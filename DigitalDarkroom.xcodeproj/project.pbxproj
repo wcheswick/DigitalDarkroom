@@ -1,0 +1,354 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
+		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
+		FBF5B3B1232E973F00DDFC4E /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3AF232E973F00DDFC4E /* Main.storyboard */; };
+		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
+		FBF5B3B6232E974000DDFC4E /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */; };
+		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
+		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
+		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		FBF5B3AC232E973F00DDFC4E /* MainVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MainVC.h; sourceTree = "<group>"; };
+		FBF5B3AD232E973F00DDFC4E /* MainVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MainVC.m; sourceTree = "<group>"; };
+		FBF5B3B0232E973F00DDFC4E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		FBF5B3B2232E974000DDFC4E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		FBF5B3B5232E974000DDFC4E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		FBF5B3B7232E974000DDFC4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		FBF5B3B8232E974000DDFC4E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		FBF5B3C2232E99CE00DDFC4E /* CameraController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CameraController.h; sourceTree = "<group>"; };
+		FBF5B3C3232E99CE00DDFC4E /* CameraController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraController.m; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FBF5B3A3232E973F00DDFC4E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		FBF5B39D232E973E00DDFC4E = {
+			isa = PBXGroup;
+			children = (
+				FBF5B3A8232E973F00DDFC4E /* DigitalDarkroom */,
+				FBF5B3A7232E973F00DDFC4E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FBF5B3A7232E973F00DDFC4E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FBF5B3A8232E973F00DDFC4E /* DigitalDarkroom */ = {
+			isa = PBXGroup;
+			children = (
+				FBB16D63232EB49B0026F789 /* Defines.h */,
+				FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */,
+				FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */,
+				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
+				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
+				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
+				FBF5B3AF232E973F00DDFC4E /* Main.storyboard */,
+				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
+				FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */,
+				FBF5B3B7232E974000DDFC4E /* Info.plist */,
+				FBF5B3B8232E974000DDFC4E /* main.m */,
+			);
+			path = DigitalDarkroom;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FBF5B3A5232E973F00DDFC4E /* DigitalDarkroom */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FBF5B3BC232E974000DDFC4E /* Build configuration list for PBXNativeTarget "DigitalDarkroom" */;
+			buildPhases = (
+				FBF5B3A2232E973F00DDFC4E /* Sources */,
+				FBF5B3A3232E973F00DDFC4E /* Frameworks */,
+				FBF5B3A4232E973F00DDFC4E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DigitalDarkroom;
+			productName = DigitalDarkroom;
+			productReference = FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		FBF5B39E232E973E00DDFC4E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1030;
+				ORGANIZATIONNAME = Cheswick.com;
+				TargetAttributes = {
+					FBF5B3A5232E973F00DDFC4E = {
+						CreatedOnToolsVersion = 10.3;
+					};
+				};
+			};
+			buildConfigurationList = FBF5B3A1232E973E00DDFC4E /* Build configuration list for PBXProject "DigitalDarkroom" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = FBF5B39D232E973E00DDFC4E;
+			productRefGroup = FBF5B3A7232E973F00DDFC4E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FBF5B3A5232E973F00DDFC4E /* DigitalDarkroom */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FBF5B3A4232E973F00DDFC4E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBF5B3B6232E974000DDFC4E /* LaunchScreen.storyboard in Resources */,
+				FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */,
+				FBF5B3B1232E973F00DDFC4E /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FBF5B3A2232E973F00DDFC4E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */,
+				FBF5B3B9232E974000DDFC4E /* main.m in Sources */,
+				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
+				FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		FBF5B3AF232E973F00DDFC4E /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FBF5B3B0232E973F00DDFC4E /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				FBF5B3B5232E974000DDFC4E /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		FBF5B3BA232E974000DDFC4E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		FBF5B3BB232E974000DDFC4E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FBF5B3BD232E974000DDFC4E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = HK64XTSZFA;
+				INFOPLIST_FILE = DigitalDarkroom/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.cheswick.DigitalDarkroom;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FBF5B3BE232E974000DDFC4E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = HK64XTSZFA;
+				INFOPLIST_FILE = DigitalDarkroom/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.cheswick.DigitalDarkroom;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FBF5B3A1232E973E00DDFC4E /* Build configuration list for PBXProject "DigitalDarkroom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FBF5B3BA232E974000DDFC4E /* Debug */,
+				FBF5B3BB232E974000DDFC4E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FBF5B3BC232E974000DDFC4E /* Build configuration list for PBXNativeTarget "DigitalDarkroom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FBF5B3BD232E974000DDFC4E /* Debug */,
+				FBF5B3BE232E974000DDFC4E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = FBF5B39E232E973E00DDFC4E /* Project object */;
+}
