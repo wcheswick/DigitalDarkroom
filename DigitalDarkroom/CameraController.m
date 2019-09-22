@@ -16,11 +16,7 @@
 @property (strong, nonatomic)   AVCaptureDevice *frontVideoDevice;
 @property (strong, nonatomic)   AVCaptureDevice *backVideoDevice;
 
-@property (nonatomic, strong)   AVCapturePhotoOutput *photoOutput;
-@property (nonatomic, strong)   AVCaptureConnection *connection;
-@property (nonatomic, strong)   AVCaptureFileOutput *movieOutput;
-
-@property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
+@property (nonatomic, strong)   AVCaptureVideoPreviewLayer *videoPreviewLayer;
 
 @end
 
@@ -30,76 +26,49 @@
 @synthesize captureSession;
 
 @synthesize frontVideoDevice, backVideoDevice;
-@synthesize captureVideoPreviewLayer;
+@synthesize videoPreviewLayer;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        frontVideoDevice = [AVCaptureDevice
-                            defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                            mediaType: AVMediaTypeVideo
-                            position: AVCaptureDevicePositionFront];
-        if (!frontVideoDevice)
-            frontVideoDevice = [AVCaptureDevice
-                                defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                                mediaType: AVMediaTypeVideo
-                                position: AVCaptureDevicePositionFront];
-        
-        backVideoDevice = [AVCaptureDevice
-                           defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                           mediaType: AVMediaTypeVideo
-                           position: AVCaptureDevicePositionBack];
-        if (!backVideoDevice)
-            backVideoDevice = [AVCaptureDevice
-                               defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                               mediaType: AVMediaTypeVideo
-                               position: AVCaptureDevicePositionBack];
-
-        if (frontVideoDevice)
-            captureDevice = frontVideoDevice;
-        else {
-            if (backVideoDevice)
-                captureDevice = backVideoDevice;
-            else {
-                NSLog(@"no video devices available");
-                return nil;
-            }
+        captureDevice = [self selectCaptureDevice];
+        if (!captureDevice) {
+            NSLog(@"*** no capture devices found");
+            return nil;
         }
-        
-#ifdef notdef
-        [connection setVideoOrientation: orientation];
-        
-        for (int i = 0; i < [[movieOutput connections] count]; i++) {
-            AVCaptureConnection *captureConnection = [[movieOutput connections] objectAtIndex:i];
-            if ([captureConnection isVideoOrientationSupported]) {
-                [captureConnection setVideoOrientation:newOrientation];
-            }
-        }
-
-        captureVideoPreviewLayer.connection.videoOrientation = UIDeviceOrientationPortrait;
-        [connection setVideoOrientation: ];
-        
-        for (int i = 0; i < [[movieOutput connections] count]; i++) {
-            AVCaptureConnection *captureConnection = [[movieOutput connections] objectAtIndex:i];
-            if ([captureConnection isVideoOrientationSupported]) {
-                [captureConnection setVideoOrientation:newOrientation];
-            }
-        }
-#endif
-        
-        captureSession = [[AVCaptureSession alloc] init];
-        if (captureDevice == nil) {
-            captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-            if (captureDevice == nil) {
-                NSLog(@"No video camera found");
-                return nil;
-            }
-        }
-        
-
     }
     return self;
+}
+
+- (AVCaptureDevice *) selectCaptureDevice {
+    frontVideoDevice = [AVCaptureDevice
+                        defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                        mediaType: AVMediaTypeVideo
+                        position: AVCaptureDevicePositionFront];
+    if (!frontVideoDevice)
+        frontVideoDevice = [AVCaptureDevice
+                            defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                            mediaType: AVMediaTypeVideo
+                            position: AVCaptureDevicePositionFront];
+    
+    backVideoDevice = [AVCaptureDevice
+                       defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                       mediaType: AVMediaTypeVideo
+                       position: AVCaptureDevicePositionBack];
+    if (!backVideoDevice)
+        backVideoDevice = [AVCaptureDevice
+                           defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                           mediaType: AVMediaTypeVideo
+                           position: AVCaptureDevicePositionBack];
+    
+    if (frontVideoDevice)
+        return frontVideoDevice;
+    else {
+        if (backVideoDevice)
+            return backVideoDevice;
+    }
+    return [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];;
 }
 
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
@@ -153,24 +122,11 @@
 #endif
 }
 
-- (void) startCamera:(NSString *_Nullable* _Nullable)errStr
-              detail:(NSString *_Nullable* _Nullable)detailStr
-              caller:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller {
+- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller
+                                    portrait:(BOOL)portrait {
     NSError *error;
-
-    assert(captureDevice);
-    assert(captureSession);
-    if (![captureDevice lockForConfiguration:&error]) {
-        *errStr = @"Could not lock media device";
-        *detailStr = [error localizedDescription];
-        return;
-    }
-    
-    captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:captureSession];
-    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    captureVideoPreviewLayer.connection.videoOrientation = AVCaptureVideoOrientationPortrait;
-    captureVideoPreviewLayer.connection.automaticallyAdjustsVideoMirroring = YES;
-
+    if (![captureDevice lockForConfiguration:&error])
+        return [NSString stringWithFormat:@"error locking camera: %@", error.localizedDescription];
     if (captureDevice.lowLightBoostSupported)
         [captureDevice automaticallyEnablesLowLightBoostWhenAvailable];
     if ([captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure])
@@ -182,26 +138,37 @@
         captureDevice.smoothAutoFocusEnabled = YES;
     [captureDevice unlockForConfiguration];
     
+    captureSession = [[AVCaptureSession alloc] init];
     AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:captureDevice error:&error];
     if (!input) {
-        NSLog(@"%s: *** no camera available", __PRETTY_FUNCTION__);
-        *errStr = @"No camera available";
-        detailStr = nil;
-        return;
+        return [NSString stringWithFormat:@"error connecting input: %@", error.localizedDescription];
     }
     [captureSession addInput:input];
     
-    AVCaptureVideoDataOutput *output = [[AVCaptureVideoDataOutput alloc] init];
-    [captureSession addOutput:output];
-    output.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
+    AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
+    [captureSession addOutput:dataOutput];
+    dataOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
     
-    dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
-    [output setSampleBufferDelegate:caller queue:queue];
-    
+    videoPreviewLayer = [AVCaptureVideoPreviewLayer layerWithSession:captureSession];
+     videoPreviewLayer.connection.videoOrientation = portrait ?
+    AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeLeft;
+#ifdef notdef
+    for (int i = 0; i < [[movieOutput connections] count]; i++) {
+        AVCaptureConnection *captureConnection = [[movieOutput connections] objectAtIndex:i];
+        if ([captureConnection isVideoOrientationSupported]) {
+            [captureConnection setVideoOrientation:newOrientation];
+        }
+    }
+#endif
+    return nil;
+}
+
+- (void) startCamera {
     [captureSession startRunning];
 }
 
 - (void) stopCamera {
+    [captureSession stopRunning];
 }
 
 

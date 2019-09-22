@@ -16,12 +16,11 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 
-- (void) startCamera:(NSString *_Nullable* _Nullable)errStr
-              detail:(NSString *_Nullable* _Nullable)detailStr
-              caller:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;
 - (CGSize) cameraVideoSizeFor: (CGSize) s;
+- (void) startCamera;
 - (void) stopCamera;
-
+- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller
+                                    portrait:(BOOL)portrait;
 @end
 
 NS_ASSUME_NONNULL_END

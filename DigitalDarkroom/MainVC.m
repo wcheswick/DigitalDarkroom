@@ -130,23 +130,30 @@ enum {
                                    action:@selector(doeditTransformList:)];
     activeNavVC.navigationItem.leftBarButtonItem = editButton;
 
-    [self layoutViews];
+    [self layoutViewsForSize:self.view.frame.size];
+}
+
+- (void) viewWillTransitionToSize:(CGSize)size
+        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [self layoutViewsForSize:size];
 }
 
 #define SEP 10
 
-- (void) layoutViews {
-    CGRect f = self.view.frame;
+- (void) layoutViewsForSize:(CGSize) size {
+    BOOL portrait = (size.width <= size.height);
+    
+    CGRect f = CGRectMake(0, 0, size.width, size.height);
     f.size.height /= 2;    // top half only, for now
     f.size = [cameraController cameraVideoSizeFor:f.size];
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.origin.x = (self.view.frame.size.width - f.size.width)/2;
+    f.origin.x = (size.width - f.size.width)/2;
     videoView.frame = f;
     
     f = activeNavVC.view.frame;
     f.origin.y = BELOW(videoView.frame) + SEP;
-    f.size.height = self.view.frame.size.height - f.origin.y;
-    f.size.width = (self.view.frame.size.width - SEP)*0.50;
+    f.size.height = size.height - f.origin.y;
+    f.size.width = (size.width - SEP)*0.50;
     activeNavVC.view.frame = f;
     activeListVC.title = @"Active";
     
@@ -168,7 +175,21 @@ enum {
     [activeNavVC.view setNeedsDisplay];
     [transformsNavVC.view setNeedsDisplay];
     
-    NSLog(@"**** %@", activeNavVC.navigationItem.leftBarButtonItem);
+    NSString *err = [cameraController configureForCaptureWithCaller:self portrait:portrait];
+    if (err) {
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:@"Camera connection failed"
+                                    message:err
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction* defaultAction = [UIAlertAction
+                                        actionWithTitle:@"Dismiss"
+                                        style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction * action) {}
+                                        ];
+        [alert addAction:defaultAction];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
 }
 
 - (void) updateFrameCounter {
@@ -178,14 +199,9 @@ enum {
 }
 
 - (void) viewDidAppear:(BOOL)animated {
-    NSString *errorStr, *detailErrorStr;
     frameCount = droppedCount = 0;
     [self updateFrameCounter];
-    [cameraController startCamera:&errorStr
-                           detail:&detailErrorStr
-                           caller:self];
-    if (errorStr)
-        NSLog(@"camera start error: %@, %@", errorStr, detailErrorStr);
+    [cameraController startCamera];
     [self.view setNeedsDisplay];
 }
 
