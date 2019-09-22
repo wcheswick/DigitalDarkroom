@@ -12,19 +12,29 @@
 @interface AppDelegate ()
 
 @property (nonatomic, strong)   UINavigationController *navController;
+@property (nonatomic, strong)   MainVC *mainVC;
 
 @end
 
 @implementation AppDelegate
 
 @synthesize navController;
+@synthesize mainVC;
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc]
                    initWithFrame:[[UIScreen mainScreen] bounds]];
-    MainVC *mainVC = [[MainVC alloc] init];
+    mainVC = [[MainVC alloc] init];
     navController = [[UINavigationController alloc]
                      initWithRootViewController:mainVC];
+    
+#ifdef notdef
+    [[NSNotificationCenter defaultCenter] addObserver:mainVC
+                                             selector:@selector(deviceRotated)
+                                                 name:UIDeviceOrientationDidChangeNotification
+                                               object:nil];
+#endif
+    
     self.window.rootViewController = navController;
     [self.window makeKeyAndVisible];
     return YES;

@@ -76,6 +76,7 @@ enum {
     frameDisplay = [[UILabel alloc] initWithFrame:CGRectMake(20, 20, 300, 20)];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
+    videoView.backgroundColor = [UIColor yellowColor];
     
     UITapGestureRecognizer *videoTapped = [[UITapGestureRecognizer alloc]
                                            initWithTarget:self
@@ -113,6 +114,8 @@ enum {
 }
 
 - (void) viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
     self.title = @"Digital Darkroom";
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = YES;
@@ -130,52 +133,145 @@ enum {
                                    action:@selector(doeditTransformList:)];
     activeNavVC.navigationItem.leftBarButtonItem = editButton;
 
-    [self layoutViewsForSize:self.view.frame.size];
+//    [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
+
+//    [self layoutViews];
 }
 
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+//    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+#ifdef notdef
+- (void)deviceRotated {
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationUnknown:
+            NSLog(@"UIDeviceOrientationUnknown");
+            break;
+        case UIDeviceOrientationPortrait:
+            NSLog(@"UIDeviceOrientationPortrait");
+            break;
+        case UIDeviceOrientationPortraitUpsideDown:
+            NSLog(@"UIDeviceOrientationPortraitUpsideDown");
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            NSLog(@"UIDeviceOrientationLandscapeLeft");
+            break;
+        case UIDeviceOrientationLandscapeRight:
+            NSLog(@"UIDeviceOrientationLandscapeRight");
+            break;
+        case UIDeviceOrientationFaceUp:
+            NSLog(@"UIDeviceOrientationFaceUp");
+            break;
+        case UIDeviceOrientationFaceDown:
+            NSLog(@"UIDeviceOrientationFaceDown");
+            break;
+    }
+}
+#endif
+
+- (void) viewWillLayoutSubviews {
+    [super viewWillLayoutSubviews];
+    
+    NSLog(@"***** viewWillLayoutSubviews: %.0f x %.0f",
+          self.view.frame.size.width, self.view.frame.size.height);  //UIInterfaceOrientationLandscapeLeft
+   [self layoutViews];
+}
+
+#ifdef notdef
+
+- (void) viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    
+    NSLog(@"***** viewDidLayoutSubviews: %.0f x %.0f",
+          self.view.bounds.size.width, self.view.bounds.size.height);  //UIInterfaceOrientationLandscapeLeft
+}
+#endif
+
+#ifdef notdef
 - (void) viewWillTransitionToSize:(CGSize)size
         withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [self layoutViewsForSize:size];
 }
+#endif
 
 #define SEP 10
 
-- (void) layoutViewsForSize:(CGSize) size {
-    BOOL portrait = (size.width <= size.height);
+- (void) layoutViews {
+    BOOL isPortrait = UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]);
+    CGRect f = self.view.frame;
     
-    CGRect f = CGRectMake(0, 0, size.width, size.height);
-    f.size.height /= 2;    // top half only, for now
-    f.size = [cameraController cameraVideoSizeFor:f.size];
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.origin.x = (size.width - f.size.width)/2;
-    videoView.frame = f;
-    
-    f = activeNavVC.view.frame;
-    f.origin.y = BELOW(videoView.frame) + SEP;
-    f.size.height = size.height - f.origin.y;
-    f.size.width = (size.width - SEP)*0.50;
-    activeNavVC.view.frame = f;
-    activeListVC.title = @"Active";
-    
-    f.origin.x += f.size.width + SEP;
-    transformsNavVC.view.frame = f;
-    transformsVC.title = @"Transforms";
-    
-    f.origin.y = activeNavVC.navigationBar.frame.size.height;
-    f.size.height -= f.origin.y;
-    f.origin.x = 0;
-    transformsVC.tableView.frame = f;
-    activeListVC.tableView.frame = f;
-    
-    [transforms updateFrameSize: videoView.frame.size];
-    
-    [activeListVC.tableView reloadData];
-    [transformsVC.tableView reloadData];
-    
-    [activeNavVC.view setNeedsDisplay];
-    [transformsNavVC.view setNeedsDisplay];
-    
-    NSString *err = [cameraController configureForCaptureWithCaller:self portrait:portrait];
+    if (isPortrait) {   // video on the top
+        f.size.height /= 2;    // top half only, for now
+        f.size = [cameraController cameraVideoSizeFor:f.size];
+        f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
+        f.origin.x = (self.view.frame.size.width - f.size.width)/2;
+        videoView.frame = f;
+        
+        f.origin.x = 0;
+        f.origin.y = BELOW(videoView.frame) + SEP;
+        f.size.height = self.view.frame.size.height - f.origin.y;
+        f.size.width = (self.view.frame.size.width - SEP)*0.50;
+        activeNavVC.view.frame = f;
+        activeListVC.title = @"Active";
+        
+        f.origin.x += f.size.width + SEP;
+        transformsNavVC.view.frame = f;
+        transformsVC.title = @"Transforms";
+        
+        f.origin.y = activeNavVC.navigationBar.frame.size.height;
+        f.size.height -= f.origin.y;
+        f.origin.x = 0;
+        transformsVC.tableView.frame = f;
+        activeListVC.tableView.frame = f;
+        
+        [transforms updateFrameSize: videoView.frame.size];
+        
+        [activeListVC.tableView reloadData];
+        [transformsVC.tableView reloadData];
+        
+        [activeNavVC.view setNeedsDisplay];
+        [transformsNavVC.view setNeedsDisplay];
+    } else {    // video on the left
+        f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
+        f.size.height -= f.origin.y;
+        f.origin.x = 0;
+        f.size = [cameraController cameraVideoSizeFor:f.size];
+        videoView.frame = f;
+        
+        f.origin.x = RIGHT(f) + SEP;
+        f.size.width = self.view.frame.size.width - f.origin.x;
+        f.size.height = 0.30*videoView.frame.size.height;
+        activeNavVC.view.frame = f;
+        activeListVC.title = @"Active";
+        
+        f.origin.y = BELOW(f) + SEP;
+        f.size.height = self.view.frame.size.height - f.origin.y;
+        transformsNavVC.view.frame = f;
+        transformsVC.title = @"Transforms";
+        
+        f.origin.y = activeNavVC.navigationBar.frame.size.height;
+        f.size.height = activeNavVC.navigationBar.frame.size.height - f.origin.y;
+        f.origin.x = 0;
+        transformsVC.tableView.frame = f;
+        
+        f.origin.y = transformsNavVC.navigationBar.frame.size.height;
+        f.size.height = transformsNavVC.navigationBar.frame.size.height - f.origin.y;
+        f.origin.x = 0;
+        transformsVC.tableView.frame = f;
+        
+        [transforms updateFrameSize: videoView.frame.size];
+        
+        [activeListVC.tableView reloadData];
+        [transformsVC.tableView reloadData];
+        
+        [activeNavVC.view setNeedsDisplay];
+        [transformsNavVC.view setNeedsDisplay];
+    }
+    NSString *err = [cameraController configureForCaptureWithCaller:self
+                                                           portrait:isPortrait];
     if (err) {
         UIAlertController *alert = [UIAlertController
                                     alertControllerWithTitle:@"Camera connection failed"

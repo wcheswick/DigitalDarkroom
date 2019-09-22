@@ -37,6 +37,7 @@
             NSLog(@"*** no capture devices found");
             return nil;
         }
+        NSLog(@"capture device: %@", captureDevice);
     }
     return self;
 }
@@ -72,6 +73,7 @@
 }
 
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
+    assert(captureDevice);
     AVCaptureDeviceFormat *selectedFormat = nil;
     CGSize bestSize;
     for (AVCaptureDeviceFormat *format in captureDevice.formats) {
@@ -125,6 +127,7 @@
 - (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller
                                     portrait:(BOOL)portrait {
     NSError *error;
+    assert(captureDevice);
     if (![captureDevice lockForConfiguration:&error])
         return [NSString stringWithFormat:@"error locking camera: %@", error.localizedDescription];
     if (captureDevice.lowLightBoostSupported)
@@ -139,6 +142,9 @@
     [captureDevice unlockForConfiguration];
     
     captureSession = [[AVCaptureSession alloc] init];
+    [captureSession beginConfiguration];
+    assert(captureSession);
+    
     AVCaptureDeviceInput *input = [AVCaptureDeviceInput deviceInputWithDevice:captureDevice error:&error];
     if (!input) {
         return [NSString stringWithFormat:@"error connecting input: %@", error.localizedDescription];
@@ -146,12 +152,18 @@
     [captureSession addInput:input];
     
     AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
+    assert(dataOutput);
     [captureSession addOutput:dataOutput];
     dataOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
     
+    dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
+    [dataOutput setSampleBufferDelegate:caller queue:queue];
+    
     videoPreviewLayer = [AVCaptureVideoPreviewLayer layerWithSession:captureSession];
-     videoPreviewLayer.connection.videoOrientation = portrait ?
+    assert(videoPreviewLayer);
+    videoPreviewLayer.connection.videoOrientation = portrait ?
     AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeLeft;
+    
 #ifdef notdef
     for (int i = 0; i < [[movieOutput connections] count]; i++) {
         AVCaptureConnection *captureConnection = [[movieOutput connections] objectAtIndex:i];
@@ -160,10 +172,12 @@
         }
     }
 #endif
+    [captureSession commitConfiguration];
     return nil;
 }
 
 - (void) startCamera {
+    assert(captureSession);
     [captureSession startRunning];
 }
 
