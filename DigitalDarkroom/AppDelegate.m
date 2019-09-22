@@ -20,6 +20,8 @@
 @synthesize navController;
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    self.window = [[UIWindow alloc]
+                   initWithFrame:[[UIScreen mainScreen] bounds]];
     MainVC *mainVC = [[MainVC alloc] init];
     navController = [[UINavigationController alloc]
                      initWithRootViewController:mainVC];

@@ -10,7 +10,8 @@
 #import <AVFoundation/AVFoundation.h>
 
 @interface MainVC : UIViewController
-    <AVCaptureVideoDataOutputSampleBufferDelegate> {
+    <UITableViewDelegate, UITableViewDataSource,
+    AVCaptureVideoDataOutputSampleBufferDelegate> {
 }
 
 

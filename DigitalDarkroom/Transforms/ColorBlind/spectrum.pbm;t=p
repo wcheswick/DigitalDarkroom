@@ -1,0 +1,373 @@
+        <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+         <html xmlns="http://www.w3.org/1999/xhtml" lang="en-us" dir="ltr">
+          <head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+            <title>Colorblind Web Page Filter</title>
+            <meta http-equiv="Content-language" name="Content-language" content="en-us" />
+          </head>
+          <body>
+            <p>Unable to process image at <tt>http://www.cheswick.com/ches/tmp/spectrum.pbm</tt></p><hr />
+
+            <h1>Colorblind Web Page Filter</h1>
+            <p title="special thanks to pair.com for donating a dedicated server">
+                I'd like to express my appreciation to
+                <a href="http://klink.wickline.org/?thanks_to_pair">pair.com</a>
+                for donating a dedicated server to host this utility.
+            </p>
+            <p title="use the colorlab before you buid your site and you won't need this filter">
+                Use the
+                <a href="http://colorlab.wickline.org/colorblind/colorlab/">colorblind colorlab</a>
+                to select safe colors earlier in the design process.
+            </p>
+            <p title="wikipedia can tell you more about colorblindness">
+                Learn more about colorblindness in this
+                <a href="http://en.wikipedia.org/wiki/Colorblind">Wikipedia entry</a>.
+            </p>
+            <p title="still in development, but feedback welcomed">
+                This tool is still in development, but
+                <a href="mailto:aware-colorlab@hwg.org">feedback</a>
+                is welcome while I work on it. If you only use one filter, use the
+                grayscale filter which will not only point out potential problem areas,
+                but will also let you see more clearly which areas the filter is unable to process.
+            </p>
+            <p title="please indicate a web page and color filter below">
+              Please indicate a resource to be viewed, and a color filter
+              to be applied to that resource:
+            </p>
+            <form method="get" action="http://colorfilter.wickline.org/" enctype="application/x-www-form-urlencoded">
+
+             <input type="hidden" id="s" name="s" value="1" />
+             <input type="hidden" id="r" name="r" value="http://www.google.com/search?hl=en&client=firefox-a&rls=org.mozilla%3Aen-US%3Aofficial&hs=TCp&q=color+blind&btnG=Search" />
+             <p>
+               <label for="u" title="user-specified URL of resource to be filtered">Type
+               a URL: <input id="u" name="u" type="text" size="50" value="http://www.cheswick.com/ches/tmp/spectrum.pbm"/></label>
+               <!-- 
+               <br />or<br />
+               <label for="w" title="web site to be filtered">select a web site:
+               <select id="w" name="w">
+                    <option value="" selected="selected">(from the following list...)</option>
+                    <option>www.w3.org/Style/CSS/Test/CSS1/20020115/test71.htm</option>
+<option>www.meyerweb.com/eric/css/edge/complexspiral/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/curvelicious/demo.html</option>
+<option>www.meyerweb.com/eric/css/tests/css2/</option>
+<option>wickline.org/lists/libwww/encodings_broken.html</option>
+<option>www.toledo-bend.com/colorblind/Ishihara.html</option>
+<option>www.geocities.com/Heartland/8833/coloreye.html</option>
+<option>ricksaphire.com/colorblind/</option>
+<option>www.everwonder.com/david/colorblind.html</option>
+<option>askabiologist.asu.edu/research/seecolor/colortest.html</option>
+<option>www.nmt.edu/~armiller/colortst.htm</option>
+<option>www.dai-sho.com/colorblindness/</option>
+<option>www.meyerweb.com/eric/css/edge/</option>
+<option>www.meyerweb.com/eric/css/edge/complexspiral/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/complexspiral/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/complexspiral/glassy.html</option>
+<option>www.meyerweb.com/eric/css/edge/popups/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/popups/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/menus/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/curvelicious/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/slantastic/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/slantastic/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/slantastic/holiday.html</option>
+<option>www.meyerweb.com/eric/css/edge/raggedfloat/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/raggedfloat/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/boxpunch/demo.html</option>
+<option>www.meyerweb.com/eric/css/edge/boxpunch/demo2.html</option>
+<option>www.meyerweb.com/eric/css/edge/boxpunch/demo-ie.html</option>
+<option>www.meyerweb.com/eric/css/edge/gallery.html</option>
+<option>www.w3.org/StyleSheets/Core/preview</option>
+<option>www.w3.org/StyleSheets/Core/stylebot.html?family=6&amp;doc=Sampler</option>
+<option>www.100hot.com</option>
+<option>www.adobe.com</option>
+<option>www.altavista.com</option>
+<option>www.amazon.com</option>
+<option>americanexpress.com</option>
+<option>www.ameritrade.com</option>
+<option>www.aol.com</option>
+<option>www.apple.com</option>
+<option>www.americansingles.com</option>
+<option>www.attitude.com</option>
+<option>www.autoworld.com</option>
+<option>bankofamerica.com</option>
+<option>www.benews.com</option>
+<option>www.beseen.com</option>
+<option>www.bhs.com</option>
+<option>www.bigcharts.com</option>
+<option>www.bigyellow.com</option>
+<option>www.blockbuster.com</option>
+<option>www.bloomberg.com</option>
+<option>www.bluemountain.com</option>
+<option>www.bn.com</option>
+<option>www.bullfrog.co.uk</option>
+<option>www.bxa.doc.gov/Encryption/regs.htm</option>
+<option>www.cardmaster.com</option>
+<option>www.cbpacific.com/</option>
+<option>www.cdnow.com</option>
+<option>www.chathouse.com</option>
+<option>www.cmpnet.com</option>
+<option>www.cnet.com</option>
+<option>www.cnn.com</option>
+<option>www.cnnfn.com</option>
+<option>www.creaf.com</option>
+<option>www.cyberthrill.com</option>
+<option>www.dakinfarm.com/</option>
+<option>www.davesclassics.com</option>
+<option>www.dejanews.com</option>
+<option>www.developer.com</option>
+<option>www.discovery.com</option>
+<option>www.dogpile.com</option>
+<option>www.download.com</option>
+<option>www.drudgereport.com</option>
+<option>www.ea.com</option>
+<option>www.ebay.com</option>
+<option>www.economist.com</option>
+<option>www.etrade.com</option>
+<option>www.excite.com</option>
+<option>fidelity.com</option>
+<option>www.fifa.com</option>
+<option>www.filez.com</option>
+<option>www.fool.com</option>
+<option>www.freethemes.com</option>
+<option>www.freshmeat.net</option>
+<option>www.fxweb.com</option>
+<option>www.gamesdomain.com</option>
+<option>www.gamespot.com</option>
+<option>www.gamestats.com</option>
+<option>www.gateway.com</option>
+<option>www.geocities.com</option>
+<option>www.go2net.com</option>
+<option>www.goto.com</option>
+<option>www.greatsports.com</option>
+<option>www.happypuppy.com</option>
+<option>www.hardradio.com</option>
+<option>www.hotbot.com</option>
+<option>www.hotfiles.com</option>
+<option>www.hotjobs.com</option>
+<option>www.hotwired.com</option>
+<option>www.hp.com</option>
+<option>www.imdb.com</option>
+<option>www.infobeat.com</option>
+<option>www.infoseek.com</option>
+<option>www.infospace.com</option>
+<option>www.intel.com</option>
+<option>www.internet.com</option>
+<option>java.sun.com</option>
+<option>www.looksmart.com</option>
+<option>www.lycos.com</option>
+<option>www.macaddict.com</option>
+<option>www.macromedia.com</option>
+<option>www.majorleaguebaseball.com</option>
+<option>www.mapquest.com</option>
+<option>marketwatch.com</option>
+<option>www.marriott.com</option>
+<option>www.mckinley.com</option>
+<option>members.aol.com</option>
+<option>www.messagemates.com</option>
+<option>www.metacrawler.com</option>
+<option>www.microsoft.com</option>
+<option>www.mirabilis.com</option>
+<option>moneycentral.msn.com</option>
+<option>www.mp3.com</option>
+<option>www.msn.com</option>
+<option>www.mtv.com</option>
+<option>www.music.sony.com</option>
+<option>www.mysap.com</option>
+<option>www.nai.com</option>
+<option>www.nasa.gov</option>
+<option>www.nasdaq.com</option>
+<option>www.nbci.com</option>
+<option>netaddress.usa.net</option>
+<option>www.netscape.com</option>
+<option>www.news.com</option>
+<option>nextcard.com</option>
+<option>www.nyse.com</option>
+<option>www.nytimes.com</option>
+<option>www.onelist.com</option>
+<option>www.onsale.com</option>
+<option>www.os2ss.com</option>
+<option>www.pathfinder.com</option>
+<option>paypal.com</option>
+<option>www.pbs.com</option>
+<option>www.planetquake.com</option>
+<option>www.playsite.com</option>
+<option>www.quicken.com</option>
+<option>www.real.com</option>
+<option>www.rewards2k.com</option>
+<option>www.richinstyle.com</option>
+<option>www.scea.sony.com</option>
+<option>www.search.com</option>
+<option>www.shockwave.com</option>
+<option>www.slashdot.org</option>
+<option>www.sony.com</option>
+<option>sports.espn.go.com/golf/index</option>
+<option>www.sportsline.com</option>
+<option>www.starwave.com</option>
+<option>www.station.sony.com</option>
+<option>www.statmarket.com</option>
+<option>www.surplusdirect.com</option>
+<option>www.the-park.com</option>
+<option>www.the-xfiles.com</option>
+<option>www.thestreet.com</option>
+<option>www.tm.com</option>
+<option>www.tomshardware.com</option>
+<option>www.travelocity.com</option>
+<option>www.travelocity.com</option>
+<option>www.tucows.com</option>
+<option>uk.imdb.com</option>
+<option>www.usatoday.com</option>
+<option>voodooextreme.com</option>
+<option>www.vservers.com</option>
+<option>www.warnerbros.com</option>
+<option>www.warzone.com</option>
+<option>www.washingtonpost.com</option>
+<option>www.weather.com</option>
+<option>www.webcrawler.com</option>
+<option>www.webmd.com</option>
+<option>webmonkey.com</option>
+<option>wellsfargo.com</option>
+<option>www.westwood.com</option>
+<option>www.whowhere.com</option>
+<option>www.winamp.com</option>
+<option>www.winfiles.com</option>
+<option>www.winzip.com</option>
+<option>www.wsj.com</option>
+<option>www.xlnc1.com</option>
+<option>www.xml.com</option>
+<option>www.xoom.com</option>
+<option>www.yahoo.com</option>
+<option>www.zdnet.com</option>
+<option>www.zone.com</option>
+               </select></label>
+               -->
+               <br />and then<br />
+               <label for="t" title="Color filter to be applied">pick a color filter:
+                <select id="t" name="t"><option value="p" selected="selected">protanopia (red/green color blindness; no red cones)</option>
+<option value="d">deutanopia (red/green color blindness; no green cones)</option>
+<option value="t">tritanopia (blue/yellow color blindness; no blue cones)</option>
+<option value="m">grayscale/achromatopsia (quick check for all forms of colorblindness)</option>
+<option value="a">atypical achromatopsia (low cone function; cone monochromat)</option>
+<option value="o">protanomaly (anomalous red cones)</option>
+<option value="c">deutanomaly (anomalous green cones)</option>
+<option value="u">tritanomaly (anomalous blue cones)</option>
+<option value="k">coverage test in black (highlight filter limitations)</option>
+<option value="q">coverage test in white (highlight filter limitations)</option>
+<option value="g">coverage test in gray (highlight filter limitations)</option></select>
+               </label><small>(<a href="/faq/">What are coverage filters?</a>)</small><br />
+               <input type="submit" value="Fetch and Filter! ...may take a minute..." />
+               Disable image filtering below for a dramatic speed increase.
+             </p>
+            <h2>Other Options...</h2>
+<dl>
+   <dt>
+       <label for="i" title="Disable Image Filtering"><input value="1" type="checkbox" id="i" name="i" />
+       <strong>Disable Image Filtering</strong></label>
+       (recomendation: <strong>do not check</strong> this box initially)
+   </dt><dd><p title="Image filtering can be slow, but may be important">
+           Image filtering takes more time than HTML or CSS filtering.
+           If you use images to convey information or to present navigational
+           elements, then you should filter images the first time you check
+           your web page. After that first check, you may wish to save time
+           by disabling image filtering unless you have made a change to the
+           images (or their background/foreground). Checking this box will
+           give an <strong>amazing speed increase</strong>.
+       </p></dd>
+   <dt>
+       <label for="n" title="Disable Non-GIF Image Filtering"><input value="1" type="checkbox" id="n" name="n" />
+       <strong>Disable Non-GIF Image Filtering</strong></label>
+       (recomendation: <strong>do not check</strong> this box initially)
+   </dt><dd><p title="Non-GIF image filtering is particularly slow, but may be important">
+           (Not relevant if all image filtering has beeen disabled above.)
+           At this time, we only filter GIF images. This means that non-GIF
+           images must first be transated into GIF format before they can be
+           processed. This results in a loss of image quality in some cases,
+           and a performance hit in most cases. You may want to compromise
+           on performance by only disabling the filtering of non-GIF images.
+           Checking this box will give a <strong>noticable speed increase</strong>.
+       </p></dd>
+<!-- 
+    <dt>
+       <label for="j" title="Disable Scripting"><input value="1" type="checkbox" id="j" name="j" checked="checked" />
+       <strong>Disable Scripting</strong></label>
+       (recomendation: <strong>check</strong> this box)
+   </dt><dd><p title="client-side scripting cannot be processed reliably">
+           Client-side scripting (ECMAscript or JavaScript) is commonly used
+           to update page content in response to user action. These
+           scripts are also used to include stylesheets and/or advertisments
+           in the document. They are very difficult to process in an automated
+           fashion and may introduce stylesheets, images, and colors which are not
+           filtered. Rather than breaking those scripts in a vain attempt to
+           process them, we prefer to simply delete them. If your web page
+           makes significant use of scripts, you may want to create
+           a version which mimics the same coloration using only
+           HTML and CSS. Run <em>that</em> version through this utility.
+       </p></dd>
+ -->
+   <dt>
+       <label for="c" title="Disable Stylesheets"><input value="1" type="checkbox" id="c" name="c" />
+       <strong>Disable Stylesheets</strong></label>
+       (recomendation: <strong>do not check</strong> this box)
+   </dt><dd><p title="CSS can be filtered appropriately in most cases">
+           Our CSS filtering is not perfect, but it is <em>much</em> better
+           than our filtering of client-side scripts. If your page is one
+           of the problematic exceptions, create a version which does not
+           use CSS (or which uses simpler CSS) to demonstrate equivilant
+           web page coloration. Run <em>that</em> page through our filter.
+       </p></dd>
+   <dt>
+       <label for="b" title="Supress Filtering of Broken CSS Colors"><input value="1" type="checkbox" id="b" name="b" />
+       <strong>Supress Filtering of Broken CSS Colors</strong></label>
+       (recomendation: <strong>do not check</strong> this box initially)
+   </dt><dd><p title="Common form of invalid CSS syntax may still be filtered">
+           Some CSS authors incorrectly leave the '#' off of their #RRGGBB color
+           values. To see how color blind users probably see the page, allow the
+           utility to attempt to filter these constructs. To hilight these errors,
+           use one of the 'coverage' modes and check the box to supress filtering
+           of this incorrect syntax.
+       </p></dd>
+</dl>
+
+</form>
+            <h2>Our Logo</h2>
+            <p title="Feel free to use this logo on your colorblind-friendly web pages.">
+                <a href="/colorblind/filter/button" title="See your site through colorblind eyes with the colorblind web page filter." style="border:0; text-decoration:none;"><img style="border:0;" alt="See your site through colorblind eyes with the colorblind web page filter." src="/colorfilter_button.gif" width="88" height="31" /></a>
+                If your page meets the following criteria, please feel free to use this logo on your web site (available in
+                <a href="/colorfilter_button.gif" title="download the colorfilter button in gif format">gif</a>
+                and
+                <a href="/colorfilter_button.png" title="download the colorfilter button in png format">png</a>
+                formats). You may use the logo from this server or a local copy,
+                but should include the following HREF and ALT text in your markup:<br />
+                <code>&#60;a href=&#34;http://colorfilter.wickline.org/colorblind/filter/button&#34;&#62;&#60;img alt=&#34;See your web site through colorblind eyes with the colorblind web page filter.&#34; src=&#34;http://colorfilter.wickline.org/colorfilter_button.gif&#34; width=&#34;88&#34; height=&#34;31&#34;&#62;&#60;/a&#62;</code>
+            </p>
+            <p >
+                Before using the logo, you'll want to <a href="/faq/">read more about coverage filters</a>
+                and then verify the following:
+            </p>
+            <ol title="list of criteria for colorblind-friendly web pages">
+                <li>the page renders legibly under the grayscale coverage test</li>
+                <li>pick two of the other (black/white/gray) coverage tests</li>
+                <li>for <strong>each</strong> of those two tests
+                    <ul> <li>either all text foreground/background color pairs remain unchanged
+                                (because your markup allows the user's browser preferences to dictate colors)
+                    </li><li>or all text foreground/background colors are transformed to the coverage color
+                                (because your markup sets both foreground and background colors to ensure adequate contrast)
+                    </li></ul>
+                </li>
+            </ol>
+            <p >
+                The logo is based on an image from the
+                <a href="http://google.com/search?q='Color+Vision+Testing+Made+Easy'">Color Vision Testing Made Easy</a>
+                screening test developed by
+                <a href="http://colorvisiontesting.com/">Terrace L. Waggoner, O.D.</a>
+                and is now used with his permission. I confess that the colorfilter logo
+                was originally developed <em>without</em> his permission before I knew of
+                the boat's origin. Fortunately, Dr. Waggoner was very understanding.
+            </p>
+            <p style="text-align:right;">
+                Thanks
+                <a href="http://klink.wickline.org/?thanks_to_pair">pair.com</a>!
+                <tt>&#160;:)&#160;&#160;-matt&#160;&#160;</tt>
+                <a href="http://klink.wickline.org/?thanks_to_pair"    style="border:0;text-decoration:none;"><img style="border:0;" alt="pair networks logo" src="http://klink.wickline.org/?pair_button_88_x_31" width="88" height="31"></a>
+                <a href="http://klink.wickline.org/?thanks_to_pairnic" style="border:0;text-decoration:none;"><img style="border:0;" alt="pairnic logo"    src="http://klink.wickline.org/?pairnic_button_88_x_31" width="88" height="31"></a>
+            </p>
+
+          </body>
+        </html>

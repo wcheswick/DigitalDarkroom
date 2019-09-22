@@ -7,25 +7,65 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */; };
+		FBB1D9D0232EBD9C00845DF1 /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */; };
+		FBB1D9D1232EBD9C00845DF1 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */; };
+		FBB1D9D2232EBD9C00845DF1 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CF232EBD9C00845DF1 /* CoreGraphics.framework */; };
+		FBB1D9D5232FB24800845DF1 /* Transforms.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9D4232FB24800845DF1 /* Transforms.m */; };
+		FBB1D9E3232FE44400845DF1 /* geom.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9DB232FE44400845DF1 /* geom.c */; };
+		FBB1D9E5232FE44400845DF1 /* trans.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9DD232FE44400845DF1 /* trans.c */; };
+		FBB1D9E6232FE44400845DF1 /* area.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9DE232FE44400845DF1 /* area.c */; };
+		FBB1D9E7232FE44400845DF1 /* etc.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9E0232FE44400845DF1 /* etc.c */; };
+		FBB1D9E8232FE44400845DF1 /* point.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9E1232FE44400845DF1 /* point.c */; };
+		FBB1D9E9232FE44400845DF1 /* colorblindness in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9E2232FE44400845DF1 /* colorblindness */; };
+		FBB1D9F4232FE56700845DF1 /* translations in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9EB232FE56700845DF1 /* translations */; };
+		FBB1D9F5232FE56700845DF1 /* cb.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9EC232FE56700845DF1 /* cb.c */; };
+		FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9ED232FE56700845DF1 /* spectrum.pbm;t=p */; };
+		FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9EE232FE56700845DF1 /* colorfilter.wickline.org.htm */; };
+		FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9EF232FE56700845DF1 /* cdisplay_colorblind.c */; };
+		FBB1D9F9232FE56700845DF1 /* colorblind.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9F0232FE56700845DF1 /* colorblind.c */; };
+		FBB1D9FA232FE56700845DF1 /* Links in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F1232FE56700845DF1 /* Links */; };
+		FBB1D9FB232FE56700845DF1 /* images in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F2232FE56700845DF1 /* images */; };
+		FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9FD2330FD0900845DF1 /* Transform.m */; };
 		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
 		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
-		FBF5B3B1232E973F00DDFC4E /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3AF232E973F00DDFC4E /* Main.storyboard */; };
 		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
-		FBF5B3B6232E974000DDFC4E /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */; };
 		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
 		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
+		FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
+		FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreVideo.framework; path = System/Library/Frameworks/CoreVideo.framework; sourceTree = SDKROOT; };
+		FBB1D9CF232EBD9C00845DF1 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		FBB1D9D3232FB24800845DF1 /* Transforms.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Transforms.h; sourceTree = "<group>"; };
+		FBB1D9D4232FB24800845DF1 /* Transforms.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Transforms.m; sourceTree = "<group>"; };
+		FBB1D9DB232FE44400845DF1 /* geom.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = geom.c; sourceTree = "<group>"; };
+		FBB1D9DD232FE44400845DF1 /* trans.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = trans.c; sourceTree = "<group>"; };
+		FBB1D9DE232FE44400845DF1 /* area.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = area.c; sourceTree = "<group>"; };
+		FBB1D9DF232FE44400845DF1 /* trans.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = trans.h; sourceTree = "<group>"; };
+		FBB1D9E0232FE44400845DF1 /* etc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = etc.c; sourceTree = "<group>"; };
+		FBB1D9E1232FE44400845DF1 /* point.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = point.c; sourceTree = "<group>"; };
+		FBB1D9E2232FE44400845DF1 /* colorblindness */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = colorblindness; sourceTree = "<group>"; };
+		FBB1D9EB232FE56700845DF1 /* translations */ = {isa = PBXFileReference; lastKnownFileType = folder; path = translations; sourceTree = "<group>"; };
+		FBB1D9EC232FE56700845DF1 /* cb.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cb.c; sourceTree = "<group>"; };
+		FBB1D9ED232FE56700845DF1 /* spectrum.pbm;t=p */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "spectrum.pbm;t=p"; sourceTree = "<group>"; };
+		FBB1D9EE232FE56700845DF1 /* colorfilter.wickline.org.htm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = colorfilter.wickline.org.htm; sourceTree = "<group>"; };
+		FBB1D9EF232FE56700845DF1 /* cdisplay_colorblind.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cdisplay_colorblind.c; sourceTree = "<group>"; };
+		FBB1D9F0232FE56700845DF1 /* colorblind.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = colorblind.c; sourceTree = "<group>"; };
+		FBB1D9F1232FE56700845DF1 /* Links */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Links; sourceTree = "<group>"; };
+		FBB1D9F2232FE56700845DF1 /* images */ = {isa = PBXFileReference; lastKnownFileType = folder; path = images; sourceTree = "<group>"; };
+		FBB1D9F3232FE56700845DF1 /* colorblind.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = colorblind.h; sourceTree = "<group>"; };
+		FBB1D9FC2330FD0900845DF1 /* Transform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Transform.h; sourceTree = "<group>"; };
+		FBB1D9FD2330FD0900845DF1 /* Transform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Transform.m; sourceTree = "<group>"; };
 		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
 		FBF5B3AC232E973F00DDFC4E /* MainVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MainVC.h; sourceTree = "<group>"; };
 		FBF5B3AD232E973F00DDFC4E /* MainVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MainVC.m; sourceTree = "<group>"; };
-		FBF5B3B0232E973F00DDFC4E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		FBF5B3B2232E974000DDFC4E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		FBF5B3B5232E974000DDFC4E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		FBF5B3B7232E974000DDFC4E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FBF5B3B8232E974000DDFC4E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		FBF5B3C2232E99CE00DDFC4E /* CameraController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CameraController.h; sourceTree = "<group>"; };
@@ -37,17 +77,72 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBB1D9D0232EBD9C00845DF1 /* CoreImage.framework in Frameworks */,
+				FBB1D9D1232EBD9C00845DF1 /* CoreVideo.framework in Frameworks */,
+				FBB1D9D2232EBD9C00845DF1 /* CoreGraphics.framework in Frameworks */,
+				FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		FBB1D9CA232EBD7200845DF1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				FBB1D9CF232EBD9C00845DF1 /* CoreGraphics.framework */,
+				FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */,
+				FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */,
+				FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		FBB1D9D9232FE3F400845DF1 /* Transforms */ = {
+			isa = PBXGroup;
+			children = (
+				FBB1D9EA232FE4D100845DF1 /* ColorBlind */,
+				FBB1D9DA232FE40600845DF1 /* LSC */,
+			);
+			path = Transforms;
+			sourceTree = "<group>";
+		};
+		FBB1D9DA232FE40600845DF1 /* LSC */ = {
+			isa = PBXGroup;
+			children = (
+				FBB1D9DE232FE44400845DF1 /* area.c */,
+				FBB1D9E2232FE44400845DF1 /* colorblindness */,
+				FBB1D9E0232FE44400845DF1 /* etc.c */,
+				FBB1D9DB232FE44400845DF1 /* geom.c */,
+				FBB1D9E1232FE44400845DF1 /* point.c */,
+				FBB1D9DD232FE44400845DF1 /* trans.c */,
+				FBB1D9DF232FE44400845DF1 /* trans.h */,
+			);
+			path = LSC;
+			sourceTree = "<group>";
+		};
+		FBB1D9EA232FE4D100845DF1 /* ColorBlind */ = {
+			isa = PBXGroup;
+			children = (
+				FBB1D9EC232FE56700845DF1 /* cb.c */,
+				FBB1D9EF232FE56700845DF1 /* cdisplay_colorblind.c */,
+				FBB1D9F0232FE56700845DF1 /* colorblind.c */,
+				FBB1D9F3232FE56700845DF1 /* colorblind.h */,
+				FBB1D9EE232FE56700845DF1 /* colorfilter.wickline.org.htm */,
+				FBB1D9F2232FE56700845DF1 /* images */,
+				FBB1D9F1232FE56700845DF1 /* Links */,
+				FBB1D9ED232FE56700845DF1 /* spectrum.pbm;t=p */,
+				FBB1D9EB232FE56700845DF1 /* translations */,
+			);
+			path = ColorBlind;
+			sourceTree = "<group>";
+		};
 		FBF5B39D232E973E00DDFC4E = {
 			isa = PBXGroup;
 			children = (
 				FBF5B3A8232E973F00DDFC4E /* DigitalDarkroom */,
 				FBF5B3A7232E973F00DDFC4E /* Products */,
+				FBB1D9CA232EBD7200845DF1 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -69,9 +164,12 @@
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
-				FBF5B3AF232E973F00DDFC4E /* Main.storyboard */,
+				FBB1D9D3232FB24800845DF1 /* Transforms.h */,
+				FBB1D9D4232FB24800845DF1 /* Transforms.m */,
+				FBB1D9FC2330FD0900845DF1 /* Transform.h */,
+				FBB1D9FD2330FD0900845DF1 /* Transform.m */,
+				FBB1D9D9232FE3F400845DF1 /* Transforms */,
 				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
-				FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */,
 				FBF5B3B7232E974000DDFC4E /* Info.plist */,
 				FBF5B3B8232E974000DDFC4E /* main.m */,
 			);
@@ -135,9 +233,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FBF5B3B6232E974000DDFC4E /* LaunchScreen.storyboard in Resources */,
+				FBB1D9FA232FE56700845DF1 /* Links in Resources */,
+				FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */,
+				FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */,
 				FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */,
-				FBF5B3B1232E973F00DDFC4E /* Main.storyboard in Resources */,
+				FBB1D9F4232FE56700845DF1 /* translations in Resources */,
+				FBB1D9FB232FE56700845DF1 /* images in Resources */,
+				FBB1D9E9232FE44400845DF1 /* colorblindness in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,33 +250,24 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
+				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
+				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
+				FBB1D9D5232FB24800845DF1 /* Transforms.m in Sources */,
+				FBB1D9F9232FE56700845DF1 /* colorblind.c in Sources */,
 				FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */,
 				FBF5B3B9232E974000DDFC4E /* main.m in Sources */,
+				FBB1D9F5232FE56700845DF1 /* cb.c in Sources */,
+				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
+				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
 				FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */,
+				FBB1D9E7232FE44400845DF1 /* etc.c in Sources */,
+				FBB1D9E3232FE44400845DF1 /* geom.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXVariantGroup section */
-		FBF5B3AF232E973F00DDFC4E /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				FBF5B3B0232E973F00DDFC4E /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		FBF5B3B4232E974000DDFC4E /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				FBF5B3B5232E974000DDFC4E /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		FBF5B3BA232E974000DDFC4E /* Debug */ = {

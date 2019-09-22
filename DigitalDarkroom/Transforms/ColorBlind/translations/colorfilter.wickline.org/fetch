@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+#	fetch	fetch color spectrum translations from colorfilter.wickline.org
+
+scp ../spectrum.png seismo.arpa.net:web/tmp
+
+for i in \
+	"p	protanopia (red/green color blindness; no red cones)" \
+	"d	deutanopia (red/green color blindness; no green cones)"\
+	"t	tritanopia (blue/yellow color blindness; no blue cones)"\
+	"m	grayscale/achromatopsia (quick check for all forms of colorblindness)"\
+	"a	atypical achromatopsia (low cone function; cone monochromat)"\
+	"o	protanomaly (anomalous red cones)"\
+	"c	deutanomaly (anomalous green cones)"\
+	"u	tritanomaly (anomalous blue cones)"
+do
+	key=`echo "$i" | cut -f1 -d"	"`
+	label=`echo "$i" | cut -f2 -d"	"`
+	echo "$key	$label"
+	fetch -q -o $key.png "http://colorfilter.wickline.org/?a=1;r=www.google.com/search%3Fhl%3Den%26client%3Dfirefox-a%26rls%3Dorg.mozilla%253Aen-US%253Aofficial%26hs%3DTCp%26q%3Dcolor%2Bblind%26btnG%3DSearch;l=0;j=1;u=www.cheswick.com/ches/tmp/spectrum.png;t=$key"
+done

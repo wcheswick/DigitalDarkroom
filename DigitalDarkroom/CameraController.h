@@ -12,14 +12,14 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface CameraController : NSObject {
-    AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
+//    AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 }
 
-@property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 
 - (void) startCamera:(NSString *_Nullable* _Nullable)errStr
               detail:(NSString *_Nullable* _Nullable)detailStr
               caller:(id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;
+- (CGSize) cameraVideoSizeFor: (CGSize) s;
 - (void) stopCamera;
 
 @end

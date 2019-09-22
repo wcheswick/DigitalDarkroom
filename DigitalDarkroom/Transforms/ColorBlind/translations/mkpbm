@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+prog=mkpbm
+usage=$prog
+#
+#	Generate a plain pbm image that contains all the 15-bit RGB values.
+
+cat <<!EOF
+P3
+256 128 31
+!EOF
+
+for r in `jot 32 0`
+do
+	for g in `jot 32 0`
+	do
+		for b in `jot 32 0`
+		do
+			echo "$r $g $b"
+		done
+	done
+done

@@ -1,0 +1,27 @@
+http://jfly.iam.u-tokyo.ac.jp/html/color_blind/#stain
+
+need translation formulas for
+protanope	red cones defective
+deuteranope	green cones defective
+tritanope	blue cones defective
+
+ABOUT VISCHECK
+
+Vischeck draws on algorithms developed at many different vision 
+laboratories around the world. In particular, this plug-in owes a 
+great deal to a 1997 paper by Brettel, Vienot and Mollon entitled 
+"Computerized simulation of color appearance for dichromats" 
+(Journal of the Optical Society of America v14 pp2647) and
+to recent work from Brian Wandell's group at Stanford
+(http://white.stanford.edu).
+
+VischeckPS is Copyright 2001 by Tiny Eyes, Inc.  It was written
+by Alex Wade (alexwade@stanford.edu) using FilterMeister
+(http://www.filtermeister.com) and is based on code written by 
+Alex Wade and Bob Dougherty (bobd@stanford.edu).
+
+VischeckPS is freely available for use and distribution.  You have 
+our permission to include VischeckPS on a CD-ROM, or any 
+other media, provided it is sold at a minimal price to cover 
+production and promotional costs only.
+
