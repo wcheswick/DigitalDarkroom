@@ -70,7 +70,7 @@
     NSLog(@"capture device: %@", captureDevice);
 }
 
-- (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
+- (CGSize) cameraVideoSizeFor: (CGSize) availableSize portrait:(BOOL) isPortrait {
     assert(captureDevice);
     AVCaptureDeviceFormat *selectedFormat = nil;
     CGSize bestSize;
@@ -96,7 +96,10 @@
     }
     NSLog(@"----- selected %.0f x %.0f", bestSize.width, bestSize.height);
     NSLog(@" format %@", selectedFormat);
-    return bestSize;
+    if (isPortrait) // this is a hack I can't figure out how to avoid
+        return (CGSize){bestSize.height,bestSize.width};
+    else
+        return bestSize;
     
 #ifdef notded
     captureDevice.activeFormat

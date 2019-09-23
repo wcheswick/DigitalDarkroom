@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 
 - (void) selectCaptureDevice;
-- (CGSize) cameraVideoSizeFor: (CGSize) s;
+- (CGSize) cameraVideoSizeFor: (CGSize) s portrait:(BOOL)isPortrait;
 - (void) setOrientation: (BOOL)isPortrait;
 - (void) setFrame: (CGRect) frame;
 

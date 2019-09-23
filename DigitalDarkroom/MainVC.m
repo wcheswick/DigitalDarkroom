@@ -40,7 +40,7 @@ enum {
 @property (nonatomic, strong)   UILabel *frameDisplay;
 @property (assign)              int frameCount, droppedCount;
 
-@property (nonatomic, strong)   UIView *videoPreview;
+@property (nonatomic, strong)   UIView *videoPreview;   // not shown
 
 @end
 
@@ -76,6 +76,7 @@ enum {
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
     videoView.backgroundColor = [UIColor yellowColor];
+    videoView.contentMode = UIViewContentModeScaleAspectFit;
     
     videoPreview = [[UIView alloc] init];    // where the original video is stored
 
@@ -212,7 +213,7 @@ enum {
     
     if (isPortrait) {   // video on the top
         f.size.height /= 2;    // top half only, for now
-        f.size = [cameraController cameraVideoSizeFor:f.size];
+        f.size = [cameraController cameraVideoSizeFor:f.size portrait:isPortrait];
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
         f.origin.x = (self.view.frame.size.width - f.size.width)/2;
         videoView.frame = f;
@@ -235,7 +236,7 @@ enum {
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
         f.size.height -= f.origin.y;
         f.origin.x = 0;
-        f.size = [cameraController cameraVideoSizeFor:f.size];
+        f.size = [cameraController cameraVideoSizeFor:f.size portrait:isPortrait];
         videoView.frame = f;
         
         f.origin.x = RIGHT(f) + SEP;
@@ -266,7 +267,6 @@ enum {
     [transformsNavVC.view setNeedsDisplay];
     [activeListVC.tableView reloadData];
     [transformsVC.tableView reloadData];    // ... needed
-
 
     f = videoView.frame;
     f.origin = CGPointZero;
