@@ -8,19 +8,25 @@
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface CameraController : NSObject {
-//    AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
+    AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 }
 
+@property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 
+- (void) selectCaptureDevice;
 - (CGSize) cameraVideoSizeFor: (CGSize) s;
+- (void) setOrientation: (BOOL)isPortrait;
+- (void) setFrame: (CGRect) frame;
+
 - (void) startCamera;
 - (void) stopCamera;
-- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller
-                                    portrait:(BOOL)portrait;
+
+- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;
 @end
 
 NS_ASSUME_NONNULL_END

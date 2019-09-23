@@ -40,6 +40,8 @@ enum {
 @property (nonatomic, strong)   UILabel *frameDisplay;
 @property (assign)              int frameCount, droppedCount;
 
+@property (nonatomic, strong)   UIView *videoPreview;
+
 @end
 
 @implementation MainVC
@@ -52,6 +54,7 @@ enum {
 @synthesize frameCount, droppedCount;
 @synthesize transforms;
 @synthesize activeList;
+@synthesize videoPreview;
 
 
 - (id)init {
@@ -65,18 +68,17 @@ enum {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    
-    cameraController = [[CameraController alloc] init];
-    if (!cameraController) {
-        NSLog(@"************ no cameras available, help");
-    }
 
+    
     videoView = [[UIImageView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     [self.view addSubview:videoView];
     frameDisplay = [[UILabel alloc] initWithFrame:CGRectMake(20, 20, 300, 20)];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
     videoView.backgroundColor = [UIColor yellowColor];
+    
+    videoPreview = [[UIView alloc] init];    // where the original video is stored
+
     
     UITapGestureRecognizer *videoTapped = [[UITapGestureRecognizer alloc]
                                            initWithTarget:self
@@ -89,13 +91,14 @@ enum {
     activeListVC.tableView.tag = ActiveTag;
     activeListVC.tableView.delegate = self;
     activeListVC.tableView.dataSource = self;
+    activeListVC.title = @"Active";
     activeListVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     activeListVC.tableView.showsVerticalScrollIndicator = YES;
     
     activeNavVC = [[UINavigationController alloc] initWithRootViewController:activeListVC];
 
     [activeNavVC.view addSubview:activeListVC.tableView];
-
+    
     transformsVC = [[UITableViewController alloc] initWithStyle:UITableViewStyleGrouped];
     transformsVC.tableView.frame = CGRectMake(0, 0,
                                              transformsVC.navigationController.navigationBar.frame.size.height, 10);
@@ -104,7 +107,8 @@ enum {
     transformsVC.tableView.delegate = self;
     transformsVC.tableView.dataSource = self;
     transformsVC.tableView.showsVerticalScrollIndicator = YES;
-    
+    transformsVC.title = @"Transforms";
+
     transformsNavVC = [[UINavigationController alloc] initWithRootViewController:transformsVC];
     [transformsNavVC.view addSubview:transformsVC.tableView];
     
@@ -133,13 +137,34 @@ enum {
                                    action:@selector(doeditTransformList:)];
     activeNavVC.navigationItem.leftBarButtonItem = editButton;
 
-//    [[UIDevice currentDevice] beginGeneratingDeviceOrientationNotifications];
-
-//    [self layoutViews];
+    cameraController = [[CameraController alloc] init];
+    if (!cameraController) {
+        NSLog(@"************ no cameras available, help");
+    }
+    
+    [cameraController selectCaptureDevice];
+    NSString *err = [cameraController configureForCaptureWithCaller:self];
+    if (err) {
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:@"Camera connection failed"
+                                    message:err
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction* defaultAction = [UIAlertAction
+                                        actionWithTitle:@"Dismiss"
+                                        style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction * action) {}
+                                        ];
+        [alert addAction:defaultAction];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+    [videoPreview.layer addSublayer:cameraController.captureVideoPreviewLayer];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
+    [cameraController stopCamera];
 //    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -172,36 +197,18 @@ enum {
 }
 #endif
 
-- (void) viewWillLayoutSubviews {
-    [super viewWillLayoutSubviews];
-    
-    NSLog(@"***** viewWillLayoutSubviews: %.0f x %.0f",
-          self.view.frame.size.width, self.view.frame.size.height);  //UIInterfaceOrientationLandscapeLeft
-   [self layoutViews];
-}
 
-#ifdef notdef
+#define SEP 10
 
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     
-    NSLog(@"***** viewDidLayoutSubviews: %.0f x %.0f",
-          self.view.bounds.size.width, self.view.bounds.size.height);  //UIInterfaceOrientationLandscapeLeft
-}
-#endif
-
-#ifdef notdef
-- (void) viewWillTransitionToSize:(CGSize)size
-        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
-    [self layoutViewsForSize:size];
-}
-#endif
-
-#define SEP 10
-
-- (void) layoutViews {
     BOOL isPortrait = UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]);
     CGRect f = self.view.frame;
+    
+    NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
+
+    [cameraController setOrientation:isPortrait];
     
     if (isPortrait) {   // video on the top
         f.size.height /= 2;    // top half only, for now
@@ -215,25 +222,15 @@ enum {
         f.size.height = self.view.frame.size.height - f.origin.y;
         f.size.width = (self.view.frame.size.width - SEP)*0.50;
         activeNavVC.view.frame = f;
-        activeListVC.title = @"Active";
         
         f.origin.x += f.size.width + SEP;
         transformsNavVC.view.frame = f;
-        transformsVC.title = @"Transforms";
         
         f.origin.y = activeNavVC.navigationBar.frame.size.height;
         f.size.height -= f.origin.y;
         f.origin.x = 0;
         transformsVC.tableView.frame = f;
         activeListVC.tableView.frame = f;
-        
-        [transforms updateFrameSize: videoView.frame.size];
-        
-        [activeListVC.tableView reloadData];
-        [transformsVC.tableView reloadData];
-        
-        [activeNavVC.view setNeedsDisplay];
-        [transformsNavVC.view setNeedsDisplay];
     } else {    // video on the left
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
         f.size.height -= f.origin.y;
@@ -245,12 +242,10 @@ enum {
         f.size.width = self.view.frame.size.width - f.origin.x;
         f.size.height = 0.30*videoView.frame.size.height;
         activeNavVC.view.frame = f;
-        activeListVC.title = @"Active";
         
         f.origin.y = BELOW(f) + SEP;
         f.size.height = self.view.frame.size.height - f.origin.y;
         transformsNavVC.view.frame = f;
-        transformsVC.title = @"Transforms";
         
         f.origin.y = activeNavVC.navigationBar.frame.size.height;
         f.size.height = activeNavVC.navigationBar.frame.size.height - f.origin.y;
@@ -261,31 +256,22 @@ enum {
         f.size.height = transformsNavVC.navigationBar.frame.size.height - f.origin.y;
         f.origin.x = 0;
         transformsVC.tableView.frame = f;
-        
-        [transforms updateFrameSize: videoView.frame.size];
-        
-        [activeListVC.tableView reloadData];
-        [transformsVC.tableView reloadData];
-        
-        [activeNavVC.view setNeedsDisplay];
-        [transformsNavVC.view setNeedsDisplay];
     }
-    NSString *err = [cameraController configureForCaptureWithCaller:self
-                                                           portrait:isPortrait];
-    if (err) {
-        UIAlertController *alert = [UIAlertController
-                                    alertControllerWithTitle:@"Camera connection failed"
-                                    message:err
-                                    preferredStyle:UIAlertControllerStyleAlert];
-        
-        UIAlertAction* defaultAction = [UIAlertAction
-                                        actionWithTitle:@"Dismiss"
-                                        style:UIAlertActionStyleDefault
-                                        handler:^(UIAlertAction * action) {}
-                                        ];
-        [alert addAction:defaultAction];
-        [self presentViewController:alert animated:YES completion:nil];
-    }
+
+    NSLog(@" **** video frame: %.0f x %.0f", videoView.frame.size.width, videoView.frame.size.height);
+    
+    [transforms updateFrameSize: videoView.frame.size];
+    
+    [activeNavVC.view setNeedsDisplay];     // not sure if any of these are ...
+    [transformsNavVC.view setNeedsDisplay];
+    [activeListVC.tableView reloadData];
+    [transformsVC.tableView reloadData];    // ... needed
+
+
+    f = videoView.frame;
+    f.origin = CGPointZero;
+    videoPreview.frame = f;
+    
 }
 
 - (void) updateFrameCounter {
@@ -424,7 +410,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
     // Lock the base address of the pixel buffer
 
-    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
+//    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
     CVPixelBufferRef imageBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     

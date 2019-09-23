@@ -14,6 +14,7 @@
     AVCaptureVideoDataOutputSampleBufferDelegate> {
 }
 
+
 //-(void)deviceRotated;
 
 @end

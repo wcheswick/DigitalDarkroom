@@ -6,6 +6,7 @@
 //  Copyright © 2019 Cheswick.com. All rights reserved.
 //
 
+#import "MainVC.h"
 #import "CameraController.h"
 
 @interface CameraController ()
@@ -16,7 +17,7 @@
 @property (strong, nonatomic)   AVCaptureDevice *frontVideoDevice;
 @property (strong, nonatomic)   AVCaptureDevice *backVideoDevice;
 
-@property (nonatomic, strong)   AVCaptureVideoPreviewLayer *videoPreviewLayer;
+@property (strong, nonatomic)   AVCaptureConnection *connection;
 
 @end
 
@@ -26,23 +27,20 @@
 @synthesize captureSession;
 
 @synthesize frontVideoDevice, backVideoDevice;
-@synthesize videoPreviewLayer;
+@synthesize captureVideoPreviewLayer;
+@synthesize connection;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        captureDevice = [self selectCaptureDevice];
-        if (!captureDevice) {
-            NSLog(@"*** no capture devices found");
-            return nil;
-        }
         NSLog(@"capture device: %@", captureDevice);
+        connection = nil;
     }
     return self;
 }
 
-- (AVCaptureDevice *) selectCaptureDevice {
+- (void) selectCaptureDevice {
     frontVideoDevice = [AVCaptureDevice
                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                         mediaType: AVMediaTypeVideo
@@ -64,12 +62,12 @@
                            position: AVCaptureDevicePositionBack];
     
     if (frontVideoDevice)
-        return frontVideoDevice;
-    else {
-        if (backVideoDevice)
-            return backVideoDevice;
-    }
-    return [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];;
+        captureDevice = frontVideoDevice;
+    else if (backVideoDevice)
+        captureDevice = backVideoDevice;
+    else
+        captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    NSLog(@"capture device: %@", captureDevice);
 }
 
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
@@ -96,7 +94,7 @@
               availableSize.width, availableSize.height);
         return (CGSize){0,0};
     }
-    NSLog(@"selected %.0f x %.0f", bestSize.width, bestSize.height);
+    NSLog(@"----- selected %.0f x %.0f", bestSize.width, bestSize.height);
     NSLog(@" format %@", selectedFormat);
     return bestSize;
     
@@ -124,9 +122,9 @@
 #endif
 }
 
-- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller
-                                    portrait:(BOOL)portrait {
+- (NSString *) configureForCaptureWithCaller: (MainVC *)caller {
     NSError *error;
+    
     assert(captureDevice);
     if (![captureDevice lockForConfiguration:&error])
         return [NSString stringWithFormat:@"error locking camera: %@", error.localizedDescription];
@@ -134,7 +132,6 @@
         [captureDevice automaticallyEnablesLowLightBoostWhenAvailable];
     if ([captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure])
         [captureDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
-    
     if ([captureDevice isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus])
         captureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
     if (captureDevice.smoothAutoFocusSupported)
@@ -156,24 +153,28 @@
     [captureSession addOutput:dataOutput];
     dataOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
     
+    connection = [dataOutput.connections objectAtIndex:0];
+    
     dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
     [dataOutput setSampleBufferDelegate:caller queue:queue];
     
-    videoPreviewLayer = [AVCaptureVideoPreviewLayer layerWithSession:captureSession];
-    assert(videoPreviewLayer);
-    videoPreviewLayer.connection.videoOrientation = portrait ?
-    AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeLeft;
-    
-#ifdef notdef
-    for (int i = 0; i < [[movieOutput connections] count]; i++) {
-        AVCaptureConnection *captureConnection = [[movieOutput connections] objectAtIndex:i];
-        if ([captureConnection isVideoOrientationSupported]) {
-            [captureConnection setVideoOrientation:newOrientation];
-        }
-    }
-#endif
     [captureSession commitConfiguration];
     return nil;
+}
+
+- (void) setOrientation: (BOOL)isPortrait {
+    captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
+    connection.videoOrientation = isPortrait ? AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeLeft; // **** This matters!
+}
+
+- (void) setFrame: (CGRect) frame {
+    captureVideoPreviewLayer.frame = frame;
+    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+
+#ifdef notdef   // this doesn't matter
+    captureVideoPreviewLayer.connection.videoOrientation = isPortrait ?
+        AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeRight;
+#endif
 }
 
 - (void) startCamera {
