@@ -35,12 +35,13 @@ enum {
 
 @property (nonatomic, strong)   UINavigationController *activeNavVC;
 @property (nonatomic, strong)   UITableViewController *activeListVC;
-@property (nonatomic, strong)   NSMutableArray *activeList;
 
 @property (nonatomic, strong)   UILabel *frameDisplay;
 @property (assign)              int frameCount, droppedCount;
 
 @property (nonatomic, strong)   UIView *videoPreview;   // not shown
+@property (nonatomic, strong)   NSIndexPath *selectedTransformEntry;
+@property (nonatomic, strong)   UIBarButtonItem *addButton;
 
 @end
 
@@ -53,15 +54,16 @@ enum {
 @synthesize frameDisplay;
 @synthesize frameCount, droppedCount;
 @synthesize transforms;
-@synthesize activeList;
 @synthesize videoPreview;
+@synthesize selectedTransformEntry;
+@synthesize addButton;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        activeList = [[NSMutableArray alloc] init];
         transforms = [[Transforms alloc] init];
+        selectedTransformEntry = nil;
     }
     return self;
 }
@@ -92,10 +94,15 @@ enum {
     activeListVC.tableView.tag = ActiveTag;
     activeListVC.tableView.delegate = self;
     activeListVC.tableView.dataSource = self;
-    activeListVC.title = @"Active";
     activeListVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     activeListVC.tableView.showsVerticalScrollIndicator = YES;
-    
+    activeListVC.title = @"Active";
+    UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
+                                   target:self
+                                   action:@selector(doeditActiveList:)];
+    activeListVC.navigationItem.rightBarButtonItem = editButton;
+
     activeNavVC = [[UINavigationController alloc] initWithRootViewController:activeListVC];
 
     [activeNavVC.view addSubview:activeListVC.tableView];
@@ -108,8 +115,15 @@ enum {
     transformsVC.tableView.delegate = self;
     transformsVC.tableView.dataSource = self;
     transformsVC.tableView.showsVerticalScrollIndicator = YES;
-    transformsVC.title = @"Transforms";
 
+    addButton = [[UIBarButtonItem alloc]
+                                  initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                  target:self
+                                  action:@selector(doAddTransform:)];
+    transformsVC.navigationItem.rightBarButtonItem = addButton;
+    addButton.enabled = (selectedTransformEntry != nil);
+
+    transformsVC.title = @"Transforms";
     transformsNavVC = [[UINavigationController alloc] initWithRootViewController:transformsVC];
     [transformsNavVC.view addSubview:transformsVC.tableView];
     
@@ -126,17 +140,6 @@ enum {
     self.navigationController.navigationBar.opaque = YES;
     self.navigationController.toolbarHidden = YES;
     self.navigationController.toolbar.opaque = NO;
-
-    UIBarButtonItem *addButton = [[UIBarButtonItem alloc]
-                                  initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-                                  target:self
-                                  action:@selector(doAddTransform:)];
-    activeNavVC.navigationItem.rightBarButtonItem = addButton;
-    UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
-                                   target:self
-                                   action:@selector(doeditTransformList:)];
-    activeNavVC.navigationItem.leftBarButtonItem = editButton;
 
     cameraController = [[CameraController alloc] init];
     if (!cameraController) {
@@ -169,35 +172,6 @@ enum {
 //    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-#ifdef notdef
-- (void)deviceRotated {
-    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
-    switch (deviceOrientation) {
-        case UIDeviceOrientationUnknown:
-            NSLog(@"UIDeviceOrientationUnknown");
-            break;
-        case UIDeviceOrientationPortrait:
-            NSLog(@"UIDeviceOrientationPortrait");
-            break;
-        case UIDeviceOrientationPortraitUpsideDown:
-            NSLog(@"UIDeviceOrientationPortraitUpsideDown");
-            break;
-        case UIDeviceOrientationLandscapeLeft:
-            NSLog(@"UIDeviceOrientationLandscapeLeft");
-            break;
-        case UIDeviceOrientationLandscapeRight:
-            NSLog(@"UIDeviceOrientationLandscapeRight");
-            break;
-        case UIDeviceOrientationFaceUp:
-            NSLog(@"UIDeviceOrientationFaceUp");
-            break;
-        case UIDeviceOrientationFaceDown:
-            NSLog(@"UIDeviceOrientationFaceDown");
-            break;
-    }
-}
-#endif
-
 
 #define SEP 10
 
@@ -209,7 +183,7 @@ enum {
     
     NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
 
-    [cameraController setOrientation:isPortrait];
+    [cameraController setVideoOrientation];
     
     if (isPortrait) {   // video on the top
         f.size.height /= 2;    // top half only, for now
@@ -292,13 +266,9 @@ enum {
     NSLog(@"video tapped");
 }
 
-- (IBAction) doAddTransform:(UIBarButtonItem *)button {
-    NSLog(@"add transform");
-}
-
-- (IBAction) doeditTransformList:(UIBarButtonItem *)button {
+- (IBAction) doeditActiveList:(UIBarButtonItem *)button {
     NSLog(@"edit transform list");
-    transformsVC.editing = !transformsVC.editing;
+    [activeListVC.tableView setEditing:!activeListVC.tableView.editing animated:YES];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -318,7 +288,10 @@ enum {
             return transformList.count;
         }
         case ActiveTag:
-            return activeList.count;
+            if (selectedTransformEntry) // if we have a selected entry, don't highlight next (empty) cell
+                return transforms.list.count;
+            else
+                return transforms.list.count + 1;    // to highlight where the next one goes
     }
     return 1;
 }
@@ -338,7 +311,11 @@ enum {
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    return (tableView.tag == ActiveTag);
+    if (tableView.tag != ActiveTag)
+        return NO;      // cannot edit source transform list
+    if (selectedTransformEntry && indexPath.row >= transforms.list.count)
+        return NO;      // cannot edit highlighted empty cell
+    return YES;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -351,8 +328,19 @@ enum {
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                           reuseIdentifier:CellIdentifier];
         }
-        Transform *transform = [activeList objectAtIndex:indexPath.row];
-        cell.textLabel.text = transform.name;
+        if (indexPath.row < transforms.list.count) { // show transform entry
+            Transform *transform = [transforms.list objectAtIndex:indexPath.row];
+            cell.textLabel.text = transform.name;
+            cell.layer.borderWidth = 0;
+        } else {    // show an empty highlighted cell where the next one goes
+            cell.textLabel.text = @"";
+            cell.layer.cornerRadius = 3.0;
+            cell.layer.borderColor = [UIColor blueColor].CGColor;
+            if (selectedTransformEntry) // do not show this
+                cell.layer.borderWidth = 0;
+            else
+                cell.layer.borderWidth = 2;
+        }
     } else {    // Selection table display table list
         NSString *CellIdentifier = @"SelectionCell";
         cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
@@ -370,19 +358,46 @@ enum {
     return cell;
 }
 
-
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-    cell.selected = NO;
     
     if (tableView.tag == ActiveTag) {
-        Transform *transform = [activeList objectAtIndex:indexPath.row];
-        NSLog(@"tapped listing entry number %ld, %@", (long)indexPath.row, transform.name);
+        // Nothing happens
+//        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
         Transform *transform = [transformList objectAtIndex:indexPath.row];
-        NSLog(@"tapped transform entry number %ld, %@", (long)indexPath.row, transform.name);
+        if (!selectedTransformEntry) {   // create a transform selection. Remove outlined cell
+            cell.selected = YES;
+            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+            selectedTransformEntry = indexPath;
+            [transforms.list addObject:transform];
+        } else if (indexPath.row != selectedTransformEntry.row) {  // switch selection entry
+            UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:selectedTransformEntry];
+            oldCell.selected = NO;
+            [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
+            selectedTransformEntry = indexPath;
+            cell.selected = YES;
+            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+            [transforms.list replaceObjectAtIndex:transforms.list.count - 1 withObject:transform];
+        } else {        // remove selection, restoring outlined cell in list
+            cell.selected = NO;
+            [transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
+            selectedTransformEntry = nil;
+            [transforms.list removeObjectAtIndex:transforms.list.count - 1];
+        }
+        [activeListVC.tableView reloadData];
+        addButton.enabled = (selectedTransformEntry != nil);
     }
+}
+
+- (IBAction) doAddTransform:(UIBarButtonItem *)button {
+    assert(selectedTransformEntry);
+    NSLog(@"add transform");
+    [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
+    selectedTransformEntry = nil;
+    addButton.enabled = (selectedTransformEntry != nil);
+    [activeListVC.tableView reloadData];
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -390,6 +405,9 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
         case UITableViewCellEditingStyleDelete:
+            [transforms.list removeObjectAtIndex:indexPath.row];
+            [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
+                             withRowAnimation:UITableViewRowAnimationBottom];
             break;
         case UITableViewCellEditingStyleInsert:
             break;
@@ -398,9 +416,15 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-- (void)moveRowAtIndexPath:(NSIndexPath *)indexPath
-               toIndexPath:(NSIndexPath *)newIndexPath {
-    
+- (void)tableView:(UITableView *)tableView
+moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
+      toIndexPath:(NSIndexPath *)toIndexPath {
+    NSLog(@"move from %ld.%ld to %ld.%ld",
+          (long)fromIndexPath.section, (long)fromIndexPath.row,
+          (long)toIndexPath.section, (long)toIndexPath.row);
+    Transform *t = [transforms.list objectAtIndex:fromIndexPath.row];
+    [transforms.list removeObjectAtIndex:fromIndexPath.row];
+    [transforms.list insertObject:t atIndex:toIndexPath.row];
 }
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput

@@ -32,11 +32,13 @@
 @synthesize categoryNames;
 @synthesize categoryList;
 @synthesize transforms;
+@synthesize list;
 @synthesize frameSize;
 
 - (id)init {
     self = [super init];
     if (self) {
+        list = [[NSMutableArray alloc] init];
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
         [self addColorTransforms];

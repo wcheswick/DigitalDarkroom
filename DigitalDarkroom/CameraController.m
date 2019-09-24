@@ -18,6 +18,7 @@
 @property (strong, nonatomic)   AVCaptureDevice *backVideoDevice;
 
 @property (strong, nonatomic)   AVCaptureConnection *connection;
+@property (assign)              AVCaptureVideoOrientation videoOrientation;
 
 @end
 
@@ -29,6 +30,7 @@
 @synthesize frontVideoDevice, backVideoDevice;
 @synthesize captureVideoPreviewLayer;
 @synthesize connection;
+@synthesize videoOrientation;
 
 
 - (id)init {
@@ -165,9 +167,28 @@
     return nil;
 }
 
-- (void) setOrientation: (BOOL)isPortrait {
+- (void) setVideoOrientation {
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationUnknown:
+        case UIDeviceOrientationPortrait:
+        case UIDeviceOrientationFaceUp:
+        case UIDeviceOrientationFaceDown:
+            videoOrientation = AVCaptureVideoOrientationPortrait;
+            break;
+        case UIDeviceOrientationPortraitUpsideDown:
+            videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+            break;
+        case UIDeviceOrientationLandscapeRight:
+            videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+            break;
+    }
+
     captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
-    connection.videoOrientation = isPortrait ? AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeLeft; // **** This matters!
+    connection.videoOrientation = videoOrientation; // **** This one matters!
 }
 
 - (void) setFrame: (CGRect) frame {

@@ -17,12 +17,14 @@ NS_ASSUME_NONNULL_BEGIN
     NSMutableArray *categoryNames;
     NSMutableArray *categoryList;
     CGSize frameSize;
+    NSMutableArray *list;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
 @property (nonatomic, strong)   NSArray *categoryList;
 @property (assign)              NSMutableArray *transforms;
 @property (assign)              CGSize frameSize;
+@property (nonatomic, strong)   NSMutableArray *list;
 
 - (void) updateFrameSize: (CGSize) newSize;
 

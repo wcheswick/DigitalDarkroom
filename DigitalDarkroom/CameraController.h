@@ -20,7 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) selectCaptureDevice;
 - (CGSize) cameraVideoSizeFor: (CGSize) s portrait:(BOOL)isPortrait;
-- (void) setOrientation: (BOOL)isPortrait;
+- (void) setVideoOrientation;
 - (void) setFrame: (CGRect) frame;
 
 - (void) startCamera;
