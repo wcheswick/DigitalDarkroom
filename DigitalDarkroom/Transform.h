@@ -11,18 +11,22 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+
+typedef enum {
+    ColorTrans,
+    GeometricTrans,
+    AreaTrans,
+    EtcTrans,
+} transform_t;
+
 typedef u_char channel;
 
 typedef struct {
     channel b, g, r, a;
 } Pixel;
 
-typedef struct Image {
-    size_t w, h;
-    Pixel *image;
-} Image;
+typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p);
 
-typedef void (^pointFunction_t)(Pixel *);
 typedef void (^transform_f)(void);
 
 // typedef int transform_t(void *param, int low, int high);
@@ -30,14 +34,16 @@ typedef void (^transform_f)(void);
 
 @interface Transform : NSObject {
     NSString *name, *description;
-    pointFunction_t __unsafe_unretained pointF;
+    transform_t type;
+    pointFunction_t pointF;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
-@property (assign)              pointFunction_t __unsafe_unretained pointF;
+@property (assign)              pointFunction_t pointF;
+@property (assign)              transform_t type;
 
-- (id)initWithName:(NSString *)n description:(NSString *)d
-          PointF:(pointFunction_t)f;
++ (Transform *)colorTransform:(NSString *)n description:(NSString *)d
+               pointTransform: (pointFunction_t) f;
 
 @end
 

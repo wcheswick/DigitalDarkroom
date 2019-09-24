@@ -74,11 +74,11 @@ enum {
     
     videoView = [[UIImageView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     [self.view addSubview:videoView];
-    frameDisplay = [[UILabel alloc] initWithFrame:CGRectMake(20, 20, 300, 20)];
+    frameDisplay = [[UILabel alloc] init];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
     videoView.backgroundColor = [UIColor yellowColor];
-    videoView.contentMode = UIViewContentModeScaleAspectFit;
+//    videoView.contentMode = UIViewContentModeScaleAspectFit;
     
     videoPreview = [[UIView alloc] init];    // where the original video is stored
 
@@ -119,7 +119,7 @@ enum {
     addButton = [[UIBarButtonItem alloc]
                                   initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
                                   target:self
-                                  action:@selector(doAddTransform:)];
+                                  action:@selector(addTransformToList:)];
     transformsVC.navigationItem.rightBarButtonItem = addButton;
     addButton.enabled = (selectedTransformEntry != nil);
 
@@ -187,7 +187,7 @@ enum {
     
     if (isPortrait) {   // video on the top
         f.size.height /= 2;    // top half only, for now
-        f.size = [cameraController cameraVideoSizeFor:f.size portrait:isPortrait];
+        f.size = [cameraController cameraVideoSizeFor:f.size];
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
         f.origin.x = (self.view.frame.size.width - f.size.width)/2;
         videoView.frame = f;
@@ -210,7 +210,7 @@ enum {
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
         f.size.height -= f.origin.y;
         f.origin.x = 0;
-        f.size = [cameraController cameraVideoSizeFor:f.size portrait:isPortrait];
+        f.size = [cameraController cameraVideoSizeFor:f.size];
         videoView.frame = f;
         
         f.origin.x = RIGHT(f) + SEP;
@@ -232,8 +232,6 @@ enum {
         f.origin.x = 0;
         transformsVC.tableView.frame = f;
     }
-
-    NSLog(@" **** video frame: %.0f x %.0f", videoView.frame.size.width, videoView.frame.size.height);
     
     [transforms updateFrameSize: videoView.frame.size];
     
@@ -245,7 +243,6 @@ enum {
     f = videoView.frame;
     f.origin = CGPointZero;
     videoPreview.frame = f;
-    
 }
 
 - (void) updateFrameCounter {
@@ -387,11 +384,12 @@ enum {
             [transforms.list removeObjectAtIndex:transforms.list.count - 1];
         }
         [activeListVC.tableView reloadData];
+        [transforms setupForTransforming];
         addButton.enabled = (selectedTransformEntry != nil);
     }
 }
 
-- (IBAction) doAddTransform:(UIBarButtonItem *)button {
+- (IBAction) addTransformToList:(UIBarButtonItem *)button {
     assert(selectedTransformEntry);
     NSLog(@"add transform");
     [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
@@ -432,9 +430,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
     
-    // Lock the base address of the pixel buffer
-
 //    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
+    // Lock the base address of the pixel buffer
     CVPixelBufferRef imageBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     
@@ -452,60 +449,21 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     
     // Create a bitmap graphics context with the sample buffer data
-    CGContextRef context1 = CGBitmapContextCreate(baseAddress, width, height, 8,
+    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
                                                   bytesPerRow, colorSpace, kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst);
     
-    Image image = {width, height, CGBitmapContextGetData(context1)};
-
-#ifdef notdef
-    for (int y=0; y<height/2; y++) {    // copy bottom
-        for (int x=0; x<width; x++) {
-            *A(image,x,y)] = *A(image,x,height - y - 1)];
-        }
-    }
-
-
-    for (int y=0; y<height/2; y++) {    // copy top
-        for (int x=0; x<width; x++) {
-            pixels[P(x,height - y - 1)] = pixels[P(x,y)];
-        }
-    }
-
-    for (int x=0; x<width/2; x++) { // copy right
-        for (int y=0; y<height; y++) {
-            pixels[P(width - x - 1,y)] = pixels[P(x,y)];
-        }
-    }
-
-    for (int x=0; x<width/2; x++) { // copy left
-        for (int y=0; y<height; y++) {
-            pixels[P(x,y)] = pixels[P(width - x - 1,y)];
-        }
-    }
-#endif
-    // Create a Quartz image from the pixel data in the bitmap graphics context
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context1);
-    // Unlock the pixel buffer
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    UIImage *transformed = [transforms doTransformsOnContext:(CGContextRef)context];
     
     // Free up the context and color space
-    CGContextRelease(context1);
+    CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
-    
-    // Create an image object from the Quartz image
-    //I modified this line: [UIImage imageWithCGImage:quartzImage]; to the following to correct the orientation:
-    UIImage *outImage =  [UIImage imageWithCGImage:quartzImage];
-    
-    // Release the Quartz image
-    CGImageRelease(quartzImage);
-    
-    
-//    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
+    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
     
     dispatch_async(dispatch_get_main_queue(), ^{
 //        [self updateFrameCounter];
-        self->videoView.image = outImage;
+        self->videoView.image = transformed;
     });
+    
 //    CMFormatDescriptionRef formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer);
 //    CMVideoDimensions d = CMVideoFormatDescriptionGetDimensions( formatDescription );
     

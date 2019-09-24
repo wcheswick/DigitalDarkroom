@@ -23,6 +23,7 @@
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
 
+
 @interface Transforms ()
 
 @end
@@ -54,42 +55,96 @@
     // update transforms:
 }
 
+- (void) setupForTransforming {
+}
+
+Image mainImage;
+
+- (UIImage *) doTransformsOnContext:(CGContextRef)context {
+    size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
+    size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
+
+    if (channelSize != 8) {
+        NSLog(@"unexpected format: channel size = %zu bits", channelSize);
+    }
+    if (pixelSize != 8*4) { // BGRA
+        NSLog(@"unexpected format: pixel size = %zu", pixelSize);
+    }
+    
+    mainImage = (Image){CGBitmapContextGetWidth(context),
+        CGBitmapContextGetHeight(context),
+        CGBitmapContextGetBytesPerRow(context),
+        CGBitmapContextGetData(context)};
+    
+    for (int i=0; i<list.count; i++) {
+        Transform *t = [list objectAtIndex:i];
+        switch (t.type) {
+            case ColorTrans: {
+                for (int y=0; y<mainImage.h; y++) {
+                    Pixel *row = A(mainImage, 0, y);
+                    for (int x=0; i<mainImage.w; x++) {
+                        t.pointF(row++);
+                    }
+                }
+                break;
+            }
+            case GeometricTrans:
+                break;
+            case AreaTrans:
+                break;
+            case EtcTrans:
+                break;
+        }
+    }
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    UIImage *out = [UIImage imageWithCGImage:quartzImage];
+    CGImageRelease(quartzImage);
+    return out;
+    //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
+}
+
+
+
+// used by colorize
+
+channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
+channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
+channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
+
 - (void) addColorTransforms {
     [categoryNames addObject:@"Color transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-
-    typedef Pixel (^PointFunction)(Pixel p);
-
-    [transformList addObject:[[Transform alloc]
-                              initWithName:@"Luminance"
-                              description:@"Convert to pixel brightness"
-                              PointF:^void(Pixel *pp) {
-                                  channel lum = LUM(*pp);   /* wasteful, but cleaner code */
-                                  *pp = SETRGB(lum, lum, lum);
-                              }]
-     ];
-
     
-    [transformList addObject:[[Transform alloc]
-                              initWithName:@"Brighten"
-                              description:@"Increase brightness"
-                              PointF:^void(Pixel *pp) {
-                                  Pixel p = *pp;
-                                  *pp = SETRGB(p.r+(Z-p.r)/8,
-                                               p.g+(Z-p.g)/8,
-                                               p.b+(Z-p.b)/8);
-                              }]
-     ];
-    [transformList addObject:[[Transform alloc]
-                              initWithName:@"Colorize"
-                              description:@"Add color"
-                              PointF:^void(Pixel *pp) {
-                                  Pixel p = *pp;
-                                  channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&31;
-                                  *pp = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-                              }]
-     ];
+    [transformList addObject:[Transform colorTransform: @"Luminance"
+        description: @"Convert to brightness"
+    pointTransform: ^(Pixel *pp) {
+        Pixel p = *pp;
+        channel lum = LUM(p);
+        *pp = SETRGB(lum, lum, lum);
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Brighten"
+        description: @"Make brighter"
+    pointTransform: ^(Pixel *p) {
+         *p = SETRGB(p->r+(Z-p->r)/8,
+                      p->g+(Z-p->g)/8,
+                      p->b+(Z-p->b)/8);
+    }]];
+
+    [transformList addObject:[Transform colorTransform: @"Colorize"
+        description: @"Add color"
+    pointTransform: ^(Pixel *p) {
+         channel pw = (((p->r>>3)^(p->g>>3)^(p->b>>3)) + (p->r>>3) + (p->g>>3) + (p->b>>3))&31;
+        *p = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Green"
+        description: @"Set to green"
+    pointTransform: ^(Pixel *p) {
+        *p = SETRGB(0,Z,0);
+    }]];
+
 #ifdef notyet
      
      - (void)aMethodWithBlock:(returnType (^)(parameters))blockName {
@@ -110,6 +165,34 @@
     extern  init_proc init_brighten;
     extern  init_proc init_auto;
     extern  init_proc init_negative;
+
+    #ifdef notdef
+        for (int y=0; y<height/2; y++) {    // copy bottom
+            for (int x=0; x<width; x++) {
+                *A(image,x,y)] = *A(image,x,height - y - 1)];
+            }
+        }
+
+
+        for (int y=0; y<height/2; y++) {    // copy top
+            for (int x=0; x<width; x++) {
+                pixels[P(x,height - y - 1)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy right
+            for (int y=0; y<height; y++) {
+                pixels[P(width - x - 1,y)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy left
+            for (int y=0; y<height; y++) {
+                pixels[P(x,y)] = pixels[P(width - x - 1,y)];
+            }
+        }
+    #endif
+
 #endif
     
 }
@@ -176,11 +259,6 @@
 #endif
 }
 
-// used by colorize
-
-channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
-channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
-channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
 
 - (void) addMiscTransforms {
     [categoryNames addObject:@"Misc. transforms"];

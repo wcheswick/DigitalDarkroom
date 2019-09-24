@@ -12,17 +12,24 @@
 
 @synthesize name, description;
 @synthesize pointF;
+@synthesize type;
 
 
-- (id)initWithName:(NSString *)n description:(NSString *)d
-            PointF:(pointFunction_t)f; {
+- (id)init {
     self = [super init];
     if (self) {
-        name = n;
-        description = d;
-        pointF = f;
     }
     return self;
+}
+
++ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
+                pointTransform:(pointFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = ColorTrans;
+    t.pointF = f;
+    return t;
 }
 
 @end

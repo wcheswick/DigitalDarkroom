@@ -9,8 +9,6 @@
 #ifndef Defines_h
 #define Defines_h
 
-#define A(im, x,y)  (im.image + (x) + (y)*im.width)
-
 #define LATER   0   /*later*/
 
 // view tools

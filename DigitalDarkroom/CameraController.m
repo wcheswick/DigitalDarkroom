@@ -72,7 +72,10 @@
     NSLog(@"capture device: %@", captureDevice);
 }
 
-- (CGSize) cameraVideoSizeFor: (CGSize) availableSize portrait:(BOOL) isPortrait {
+- (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
+    BOOL isPortrait = (videoOrientation == AVCaptureVideoOrientationPortrait) ||
+        (videoOrientation == AVCaptureVideoOrientationPortraitUpsideDown);
+    
     assert(captureDevice);
     AVCaptureDeviceFormat *selectedFormat = nil;
     CGSize bestSize;
@@ -96,35 +99,11 @@
               availableSize.width, availableSize.height);
         return (CGSize){0,0};
     }
-    NSLog(@"----- selected %.0f x %.0f", bestSize.width, bestSize.height);
     NSLog(@" format %@", selectedFormat);
     if (isPortrait) // this is a hack I can't figure out how to avoid
-        return (CGSize){bestSize.height,bestSize.width};
-    else
-        return bestSize;
-    
-#ifdef notded
-    captureDevice.activeFormat
-    NSArray *sizes = [NSArray arrayWithObjects:
-                      @[@(352),@(288), AVCaptureSessionPreset352x288],
-                      @[@(640),@(480), AVCaptureSessionPreset640x480],
-                      @[@(1280),@(720), AVCaptureSessionPreset1280x720],
-                      @[@(1920),@(1080), AVCaptureSessionPreset1920x1080],
-                      @[@(3840),@(2160), AVCaptureSessionPreset3840x2160],
-                      nil];
-
-    unsigned long i;
-    for (i=sizes.count-1; i>=0; i--) {
-        NSArray *entry = [sizes objectAtIndex:i];
-        NSNumber *w = (NSNumber *)[entry objectAtIndex:0];
-        NSNumber *h = (NSNumber *)[entry objectAtIndex:1];
-        captureSession.sessionPreset = [entry objectAtIndex:2];
-        if (w.intValue <= availableSize.width && h.intValue <= availableSize.height)
-            return (CGSize){w.intValue,h.intValue};
-    }
-    NSLog(@"**** inconceivable, no size fits %.0f4,%.0f", availableSize.width, availableSize.height);
-    return (CGSize){0,0};
-#endif
+        bestSize = (CGSize){bestSize.height,bestSize.width};
+    NSLog(@"----- video selected: %.0f x %.0f", bestSize.width, bestSize.height);
+    return bestSize;
 }
 
 - (NSString *) configureForCaptureWithCaller: (MainVC *)caller {
