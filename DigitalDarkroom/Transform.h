@@ -25,7 +25,8 @@ typedef struct {
     channel b, g, r, a;
 } Pixel;
 
-typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p);
+// typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p);
+typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 
 typedef void (^transform_f)(void);
 

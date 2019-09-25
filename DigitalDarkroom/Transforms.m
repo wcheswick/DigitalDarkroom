@@ -64,28 +64,27 @@ Image mainImage;
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
     size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
 
-    if (channelSize != 8) {
-        NSLog(@"unexpected format: channel size = %zu bits", channelSize);
-    }
-    if (pixelSize != 8*4) { // BGRA
-        NSLog(@"unexpected format: pixel size = %zu", pixelSize);
-    }
+    // These transforms make certain assumptions about the bitmaps encountered
+    // that greatly speed up and simplify them.  Make sure these assumptions
+    // are valid.
     
+    assert(channelSize == 8);   // eight bits per color
+    assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
+
     mainImage = (Image){CGBitmapContextGetWidth(context),
         CGBitmapContextGetHeight(context),
         CGBitmapContextGetBytesPerRow(context),
         CGBitmapContextGetData(context)};
     
+    assert(mainImage.bytes_per_row == mainImage.w * sizeof(Pixel)); //no slop on the rows
+
+    assert(((u_long)mainImage.image & 0x03 ) == 0); // word-aligned pixels
+    
     for (int i=0; i<list.count; i++) {
         Transform *t = [list objectAtIndex:i];
         switch (t.type) {
             case ColorTrans: {
-                for (int y=0; y<mainImage.h; y++) {
-                    Pixel *row = A(mainImage, 0, y);
-                    for (int x=0; i<mainImage.w; x++) {
-                        t.pointF(row++);
-                    }
-                }
+                t.pointF(mainImage.image, mainImage.w * mainImage.h);
                 break;
             }
             case GeometricTrans:
@@ -118,38 +117,52 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     [transformList addObject:[Transform colorTransform: @"Luminance"
         description: @"Convert to brightness"
-    pointTransform: ^(Pixel *pp) {
-        Pixel p = *pp;
-        channel lum = LUM(p);
-        *pp = SETRGB(lum, lum, lum);
+    pointTransform: ^(Pixel *p, size_t n) {
+        while (n-- > 0) {
+            channel lum = LUM(*p);
+            *p++ = SETRGB(lum, lum, lum);
+        }
     }]];
     
     [transformList addObject:[Transform colorTransform: @"Brighten"
         description: @"Make brighter"
-    pointTransform: ^(Pixel *p) {
-         *p = SETRGB(p->r+(Z-p->r)/8,
-                      p->g+(Z-p->g)/8,
-                      p->b+(Z-p->b)/8);
+    pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            Pixel p = *pp;
+            *pp++ = SETRGB(p.r+(Z-p.r)/8,
+                          p.g+(Z-p.g)/8,
+                          p.b+(Z-p.b)/8);
+        }
     }]];
 
     [transformList addObject:[Transform colorTransform: @"Colorize"
         description: @"Add color"
-    pointTransform: ^(Pixel *p) {
-         channel pw = (((p->r>>3)^(p->g>>3)^(p->b>>3)) + (p->r>>3) + (p->g>>3) + (p->b>>3))&31;
-        *p = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+    pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            Pixel p = *pp;
+            channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+            *pp++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+        }
     }]];
-    
+
     [transformList addObject:[Transform colorTransform: @"Green"
         description: @"Set to green"
-    pointTransform: ^(Pixel *p) {
-        *p = SETRGB(0,Z,0);
+    pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            *pp++ = SETRGB(0,Z,0);
+        }
     }]];
 
 #ifdef notyet
      
      - (void)aMethodWithBlock:(returnType (^)(parameters))blockName {
          // your code
-     }
+     }        while (n-- > 0) {
+         Pixel p = *p;
+          *pp++ = SETRGB(p.r+(Z-p.r)/8,
+                       p.g+(Z-p.g)/8,
+                       p.b+(Z-p.b)/8);
+
 
     // colorblind
 
