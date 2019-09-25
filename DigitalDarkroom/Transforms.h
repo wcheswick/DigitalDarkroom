@@ -13,12 +13,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 
-typedef struct Image {
-    size_t w, h;
-    size_t bytes_per_row;
-    Pixel *image;
-} Image;
-
 #define A(im, x,y)  (Pixel *)((im).image + (x) + (y)*(im).bytes_per_row) // address of Pixel at x, y
 
 @interface Transforms : NSObject {

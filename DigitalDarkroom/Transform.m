@@ -12,6 +12,7 @@
 
 @synthesize name, description;
 @synthesize pointF;
+@synthesize areaF;
 @synthesize type;
 
 
@@ -29,6 +30,16 @@
     t.description = d;
     t.type = ColorTrans;
     t.pointF = f;
+    return t;
+}
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                areaTransform:(areaFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = AreaTrans;
+    t.areaF = f;
     return t;
 }
 

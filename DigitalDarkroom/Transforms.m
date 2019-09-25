@@ -23,8 +23,13 @@
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
 
+#define R(x) x.r
+#define G(x) x.g
+#define B(x) x.b
 
 @interface Transforms ()
+
+@property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
 
 @end
 
@@ -35,6 +40,7 @@
 @synthesize transforms;
 @synthesize list;
 @synthesize frameSize;
+@synthesize sourceImageIndicies;
 
 - (id)init {
     self = [super init];
@@ -42,6 +48,7 @@
         list = [[NSMutableArray alloc] init];
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
+
         [self addColorTransforms];
         [self addAreaTransforms];
         [self addGeometricTransforms];
@@ -55,10 +62,32 @@
     // update transforms:
 }
 
-- (void) setupForTransforming {
-}
 
-Image mainImage;
+// Some transforms are best done in place, but some need to go to a destination
+// other than the source.   Here are the two possible sources.
+
+Image sources[2];
+#define NEEDS_ALLOC     ((Pixel *)1)
+
+- (void) setupForTransforming {
+    // source[0] gets all its data from the call context.  If we need a destination image,
+    // we have to allocate one.  Set it to the invalid address 1 if we need an alloc.
+    
+    sources[1].image = (Pixel *)0;
+    for (int i=0; i<list.count; i++) {
+        Transform *t = [list objectAtIndex:i];
+        switch (t.type) {
+            case ColorTrans: {
+                break;
+            }
+            case GeometricTrans:
+            case AreaTrans:
+            case EtcTrans:
+                    sources[1].image = NEEDS_ALLOC;
+                return;
+        }
+    }
+}
 
 - (UIImage *) doTransformsOnContext:(CGContextRef)context {
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
@@ -71,29 +100,47 @@ Image mainImage;
     assert(channelSize == 8);   // eight bits per color
     assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
 
-    mainImage = (Image){CGBitmapContextGetWidth(context),
+    int sourceImageIndex = 0;
+
+    Image *source = &sources[0];
+    Image *dest = &sources[1 - sourceImageIndex];
+    
+    BOOL needsAlloc = dest->image == NEEDS_ALLOC;
+    
+    *source = (Image){CGBitmapContextGetWidth(context),
         CGBitmapContextGetHeight(context),
         CGBitmapContextGetBytesPerRow(context),
         CGBitmapContextGetData(context)};
     
-    assert(mainImage.bytes_per_row == mainImage.w * sizeof(Pixel)); //no slop on the rows
-
-    assert(((u_long)mainImage.image & 0x03 ) == 0); // word-aligned pixels
+    *dest = *source;
+    if (needsAlloc)
+        dest->image = (Pixel *)calloc(dest->w * dest->h, sizeof(Pixel));
+    else
+        dest->image = (Pixel *)0;   // nothing to see here, folks
+    
+    assert(source->bytes_per_row == source->w * sizeof(Pixel)); //no slop on the rows
+    assert(((u_long)source->image & 0x03 ) == 0); // word-aligned pixels
     
     for (int i=0; i<list.count; i++) {
         Transform *t = [list objectAtIndex:i];
         switch (t.type) {
             case ColorTrans: {
-                t.pointF(mainImage.image, mainImage.w * mainImage.h);
+                t.pointF(source->image, source->w * source->h);
                 break;
             }
             case GeometricTrans:
                 break;
             case AreaTrans:
+                t.areaF(source, dest);
+                sourceImageIndex = 1 - sourceImageIndex;
                 break;
             case EtcTrans:
                 break;
         }
+    }
+    // temp kludge, copy bytes back into main context, if needed
+    if (sourceImageIndex) {
+        memcpy(source->image, dest->image, source->w * source->h * sizeof(Pixel));
     }
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     UIImage *out = [UIImage imageWithCGImage:quartzImage];
@@ -101,8 +148,6 @@ Image mainImage;
     return out;
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
 }
-
-
 
 // used by colorize
 
@@ -152,68 +197,77 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             *pp++ = SETRGB(0,Z,0);
         }
     }]];
-
-#ifdef notyet
-     
-     - (void)aMethodWithBlock:(returnType (^)(parameters))blockName {
-         // your code
-     }        while (n-- > 0) {
-         Pixel p = *p;
-          *pp++ = SETRGB(p.r+(Z-p.r)/8,
-                       p.g+(Z-p.g)/8,
-                       p.b+(Z-p.b)/8);
-
-
-    // colorblind
-
-    extern  transform_t op_art;
-    extern  transform_t do_auto;
-    extern  init_proc init_colorize;
-    extern  init_proc init_swapcolors;
-    extern  init_proc init_lum;
-    extern  init_proc init_high;
-    extern  init_proc init_lum;
-    extern  init_proc init_solarize;
-    extern  init_proc init_truncatepix;
-    extern  init_proc init_brighten;
-    extern  init_proc init_auto;
-    extern  init_proc init_negative;
-
-    #ifdef notdef
-        for (int y=0; y<height/2; y++) {    // copy bottom
-            for (int x=0; x<width; x++) {
-                *A(image,x,y)] = *A(image,x,height - y - 1)];
-            }
-        }
-
-
-        for (int y=0; y<height/2; y++) {    // copy top
-            for (int x=0; x<width; x++) {
-                pixels[P(x,height - y - 1)] = pixels[P(x,y)];
-            }
-        }
-
-        for (int x=0; x<width/2; x++) { // copy right
-            for (int y=0; y<height; y++) {
-                pixels[P(width - x - 1,y)] = pixels[P(x,y)];
-            }
-        }
-
-        for (int x=0; x<width/2; x++) { // copy left
-            for (int y=0; y<height; y++) {
-                pixels[P(x,y)] = pixels[P(width - x - 1,y)];
-            }
-        }
-    #endif
-
-#endif
-    
 }
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+    
+    [transformList addObject:[Transform areaTransform: @"Sobel"
+        description: @"Sobel filter"
+    areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
+//        size_t bpr = src->bytes_per_row;
+        int x, y;
+        
+        #define AYX(im, y,x)    &im[(x) + (y)*maxX]
+        #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+
+        for (y=1; y<maxY-1; y++) {
+            for (x=1; x<maxX-1; x++) {
+                int aa, bb, s;
+                Pixel p = {0,0,0,Z};
+                aa = R(PYX(in,y-1, x-1))+R(PYX(in,y-1, x))*2+
+                    R(PYX(in,y-1, x+1))-
+                    R(PYX(in,y+1, x-1))-R(PYX(in,y+1, x))*2-
+                    R(PYX(in,y+1, x+1));
+                bb = R(PYX(in,y-1, x-1))+R(PYX(in,y, x-1))*2+
+                    R(PYX(in,y+1, x-1))-
+                    R(PYX(in,y-1, x+1))-R(PYX(in,y, x+1))*2-
+                    R(PYX(in,y+1, x+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.r = Z;
+                else
+                    p.r = s;
+
+                aa = G(PYX(in,y-1, x-1))+G(PYX(in,y-1, x))*2+
+                    G(PYX(in,y-1, x+1))-
+                    G(PYX(in,y+1, x-1))-G(PYX(in,y+1, x))*2-
+                    G(PYX(in,y+1, x+1));
+                bb = G(PYX(in,y-1, x-1))+G(PYX(in,y, x-1))*2+
+                    G(PYX(in,y+1, x-1))-
+                    G(PYX(in,y-1, x+1))-G(PYX(in,y, x+1))*2-
+                    G(PYX(in,y+1, x+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.g = Z;
+                else
+                    p.g = s;
+
+                aa = B(PYX(in,y-1, x-1))+B(PYX(in,y-1, x))*2+
+                    B(PYX(in,y-1, x+1))-
+                    B(PYX(in,y+1, x-1))-B(PYX(in,y+1, x))*2-
+                    B(PYX(in,y+1, x+1));
+                bb = B(PYX(in,y-1, x-1))+B(PYX(in,y, x-1))*2+
+                    R(PYX(in,y+1, x-1))-
+                    B(PYX(in,y-1, x+1))-B(PYX(in,y, x+1))*2-
+                    B(PYX(in,y+1, x+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.b = Z;
+                else
+                    p.b = s;
+                PYX(out,y,x) = p;
+            }
+        }
+
+    }]];
+
 #ifdef notyet
     extern  init_proc init_zoom;
     
@@ -453,3 +507,50 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 #endif
 
 #endif
+
+#ifdef notyet
+
+    // colorblind
+
+    extern  transform_t op_art;
+    extern  transform_t do_auto;
+    extern  init_proc init_colorize;
+    extern  init_proc init_swapcolors;
+    extern  init_proc init_lum;
+    extern  init_proc init_high;
+    extern  init_proc init_lum;
+    extern  init_proc init_solarize;
+    extern  init_proc init_truncatepix;
+    extern  init_proc init_brighten;
+    extern  init_proc init_auto;
+    extern  init_proc init_negative;
+
+    #ifdef notdef
+        for (int y=0; y<height/2; y++) {    // copy bottom
+            for (int x=0; x<width; x++) {
+                *A(image,x,y)] = *A(image,x,height - y - 1)];
+            }
+        }
+
+
+        for (int y=0; y<height/2; y++) {    // copy top
+            for (int x=0; x<width; x++) {
+                pixels[P(x,height - y - 1)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy right
+            for (int y=0; y<height; y++) {
+                pixels[P(width - x - 1,y)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy left
+            for (int y=0; y<height; y++) {
+                pixels[P(x,y)] = pixels[P(width - x - 1,y)];
+            }
+        }
+    #endif
+
+#endif
+    
