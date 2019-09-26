@@ -100,7 +100,7 @@ enum {
     UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
                                    target:self
-                                   action:@selector(doeditActiveList:)];
+                                   action:@selector(doEditActiveList:)];
     activeListVC.navigationItem.rightBarButtonItem = editButton;
 
     activeNavVC = [[UINavigationController alloc] initWithRootViewController:activeListVC];
@@ -117,10 +117,10 @@ enum {
     transformsVC.tableView.showsVerticalScrollIndicator = YES;
 
     addButton = [[UIBarButtonItem alloc]
-                                  initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                  initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                   target:self
-                                  action:@selector(addTransformToList:)];
-    transformsVC.navigationItem.rightBarButtonItem = addButton;
+                                  action:@selector(undoLastTransform:)];
+    transformsVC.navigationItem.leftBarButtonItem = addButton;
     addButton.enabled = (selectedTransformEntry != nil);
 
     transformsVC.title = @"Transforms";
@@ -255,6 +255,7 @@ enum {
     frameCount = droppedCount = 0;
     [self updateFrameCounter];
     [cameraController startCamera];
+    [cameraController startCapture];
     [self.view setNeedsDisplay];
 }
 
@@ -263,7 +264,7 @@ enum {
     NSLog(@"video tapped");
 }
 
-- (IBAction) doeditActiveList:(UIBarButtonItem *)button {
+- (IBAction) doEditActiveList:(UIBarButtonItem *)button {
     NSLog(@"edit transform list");
     [activeListVC.tableView setEditing:!activeListVC.tableView.editing animated:YES];
 }
@@ -357,38 +358,49 @@ enum {
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-    
     if (tableView.tag == ActiveTag) {
         // Nothing happens
 //        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
         Transform *transform = [transformList objectAtIndex:indexPath.row];
-        if (!selectedTransformEntry) {   // create a transform selection. Remove outlined cell
-            cell.selected = YES;
-            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
-            selectedTransformEntry = indexPath;
-            [transforms.list addObject:transform];
-        } else if (indexPath.row != selectedTransformEntry.row) {  // switch selection entry
-            UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:selectedTransformEntry];
-            oldCell.selected = NO;
-            [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
-            selectedTransformEntry = indexPath;
-            cell.selected = YES;
-            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
-            [transforms.list replaceObjectAtIndex:transforms.list.count - 1 withObject:transform];
-        } else {        // remove selection, restoring outlined cell in list
-            cell.selected = NO;
-            [transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
-            selectedTransformEntry = nil;
-            [transforms.list removeObjectAtIndex:transforms.list.count - 1];
-        }
+        [self suspendCaptureWhile:^{
+            if (!self->selectedTransformEntry) {   // create a transform selection. Remove outlined cell
+                cell.selected = YES;
+                [self->transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+                self->selectedTransformEntry = indexPath;
+                [self->transforms.list addObject:transform];
+            } else if (indexPath.row != self->selectedTransformEntry.row) {  // switch selection entry
+                UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:self->selectedTransformEntry];
+                oldCell.selected = NO;
+                [self->transformsVC.tableView deselectRowAtIndexPath:self->selectedTransformEntry animated:NO];
+                self->selectedTransformEntry = indexPath;
+                cell.selected = YES;
+                [self->transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+                [self->transforms.list replaceObjectAtIndex:self->transforms.list.count - 1 withObject:transform];
+            } else {        // remove selection, restoring outlined cell in list
+                cell.selected = NO;
+                [self->transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
+                self->selectedTransformEntry = nil;
+                [self->transforms.list removeObjectAtIndex:self->transforms.list.count - 1];
+            }
+        }];
         [activeListVC.tableView reloadData];
         [transforms setupForTransforming];
         addButton.enabled = (selectedTransformEntry != nil);
     }
 }
 
+- (IBAction) undoLastTransform:(UIBarButtonItem *)button {
+    assert(selectedTransformEntry);
+    NSLog(@"undo transform");
+    [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
+    selectedTransformEntry = nil;
+    addButton.enabled = (selectedTransformEntry != nil);
+    [activeListVC.tableView reloadData];
+}
+
+#ifdef notdef
 - (IBAction) addTransformToList:(UIBarButtonItem *)button {
     assert(selectedTransformEntry);
     NSLog(@"add transform");
@@ -397,16 +409,20 @@ enum {
     addButton.enabled = (selectedTransformEntry != nil);
     [activeListVC.tableView reloadData];
 }
+#endif
 
 - (void)tableView:(UITableView *)tableView
 commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
-        case UITableViewCellEditingStyleDelete:
-            [transforms.list removeObjectAtIndex:indexPath.row];
+        case UITableViewCellEditingStyleDelete: {
+            [self suspendCaptureWhile:^{
+                [self->transforms.list removeObjectAtIndex:indexPath.row];
+            }];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             break;
+        }
         case UITableViewCellEditingStyleInsert:
             break;
         default:
@@ -421,8 +437,10 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
           (long)fromIndexPath.section, (long)fromIndexPath.row,
           (long)toIndexPath.section, (long)toIndexPath.row);
     Transform *t = [transforms.list objectAtIndex:fromIndexPath.row];
-    [transforms.list removeObjectAtIndex:fromIndexPath.row];
-    [transforms.list insertObject:t atIndex:toIndexPath.row];
+    [self suspendCaptureWhile:^{
+        [self->transforms.list removeObjectAtIndex:fromIndexPath.row];
+        [self->transforms.list insertObject:t atIndex:toIndexPath.row];
+    }];
 }
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
@@ -479,6 +497,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     //    NSLog(@"***************** %s", __PRETTY_FUNCTION__);
     //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
     // Add your code here that uses the image.
+}
+
+- (void) suspendCaptureWhile:(void (^)(void))changeTransforms {
+    [cameraController stopCapture];
+    changeTransforms();
+    [cameraController startCapture];
 }
 
 @end

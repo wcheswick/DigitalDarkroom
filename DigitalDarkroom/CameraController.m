@@ -138,6 +138,7 @@
     dataOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
     
     connection = [dataOutput.connections objectAtIndex:0];
+    connection.enabled = NO;
     
     dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
     [dataOutput setSampleBufferDelegate:caller queue:queue];
@@ -145,6 +146,15 @@
     [captureSession commitConfiguration];
     return nil;
 }
+
+- (void) startCapture {
+    connection.enabled = YES;
+}
+
+- (void) stopCapture {
+    connection.enabled = NO;
+}
+
 
 - (void) setVideoOrientation {
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];

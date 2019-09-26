@@ -37,7 +37,6 @@
 
 @synthesize categoryNames;
 @synthesize categoryList;
-@synthesize transforms;
 @synthesize list;
 @synthesize frameSize;
 @synthesize sourceImageIndicies;
@@ -53,6 +52,7 @@
         [self addAreaTransforms];
         [self addGeometricTransforms];
         [self addMiscTransforms];
+        [self addArtTransforms];
     }
     return self;
 }
@@ -83,7 +83,7 @@ Image sources[2];
             case GeometricTrans:
             case AreaTrans:
             case EtcTrans:
-                    sources[1].image = NEEDS_ALLOC;
+                sources[1].image = NEEDS_ALLOC;
                 return;
         }
     }
@@ -100,28 +100,29 @@ Image sources[2];
     assert(channelSize == 8);   // eight bits per color
     assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
 
-    int sourceImageIndex = 0;
-
-    Image *source = &sources[0];
-    Image *dest = &sources[1 - sourceImageIndex];
+    int sourceImageIndex = 0;   // incoming image is at zero
     
-    BOOL needsAlloc = dest->image == NEEDS_ALLOC;
-    
-    *source = (Image){CGBitmapContextGetWidth(context),
+    sources[sourceImageIndex] = (Image){CGBitmapContextGetWidth(context),
         CGBitmapContextGetHeight(context),
         CGBitmapContextGetBytesPerRow(context),
         CGBitmapContextGetData(context)};
+    assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
+    assert(((u_long)sources[sourceImageIndex].image & 0x03 ) == 0); // word-aligned pixels
+
+    BOOL needsAlloc = (sources[1-sourceImageIndex].image == NEEDS_ALLOC);
+
+    sources[1] = sources[0];
+    if (needsAlloc) {
+        sources[1-sourceImageIndex].image = (Pixel *)calloc(
+                                                            sources[1-sourceImageIndex].w * sources[1-sourceImageIndex].h,
+                                                            sizeof(Pixel));
+    }
     
-    *dest = *source;
-    if (needsAlloc)
-        dest->image = (Pixel *)calloc(dest->w * dest->h, sizeof(Pixel));
-    else
-        dest->image = (Pixel *)0;   // nothing to see here, folks
-    
-    assert(source->bytes_per_row == source->w * sizeof(Pixel)); //no slop on the rows
-    assert(((u_long)source->image & 0x03 ) == 0); // word-aligned pixels
-    
+    Image *source = &sources[0];
+    Image *dest = 0;
     for (int i=0; i<list.count; i++) {
+        source = &sources[sourceImageIndex];
+        dest = &sources[1 - sourceImageIndex];
         Transform *t = [list objectAtIndex:i];
         switch (t.type) {
             case ColorTrans: {
@@ -131,6 +132,9 @@ Image sources[2];
             case GeometricTrans:
                 break;
             case AreaTrans:
+                assert(source->image);
+                assert(dest->image);
+                NSLog(@"from %p to %p", source, dest);
                 t.areaF(source, dest);
                 sourceImageIndex = 1 - sourceImageIndex;
                 break;
@@ -140,7 +144,10 @@ Image sources[2];
     }
     // temp kludge, copy bytes back into main context, if needed
     if (sourceImageIndex) {
-        memcpy(source->image, dest->image, source->w * source->h * sizeof(Pixel));
+        assert(list.count > 0);
+        assert(dest != 0);
+        memcpy(dest->image, sources[0].image,
+               dest->w * dest->h * sizeof(Pixel));
     }
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     UIImage *out = [UIImage imageWithCGImage:quartzImage];
@@ -199,11 +206,80 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }]];
 }
 
+#define AYX(im, y,x)    &im[(x) + (y)*maxX]
+#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+#define P(im, x,y)    (*(AYX((im),(y),(x))))
+
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+         
+    [transformList addObject:[Transform areaTransform: @"Area test"
+            description: @"Testing"
+        areaTransform: ^(Image *src, Image *dest) {
+            Pixel *in = src->image;
+            Pixel *out = dest->image;
+            size_t maxY = src->h;
+            size_t maxX = src->w;
+    //        size_t bpr = src->bytes_per_row;
+            int x, y;
+            
+ 
+            for (x=0; x<maxX; x++) {
+                for (y=0; y<maxY/2; y++) {
+                    P(out,x,y) = SETRGB(0,Z,0);
+                }
+                for (; y<maxY; y++) {
+                    P(out,x,y) = P(in,maxX-x,y);
+                }
+            }
+    }]];
+
+    [transformList addObject:[Transform areaTransform: @"Mirror left"
+            description: @"Reflect the left half of the screen on the right"
+        areaTransform: ^(Image *src, Image *dest) {
+            Pixel *in = src->image;
+            Pixel *out = dest->image;
+        assert(in);
+        assert(out);
+            size_t maxY = src->h;
+            size_t maxX = src->w;
+    //        size_t bpr = src->bytes_per_row;
+            int x, y;
+            
+            #define AYX(im, y,x)    &im[(x) + (y)*maxX]
+            #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+            #define P(im, x,y)    (*(AYX((im),(y),(x))))
+
+            for (x=0; x<maxX; x++) {
+                for (y=0; y<maxY; y++) {
+                    P(out,x,y) = P(in,maxX-x-1,y);
+                }
+            }
+    }]];
     
+    [transformList addObject:[Transform areaTransform: @"Mirror right"
+            description: @"Reflect the right half of the screen on the left"
+        areaTransform: ^(Image *src, Image *dest) {
+            Pixel *in = src->image;
+            Pixel *out = dest->image;
+            size_t maxY = src->h;
+            size_t maxX = src->w;
+    //        size_t bpr = src->bytes_per_row;
+            int x, y;
+            
+            #define AYX(im, y,x)    &im[(x) + (y)*maxX]
+            #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+            #define P(im, x,y)    (*(AYX((im),(y),(x))))
+
+            for (x=0; x<maxX; x++) {
+                for (y=0; y<maxY; y++) {
+                    P(out,maxX-x-1,y) = P(in,x,y);
+                }
+            }
+    }]];
+
     [transformList addObject:[Transform areaTransform: @"Sobel"
         description: @"Sobel filter"
     areaTransform: ^(Image *src, Image *dest) {
@@ -337,20 +413,27 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     extern  transform_t do_color_logo;
     extern  transform_t do_spectrum;
 #endif
-    
+}
+
+- (void) addArtTransforms {
+    [categoryNames addObject:@"Art-style transforms"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+#ifdef notdef
+extern  init_proc init_seurat;
+extern  init_proc init_dali;
+extern  init_proc init_escher;
+#endif
 }
 
 #ifdef notdef
 extern  init_proc init_cone;
 extern  init_proc init_bignose;
 extern  init_proc init_fisheye;
-extern  init_proc init_dali;
 extern  init_proc init_andrew;
 extern  init_proc init_twist;
 extern  init_proc init_kentwist;
-extern  init_proc init_escher;
 extern  init_proc init_slicer;
-extern  init_proc init_seurat;
 
 extern  init_proc init_colorize;
 extern  init_proc init_swapcolors;
@@ -362,9 +445,6 @@ extern  init_proc init_truncatepix;
 extern  init_proc init_brighten;
 extern  init_proc init_auto;
 extern  init_proc init_negative;
-
-extern  transform_t do_remap;
-extern  transform_t do_point;
 
 extern  void init_polar(void);
 #endif
@@ -379,8 +459,6 @@ extern  void init_polar(void);
 
 typedef Point remap[MAX_X][MAX_Y];
 typedef void *init_proc(void);
-
-typedef int transform_t(void *param, image in, image out);
 
 /* in trans.c */
 extern  int irand(int i);
