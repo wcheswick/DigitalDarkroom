@@ -41,13 +41,17 @@
 @synthesize frameSize;
 @synthesize sourceImageIndicies;
 
+Image sources[2];
+
 - (id)init {
     self = [super init];
     if (self) {
+        sources[1].image = 0;
+        
         list = [[NSMutableArray alloc] init];
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
-
+        
         [self addColorTransforms];
         [self addAreaTransforms];
         [self addGeometricTransforms];
@@ -66,14 +70,10 @@
 // Some transforms are best done in place, but some need to go to a destination
 // other than the source.   Here are the two possible sources.
 
-Image sources[2];
-#define NEEDS_ALLOC     ((Pixel *)1)
-
 - (void) setupForTransforming {
     // source[0] gets all its data from the call context.  If we need a destination image,
     // we have to allocate one.  Set it to the invalid address 1 if we need an alloc.
     
-    sources[1].image = (Pixel *)0;
     for (int i=0; i<list.count; i++) {
         Transform *t = [list objectAtIndex:i];
         switch (t.type) {
@@ -83,7 +83,6 @@ Image sources[2];
             case GeometricTrans:
             case AreaTrans:
             case EtcTrans:
-                sources[1].image = NEEDS_ALLOC;
                 return;
         }
     }
@@ -92,14 +91,14 @@ Image sources[2];
 - (UIImage *) doTransformsOnContext:(CGContextRef)context {
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
     size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
-
+    
     // These transforms make certain assumptions about the bitmaps encountered
     // that greatly speed up and simplify them.  Make sure these assumptions
     // are valid.
     
     assert(channelSize == 8);   // eight bits per color
     assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
-
+    
     int sourceImageIndex = 0;   // incoming image is at zero
     
     sources[sourceImageIndex] = (Image){CGBitmapContextGetWidth(context),
@@ -108,17 +107,13 @@ Image sources[2];
         CGBitmapContextGetData(context)};
     assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
     assert(((u_long)sources[sourceImageIndex].image & 0x03 ) == 0); // word-aligned pixels
-
-    BOOL needsAlloc = (sources[1-sourceImageIndex].image == NEEDS_ALLOC);
-
-    sources[1] = sources[0];
-    if (needsAlloc) {
-        sources[1-sourceImageIndex].image = (Pixel *)calloc(
-                                                            sources[1-sourceImageIndex].w * sources[1-sourceImageIndex].h,
-                                                            sizeof(Pixel));
-    }
     
-    Image *source = &sources[0];
+    BOOL needsAlloc = sources[1].image == 0;
+    sources[1] = sources[0];
+    if (needsAlloc)
+        sources[1].image = (Pixel *)calloc(sources[1].w * sources[1].h, sizeof(Pixel));
+    
+    Image *source= &sources[0];
     Image *dest = 0;
     if (list.count == 0)
         assert(sourceImageIndex == 0);
@@ -137,6 +132,8 @@ Image sources[2];
             case AreaTrans:
                 assert(source->image);
                 assert(dest->image);
+                assert(dest->image != (Pixel *)1);
+                
                 NSLog(@"from %p to %p", source, dest);
                 t.areaF(source, dest);
                 sourceImageIndex = 1 - sourceImageIndex;
@@ -150,8 +147,9 @@ Image sources[2];
     if (sourceImageIndex) {
         assert(list.count > 0);
         assert(dest != 0);
-// XXX bad exec addr 1
-            memcpy(dest->image, sources[0].image,
+        assert(dest->image != (Pixel *)1);
+        // XXX bad exec addr 1
+        memcpy(dest->image, sources[0].image,
                dest->w * dest->h * sizeof(Pixel));
     }
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
@@ -173,8 +171,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [categoryList addObject:transformList];
     
     [transformList addObject:[Transform colorTransform: @"Luminance"
-        description: @"Convert to brightness"
-    pointTransform: ^(Pixel *p, size_t n) {
+                                           description: @"Convert to brightness"
+                                        pointTransform: ^(Pixel *p, size_t n) {
         while (n-- > 0) {
             channel lum = LUM(*p);
             *p++ = SETRGB(lum, lum, lum);
@@ -182,29 +180,29 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }]];
     
     [transformList addObject:[Transform colorTransform: @"Brighten"
-        description: @"Make brighter"
-    pointTransform: ^(Pixel *pp, size_t n) {
+                                           description: @"Make brighter"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
         while (n-- > 0) {
             Pixel p = *pp;
             *pp++ = SETRGB(p.r+(Z-p.r)/8,
-                          p.g+(Z-p.g)/8,
-                          p.b+(Z-p.b)/8);
+                           p.g+(Z-p.g)/8,
+                           p.b+(Z-p.b)/8);
         }
     }]];
-
+    
     [transformList addObject:[Transform colorTransform: @"Colorize"
-        description: @"Add color"
-    pointTransform: ^(Pixel *pp, size_t n) {
+                                           description: @"Add color"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
         while (n-- > 0) {
             Pixel p = *pp;
             channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
             *pp++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
         }
     }]];
-
+    
     [transformList addObject:[Transform colorTransform: @"Green"
-        description: @"Set to green"
-    pointTransform: ^(Pixel *pp, size_t n) {
+                                           description: @"Set to green"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
         while (n-- > 0) {
             *pp++ = SETRGB(0,Z,0);
         }
@@ -219,130 +217,130 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-         
-    [transformList addObject:[Transform areaTransform: @"Area test"
-            description: @"Testing"
-        areaTransform: ^(Image *src, Image *dest) {
-            Pixel *in = src->image;
-            Pixel *out = dest->image;
-            size_t maxY = src->h;
-            size_t maxX = src->w;
-        assert(src->h == dest->h);
-        assert(src->w == dest->w);
-    //        size_t bpr = src->bytes_per_row;
-            int x, y;
-            
-            for (x=0; x<maxX; x++) {
-                for (y=0; y<maxY/2; y++) {
-                    assert(x < maxX);
-                    assert(y < maxY);
-                    P(out,x,y) = SETRGB(0,Z,0);
-                }
-                for (; y<maxY; y++) {
-                    assert(x < maxX);
-                    assert(y < maxY);
-                    P(out,x,y) = P(in,maxX-x,y);
-                }
-            }
-    }]];
-
-    [transformList addObject:[Transform areaTransform: @"Mirror left"
-            description: @"Reflect the left half of the screen on the right"
-        areaTransform: ^(Image *src, Image *dest) {
-            Pixel *in = src->image;
-            Pixel *out = dest->image;
-        assert(in);
-        assert(out);
-            size_t maxY = src->h;
-            size_t maxX = src->w;
-    //        size_t bpr = src->bytes_per_row;
-            int x, y;
-            
-            #define AYX(im, y,x)    &im[(x) + (y)*maxX]
-            #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-            #define P(im, x,y)    (*(AYX((im),(y),(x))))
-
-            for (x=0; x<maxX; x++) {
-                for (y=0; y<maxY; y++) {
-                    P(out,x,y) = P(in,maxX-x-1,y);
-                }
-            }
-    }]];
     
-    [transformList addObject:[Transform areaTransform: @"Mirror right"
-            description: @"Reflect the right half of the screen on the left"
-        areaTransform: ^(Image *src, Image *dest) {
-            Pixel *in = src->image;
-            Pixel *out = dest->image;
-            size_t maxY = src->h;
-            size_t maxX = src->w;
-    //        size_t bpr = src->bytes_per_row;
-            int x, y;
-            
-            #define AYX(im, y,x)    &im[(x) + (y)*maxX]
-            #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-            #define P(im, x,y)    (*(AYX((im),(y),(x))))
-
-            for (x=0; x<maxX; x++) {
-                for (y=0; y<maxY; y++) {
-                    P(out,maxX-x-1,y) = P(in,x,y);
-                }
-            }
-    }]];
-
-    [transformList addObject:[Transform areaTransform: @"Sobel"
-        description: @"Sobel filter"
-    areaTransform: ^(Image *src, Image *dest) {
+    [transformList addObject:[Transform areaTransform: @"Area test"
+                                          description: @"Testing"
+                                        areaTransform: ^(Image *src, Image *dest) {
         Pixel *in = src->image;
         Pixel *out = dest->image;
         size_t maxY = src->h;
         size_t maxX = src->w;
-//        size_t bpr = src->bytes_per_row;
+        assert(src->h == dest->h);
+        assert(src->w == dest->w);
+        //        size_t bpr = src->bytes_per_row;
         int x, y;
         
-        #define AYX(im, y,x)    &im[(x) + (y)*maxX]
-        #define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-
+        for (x=0; x<maxX; x++) {
+            for (y=0; y<maxY/2; y++) {
+                assert(x < maxX);
+                assert(y < maxY);
+                P(out,x,y) = SETRGB(0,Z,0);
+            }
+            for (; y<maxY; y++) {
+                assert(x < maxX);
+                assert(y < maxY);
+                P(out,x,y) = P(in,maxX-x,y);
+            }
+        }
+    }]];
+    
+    [transformList addObject:[Transform areaTransform: @"Mirror left"
+                                          description: @"Reflect the left half of the screen on the right"
+                                        areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        assert(in);
+        assert(out);
+        size_t maxY = src->h;
+        size_t maxX = src->w;
+        //        size_t bpr = src->bytes_per_row;
+        int x, y;
+        
+#define AYX(im, y,x)    &im[(x) + (y)*maxX]
+#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+#define P(im, x,y)    (*(AYX((im),(y),(x))))
+        
+        for (x=0; x<maxX; x++) {
+            for (y=0; y<maxY; y++) {
+                P(out,x,y) = P(in,maxX-x-1,y);
+            }
+        }
+    }]];
+    
+    [transformList addObject:[Transform areaTransform: @"Mirror right"
+                                          description: @"Reflect the right half of the screen on the left"
+                                        areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
+        //        size_t bpr = src->bytes_per_row;
+        int x, y;
+        
+#define AYX(im, y,x)    &im[(x) + (y)*maxX]
+#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+#define P(im, x,y)    (*(AYX((im),(y),(x))))
+        
+        for (x=0; x<maxX; x++) {
+            for (y=0; y<maxY; y++) {
+                P(out,maxX-x-1,y) = P(in,x,y);
+            }
+        }
+    }]];
+    
+    [transformList addObject:[Transform areaTransform: @"Sobel"
+                                          description: @"Sobel filter"
+                                        areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
+        //        size_t bpr = src->bytes_per_row;
+        int x, y;
+        
+#define AYX(im, y,x)    &im[(x) + (y)*maxX]
+#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
+        
         for (y=1; y<maxY-1; y++) {
             for (x=1; x<maxX-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
                 aa = R(PYX(in,y-1, x-1))+R(PYX(in,y-1, x))*2+
-                    R(PYX(in,y-1, x+1))-
-                    R(PYX(in,y+1, x-1))-R(PYX(in,y+1, x))*2-
-                    R(PYX(in,y+1, x+1));
+                R(PYX(in,y-1, x+1))-
+                R(PYX(in,y+1, x-1))-R(PYX(in,y+1, x))*2-
+                R(PYX(in,y+1, x+1));
                 bb = R(PYX(in,y-1, x-1))+R(PYX(in,y, x-1))*2+
-                    R(PYX(in,y+1, x-1))-
-                    R(PYX(in,y-1, x+1))-R(PYX(in,y, x+1))*2-
-                    R(PYX(in,y+1, x+1));
+                R(PYX(in,y+1, x-1))-
+                R(PYX(in,y-1, x+1))-R(PYX(in,y, x+1))*2-
+                R(PYX(in,y+1, x+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.r = Z;
                 else
                     p.r = s;
-
+                
                 aa = G(PYX(in,y-1, x-1))+G(PYX(in,y-1, x))*2+
-                    G(PYX(in,y-1, x+1))-
-                    G(PYX(in,y+1, x-1))-G(PYX(in,y+1, x))*2-
-                    G(PYX(in,y+1, x+1));
+                G(PYX(in,y-1, x+1))-
+                G(PYX(in,y+1, x-1))-G(PYX(in,y+1, x))*2-
+                G(PYX(in,y+1, x+1));
                 bb = G(PYX(in,y-1, x-1))+G(PYX(in,y, x-1))*2+
-                    G(PYX(in,y+1, x-1))-
-                    G(PYX(in,y-1, x+1))-G(PYX(in,y, x+1))*2-
-                    G(PYX(in,y+1, x+1));
+                G(PYX(in,y+1, x-1))-
+                G(PYX(in,y-1, x+1))-G(PYX(in,y, x+1))*2-
+                G(PYX(in,y+1, x+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.g = Z;
                 else
                     p.g = s;
-
+                
                 aa = B(PYX(in,y-1, x-1))+B(PYX(in,y-1, x))*2+
-                    B(PYX(in,y-1, x+1))-
-                    B(PYX(in,y+1, x-1))-B(PYX(in,y+1, x))*2-
-                    B(PYX(in,y+1, x+1));
+                B(PYX(in,y-1, x+1))-
+                B(PYX(in,y+1, x-1))-B(PYX(in,y+1, x))*2-
+                B(PYX(in,y+1, x+1));
                 bb = B(PYX(in,y-1, x-1))+B(PYX(in,y, x-1))*2+
-                    R(PYX(in,y+1, x-1))-
-                    B(PYX(in,y-1, x+1))-B(PYX(in,y, x+1))*2-
-                    B(PYX(in,y+1, x+1));
+                R(PYX(in,y+1, x-1))-
+                B(PYX(in,y-1, x+1))-B(PYX(in,y, x+1))*2-
+                B(PYX(in,y+1, x+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.b = Z;
@@ -351,7 +349,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                 PYX(out,y,x) = p;
             }
         }
-
+        
     }]];
 
 #ifdef notyet
