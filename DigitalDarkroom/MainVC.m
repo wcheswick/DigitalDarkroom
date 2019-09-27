@@ -71,15 +71,14 @@ enum {
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    
     videoView = [[UIImageView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
-    [self.view addSubview:videoView];
     frameDisplay = [[UILabel alloc] init];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
     videoView.backgroundColor = [UIColor yellowColor];
 //    videoView.contentMode = UIViewContentModeScaleAspectFit;
-    
+    [self.view addSubview:videoView];
+
     videoPreview = [[UIView alloc] init];    // where the original video is stored
 
     
@@ -173,15 +172,25 @@ enum {
 }
 
 
-#define SEP 10
+#define SEP 10  // between views
+#define INSET 3 // from screen edges
+#define MIN_TABLE_W 300
 
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     
     BOOL isPortrait = UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]);
-    CGRect f = self.view.frame;
-    
     NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
+    NSLog(@"    orientation: (%d)  %@",
+          UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]),
+          isPortrait ? @"Portrait" : @"Landscape");
+
+    CGRect workingFrame = self.view.frame;
+    workingFrame.origin.x = INSET;
+    workingFrame.size.width -= 2*INSET;
+    workingFrame.origin.y = BELOW(self.navigationController.navigationBar.frame);
+    workingFrame.size.height -= workingFrame.origin.y + INSET;  // space at the bottom
+    CGRect f = workingFrame;
 
     [cameraController setVideoOrientation];
     
@@ -189,13 +198,13 @@ enum {
         f.size.height /= 2;    // top half only, for now
         f.size = [cameraController cameraVideoSizeFor:f.size];
         f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-        f.origin.x = (self.view.frame.size.width - f.size.width)/2;
+        f.origin.x = (workingFrame.size.width - f.size.width)/2;
         videoView.frame = f;
         
         f.origin.x = 0;
         f.origin.y = BELOW(videoView.frame) + SEP;
-        f.size.height = self.view.frame.size.height - f.origin.y;
-        f.size.width = (self.view.frame.size.width - SEP)*0.50;
+        f.size.height = workingFrame.size.height - f.origin.y;
+        f.size.width = (workingFrame.size.width - SEP)*0.50;
         activeNavVC.view.frame = f;
         
         f.origin.x += f.size.width + SEP;
@@ -207,29 +216,32 @@ enum {
         transformsVC.tableView.frame = f;
         activeListVC.tableView.frame = f;
     } else {    // video on the left
-        f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-        f.size.height -= f.origin.y;
-        f.origin.x = 0;
+        f.size.width -= MIN_TABLE_W + SEP;
         f.size = [cameraController cameraVideoSizeFor:f.size];
+        assert(workingFrame.size.height - INSET);
+        f.origin.x = INSET;
+        f.origin.y = BELOW(self.navigationController.navigationBar.frame) + (workingFrame.size.height - f.size.height)/2;
         videoView.frame = f;
         
         f.origin.x = RIGHT(f) + SEP;
-        f.size.width = self.view.frame.size.width - f.origin.x;
+        f.origin.y = workingFrame.origin.y;
+        f.size.width = workingFrame.size.width - f.origin.x - INSET;
         f.size.height = 0.30*videoView.frame.size.height;
         activeNavVC.view.frame = f;
         
-        f.origin.y = BELOW(f) + SEP;
-        f.size.height = self.view.frame.size.height - f.origin.y;
+        f.origin.x = 0;
+        f.origin.y = activeNavVC.navigationBar.frame.size.height;
+        f.size.height = activeNavVC.view.frame.size.height - f.origin.y;
+        activeListVC.view.frame = f;
+        
+        f.origin.x = activeNavVC.view.frame.origin.x;
+        f.origin.y = BELOW(activeNavVC.view.frame) + SEP;
+        f.size.height = workingFrame.size.height - INSET - f.origin.y;
         transformsNavVC.view.frame = f;
         
-        f.origin.y = activeNavVC.navigationBar.frame.size.height;
-        f.size.height = activeNavVC.navigationBar.frame.size.height - f.origin.y;
         f.origin.x = 0;
-        transformsVC.tableView.frame = f;
-        
         f.origin.y = transformsNavVC.navigationBar.frame.size.height;
-        f.size.height = transformsNavVC.navigationBar.frame.size.height - f.origin.y;
-        f.origin.x = 0;
+        f.size.height = transformsNavVC.view.frame.size.height - f.origin.y;
         transformsVC.tableView.frame = f;
     }
     
@@ -328,7 +340,8 @@ enum {
         }
         if (indexPath.row < transforms.list.count) { // show transform entry
             Transform *transform = [transforms.list objectAtIndex:indexPath.row];
-            cell.textLabel.text = transform.name;
+            cell.textLabel.text = [NSString stringWithFormat:
+                                   @"%2ld: %@", indexPath.row+1, transform.name];
             cell.layer.borderWidth = 0;
         } else {    // show an empty highlighted cell where the next one goes
             cell.textLabel.text = @"";

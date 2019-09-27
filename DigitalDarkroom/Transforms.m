@@ -146,7 +146,8 @@ Image sources[2];
     if (sourceImageIndex) {
         assert(list.count > 0);
         assert(dest != 0);
-        memcpy(dest->image, sources[0].image,
+// XXX bad exec addr 1
+            memcpy(dest->image, sources[0].image,
                dest->w * dest->h * sizeof(Pixel));
     }
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
