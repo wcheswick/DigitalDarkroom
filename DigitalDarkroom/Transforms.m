@@ -120,7 +120,10 @@ Image sources[2];
     
     Image *source = &sources[0];
     Image *dest = 0;
+    if (list.count == 0)
+        assert(sourceImageIndex == 0);
     for (int i=0; i<list.count; i++) {
+        assert(list.count > 0);
         source = &sources[sourceImageIndex];
         dest = &sources[1 - sourceImageIndex];
         Transform *t = [list objectAtIndex:i];
@@ -137,6 +140,7 @@ Image sources[2];
                 NSLog(@"from %p to %p", source, dest);
                 t.areaF(source, dest);
                 sourceImageIndex = 1 - sourceImageIndex;
+                assert(list.count > 0);
                 break;
             case EtcTrans:
                 break;
@@ -223,15 +227,20 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             Pixel *out = dest->image;
             size_t maxY = src->h;
             size_t maxX = src->w;
+        assert(src->h == dest->h);
+        assert(src->w == dest->w);
     //        size_t bpr = src->bytes_per_row;
             int x, y;
             
- 
             for (x=0; x<maxX; x++) {
                 for (y=0; y<maxY/2; y++) {
+                    assert(x < maxX);
+                    assert(y < maxY);
                     P(out,x,y) = SETRGB(0,Z,0);
                 }
                 for (; y<maxY; y++) {
+                    assert(x < maxX);
+                    assert(y < maxY);
                     P(out,x,y) = P(in,maxX-x,y);
                 }
             }

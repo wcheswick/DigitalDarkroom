@@ -43,6 +43,9 @@ enum {
 @property (nonatomic, strong)   NSIndexPath *selectedTransformEntry;
 @property (nonatomic, strong)   UIBarButtonItem *addButton;
 
+@property (assign)              BOOL listChangePending;
+@property (nonatomic, copy)     void (^pendingTransformChanges)(void);
+
 @end
 
 @implementation MainVC
@@ -57,6 +60,8 @@ enum {
 @synthesize videoPreview;
 @synthesize selectedTransformEntry;
 @synthesize addButton;
+@synthesize listChangePending;
+@synthesize pendingTransformChanges;
 
 
 - (id)init {
@@ -64,6 +69,7 @@ enum {
     if (self) {
         transforms = [[Transforms alloc] init];
         selectedTransformEntry = nil;
+        listChangePending = NO;
     }
     return self;
 }
@@ -377,27 +383,31 @@ enum {
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
         Transform *transform = [transformList objectAtIndex:indexPath.row];
-        [self suspendCaptureWhile:^{
-            if (!self->selectedTransformEntry) {   // create a transform selection. Remove outlined cell
-                cell.selected = YES;
-                [self->transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
-                self->selectedTransformEntry = indexPath;
+        if (!selectedTransformEntry) {   // create a transform selection. Remove outlined cell
+            cell.selected = YES;
+            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+            selectedTransformEntry = indexPath;
+            [self changeTransformList:^{
                 [self->transforms.list addObject:transform];
-            } else if (indexPath.row != self->selectedTransformEntry.row) {  // switch selection entry
-                UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:self->selectedTransformEntry];
-                oldCell.selected = NO;
-                [self->transformsVC.tableView deselectRowAtIndexPath:self->selectedTransformEntry animated:NO];
-                self->selectedTransformEntry = indexPath;
-                cell.selected = YES;
-                [self->transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+            }];
+        } else if (indexPath.row != self->selectedTransformEntry.row) {  // switch selection entry
+            UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:self->selectedTransformEntry];
+            oldCell.selected = NO;
+            [transformsVC.tableView deselectRowAtIndexPath:self->selectedTransformEntry animated:NO];
+            selectedTransformEntry = indexPath;
+            cell.selected = YES;
+            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
+            [self changeTransformList:^{
                 [self->transforms.list replaceObjectAtIndex:self->transforms.list.count - 1 withObject:transform];
-            } else {        // remove selection, restoring outlined cell in list
-                cell.selected = NO;
-                [self->transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
-                self->selectedTransformEntry = nil;
+            }];
+        } else {        // remove selection, restoring outlined cell in list
+            cell.selected = NO;
+            [transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
+            selectedTransformEntry = nil;
+            [self changeTransformList:^{
                 [self->transforms.list removeObjectAtIndex:self->transforms.list.count - 1];
-            }
-        }];
+            }];
+}
         [activeListVC.tableView reloadData];
         [transforms setupForTransforming];
         addButton.enabled = (selectedTransformEntry != nil);
@@ -429,7 +439,7 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
         case UITableViewCellEditingStyleDelete: {
-            [self suspendCaptureWhile:^{
+            [self changeTransformList:^{
                 [self->transforms.list removeObjectAtIndex:indexPath.row];
             }];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
@@ -446,11 +456,8 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView
 moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
-    NSLog(@"move from %ld.%ld to %ld.%ld",
-          (long)fromIndexPath.section, (long)fromIndexPath.row,
-          (long)toIndexPath.section, (long)toIndexPath.row);
     Transform *t = [transforms.list objectAtIndex:fromIndexPath.row];
-    [self suspendCaptureWhile:^{
+    [self changeTransformList:^{
         [self->transforms.list removeObjectAtIndex:fromIndexPath.row];
         [self->transforms.list insertObject:t atIndex:toIndexPath.row];
     }];
@@ -460,6 +467,11 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
+    
+    if (listChangePending) {
+        pendingTransformChanges();
+        listChangePending = NO;
+    }
     
 //    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
     // Lock the base address of the pixel buffer
@@ -512,10 +524,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     // Add your code here that uses the image.
 }
 
-- (void) suspendCaptureWhile:(void (^)(void))changeTransforms {
-    [cameraController stopCapture];
-    changeTransforms();
-    [cameraController startCapture];
+// Don't change the list datastructure while running through the list.
+
+- (void) changeTransformList:(void (^)(void))changeTransforms {
+    assert(!listChangePending); //  XXX right now, this is a race we hope not to lose
+    pendingTransformChanges = changeTransforms;
+    listChangePending = YES;
 }
 
 @end

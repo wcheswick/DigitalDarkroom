@@ -13,6 +13,7 @@
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
+@property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
 
 @property (strong, nonatomic)   AVCaptureDevice *frontVideoDevice;
 @property (strong, nonatomic)   AVCaptureDevice *backVideoDevice;
@@ -30,6 +31,7 @@
 @synthesize frontVideoDevice, backVideoDevice;
 @synthesize captureVideoPreviewLayer;
 @synthesize connection;
+@synthesize selectedFormat;
 @synthesize videoOrientation;
 
 
@@ -37,7 +39,9 @@
     self = [super init];
     if (self) {
         NSLog(@"capture device: %@", captureDevice);
+        captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
         connection = nil;
+        selectedFormat = nil;
     }
     return self;
 }
@@ -100,9 +104,19 @@
         return (CGSize){0,0};
     }
     NSLog(@" format %@", selectedFormat);
+    
+    NSError *error;
+    if (![captureDevice lockForConfiguration:&error]) {
+        NSLog(@"could not lock device for configuration");
+        return CGSizeZero;
+    }
+    captureDevice.activeFormat = selectedFormat;
+    [captureDevice unlockForConfiguration];
+    
     if (isPortrait) // this is a hack I can't figure out how to avoid
         bestSize = (CGSize){bestSize.height,bestSize.width};
     NSLog(@"----- video selected: %.0f x %.0f", bestSize.width, bestSize.height);
+
     return bestSize;
 }
 
@@ -169,20 +183,18 @@
             videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
             break;
         case UIDeviceOrientationLandscapeLeft:
-            videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-            break;
-        case UIDeviceOrientationLandscapeRight:
             videoOrientation = AVCaptureVideoOrientationLandscapeRight;
             break;
+        case UIDeviceOrientationLandscapeRight:
+            videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+            break;
     }
-
-    captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
     connection.videoOrientation = videoOrientation; // **** This one matters!
 }
 
 - (void) setFrame: (CGRect) frame {
     captureVideoPreviewLayer.frame = frame;
-    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+//    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
 
 #ifdef notdef   // this doesn't matter
     captureVideoPreviewLayer.connection.videoOrientation = isPortrait ?
