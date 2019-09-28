@@ -365,6 +365,8 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.detailTextLabel.text = transform.description;
         cell.indentationLevel = 1;
         cell.indentationWidth = 10;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        cell.selected = NO;
     }
     return cell;
 }
@@ -486,7 +488,22 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 }
 // Don't change the list datastructure while running through the list.
 
+#define SPIN_WAIT_MS    10
+
 - (void) changeTransformList:(void (^)(void))changeTransforms {
+    // It is possible that the transformer engine hasn't processed some
+    // previous changes we made.  Wait until it has.  This should
+    // almost never happen.
+    
+    if (transforms.listChanged) {
+        NSLog(@"prevous change pending");
+        int msWait = 0;
+        while(transforms.listChanged) {
+            usleep(SPIN_WAIT_MS);
+            msWait += SPIN_WAIT_MS;
+        }
+        NSLog(@"Spin wait for transform change took %dms", msWait);
+    }
     changeTransforms();
     transforms.listChanged = YES;
 }
