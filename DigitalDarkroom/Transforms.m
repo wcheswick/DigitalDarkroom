@@ -94,6 +94,8 @@ Image sources[2];
             case ColorTrans: {
                 break;
             }
+            case RemapTrans:    // precompute new pixel locations
+                break;
             case GeometricTrans:
             case AreaTrans:
             case EtcTrans:
@@ -140,20 +142,23 @@ Image sources[2];
         assert(executeList.count > 0);
         source = &sources[sourceImageIndex];
         dest = &sources[1 - sourceImageIndex];
-        Transform *t = [executeList objectAtIndex:i];
-        switch (t.type) {
+        Transform *transform = [executeList objectAtIndex:i];
+        switch (transform.type) {
             case ColorTrans: {
-                t.pointF(source->image, source->w * source->h);
+                transform.pointF(source->image, source->w * source->h);
                 break;
             }
             case GeometricTrans:
+                break;
+            case RemapTrans:
+                [self remapWithTable:transform.remapTable from:source to:dest];
                 break;
             case AreaTrans:
                 assert(source->image);
                 assert(dest->image);
                 assert(dest->image != (Pixel *)1);
                 
-                t.areaF(source, dest);
+                transform.areaF(source, dest);
                 sourceImageIndex = 1 - sourceImageIndex;
                 assert(executeList.count > 0);
                 break;
@@ -175,56 +180,6 @@ Image sources[2];
     CGImageRelease(quartzImage);
     return out;
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
-}
-
-// used by colorize
-
-channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
-channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
-channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
-
-- (void) addColorTransforms {
-    [categoryNames addObject:@"Color transforms"];
-    NSMutableArray *transformList = [[NSMutableArray alloc] init];
-    [categoryList addObject:transformList];
-    
-    [transformList addObject:[Transform colorTransform: @"Luminance"
-                                           description: @"Convert to brightness"
-                                        pointTransform: ^(Pixel *p, size_t n) {
-        while (n-- > 0) {
-            channel lum = LUM(*p);
-            *p++ = SETRGB(lum, lum, lum);
-        }
-    }]];
-    
-    [transformList addObject:[Transform colorTransform: @"Brighten"
-                                           description: @"Make brighter"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            Pixel p = *pp;
-            *pp++ = SETRGB(p.r+(Z-p.r)/8,
-                           p.g+(Z-p.g)/8,
-                           p.b+(Z-p.b)/8);
-        }
-    }]];
-    
-    [transformList addObject:[Transform colorTransform: @"Colorize"
-                                           description: @"Add color"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            Pixel p = *pp;
-            channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-            *pp++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-        }
-    }]];
-    
-    [transformList addObject:[Transform colorTransform: @"Green"
-                                           description: @"Set to green"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            *pp++ = SETRGB(0,Z,0);
-        }
-    }]];
 }
 
 // These all assume maxX and maxY are local variables
@@ -256,33 +211,20 @@ int dPI(int x, int y, int maxX, int maxY) {
 #define PA(im, x,y) &im[PI((x),(y))]
 #define P(im, x,y)  (*PA(im,(x),(y)))
 
+
+- (void) remapWithTable:(size_t *)table from:(Image *)src to:(Image *)dest {
+    for (size_t i=0; i<dest->w * dest->h; i++) {
+        size_t target = table[i];
+        assert(target < dest->w * dest->h);
+        dest->image[target] = src->image[i];
+    }
+}
+
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
-    [transformList addObject:[Transform areaTransform: @"Area test"
-                                          description: @"Testing"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
-        int maxY = src->h;
-        int maxX = src->w;
-        assert(src->h == dest->h);
-        assert(src->w == dest->w);
-        //        size_t bpr = src->bytes_per_row;
-        int x, y;
         
-        for (x=0; x<maxX; x++) {
-            for (y=0; y<maxY/2; y++) {
-                P(out,x,y) = SETRGB(0,Z,0);
-            }
-            for (; y<maxY; y++) {
-                P(out,x,y) = P(in,maxX-x-1,y);
-            }
-        }
-    }]];
-    
     [transformList addObject:[Transform areaTransform: @"Mirror left"
                                           description: @"Reflect the left half of the screen on the right"
                                         areaTransform: ^(Image *src, Image *dest) {
@@ -333,10 +275,8 @@ int dPI(int x, int y, int maxX, int maxY) {
             for (x=1; x<maxX-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
-                aa = R(P(in,x-1, y-1))+R(P(in,x-1, y))*2+
-                    R(P(in,x-1, y+1))-
-                    R(P(in,x+1, y-1))-R(P(in,x+1, y))*2-
-                    R(P(in,x+1, y+1));
+                aa = R(P(in,x-1, y-1)) + R(P(in,x-1, y))*2 + R(P(in,x-1, y+1)) -
+                    R(P(in,x+1, y-1)) - R(P(in,x+1, y))*2 - R(P(in,x+1, y+1));
                 bb = R(P(in,x-1, y-1))+R(P(in,x, y-1))*2+
                     R(P(in,x+1, y-1))-
                     R(P(in,x-1, y+1))-R(P(in,x, y+1))*2-
@@ -374,6 +314,69 @@ int dPI(int x, int y, int maxX, int maxY) {
                     p.b = Z;
                 else
                     p.b = s;
+                P(out,x,y) = p;
+            }
+        }
+        
+    }]];
+    
+    [transformList addObject:[Transform areaTransform: @"Negative Sobel"
+                                          description: @"Negative Sobel filter"
+                                        areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        int maxY = src->h;
+        int maxX = src->w;
+
+        int x, y;
+        for (y=1; y<maxY-1; y++) {
+            for (x=1; x<maxX-1; x++) {
+                int aa, bb, s;
+                Pixel p = {0,0,0,Z};
+                aa = P(in, x-1,y-1).r + P(in, x-1,y).r * 2 +
+                    P(in, (x-1),(y+1)).r -
+                    P(in, (x+1),(y-1)).r - P(in, (x+1),(y)).r * 2 -
+                    P(in, (x+1),(y+1)).r;
+                bb = P(in, (x-1),(y-1)).r + P(in, (x),(y-1)).r * 2 +
+                    P(in, (x+1),(y-1)).r -
+                    P(in, (x-1),(y+1)).r - P(in, (x),(y+1)).r * 2 -
+                    P(in, (x+1),(y+1)).r;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.r = Z;
+                else
+                    p.r = s;
+
+                aa = P(in, x-1,y-1).g + P(in, x-1,y).g * 2 +
+                    P(in, (x-1),(y+1)).g -
+                    P(in, (x+1),(y-1)).g - P(in, (x+1),(y)).g * 2 -
+                    P(in, (x+1),(y+1)).g;
+                bb = P(in, (x-1),(y-1)).g + P(in, (x),(y-1)).g * 2 +
+                    P(in, (x+1),(y-1)).g -
+                    P(in, (x-1),(y+1)).g - P(in, (x),(y+1)).g * 2 -
+                    P(in, (x+1),(y+1)).g;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.g = Z;
+                else
+                    p.g = s;
+
+                aa = P(in, x-1,y-1).b + P(in, x-1,y).b * 2 +
+                     P(in, (x-1),(y+1)).b -
+                     P(in, (x+1),(y-1)).b - P(in, (x+1),(y)).b * 2 -
+                     P(in, (x+1),(y+1)).b;
+                 bb = P(in, (x-1),(y-1)).b + P(in, (x),(y-1)).b * 2 +
+                     P(in, (x+1),(y-1)).b -
+                     P(in, (x-1),(y+1)).b - P(in, (x),(y+1)).b * 2 -
+                     P(in, (x+1),(y+1)).b;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.b = Z;
+                else
+                    p.b = s;
+                p.r = Z - p.r;
+                p.g = Z - p.g;
+                p.b = Z - p.b;
                 P(out,x,y) = p;
             }
         }
@@ -449,6 +452,57 @@ int dPI(int x, int y, int maxX, int maxY) {
     extern  transform_t do_color_logo;
     extern  transform_t do_spectrum;
 #endif
+}
+
+
+// used by colorize
+
+channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
+channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
+channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
+
+- (void) addColorTransforms {
+    [categoryNames addObject:@"Color transforms"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+    
+    [transformList addObject:[Transform colorTransform: @"Luminance"
+                                           description: @"Convert to brightness"
+                                        pointTransform: ^(Pixel *p, size_t n) {
+        while (n-- > 0) {
+            channel lum = LUM(*p);
+            *p++ = SETRGB(lum, lum, lum);
+        }
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Brighten"
+                                           description: @"Make brighter"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            Pixel p = *pp;
+            *pp++ = SETRGB(p.r+(Z-p.r)/8,
+                           p.g+(Z-p.g)/8,
+                           p.b+(Z-p.b)/8);
+        }
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Colorize"
+                                           description: @"Add color"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            Pixel p = *pp;
+            channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+            *pp++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+        }
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Green"
+                                           description: @"Set to green"
+                                        pointTransform: ^(Pixel *pp, size_t n) {
+        while (n-- > 0) {
+            *pp++ = SETRGB(0,Z,0);
+        }
+    }]];
 }
 
 - (void) addArtTransforms {

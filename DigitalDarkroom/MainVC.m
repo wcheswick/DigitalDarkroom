@@ -74,17 +74,31 @@ enum {
     frameDisplay = [[UILabel alloc] init];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
-    videoView.backgroundColor = [UIColor yellowColor];
+    videoView.backgroundColor = [UIColor blueColor];
+    videoView.userInteractionEnabled = YES;
 //    videoView.contentMode = UIViewContentModeScaleAspectFit;
     [self.view addSubview:videoView];
+    
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+                                   initWithTarget:self action:@selector(didTapVideo:)];
+    [videoView addGestureRecognizer:tap];
+    
+    UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
+                                           initWithTarget:self action:@selector(didPressVideo:)];
+    press.minimumPressDuration = 1.0;
+    [videoView addGestureRecognizer:press];
+
+    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
+                                            initWithTarget:self action:@selector(didSwipeVideoLeft:)];
+    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+    [videoView addGestureRecognizer:swipeLeft];
+    
+    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
+                                            initWithTarget:self action:@selector(didSwipeVideoRight:)];
+    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
+    [videoView addGestureRecognizer:swipeRight];
 
     videoPreview = [[UIView alloc] init];    // where the original video is stored
-
-    
-    UITapGestureRecognizer *videoTapped = [[UITapGestureRecognizer alloc]
-                                           initWithTarget:self
-                                           action:@selector(doVideoTap:)];
-    [frameDisplay addGestureRecognizer:videoTapped];
     
     activeListVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     activeListVC.tableView.frame = CGRectMake(0, 0,
@@ -286,8 +300,22 @@ enum {
 }
 
 
-- (IBAction) doVideoTap:(UITapGestureRecognizer *)recognizer {
+- (IBAction) didTapVideo:(UITapGestureRecognizer *)recognizer {
     NSLog(@"video tapped");
+}
+
+- (IBAction) didSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
+    NSLog(@"did swipe video left");
+}
+
+- (IBAction) didSwipeVideoRight:(UISwipeGestureRecognizer *)recognizer {
+    NSLog(@"did swipe video right");
+}
+
+- (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {
+    if (recognizer.state == UIGestureRecognizerStateEnded) {
+        NSLog(@"video long press");
+    }
 }
 
 - (IBAction) doEditActiveList:(UIBarButtonItem *)button {

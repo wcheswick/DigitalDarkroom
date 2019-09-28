@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 typedef enum {
     ColorTrans,
     GeometricTrans,
+    RemapTrans,
     AreaTrans,
     EtcTrans,
 } transform_t;
@@ -43,12 +44,14 @@ typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image *src, Image
     transform_t type;
     pointFunction_t pointF;
     areaFunction_t areaF;
+    size_t *remapTable;      // where to remap pixels, or nil
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              transform_t type;
+@property (assign)              size_t *remapTable;
 
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;

@@ -14,11 +14,15 @@
 @synthesize pointF;
 @synthesize areaF;
 @synthesize type;
+@synthesize remapTable;
 
 
 - (id)init {
     self = [super init];
     if (self) {
+        remapTable = nil;
+        pointF = nil;
+        areaF = nil;
     }
     return self;
 }
