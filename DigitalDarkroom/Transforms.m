@@ -30,6 +30,7 @@
 @interface Transforms ()
 
 @property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
+@property (strong, nonatomic)   NSArray *executeList;
 
 @end
 
@@ -38,6 +39,8 @@
 @synthesize categoryNames;
 @synthesize categoryList;
 @synthesize list;
+@synthesize listChanged;
+@synthesize executeList;
 @synthesize frameSize;
 @synthesize sourceImageIndicies;
 
@@ -49,6 +52,7 @@ Image sources[2];
         sources[1].image = 0;
         
         list = [[NSMutableArray alloc] init];
+        listChanged = NO;
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
         
@@ -67,15 +71,24 @@ Image sources[2];
 }
 
 
-// Some transforms are best done in place, but some need to go to a destination
-// other than the source.   Here are the two possible sources.
 
 - (void) setupForTransforming {
+    // we can't have this routine execute off the official list, because that can get changed
+    // by the user in mid-transform.  So we keep a separate copy here.  This copy still
+    // points to each individual transform, whose parameter can change in mid-transform,
+    // so we have to keep a local copy of that parameter in the actual transform processor.
+    
+    executeList = [NSArray arrayWithArray:list];
+    listChanged = NO;
+    
     // source[0] gets all its data from the call context.  If we need a destination image,
     // we have to allocate one.  Set it to the invalid address 1 if we need an alloc.
-    
-    for (int i=0; i<list.count; i++) {
-        Transform *t = [list objectAtIndex:i];
+
+    // Some transforms are best done in place, but some need to go to a destination
+    // other than the source.   Here are the two possible sources.
+
+    for (int i=0; i<executeList.count; i++) {
+        Transform *t = [executeList objectAtIndex:i];
         switch (t.type) {
             case ColorTrans: {
                 break;
@@ -89,6 +102,10 @@ Image sources[2];
 }
 
 - (UIImage *) doTransformsOnContext:(CGContextRef)context {
+    if (listChanged) {
+        [self setupForTransforming];
+    }
+    
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
     size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
     
@@ -115,13 +132,13 @@ Image sources[2];
     
     Image *source= &sources[0];
     Image *dest = 0;
-    if (list.count == 0)
+    if (executeList.count == 0)
         assert(sourceImageIndex == 0);
-    for (int i=0; i<list.count; i++) {
-        assert(list.count > 0);
+    for (int i=0; i<executeList.count; i++) {
+        assert(executeList.count > 0);
         source = &sources[sourceImageIndex];
         dest = &sources[1 - sourceImageIndex];
-        Transform *t = [list objectAtIndex:i];
+        Transform *t = [executeList objectAtIndex:i];
         switch (t.type) {
             case ColorTrans: {
                 t.pointF(source->image, source->w * source->h);
@@ -134,10 +151,9 @@ Image sources[2];
                 assert(dest->image);
                 assert(dest->image != (Pixel *)1);
                 
-                NSLog(@"from %p to %p", source, dest);
                 t.areaF(source, dest);
                 sourceImageIndex = 1 - sourceImageIndex;
-                assert(list.count > 0);
+                assert(executeList.count > 0);
                 break;
             case EtcTrans:
                 break;
@@ -145,7 +161,7 @@ Image sources[2];
     }
     // temp kludge, copy bytes back into main context, if needed
     if (sourceImageIndex) {
-        assert(list.count > 0);
+        assert(executeList.count > 0);
         assert(dest != 0);
         assert(dest->image != (Pixel *)1);
         // XXX bad exec addr 1

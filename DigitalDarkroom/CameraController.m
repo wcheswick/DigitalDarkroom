@@ -76,6 +76,8 @@
     NSLog(@"capture device: %@", captureDevice);
 }
 
+#define MAX_FRAME_RATE  24
+
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
     BOOL isPortrait = (videoOrientation == AVCaptureVideoOrientationPortrait) ||
         (videoOrientation == AVCaptureVideoOrientationPortraitUpsideDown);
@@ -103,7 +105,7 @@
               availableSize.width, availableSize.height);
         return (CGSize){0,0};
     }
-    NSLog(@" format %@", selectedFormat);
+//    NSLog(@" format %@", selectedFormat);
     
     NSError *error;
     if (![captureDevice lockForConfiguration:&error]) {
@@ -111,6 +113,9 @@
         return CGSizeZero;
     }
     captureDevice.activeFormat = selectedFormat;
+    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+
     [captureDevice unlockForConfiguration];
     
     if (isPortrait) // this is a hack I can't figure out how to avoid
@@ -134,6 +139,7 @@
         captureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
     if (captureDevice.smoothAutoFocusSupported)
         captureDevice.smoothAutoFocusEnabled = YES;
+
     [captureDevice unlockForConfiguration];
     
     captureSession = [[AVCaptureSession alloc] init];
@@ -152,6 +158,8 @@
     dataOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
     
     connection = [dataOutput.connections objectAtIndex:0];
+    if (connection.supportsVideoMirroring)
+        connection.videoMirrored = YES;
     connection.enabled = NO;
     
     dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);

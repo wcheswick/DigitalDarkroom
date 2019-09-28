@@ -40,11 +40,7 @@ enum {
 @property (assign)              int frameCount, droppedCount;
 
 @property (nonatomic, strong)   UIView *videoPreview;   // not shown
-@property (nonatomic, strong)   NSIndexPath *selectedTransformEntry;
 @property (nonatomic, strong)   UIBarButtonItem *addButton;
-
-@property (assign)              BOOL listChangePending;
-@property (nonatomic, copy)     void (^pendingTransformChanges)(void);
 
 @end
 
@@ -58,18 +54,13 @@ enum {
 @synthesize frameCount, droppedCount;
 @synthesize transforms;
 @synthesize videoPreview;
-@synthesize selectedTransformEntry;
 @synthesize addButton;
-@synthesize listChangePending;
-@synthesize pendingTransformChanges;
 
 
 - (id)init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
-        selectedTransformEntry = nil;
-        listChangePending = NO;
     }
     return self;
 }
@@ -107,6 +98,12 @@ enum {
                                    target:self
                                    action:@selector(doEditActiveList:)];
     activeListVC.navigationItem.rightBarButtonItem = editButton;
+    UIBarButtonItem *undoButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+                                   target:self
+                                   action:@selector(doRemoveLastTransform:)];
+    activeListVC.navigationItem.leftBarButtonItem = undoButton;
+    [self adjustUndoButton];
 
     activeNavVC = [[UINavigationController alloc] initWithRootViewController:activeListVC];
 
@@ -121,13 +118,6 @@ enum {
     transformsVC.tableView.dataSource = self;
     transformsVC.tableView.showsVerticalScrollIndicator = YES;
 
-    addButton = [[UIBarButtonItem alloc]
-                                  initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                                  target:self
-                                  action:@selector(undoLastTransform:)];
-    transformsVC.navigationItem.leftBarButtonItem = addButton;
-    addButton.enabled = (selectedTransformEntry != nil);
-
     transformsVC.title = @"Transforms";
     transformsNavVC = [[UINavigationController alloc] initWithRootViewController:transformsVC];
     [transformsNavVC.view addSubview:transformsVC.tableView];
@@ -135,6 +125,10 @@ enum {
     [self.view addSubview:activeNavVC.view];
     [self.view addSubview:transformsNavVC.view];
     self.view.backgroundColor = [UIColor whiteColor];
+}
+
+- (void) adjustUndoButton {
+    activeListVC.navigationItem.leftBarButtonItem.enabled = transforms.list.count > 0;
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -255,7 +249,6 @@ enum {
     
     [activeNavVC.view setNeedsDisplay];     // not sure if any of these are ...
     [transformsNavVC.view setNeedsDisplay];
-    [activeListVC.tableView reloadData];
     [transformsVC.tableView reloadData];    // ... needed
 
     f = videoView.frame;
@@ -304,10 +297,7 @@ enum {
             return transformList.count;
         }
         case ActiveTag:
-            if (selectedTransformEntry) // if we have a selected entry, don't highlight next (empty) cell
-                return transforms.list.count;
-            else
-                return transforms.list.count + 1;    // to highlight where the next one goes
+            return transforms.list.count;
     }
     return 1;
 }
@@ -326,12 +316,14 @@ enum {
     return 30;
 }
 
+
+- (BOOL)tableView:(UITableView *)tableView
+canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
+    return tableView.tag == ActiveTag;
+}
+
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (tableView.tag != ActiveTag)
-        return NO;      // cannot edit source transform list
-    if (selectedTransformEntry && indexPath.row >= transforms.list.count)
-        return NO;      // cannot edit highlighted empty cell
-    return YES;
+    return tableView.tag == ActiveTag;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -353,11 +345,13 @@ enum {
             cell.textLabel.text = @"";
             cell.layer.cornerRadius = 3.0;
             cell.layer.borderColor = [UIColor blueColor].CGColor;
-            if (selectedTransformEntry) // do not show this
-                cell.layer.borderWidth = 0;
-            else
-                cell.layer.borderWidth = 2;
         }
+#ifdef brokenloop
+        if (indexPath.row == transforms.list.count - 1)
+            [tableView scrollToRowAtIndexPath:indexPath
+                             atScrollPosition:UITableViewScrollPositionBottom
+                                     animated:YES];
+#endif
     } else {    // Selection table display table list
         NSString *CellIdentifier = @"SelectionCell";
         cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
@@ -376,63 +370,30 @@ enum {
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     if (tableView.tag == ActiveTag) {
         // Nothing happens
-//        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
+        //        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
         Transform *transform = [transformList objectAtIndex:indexPath.row];
-        if (!selectedTransformEntry) {   // create a transform selection. Remove outlined cell
-            cell.selected = YES;
-            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
-            selectedTransformEntry = indexPath;
-            [self changeTransformList:^{
-                [self->transforms.list addObject:transform];
-            }];
-        } else if (indexPath.row != self->selectedTransformEntry.row) {  // switch selection entry
-            UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:self->selectedTransformEntry];
-            oldCell.selected = NO;
-            [transformsVC.tableView deselectRowAtIndexPath:self->selectedTransformEntry animated:NO];
-            selectedTransformEntry = indexPath;
-            cell.selected = YES;
-            [transformsVC.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionBottom];
-            [self changeTransformList:^{
-                [self->transforms.list replaceObjectAtIndex:self->transforms.list.count - 1 withObject:transform];
-            }];
-        } else {        // remove selection, restoring outlined cell in list
-            cell.selected = NO;
-            [transformsVC.tableView deselectRowAtIndexPath:indexPath animated:NO];
-            selectedTransformEntry = nil;
-            [self changeTransformList:^{
-                [self->transforms.list removeObjectAtIndex:self->transforms.list.count - 1];
-            }];
-}
-        [activeListVC.tableView reloadData];
-        [transforms setupForTransforming];
-        addButton.enabled = (selectedTransformEntry != nil);
+        [self changeTransformList:^{
+            [self->transforms.list addObject:transform];
+            [self->transforms setupForTransforming];
+            [self adjustUndoButton];
+        }];
     }
 }
 
-- (IBAction) undoLastTransform:(UIBarButtonItem *)button {
-    assert(selectedTransformEntry);
-    NSLog(@"undo transform");
-    [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
-    selectedTransformEntry = nil;
-    addButton.enabled = (selectedTransformEntry != nil);
-    [activeListVC.tableView reloadData];
+- (IBAction) doRemoveLastTransform:(UIBarButtonItem *)button {
+    [self changeTransformList:^{
+        [self->transforms.list removeLastObject];
+        [self adjustUndoButton];
+    }];
+    [activeListVC.tableView
+     deleteRowsAtIndexPaths:[NSArray arrayWithObject:
+                                                    [NSIndexPath indexPathForRow:transforms.list.count inSection:0]]
+                                  withRowAnimation:UITableViewRowAnimationFade];
 }
-
-#ifdef notdef
-- (IBAction) addTransformToList:(UIBarButtonItem *)button {
-    assert(selectedTransformEntry);
-    NSLog(@"add transform");
-    [transformsVC.tableView deselectRowAtIndexPath:selectedTransformEntry animated:NO];
-    selectedTransformEntry = nil;
-    addButton.enabled = (selectedTransformEntry != nil);
-    [activeListVC.tableView reloadData];
-}
-#endif
 
 - (void)tableView:(UITableView *)tableView
 commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
@@ -441,12 +402,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         case UITableViewCellEditingStyleDelete: {
             [self changeTransformList:^{
                 [self->transforms.list removeObjectAtIndex:indexPath.row];
+                [self adjustUndoButton];
             }];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             break;
         }
         case UITableViewCellEditingStyleInsert:
+            NSLog(@"insert?");
             break;
         default:
             NSLog(@"commitEditingStyle: never mind: %ld", (long)editingStyle);
@@ -461,6 +424,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         [self->transforms.list removeObjectAtIndex:fromIndexPath.row];
         [self->transforms.list insertObject:t atIndex:toIndexPath.row];
     }];
+    [tableView reloadData];
 }
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
@@ -468,10 +432,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
     
-    if (listChangePending) {
-        pendingTransformChanges();
-        listChangePending = NO;
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self->activeListVC.tableView reloadData];
+    });
     
 //    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
     // Lock the base address of the pixel buffer
@@ -480,18 +443,16 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
     // Get the number of bytes per row for the pixel buffer
     void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
-    
 
     // Get the number of bytes per row for the pixel buffer
     size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
+    
     // Get the pixel buffer width and height
     size_t width = CVPixelBufferGetWidth(imageBuffer);
     size_t height = CVPixelBufferGetHeight(imageBuffer);
 
     // Create a device-dependent RGB color space
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    
-    // Create a bitmap graphics context with the sample buffer data
     CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
                                                   bytesPerRow, colorSpace, kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst);
     
@@ -523,13 +484,19 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
     // Add your code here that uses the image.
 }
-
 // Don't change the list datastructure while running through the list.
 
+- (void) changeTransformList:(void (^)(void))changeTransforms {
+    changeTransforms();
+    transforms.listChanged = YES;
+}
+
+#ifdef OLDCOMPLICATED
 - (void) changeTransformList:(void (^)(void))changeTransforms {
     assert(!listChangePending); //  XXX right now, this is a race we hope not to lose
     pendingTransformChanges = changeTransforms;
     listChangePending = YES;
 }
+#endif
 
 @end

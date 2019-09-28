@@ -20,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSMutableArray *categoryList;
     CGSize frameSize;
     NSMutableArray *list;
+    BOOL listChanged;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -27,6 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              NSMutableArray *transforms;
 @property (assign)              CGSize frameSize;
 @property (nonatomic, strong)   NSMutableArray *list;
+@property (assign)              BOOL listChanged;
 
 - (void) updateFrameSize: (CGSize) newSize;
 - (void) setupForTransforming;
