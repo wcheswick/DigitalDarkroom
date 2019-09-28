@@ -35,6 +35,7 @@ enum {
 
 @property (nonatomic, strong)   UINavigationController *activeNavVC;
 @property (nonatomic, strong)   UITableViewController *activeListVC;
+@property (nonatomic, strong)   UIBarButtonItem *undoButton, *trashButton;
 
 @property (nonatomic, strong)   UILabel *frameDisplay;
 @property (assign)              int frameCount, droppedCount;
@@ -55,6 +56,7 @@ enum {
 @synthesize transforms;
 @synthesize videoPreview;
 @synthesize addButton;
+@synthesize undoButton, trashButton;
 
 
 - (id)init {
@@ -98,12 +100,25 @@ enum {
                                    target:self
                                    action:@selector(doEditActiveList:)];
     activeListVC.navigationItem.rightBarButtonItem = editButton;
-    UIBarButtonItem *undoButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+    undoButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                    target:self
                                    action:@selector(doRemoveLastTransform:)];
     activeListVC.navigationItem.leftBarButtonItem = undoButton;
-    [self adjustUndoButton];
+    trashButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+                                   target:self
+                                   action:@selector(doRemoveAllTransforms:)];
+    UIBarButtonItem *flexSpacer = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                   target:nil
+                                   action:nil];
+    activeListVC.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:
+                                                      undoButton,
+                                                      flexSpacer,
+                                                      trashButton,
+                                                      nil];
+    [self adjustButtons];
 
     activeNavVC = [[UINavigationController alloc] initWithRootViewController:activeListVC];
 
@@ -127,8 +142,8 @@ enum {
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
-- (void) adjustUndoButton {
-    activeListVC.navigationItem.leftBarButtonItem.enabled = transforms.list.count > 0;
+- (void) adjustButtons {
+    undoButton.enabled = trashButton.enabled = transforms.list.count > 0;
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -381,7 +396,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         [self changeTransformList:^{
             [self->transforms.list addObject:transform];
             [self->transforms setupForTransforming];
-            [self adjustUndoButton];
+            [self adjustButtons];
         }];
     }
 }
@@ -389,12 +404,17 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) doRemoveLastTransform:(UIBarButtonItem *)button {
     [self changeTransformList:^{
         [self->transforms.list removeLastObject];
-        [self adjustUndoButton];
+        [self adjustButtons];
     }];
-    [activeListVC.tableView
-     deleteRowsAtIndexPaths:[NSArray arrayWithObject:
-                                                    [NSIndexPath indexPathForRow:transforms.list.count inSection:0]]
-                                  withRowAnimation:UITableViewRowAnimationFade];
+    [activeListVC.tableView reloadData];
+}
+
+- (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
+    [self changeTransformList:^{
+        [self->transforms.list removeAllObjects];
+        [self adjustButtons];
+    }];
+    [activeListVC.tableView reloadData];
 }
 
 - (void)tableView:(UITableView *)tableView
@@ -404,7 +424,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         case UITableViewCellEditingStyleDelete: {
             [self changeTransformList:^{
                 [self->transforms.list removeObjectAtIndex:indexPath.row];
-                [self adjustUndoButton];
+                [self adjustButtons];
             }];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];

@@ -9,6 +9,8 @@
 #import "Transforms.h"
 #import "Defines.h"
 
+#define DEBUG_TRANSFORMS    // bounds checking and a lot of CPU-expensive assertions
+
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
 
@@ -71,7 +73,6 @@ Image sources[2];
 }
 
 
-
 - (void) setupForTransforming {
     // we can't have this routine execute off the official list, because that can get changed
     // by the user in mid-transform.  So we keep a separate copy here.  This copy still
@@ -118,9 +119,10 @@ Image sources[2];
     
     int sourceImageIndex = 0;   // incoming image is at zero
     
-    sources[sourceImageIndex] = (Image){CGBitmapContextGetWidth(context),
-        CGBitmapContextGetHeight(context),
-        CGBitmapContextGetBytesPerRow(context),
+    sources[sourceImageIndex] = (Image){
+        (int)CGBitmapContextGetWidth(context),
+        (int)CGBitmapContextGetHeight(context),
+        (int)CGBitmapContextGetBytesPerRow(context),
         CGBitmapContextGetData(context)};
     assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
     assert(((u_long)sources[sourceImageIndex].image & 0x03 ) == 0); // word-aligned pixels
@@ -225,9 +227,34 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }]];
 }
 
-#define AYX(im, y,x)    &im[(x) + (y)*maxX]
-#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-#define P(im, x,y)    (*(AYX((im),(y),(x))))
+// These all assume maxX and maxY are local variables
+//
+// PI pixel index in an image
+// PA: pixel address in an image
+// Pixel in an image pixel
+
+#ifdef DEBUG_TRANSFORMS
+
+#define PI(x,y)     dPI((x), (y), maxX, maxY)
+
+int dPI(int x, int y, int maxX, int maxY) {
+    assert(x >= 0);
+    assert(x < maxX);
+    assert(y >= 0);
+    assert(y < maxY);
+    int i = x + y*maxX;
+    assert(i < maxX*maxY);
+    return i;
+}
+
+#else
+
+#define PI(x,y)     ((x) + (y)*maxX)
+
+#endif
+
+#define PA(im, x,y) &im[PI((x),(y))]
+#define P(im, x,y)  (*PA(im,(x),(y)))
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
@@ -239,8 +266,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                         areaTransform: ^(Image *src, Image *dest) {
         Pixel *in = src->image;
         Pixel *out = dest->image;
-        size_t maxY = src->h;
-        size_t maxX = src->w;
+        int maxY = src->h;
+        int maxX = src->w;
         assert(src->h == dest->h);
         assert(src->w == dest->w);
         //        size_t bpr = src->bytes_per_row;
@@ -248,14 +275,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         
         for (x=0; x<maxX; x++) {
             for (y=0; y<maxY/2; y++) {
-                assert(x < maxX);
-                assert(y < maxY);
                 P(out,x,y) = SETRGB(0,Z,0);
             }
             for (; y<maxY; y++) {
-                assert(x < maxX);
-                assert(y < maxY);
-                P(out,x,y) = P(in,maxX-x,y);
+                P(out,x,y) = P(in,maxX-x-1,y);
             }
         }
     }]];
@@ -267,14 +290,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         Pixel *out = dest->image;
         assert(in);
         assert(out);
-        size_t maxY = src->h;
-        size_t maxX = src->w;
+        int maxY = src->h;
+        int maxX = src->w;
         //        size_t bpr = src->bytes_per_row;
         int x, y;
-        
-#define AYX(im, y,x)    &im[(x) + (y)*maxX]
-#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-#define P(im, x,y)    (*(AYX((im),(y),(x))))
         
         for (x=0; x<maxX; x++) {
             for (y=0; y<maxY; y++) {
@@ -288,14 +307,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                         areaTransform: ^(Image *src, Image *dest) {
         Pixel *in = src->image;
         Pixel *out = dest->image;
-        size_t maxY = src->h;
-        size_t maxX = src->w;
+        int maxY = src->h;
+        int maxX = src->w;
         //        size_t bpr = src->bytes_per_row;
         int x, y;
-        
-#define AYX(im, y,x)    &im[(x) + (y)*maxX]
-#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
-#define P(im, x,y)    (*(AYX((im),(y),(x))))
         
         for (x=0; x<maxX; x++) {
             for (y=0; y<maxY; y++) {
@@ -309,60 +324,57 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                         areaTransform: ^(Image *src, Image *dest) {
         Pixel *in = src->image;
         Pixel *out = dest->image;
-        size_t maxY = src->h;
-        size_t maxX = src->w;
-        //        size_t bpr = src->bytes_per_row;
+        int maxY = src->h;
+        int maxX = src->w;
+        //        int bpr = src->bytes_per_row;
         int x, y;
-        
-#define AYX(im, y,x)    &im[(x) + (y)*maxX]
-#define PYX(im, y,x)    (*(AYX((im),(y),(x))))
         
         for (y=1; y<maxY-1; y++) {
             for (x=1; x<maxX-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
-                aa = R(PYX(in,y-1, x-1))+R(PYX(in,y-1, x))*2+
-                R(PYX(in,y-1, x+1))-
-                R(PYX(in,y+1, x-1))-R(PYX(in,y+1, x))*2-
-                R(PYX(in,y+1, x+1));
-                bb = R(PYX(in,y-1, x-1))+R(PYX(in,y, x-1))*2+
-                R(PYX(in,y+1, x-1))-
-                R(PYX(in,y-1, x+1))-R(PYX(in,y, x+1))*2-
-                R(PYX(in,y+1, x+1));
+                aa = R(P(in,x-1, y-1))+R(P(in,x-1, y))*2+
+                    R(P(in,x-1, y+1))-
+                    R(P(in,x+1, y-1))-R(P(in,x+1, y))*2-
+                    R(P(in,x+1, y+1));
+                bb = R(P(in,x-1, y-1))+R(P(in,x, y-1))*2+
+                    R(P(in,x+1, y-1))-
+                    R(P(in,x-1, y+1))-R(P(in,x, y+1))*2-
+                    R(P(in,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.r = Z;
                 else
                     p.r = s;
                 
-                aa = G(PYX(in,y-1, x-1))+G(PYX(in,y-1, x))*2+
-                G(PYX(in,y-1, x+1))-
-                G(PYX(in,y+1, x-1))-G(PYX(in,y+1, x))*2-
-                G(PYX(in,y+1, x+1));
-                bb = G(PYX(in,y-1, x-1))+G(PYX(in,y, x-1))*2+
-                G(PYX(in,y+1, x-1))-
-                G(PYX(in,y-1, x+1))-G(PYX(in,y, x+1))*2-
-                G(PYX(in,y+1, x+1));
+                aa = G(P(in,x-1, y-1))+G(P(in,x-1, y))*2+
+                    G(P(in,x-1, y+1))-
+                    G(P(in,x+1, y-1))-G(P(in,x+1, y))*2-
+                    G(P(in,x+1, y+1));
+                bb = G(P(in,x-1, y-1))+G(P(in,x, y-1))*2+
+                    G(P(in,x+1, y-1))-
+                    G(P(in,x-1, y+1))-G(P(in,x, y+1))*2-
+                    G(P(in,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.g = Z;
                 else
                     p.g = s;
                 
-                aa = B(PYX(in,y-1, x-1))+B(PYX(in,y-1, x))*2+
-                B(PYX(in,y-1, x+1))-
-                B(PYX(in,y+1, x-1))-B(PYX(in,y+1, x))*2-
-                B(PYX(in,y+1, x+1));
-                bb = B(PYX(in,y-1, x-1))+B(PYX(in,y, x-1))*2+
-                R(PYX(in,y+1, x-1))-
-                B(PYX(in,y-1, x+1))-B(PYX(in,y, x+1))*2-
-                B(PYX(in,y+1, x+1));
+                aa = B(P(in,x-1, y-1))+B(P(in,x-1, y))*2+
+                    B(P(in,x-1, y+1))-
+                    B(P(in,x+1, y-1))-B(P(in,x+1, y))*2-
+                    B(P(in,x+1, y+1));
+                bb = B(P(in,x-1, y-1))+B(P(in,x, y-1))*2+
+                    R(P(in,x+1, y-1))-
+                    B(P(in,x-1, y+1))-B(P(in,x, y+1))*2-
+                    B(P(in,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.b = Z;
                 else
                     p.b = s;
-                PYX(out,y,x) = p;
+                P(out,x,y) = p;
             }
         }
         

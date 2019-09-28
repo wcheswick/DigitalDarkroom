@@ -26,8 +26,8 @@ typedef struct {
 } Pixel;
 
 typedef struct Image {
-    size_t w, h;
-    size_t bytes_per_row;
+    int w, h;
+    int bytes_per_row;
     Pixel *image;
 } Image;
 

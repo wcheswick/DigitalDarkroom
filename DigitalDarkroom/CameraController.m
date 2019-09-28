@@ -38,7 +38,6 @@
 - (id)init {
     self = [super init];
     if (self) {
-        NSLog(@"capture device: %@", captureDevice);
         captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
         connection = nil;
         selectedFormat = nil;
@@ -73,7 +72,6 @@
         captureDevice = backVideoDevice;
     else
         captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    NSLog(@"capture device: %@", captureDevice);
 }
 
 #define MAX_FRAME_RATE  24
