@@ -423,7 +423,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         Transform *transform = [transformList objectAtIndex:indexPath.row];
         [self changeTransformList:^{
             [self->transforms.list addObject:transform];
-            [self->transforms setupForTransforming];
             [self adjustButtons];
         }];
     }
@@ -432,6 +431,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) doRemoveLastTransform:(UIBarButtonItem *)button {
     [self changeTransformList:^{
         [self->transforms.list removeLastObject];
+
         [self adjustButtons];
     }];
     [activeListVC.tableView reloadData];
@@ -473,6 +473,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     [self changeTransformList:^{
         [self->transforms.list removeObjectAtIndex:fromIndexPath.row];
         [self->transforms.list insertObject:t atIndex:toIndexPath.row];
+
     }];
     [tableView reloadData];
 }

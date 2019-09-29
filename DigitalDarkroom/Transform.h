@@ -35,6 +35,7 @@ typedef struct Image {
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image *src, Image *dest);
+typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int w, int h, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();
@@ -44,19 +45,25 @@ typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image *src, Image
     transform_t type;
     pointFunction_t pointF;
     areaFunction_t areaF;
-    size_t *remapTable;      // where to remap pixels, or nil
+    remapFunction_t remapF;
+    int lowParam, defaultParam, highParam;
+    size_t * _Nullable remapTable;      // where to find remap pixels, or nil
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
+@property (assign)              remapFunction_t remapF;
 @property (assign)              transform_t type;
-@property (assign)              size_t *remapTable;
+@property (assign)              size_t * _Nullable remapTable;
+@property (assign)              int lowParam, defaultParam, highParam;
 
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 areaTransform:(areaFunction_t) f;
++ (Transform *) remapTransform:(NSString *) n description:(NSString *) d
+                         remap:(remapFunction_t) f;
 
 @end
 

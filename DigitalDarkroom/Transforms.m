@@ -67,9 +67,11 @@ Image sources[2];
     return self;
 }
 
-- (void) updateFrameSize: (CGSize) newSize {
+- (void) updateFrameSize: (CGSize) newSize {    // XXXX this needs to be protected from changes
     frameSize = newSize;
+    listChanged = YES;
     // update transforms:
+    // XXXXXX change requires recomputing all remap functions
 }
 
 
@@ -89,12 +91,17 @@ Image sources[2];
     // other than the source.   Here are the two possible sources.
 
     for (int i=0; i<executeList.count; i++) {
-        Transform *t = [executeList objectAtIndex:i];
-        switch (t.type) {
+        Transform *transform = [executeList objectAtIndex:i];
+        switch (transform.type) {
             case ColorTrans: {
                 break;
             }
             case RemapTrans:    // precompute new pixel locations
+                if (transform.remapTable) {
+                    free(transform.remapTable);
+                    transform.remapTable = nil;
+                }
+                transform.remapTable = transform.remapF(frameSize.width, frameSize.height, transform.param);
                 break;
             case GeometricTrans:
             case AreaTrans:
@@ -150,9 +157,11 @@ Image sources[2];
             }
             case GeometricTrans:
                 break;
-            case RemapTrans:
+            case RemapTrans: {
                 [self remapWithTable:transform.remapTable from:source to:dest];
+                sourceImageIndex = 1 - sourceImageIndex;
                 break;
+                }
             case AreaTrans:
                 assert(source->image);
                 assert(dest->image);
@@ -212,11 +221,11 @@ int dPI(int x, int y, int maxX, int maxY) {
 #define P(im, x,y)  (*PA(im,(x),(y)))
 
 
-- (void) remapWithTable:(size_t *)table from:(Image *)src to:(Image *)dest {
+- (void) remapWithTable:(size_t *) table from:(Image *)src to:(Image *)dest {
     for (size_t i=0; i<dest->w * dest->h; i++) {
-        size_t target = table[i];
+        size_t target = *table++;
         assert(target < dest->w * dest->h);
-        dest->image[target] = src->image[i];
+        dest->image[i] = src->image[target];
     }
 }
 
@@ -224,26 +233,20 @@ int dPI(int x, int y, int maxX, int maxY) {
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-        
-    [transformList addObject:[Transform areaTransform: @"Mirror left"
-                                          description: @"Reflect the left half of the screen on the right"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
-        assert(in);
-        assert(out);
-        int maxY = src->h;
-        int maxX = src->w;
-        //        size_t bpr = src->bytes_per_row;
-        int x, y;
-        
-        for (x=0; x<maxX; x++) {
-            for (y=0; y<maxY; y++) {
-                P(out,x,y) = P(in,maxX-x-1,y);
-            }
-        }
-    }]];
     
+    [transformList addObject:[Transform remapTransform: @"Pixelate"
+                                          description: @"Giant pixels"
+                                                remap:^size_t *(int maxX, int maxY, int pixsize) {
+        size_t *table = (size_t *)calloc(maxX * maxY, sizeof(size_t));
+        for (int y=0; y<maxY; y++)
+            for (int x=0; x<maxX; x++) {
+                size_t s = PI((x/pixsize)*pixsize, (y/pixsize)*pixsize);
+                size_t d = PI(x,y);
+                table[d] = s;
+            }
+        return table;
+    }]];
+
     [transformList addObject:[Transform areaTransform: @"Mirror right"
                                           description: @"Reflect the right half of the screen on the left"
                                         areaTransform: ^(Image *src, Image *dest) {
@@ -381,6 +384,25 @@ int dPI(int x, int y, int maxX, int maxY) {
             }
         }
         
+    }]];
+        
+    [transformList addObject:[Transform areaTransform: @"Mirror left"
+                                          description: @"Reflect the left half of the screen on the right"
+                                        areaTransform: ^(Image *src, Image *dest) {
+        Pixel *in = src->image;
+        Pixel *out = dest->image;
+        assert(in);
+        assert(out);
+        int maxY = src->h;
+        int maxX = src->w;
+        //        size_t bpr = src->bytes_per_row;
+        int x, y;
+        
+        for (x=0; x<maxX; x++) {
+            for (y=0; y<maxY; y++) {
+                P(out,x,y) = P(in,maxX-x-1,y);
+            }
+        }
     }]];
 
 #ifdef notyet

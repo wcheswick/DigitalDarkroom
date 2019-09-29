@@ -13,8 +13,10 @@
 @synthesize name, description;
 @synthesize pointF;
 @synthesize areaF;
+@synthesize remapF;
 @synthesize type;
 @synthesize remapTable;
+@synthesize lowParam, defaultParam, highParam;
 
 
 - (id)init {
@@ -23,6 +25,8 @@
         remapTable = nil;
         pointF = nil;
         areaF = nil;
+        remapF = nil;
+        lowParam = defaultParam = highParam = 0;
     }
     return self;
 }
@@ -44,6 +48,16 @@
     t.description = d;
     t.type = AreaTrans;
     t.areaF = f;
+    return t;
+}
+
++ (Transform *) remapTransform:(NSString *) n description:(NSString *) d
+                remap:(remapFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RemapTrans;
+    t.remapF = f;
     return t;
 }
 
