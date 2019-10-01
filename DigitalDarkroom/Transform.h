@@ -46,7 +46,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int
     pointFunction_t pointF;
     areaFunction_t areaF;
     remapFunction_t remapF;
-    int lowParam, defaultParam, highParam;
+    int low, param, high;   // parameter setting and range for transform
     size_t * _Nullable remapTable;      // where to find remap pixels, or nil
 }
 
@@ -56,7 +56,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int
 @property (assign)              remapFunction_t remapF;
 @property (assign)              transform_t type;
 @property (assign)              size_t * _Nullable remapTable;
-@property (assign)              int lowParam, defaultParam, highParam;
+@property (assign)              int low, param, high;
 
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;

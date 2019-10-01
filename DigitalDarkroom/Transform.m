@@ -16,7 +16,7 @@
 @synthesize remapF;
 @synthesize type;
 @synthesize remapTable;
-@synthesize lowParam, defaultParam, highParam;
+@synthesize low, param, high;
 
 
 - (id)init {
@@ -26,7 +26,7 @@
         pointF = nil;
         areaF = nil;
         remapF = nil;
-        lowParam = defaultParam = highParam = 0;
+        low = param = high = 0;
     }
     return self;
 }

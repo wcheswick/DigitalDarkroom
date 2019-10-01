@@ -33,6 +33,7 @@
 
 @property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
 @property (strong, nonatomic)   NSArray *executeList;
+@property (strong, nonatomic)   Transform *lastTransform;
 
 @end
 
@@ -45,6 +46,7 @@
 @synthesize executeList;
 @synthesize frameSize;
 @synthesize sourceImageIndicies;
+@synthesize lastTransform;
 
 Image sources[2];
 
@@ -234,9 +236,9 @@ int dPI(int x, int y, int maxX, int maxY) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    [transformList addObject:[Transform remapTransform: @"Pixelate"
-                                          description: @"Giant pixels"
-                                                remap:^size_t *(int maxX, int maxY, int pixsize) {
+    lastTransform = [Transform remapTransform: @"Pixelate"
+                                  description: @"Giant pixels"
+                                        remap:^size_t *(int maxX, int maxY, int pixsize) {
         size_t *table = (size_t *)calloc(maxX * maxY, sizeof(size_t));
         for (int y=0; y<maxY; y++)
             for (int x=0; x<maxX; x++) {
@@ -245,8 +247,10 @@ int dPI(int x, int y, int maxX, int maxY) {
                 table[d] = s;
             }
         return table;
-    }]];
-
+    }];
+    lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
+    [transformList addObject:lastTransform];
+    
     [transformList addObject:[Transform areaTransform: @"Mirror right"
                                           description: @"Reflect the right half of the screen on the left"
                                         areaTransform: ^(Image *src, Image *dest) {

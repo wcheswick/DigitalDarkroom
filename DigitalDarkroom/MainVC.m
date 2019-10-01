@@ -369,6 +369,8 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     return tableView.tag == ActiveTag;
 }
 
+#define SLIDER_TAG_OFFSET   100
+
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell;
@@ -379,15 +381,24 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                           reuseIdentifier:CellIdentifier];
         }
-        if (indexPath.row < transforms.list.count) { // show transform entry
-            Transform *transform = [transforms.list objectAtIndex:indexPath.row];
-            cell.textLabel.text = [NSString stringWithFormat:
-                                   @"%2ld: %@", indexPath.row+1, transform.name];
-            cell.layer.borderWidth = 0;
-        } else {    // show an empty highlighted cell where the next one goes
-            cell.textLabel.text = @"";
-            cell.layer.cornerRadius = 3.0;
-            cell.layer.borderColor = [UIColor blueColor].CGColor;
+        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
+        cell.textLabel.text = [NSString stringWithFormat:
+                               @"%2ld: %@", indexPath.row+1, transform.name];
+        cell.layer.borderWidth = 0;
+        cell.tag = 0;
+        if (transform.param) {  // we need a slider
+            CGRect f = CGRectInset(cell.contentView.frame, 2, 2);
+            f.origin.x += f.size.width - 80;
+            f.size.width = 80;
+            f.origin.x = cell.contentView.frame.size.width - f.size.width;
+            UISlider *slider = [[UISlider alloc] initWithFrame:f];
+            slider.value = transform.param;
+            slider.minimumValue = transform.low;
+            slider.maximumValue = transform.high;
+            slider.tag = indexPath.row + SLIDER_TAG_OFFSET;
+            [slider addTarget:self action:@selector(adjustParam:)
+             forControlEvents:UIControlEventValueChanged];
+            [cell.contentView addSubview:slider];
         }
 #ifdef brokenloop
         if (indexPath.row == transforms.list.count - 1)
@@ -412,6 +423,15 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         cell.selected = NO;
     }
     return cell;
+}
+
+- (IBAction) adjustParam:(UISlider *)slider {
+    if (slider.tag < SLIDER_TAG_OFFSET)
+        return;
+    [self changeTransformList:^{    // XXXXXX these parameters need per-execute values
+        Transform *transform = [self->transforms.list objectAtIndex:slider.tag - SLIDER_TAG_OFFSET];
+        transform.param = slider.value;
+    }];
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
