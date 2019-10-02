@@ -135,7 +135,8 @@ Image sources[2];
         (int)CGBitmapContextGetHeight(context),
         (int)CGBitmapContextGetBytesPerRow(context),
         CGBitmapContextGetData(context)};
-    assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
+// not true on the ipad:
+//    assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
     assert(((u_long)sources[sourceImageIndex].image & 0x03 ) == 0); // word-aligned pixels
     
     BOOL needsAlloc = sources[1].image == 0;

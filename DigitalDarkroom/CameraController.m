@@ -77,6 +77,8 @@
 #define MAX_FRAME_RATE  24
 
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
+    NSError *error;
+
     BOOL isPortrait = (videoOrientation == AVCaptureVideoOrientationPortrait) ||
         (videoOrientation == AVCaptureVideoOrientationPortraitUpsideDown);
     
@@ -103,9 +105,8 @@
               availableSize.width, availableSize.height);
         return (CGSize){0,0};
     }
-//    NSLog(@" format %@", selectedFormat);
+    NSLog(@" format %@", selectedFormat);
     
-    NSError *error;
     if (![captureDevice lockForConfiguration:&error]) {
         NSLog(@"could not lock device for configuration");
         return CGSizeZero;
