@@ -17,6 +17,7 @@
 @synthesize type;
 @synthesize remapTable;
 @synthesize low, param, high;
+@synthesize changed;
 
 
 - (id)init {
@@ -27,6 +28,7 @@
         areaF = nil;
         remapF = nil;
         low = param = high = 0;
+        changed = YES;
     }
     return self;
 }

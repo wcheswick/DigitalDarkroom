@@ -200,7 +200,6 @@ enum {
 //    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
-
 #define SEP 10  // between views
 #define INSET 3 // from screen edges
 #define MIN_TABLE_W 300
@@ -274,8 +273,6 @@ enum {
         transformsVC.tableView.frame = f;
     }
     
-    [transforms updateFrameSize: videoView.frame.size];
-    
     [activeNavVC.view setNeedsDisplay];     // not sure if any of these are ...
     [transformsNavVC.view setNeedsDisplay];
     [transformsVC.tableView reloadData];    // ... needed
@@ -298,7 +295,6 @@ enum {
     [cameraController startCapture];
     [self.view setNeedsDisplay];
 }
-
 
 - (IBAction) didTapVideo:(UITapGestureRecognizer *)recognizer {
     NSLog(@"video tapped");
@@ -431,6 +427,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     [self changeTransformList:^{    // XXXXXX these parameters need per-execute values
         Transform *transform = [self->transforms.list objectAtIndex:slider.tag - SLIDER_TAG_OFFSET];
         transform.param = slider.value;
+        transform.changed = YES;
     }];
 }
 
@@ -440,8 +437,9 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         //        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-        Transform *transform = [transformList objectAtIndex:indexPath.row];
+        Transform *transform = [[transformList objectAtIndex:indexPath.row] copy];
         [self changeTransformList:^{
+            transform.changed = YES;
             [self->transforms.list addObject:transform];
             [self adjustButtons];
         }];
@@ -450,8 +448,8 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (IBAction) doRemoveLastTransform:(UIBarButtonItem *)button {
     [self changeTransformList:^{
+        self->transforms.listChanged = YES;
         [self->transforms.list removeLastObject];
-
         [self adjustButtons];
     }];
     [activeListVC.tableView reloadData];
@@ -459,6 +457,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
     [self changeTransformList:^{
+        self->transforms.listChanged = YES;
         [self->transforms.list removeAllObjects];
         [self adjustButtons];
     }];
@@ -491,9 +490,9 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
     Transform *t = [transforms.list objectAtIndex:fromIndexPath.row];
     [self changeTransformList:^{
+        self->transforms.listChanged = YES;
         [self->transforms.list removeObjectAtIndex:fromIndexPath.row];
         [self->transforms.list insertObject:t atIndex:toIndexPath.row];
-
     }];
     [tableView reloadData];
 }
@@ -503,9 +502,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
     
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self->activeListVC.tableView reloadData];
-    });
+    if (transforms.busy) {  // drop the frame
+        return;
+    }
+//    dispatch_async(dispatch_get_main_queue(), ^{    // XXXXX always?
+//      [self->activeListVC.tableView reloadData];
+//});
     
 //    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
     // Lock the base address of the pixel buffer
@@ -527,7 +529,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
                                                   bytesPerRow, colorSpace, kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst);
     
-    UIImage *transformed = [transforms doTransformsOnContext:(CGContextRef)context];
+    UIImage *transformed = [transforms executeTransformsWithContext:(CGContextRef)context];
     
     // Free up the context and color space
     CGContextRelease(context);

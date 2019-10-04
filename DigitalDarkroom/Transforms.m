@@ -42,21 +42,26 @@
 @synthesize categoryNames;
 @synthesize categoryList;
 @synthesize list;
-@synthesize listChanged;
+@synthesize listChanged, paramsChanged;
 @synthesize executeList;
-@synthesize frameSize;
+@synthesize bytesPerRow;
 @synthesize sourceImageIndicies;
 @synthesize lastTransform;
+@synthesize busy;
 
-Image sources[2];
+Image_t currentFormat;
+
+Image_t sources[2];
 
 - (id)init {
     self = [super init];
     if (self) {
         sources[1].image = 0;
+        currentFormat.bytes_per_row = 0;    // no current format
         
         list = [[NSMutableArray alloc] init];
         listChanged = NO;
+        busy = NO;
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
         
@@ -69,19 +74,35 @@ Image sources[2];
     return self;
 }
 
-- (void) updateFrameSize: (CGSize) newSize {    // XXXX this needs to be protected from changes
-    frameSize = newSize;
-    listChanged = YES;
-    // update transforms:
-    // XXXXXX change requires recomputing all remap functions
+- (void) computeTransform:(Transform *) transform {
+    assert(currentFormat.bytes_per_row != 0);
+    switch (transform.type) {
+        case ColorTrans: {
+            break;
+        }
+        case RemapTrans:    // precompute new pixel locations
+            if (transform.remapTable) {
+                free(transform.remapTable);
+                transform.remapTable = nil;
+            }
+            transform.remapTable = transform.remapF(&currentFormat, transform.param);
+            break;
+        case GeometricTrans:
+        case AreaTrans:
+        case EtcTrans:
+            return;
+    }
+    transform.changed = NO;
 }
 
-
+// currentFormat has the bitmap details
 - (void) setupForTransforming {
     // we can't have this routine execute off the official list, because that can get changed
     // by the user in mid-transform.  So we keep a separate copy here.  This copy still
     // points to each individual transform, whose parameter can change in mid-transform,
     // so we have to keep a local copy of that parameter in the actual transform processor.
+    
+    assert(currentFormat.bytes_per_row != 0);   // we need real values now
     
     executeList = [NSArray arrayWithArray:list];
     listChanged = NO;
@@ -93,29 +114,25 @@ Image sources[2];
     // other than the source.   Here are the two possible sources.
 
     for (int i=0; i<executeList.count; i++) {
-        Transform *transform = [executeList objectAtIndex:i];
-        switch (transform.type) {
-            case ColorTrans: {
-                break;
-            }
-            case RemapTrans:    // precompute new pixel locations
-                if (transform.remapTable) {
-                    free(transform.remapTable);
-                    transform.remapTable = nil;
-                }
-                transform.remapTable = transform.remapF(frameSize.width, frameSize.height, transform.param);
-                break;
-            case GeometricTrans:
-            case AreaTrans:
-            case EtcTrans:
-                return;
-        }
+        Transform *transform = [[executeList objectAtIndex:i] copy];
+        [self computeTransform:transform];
     }
 }
 
-- (UIImage *) doTransformsOnContext:(CGContextRef)context {
+- (void) updateParams {
+    for (int i=0; i<executeList.count; i++) {
+        Transform *transform = [executeList objectAtIndex:i];
+        if (!transform.changed)
+            continue;
+        [self computeTransform:transform];
+    }
+}
+
+- (UIImage *) executeTransformsWithContext:(CGContextRef)context {
     if (listChanged) {
         [self setupForTransforming];
+    } else if (paramsChanged) { // recompute one or more parameter changes
+        [self updateParams];
     }
     
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
@@ -128,24 +145,38 @@ Image sources[2];
     assert(channelSize == 8);   // eight bits per color
     assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
     
+    int w = (int)CGBitmapContextGetWidth(context);
+    int h = (int)CGBitmapContextGetHeight(context);
+    int bpr = (int)CGBitmapContextGetBytesPerRow(context);
+    
+    if (currentFormat.bytes_per_row == 0 |
+        currentFormat.bytes_per_row != bpr ||
+        currentFormat.w != w ||
+        currentFormat.h != h) {     // first or changed format, compute new transforms
+        currentFormat = (Image_t){w,h,bpr,(Pixel *)0};
+        busy = YES;
+        [self setupForTransforming];
+        busy = NO;
+        return nil;     // We don't even try, this probably took too long
+    }
+    
     int sourceImageIndex = 0;   // incoming image is at zero
     
-    sources[sourceImageIndex] = (Image){
-        (int)CGBitmapContextGetWidth(context),
-        (int)CGBitmapContextGetHeight(context),
-        (int)CGBitmapContextGetBytesPerRow(context),
-        CGBitmapContextGetData(context)};
-// not true on the ipad:
-//    assert(sources[sourceImageIndex].bytes_per_row == sources[sourceImageIndex].w * sizeof(Pixel)); //no slop on the rows
+    sources[sourceImageIndex] = currentFormat;
+    sources[sourceImageIndex].image = CGBitmapContextGetData(context);
+
+    // We can have extra bytes at the end of a bitmap row, but it has to come out
+    // to an integer number of Pixels.  The code assumes this.
+    assert(sources[sourceImageIndex].bytes_per_row % sizeof(Pixel) == 0); //no slop on the rows
     assert(((u_long)sources[sourceImageIndex].image & 0x03 ) == 0); // word-aligned pixels
     
     BOOL needsAlloc = sources[1].image == 0;
     sources[1] = sources[0];
     if (needsAlloc)
-        sources[1].image = (Pixel *)calloc(sources[1].w * sources[1].h, sizeof(Pixel));
+        sources[1].image = (Pixel *)calloc(sources[1].bytes_per_row * sources[1].h, sizeof(Pixel));
     
-    Image *source= &sources[0];
-    Image *dest = 0;
+    Image_t *source= &sources[0];
+    Image_t *dest = 0;
     if (executeList.count == 0)
         assert(sourceImageIndex == 0);
     for (int i=0; i<executeList.count; i++) {
@@ -194,37 +225,40 @@ Image sources[2];
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
 }
 
-// These all assume maxX and maxY are local variables
-//
-// PI pixel index in an image
-// PA: pixel address in an image
-// Pixel in an image pixel
-
 #ifdef DEBUG_TRANSFORMS
 
-#define PI(x,y)     dPI((x), (y), maxX, maxY)
+#define PIR(imt, y)     (dPIR(imt, (y)))
+#define PI(imt, x,y)    (PIR((imt),y) + (x))
 
-int dPI(int x, int y, int maxX, int maxY) {
-    assert(x >= 0);
-    assert(x < maxX);
+int dPIR(Image_t *im, int y) {
     assert(y >= 0);
-    assert(y < maxY);
-    int i = x + y*maxX;
-    assert(i < maxX*maxY);
-    return i;
+    assert(y < im->h);
+    return im->bytes_per_row * y;
+}
+
+int dPI(Image_t *im, int x, int y) {
+    assert(x >= 0);
+    assert(x < im->w);
+    return dPIR(im, y) + x;
 }
 
 #else
 
-#define PI(x,y)     ((x) + (y)*maxX)
+// Pixel array index for start of row y
+#define PIR(imt, y)  ((y)*imt->bytes_per_row)
+// Pixel array index for pixel x,y
+#define PI(imt, x,y)     (PIR((imt),y) + (x))
 
 #endif
 
-#define PA(im, x,y) &im[PI((x),(y))]
-#define P(im, x,y)  (*PA(im,(x),(y)))
+// Pixel at coordinates in image
+#define P(imt, x,y)  imt->image[PI(imt, x, y)]
+
+// Address Pixel at coordinates in image
+#define PA(imt, x,y)    (&P(imt, x,y))
 
 
-- (void) remapWithTable:(size_t *) table from:(Image *)src to:(Image *)dest {
+- (void) remapWithTable:(size_t *) table from:(Image_t *)src to:(Image_t *)dest {
     for (size_t i=0; i<dest->w * dest->h; i++) {
         size_t target = *table++;
         assert(target < dest->w * dest->h);
@@ -239,12 +273,12 @@ int dPI(int x, int y, int maxX, int maxY) {
     
     lastTransform = [Transform remapTransform: @"Pixelate"
                                   description: @"Giant pixels"
-                                        remap:^size_t *(int maxX, int maxY, int pixsize) {
-        size_t *table = (size_t *)calloc(maxX * maxY, sizeof(size_t));
-        for (int y=0; y<maxY; y++)
-            for (int x=0; x<maxX; x++) {
-                size_t s = PI((x/pixsize)*pixsize, (y/pixsize)*pixsize);
-                size_t d = PI(x,y);
+                                        remap:^size_t *(Image_t *im, int pixsize) {
+        size_t *table = (size_t *)calloc(im->w * im->h*im->bytes_per_row, sizeof(size_t));
+        for (int y=0; y<im->h; y++)
+            for (int x=0; x<im->w; x++) {
+                size_t s = PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
+                size_t d = PI(im, x,y);
                 table[d] = s;
             }
         return table;
@@ -254,9 +288,7 @@ int dPI(int x, int y, int maxX, int maxY) {
     
     [transformList addObject:[Transform areaTransform: @"Mirror right"
                                           description: @"Reflect the right half of the screen on the left"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
+                                        areaTransform: ^(Image_t *src, Image_t *dest) {
         int maxY = src->h;
         int maxX = src->w;
         //        size_t bpr = src->bytes_per_row;
@@ -264,16 +296,14 @@ int dPI(int x, int y, int maxX, int maxY) {
         
         for (x=0; x<maxX; x++) {
             for (y=0; y<maxY; y++) {
-                P(out,maxX-x-1,y) = P(in,x,y);
+                P(dest,maxX-x-1,y) = P(src,x,y);
             }
         }
     }]];
     
     [transformList addObject:[Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
+                                        areaTransform: ^(Image_t *src, Image_t *dest) {
         int maxY = src->h;
         int maxX = src->w;
         //        int bpr = src->bytes_per_row;
@@ -283,46 +313,46 @@ int dPI(int x, int y, int maxX, int maxY) {
             for (x=1; x<maxX-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
-                aa = R(P(in,x-1, y-1)) + R(P(in,x-1, y))*2 + R(P(in,x-1, y+1)) -
-                    R(P(in,x+1, y-1)) - R(P(in,x+1, y))*2 - R(P(in,x+1, y+1));
-                bb = R(P(in,x-1, y-1))+R(P(in,x, y-1))*2+
-                    R(P(in,x+1, y-1))-
-                    R(P(in,x-1, y+1))-R(P(in,x, y+1))*2-
-                    R(P(in,x+1, y+1));
+                aa = R(P(src,x-1, y-1)) + R(P(src,x-1, y))*2 + R(P(src,x-1, y+1)) -
+                    R(P(src,x+1, y-1)) - R(P(src,x+1, y))*2 - R(P(src,x+1, y+1));
+                bb = R(P(src,x-1, y-1)) + R(P(src,x, y-1))*2+
+                    R(P(src,x+1, y-1)) -
+                    R(P(src,x-1, y+1)) - R(P(src,x, y+1))*2-
+                    R(P(src,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.r = Z;
                 else
                     p.r = s;
                 
-                aa = G(P(in,x-1, y-1))+G(P(in,x-1, y))*2+
-                    G(P(in,x-1, y+1))-
-                    G(P(in,x+1, y-1))-G(P(in,x+1, y))*2-
-                    G(P(in,x+1, y+1));
-                bb = G(P(in,x-1, y-1))+G(P(in,x, y-1))*2+
-                    G(P(in,x+1, y-1))-
-                    G(P(in,x-1, y+1))-G(P(in,x, y+1))*2-
-                    G(P(in,x+1, y+1));
+                aa = G(P(src,x-1, y-1))+G(P(src,x-1, y))*2+
+                    G(P(src,x-1, y+1))-
+                    G(P(src,x+1, y-1))-G(P(src,x+1, y))*2-
+                    G(P(src,x+1, y+1));
+                bb = G(P(src,x-1, y-1))+G(P(src,x, y-1))*2+
+                    G(P(src,x+1, y-1))-
+                    G(P(src,x-1, y+1))-G(P(src,x, y+1))*2-
+                    G(P(src,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.g = Z;
                 else
                     p.g = s;
                 
-                aa = B(P(in,x-1, y-1))+B(P(in,x-1, y))*2+
-                    B(P(in,x-1, y+1))-
-                    B(P(in,x+1, y-1))-B(P(in,x+1, y))*2-
-                    B(P(in,x+1, y+1));
-                bb = B(P(in,x-1, y-1))+B(P(in,x, y-1))*2+
-                    R(P(in,x+1, y-1))-
-                    B(P(in,x-1, y+1))-B(P(in,x, y+1))*2-
-                    B(P(in,x+1, y+1));
+                aa = B(P(src,x-1, y-1))+B(P(src,x-1, y))*2+
+                    B(P(src,x-1, y+1))-
+                    B(P(src,x+1, y-1))-B(P(src,x+1, y))*2-
+                    B(P(src,x+1, y+1));
+                bb = B(P(src,x-1, y-1))+B(P(src,x, y-1))*2+
+                    R(P(src,x+1, y-1))-
+                    B(P(src,x-1, y+1))-B(P(src,x, y+1))*2-
+                    B(P(src,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.b = Z;
                 else
                     p.b = s;
-                P(out,x,y) = p;
+                P(dest,x,y) = p;
             }
         }
         
@@ -330,9 +360,7 @@ int dPI(int x, int y, int maxX, int maxY) {
     
     [transformList addObject:[Transform areaTransform: @"Negative Sobel"
                                           description: @"Negative Sobel filter"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
+                                        areaTransform: ^(Image_t *src, Image_t *dest) {
         int maxY = src->h;
         int maxX = src->w;
 
@@ -341,42 +369,42 @@ int dPI(int x, int y, int maxX, int maxY) {
             for (x=1; x<maxX-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
-                aa = P(in, x-1,y-1).r + P(in, x-1,y).r * 2 +
-                    P(in, (x-1),(y+1)).r -
-                    P(in, (x+1),(y-1)).r - P(in, (x+1),(y)).r * 2 -
-                    P(in, (x+1),(y+1)).r;
-                bb = P(in, (x-1),(y-1)).r + P(in, (x),(y-1)).r * 2 +
-                    P(in, (x+1),(y-1)).r -
-                    P(in, (x-1),(y+1)).r - P(in, (x),(y+1)).r * 2 -
-                    P(in, (x+1),(y+1)).r;
+                aa = P(src, x-1,y-1).r + P(src, x-1,y).r * 2 +
+                    P(src, (x-1),(y+1)).r -
+                    P(src, (x+1),(y-1)).r - P(src, (x+1),(y)).r * 2 -
+                    P(src, (x+1),(y+1)).r;
+                bb = P(src, (x-1),(y-1)).r + P(src, (x),(y-1)).r * 2 +
+                    P(src, (x+1),(y-1)).r -
+                    P(src, (x-1),(y+1)).r - P(src, (x),(y+1)).r * 2 -
+                    P(src, (x+1),(y+1)).r;
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.r = Z;
                 else
                     p.r = s;
 
-                aa = P(in, x-1,y-1).g + P(in, x-1,y).g * 2 +
-                    P(in, (x-1),(y+1)).g -
-                    P(in, (x+1),(y-1)).g - P(in, (x+1),(y)).g * 2 -
-                    P(in, (x+1),(y+1)).g;
-                bb = P(in, (x-1),(y-1)).g + P(in, (x),(y-1)).g * 2 +
-                    P(in, (x+1),(y-1)).g -
-                    P(in, (x-1),(y+1)).g - P(in, (x),(y+1)).g * 2 -
-                    P(in, (x+1),(y+1)).g;
+                aa = P(src, x-1,y-1).g + P(src, x-1,y).g * 2 +
+                    P(src, (x-1),(y+1)).g -
+                    P(src, (x+1),(y-1)).g - P(src, (x+1),(y)).g * 2 -
+                    P(src, (x+1),(y+1)).g;
+                bb = P(src, (x-1),(y-1)).g + P(src, (x),(y-1)).g * 2 +
+                    P(src, (x+1),(y-1)).g -
+                    P(src, (x-1),(y+1)).g - P(src, (x),(y+1)).g * 2 -
+                    P(src, (x+1),(y+1)).g;
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.g = Z;
                 else
                     p.g = s;
 
-                aa = P(in, x-1,y-1).b + P(in, x-1,y).b * 2 +
-                     P(in, (x-1),(y+1)).b -
-                     P(in, (x+1),(y-1)).b - P(in, (x+1),(y)).b * 2 -
-                     P(in, (x+1),(y+1)).b;
-                 bb = P(in, (x-1),(y-1)).b + P(in, (x),(y-1)).b * 2 +
-                     P(in, (x+1),(y-1)).b -
-                     P(in, (x-1),(y+1)).b - P(in, (x),(y+1)).b * 2 -
-                     P(in, (x+1),(y+1)).b;
+                aa = P(src, x-1,y-1).b + P(src, x-1,y).b * 2 +
+                     P(src, (x-1),(y+1)).b -
+                     P(src, (x+1),(y-1)).b - P(src, (x+1),(y)).b * 2 -
+                     P(src, (x+1),(y+1)).b;
+                 bb = P(src, (x-1),(y-1)).b + P(src, (x),(y-1)).b * 2 +
+                     P(src, (x+1),(y-1)).b -
+                     P(src, (x-1),(y+1)).b - P(src, (x),(y+1)).b * 2 -
+                     P(src, (x+1),(y+1)).b;
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.b = Z;
@@ -385,7 +413,7 @@ int dPI(int x, int y, int maxX, int maxY) {
                 p.r = Z - p.r;
                 p.g = Z - p.g;
                 p.b = Z - p.b;
-                P(out,x,y) = p;
+                P(dest,x,y) = p;
             }
         }
         
@@ -393,11 +421,7 @@ int dPI(int x, int y, int maxX, int maxY) {
         
     [transformList addObject:[Transform areaTransform: @"Mirror left"
                                           description: @"Reflect the left half of the screen on the right"
-                                        areaTransform: ^(Image *src, Image *dest) {
-        Pixel *in = src->image;
-        Pixel *out = dest->image;
-        assert(in);
-        assert(out);
+                                        areaTransform: ^(Image_t *src, Image_t *dest) {
         int maxY = src->h;
         int maxX = src->w;
         //        size_t bpr = src->bytes_per_row;
@@ -405,7 +429,7 @@ int dPI(int x, int y, int maxX, int maxY) {
         
         for (x=0; x<maxX; x++) {
             for (y=0; y<maxY; y++) {
-                P(out,x,y) = P(in,maxX-x-1,y);
+                P(dest,x,y) = P(src,maxX-x-1,y);
             }
         }
     }]];

@@ -26,16 +26,16 @@ typedef struct {
     channel b, g, r, a;
 } Pixel;
 
-typedef struct Image {
+typedef struct Image_t {
     int w, h;
     int bytes_per_row;
     Pixel *image;
-} Image;
+} Image_t;
 
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
-typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image *src, Image *dest);
-typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int w, int h, int p);
+typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest);
+typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(Image_t *im, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();
@@ -48,6 +48,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int
     remapFunction_t remapF;
     int low, param, high;   // parameter setting and range for transform
     size_t * _Nullable remapTable;      // where to find remap pixels, or nil
+    volatile BOOL changed;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
@@ -57,6 +58,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(int
 @property (assign)              transform_t type;
 @property (assign)              size_t * _Nullable remapTable;
 @property (assign)              int low, param, high;
+@property (assign)              volatile BOOL changed;
 
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;

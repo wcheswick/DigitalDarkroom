@@ -27,7 +27,6 @@
 		FBB1D9FA232FE56700845DF1 /* Links in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F1232FE56700845DF1 /* Links */; };
 		FBB1D9FB232FE56700845DF1 /* images in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F2232FE56700845DF1 /* images */; };
 		FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9FD2330FD0900845DF1 /* Transform.m */; };
-		FBB1DA0123380D4200845DF1 /* Old in Resources */ = {isa = PBXBuildFile; fileRef = FBB1DA0023380D4200845DF1 /* Old */; };
 		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
 		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
 		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
@@ -61,7 +60,6 @@
 		FBB1D9F3232FE56700845DF1 /* colorblind.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = colorblind.h; sourceTree = "<group>"; };
 		FBB1D9FC2330FD0900845DF1 /* Transform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Transform.h; sourceTree = "<group>"; };
 		FBB1D9FD2330FD0900845DF1 /* Transform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Transform.m; sourceTree = "<group>"; };
-		FBB1DA0023380D4200845DF1 /* Old */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Old; sourceTree = "<group>"; };
 		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -159,7 +157,6 @@
 		FBF5B3A8232E973F00DDFC4E /* DigitalDarkroom */ = {
 			isa = PBXGroup;
 			children = (
-				FBB1DA0023380D4200845DF1 /* Old */,
 				FBB16D63232EB49B0026F789 /* Defines.h */,
 				FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */,
 				FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */,
@@ -238,7 +235,6 @@
 			files = (
 				FBB1D9FA232FE56700845DF1 /* Links in Resources */,
 				FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */,
-				FBB1DA0123380D4200845DF1 /* Old in Resources */,
 				FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */,
 				FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */,
 				FBB1D9F4232FE56700845DF1 /* translations in Resources */,

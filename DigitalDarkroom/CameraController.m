@@ -176,7 +176,6 @@
     connection.enabled = NO;
 }
 
-
 - (void) setVideoOrientation {
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
     switch (deviceOrientation) {
@@ -217,6 +216,5 @@
 - (void) stopCamera {
     [captureSession stopRunning];
 }
-
 
 @end
