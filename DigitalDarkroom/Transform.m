@@ -63,6 +63,21 @@
     return t;
 }
 
+- (id)copyWithZone:(NSZone *)zone {
+    Transform *copy = [[Transform alloc] init];
+    copy.name = name;
+    copy.type = type;
+    copy.description = description;
+    copy.pointF = pointF;
+    copy.areaF = areaF;
+    copy.remapF = remapF;
+    copy.low = low;
+    copy.param = param;
+    copy.high = high;
+    copy.remapTable = nil;
+    return copy;
+}
+
 @end
 
 #ifdef notdef

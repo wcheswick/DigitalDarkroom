@@ -32,10 +32,17 @@ typedef struct Image_t {
     Pixel *image;
 } Image_t;
 
+// PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
+typedef UInt32 PixelIndex_t;
+
+// BitmapIndex_t: index into bitmap, 0..EOR X 0..h-1
+// where EOR is number of bytes in row / sizeof(Pixel)
+typedef UInt32 BitmapIndex_t;
+
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest);
-typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(Image_t *im, int p);
+typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapFunction_t)(Image_t *im, int x, int y, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();
@@ -47,7 +54,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(Ima
     areaFunction_t areaF;
     remapFunction_t remapF;
     int low, param, high;   // parameter setting and range for transform
-    size_t * _Nullable remapTable;      // where to find remap pixels, or nil
+    BitmapIndex_t * _Nullable remapTable;      // PixelIndex_t long table of BitmapTable_t values
     volatile BOOL changed;
 }
 
@@ -56,7 +63,7 @@ typedef size_t * _Nonnull (^ __nullable __unsafe_unretained remapFunction_t)(Ima
 @property (assign)              areaFunction_t areaF;
 @property (assign)              remapFunction_t remapF;
 @property (assign)              transform_t type;
-@property (assign)              size_t * _Nullable remapTable;
+@property (assign)              BitmapIndex_t * _Nullable remapTable;
 @property (assign)              int low, param, high;
 @property (assign)              volatile BOOL changed;
 

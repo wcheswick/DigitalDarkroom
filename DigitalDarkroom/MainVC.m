@@ -441,6 +441,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         [self changeTransformList:^{
             transform.changed = YES;
             [self->transforms.list addObject:transform];
+            [self->activeListVC.tableView reloadData];
             [self adjustButtons];
         }];
     }

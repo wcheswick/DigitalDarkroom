@@ -21,6 +21,9 @@
 #define Grey            SETRGB(Z/2,Z/2,Z/2)
 #define LightGrey       SETRGB(2*Z/3,2*Z/3,2*Z/3)
 #define White           SETRGB(Z,Z,Z)
+#define RED             SETRGB(Z,0,0)
+#define GREEN           SETRGB(0,Z,0)
+#define BLUE            SETRGB(0,0,Z)
 
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -85,7 +88,28 @@ Image_t sources[2];
                 free(transform.remapTable);
                 transform.remapTable = nil;
             }
-            transform.remapTable = transform.remapF(&currentFormat, transform.param);
+            NSLog(@"remap %@", transform.name);
+            // we compute a table of indices into a bitmap, which may have extra unused Pixels
+            // at the end of each row.  Our computed index takes these into account, but we
+            // only have to compute entries for actual useful x,y coordinates.
+            
+            size_t entryCount = currentFormat.w * currentFormat.h;
+            BitmapIndex_t *table = (BitmapIndex_t *)calloc(entryCount, sizeof(BitmapIndex_t));
+            NSLog(@"table size is %lu, %lu, %lu bytes",
+                  entryCount, sizeof(BitmapIndex_t), entryCount * sizeof(BitmapIndex_t));
+            assert(table);
+            int i = 0;
+            for (int y=0; y<currentFormat.h; y++)
+                for (int x=0; x<currentFormat.w; x++) {
+                    BitmapIndex_t s = transform.remapF(&currentFormat, x, y, transform.param);
+                    table[i++] = s;
+                }
+#ifdef notdef
+            NSLog(@"Table: ");
+            for (int i=0; i<16; i++)
+                NSLog(@"      %d", table[i]);
+#endif
+            transform.remapTable = table;
             break;
         case GeometricTrans:
         case AreaTrans:
@@ -106,7 +130,7 @@ Image_t sources[2];
     
     executeList = [NSArray arrayWithArray:list];
     listChanged = NO;
-    
+    NSLog(@"recompute transforms");
     // source[0] gets all its data from the call context.  If we need a destination image,
     // we have to allocate one.  Set it to the invalid address 1 if we need an alloc.
 
@@ -114,7 +138,7 @@ Image_t sources[2];
     // other than the source.   Here are the two possible sources.
 
     for (int i=0; i<executeList.count; i++) {
-        Transform *transform = [[executeList objectAtIndex:i] copy];
+        Transform *transform = [executeList objectAtIndex:i];
         [self computeTransform:transform];
     }
 }
@@ -179,6 +203,12 @@ Image_t sources[2];
     Image_t *dest = 0;
     if (executeList.count == 0)
         assert(sourceImageIndex == 0);
+    
+    // for debugging, three useful pixels
+    source->image[0] = RED;
+    source->image[1] = GREEN;
+    source->image[2] = BLUE;
+    
     for (int i=0; i<executeList.count; i++) {
         assert(executeList.count > 0);
         source = &sources[sourceImageIndex];
@@ -192,6 +222,7 @@ Image_t sources[2];
             case GeometricTrans:
                 break;
             case RemapTrans: {
+                assert(transform.remapTable);
                 [self remapWithTable:transform.remapTable from:source to:dest];
                 sourceImageIndex = 1 - sourceImageIndex;
                 break;
@@ -227,27 +258,20 @@ Image_t sources[2];
 
 #ifdef DEBUG_TRANSFORMS
 
-#define PIR(imt, y)     (dPIR(imt, (y)))
-#define PI(imt, x,y)    (PIR((imt),y) + (x))
-
-int dPIR(Image_t *im, int y) {
-    assert(y >= 0);
-    assert(y < im->h);
-    return im->bytes_per_row * y;
-}
+#define PI(imt, x,y)    dPI((imt), (x), (y))    // DEBUG version
 
 int dPI(Image_t *im, int x, int y) {
     assert(x >= 0);
     assert(x < im->w);
-    return dPIR(im, y) + x;
+    assert(y >= 0);
+    assert(y < im->h);
+    return im->bytes_per_row/sizeof(Pixel) * y + x;
 }
 
 #else
 
-// Pixel array index for start of row y
-#define PIR(imt, y)  ((y)*imt->bytes_per_row)
 // Pixel array index for pixel x,y
-#define PI(imt, x,y)     (PIR((imt),y) + (x))
+#define PI(imt, x,y)     (((y)*imt->bytes_per_row/sizeof(Pixel)) + (x))
 
 #endif
 
@@ -258,11 +282,14 @@ int dPI(Image_t *im, int x, int y) {
 #define PA(imt, x,y)    (&P(imt, x,y))
 
 
-- (void) remapWithTable:(size_t *) table from:(Image_t *)src to:(Image_t *)dest {
-    for (size_t i=0; i<dest->w * dest->h; i++) {
-        size_t target = *table++;
-        assert(target < dest->w * dest->h);
-        dest->image[i] = src->image[target];
+- (void) remapWithTable:(BitmapIndex_t *)table from:(Image_t *)src to:(Image_t *)dest {
+    int i=0;
+    for (int y=0; y<dest->h; y++) {
+        Pixel *p = PA(dest, 0, y);    // start of row
+        for (int x=0; x<dest->w; x++) {
+            BitmapIndex_t target = table[i++];
+            *p++ = src->image[target];
+        }
     }
 }
 
@@ -271,35 +298,33 @@ int dPI(Image_t *im, int x, int y) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform remapTransform: @"DEBUG"
+                                  description: @"DEBUG"
+                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
+        if (x == 0)
+            NSLog(@" at zero, y=%d", y);
+        return PI(im, 0, 0);    // XXX
+                                        return PI(im, x, y);
+    }];
+    [transformList addObject:lastTransform];
+    
     lastTransform = [Transform remapTransform: @"Pixelate"
                                   description: @"Giant pixels"
-                                        remap:^size_t *(Image_t *im, int pixsize) {
-        size_t *table = (size_t *)calloc(im->w * im->h*im->bytes_per_row, sizeof(size_t));
-        for (int y=0; y<im->h; y++)
-            for (int x=0; x<im->w; x++) {
-                size_t s = PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
-                size_t d = PI(im, x,y);
-                table[d] = s;
-            }
-        return table;
+                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
+        return PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
     }];
     lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
     [transformList addObject:lastTransform];
     
-    [transformList addObject:[Transform areaTransform: @"Mirror right"
-                                          description: @"Reflect the right half of the screen on the left"
-                                        areaTransform: ^(Image_t *src, Image_t *dest) {
-        int maxY = src->h;
-        int maxX = src->w;
-        //        size_t bpr = src->bytes_per_row;
-        int x, y;
-        
-        for (x=0; x<maxX; x++) {
-            for (y=0; y<maxY; y++) {
-                P(dest,maxX-x-1,y) = P(src,x,y);
-            }
-        }
-    }]];
+    lastTransform = [Transform remapTransform: @"Mirror right"
+                                  description: @"Reflect the right half of the screen on the left"
+                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int v) {
+        if (x < im->w/2)
+            return PI(im, im->w - 1 - x, y);
+        else
+            return PI(im, x,y);
+    }];
+    [transformList addObject:lastTransform];
     
     [transformList addObject:[Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
