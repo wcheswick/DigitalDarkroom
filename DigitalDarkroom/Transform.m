@@ -14,6 +14,7 @@
 @synthesize pointF;
 @synthesize areaF;
 @synthesize remapF;
+@synthesize rowF;
 @synthesize type;
 @synthesize remapTable;
 @synthesize low, param, high;
@@ -27,6 +28,7 @@
         pointF = nil;
         areaF = nil;
         remapF = nil;
+        rowF = nil;
         low = param = high = 0;
         changed = YES;
     }
@@ -43,6 +45,16 @@
     return t;
 }
 
++ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
+                rowTransform:(rowFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RowTrans;
+    t.rowF = f;
+    return t;
+}
+
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 areaTransform:(areaFunction_t) f {
     Transform *t = [[Transform alloc] init];
@@ -53,7 +65,7 @@
     return t;
 }
 
-+ (Transform *) remapTransform:(NSString *) n description:(NSString *) d
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 remap:(remapFunction_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
@@ -71,6 +83,7 @@
     copy.pointF = pointF;
     copy.areaF = areaF;
     copy.remapF = remapF;
+    copy.rowF = rowF;
     copy.low = low;
     copy.param = param;
     copy.high = high;

@@ -14,6 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef enum {
     ColorTrans,
+    RowTrans,
     GeometricTrans,
     RemapTrans,
     AreaTrans,
@@ -37,11 +38,15 @@ typedef UInt32 PixelIndex_t;
 
 // BitmapIndex_t: index into bitmap, 0..EOR X 0..h-1
 // where EOR is number of bytes in row / sizeof(Pixel)
-typedef UInt32 BitmapIndex_t;
+typedef int32_t BitmapIndex_t;
+
+#define Remap_White     (-1)    // special bitmap index for White
+#define Remap_Black     (-2)    // special bitmap index for Black
 
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest);
+typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
 typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapFunction_t)(Image_t *im, int x, int y, int p);
 
 // typedef int transform_t(void *param, int low, int high);
@@ -53,6 +58,7 @@ typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapFunction_t)(Image_t
     pointFunction_t pointF;
     areaFunction_t areaF;
     remapFunction_t remapF;
+    rowFunction_t rowF;
     int low, param, high;   // parameter setting and range for transform
     BitmapIndex_t * _Nullable remapTable;      // PixelIndex_t long table of BitmapTable_t values
     volatile BOOL changed;
@@ -62,6 +68,7 @@ typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapFunction_t)(Image_t
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              remapFunction_t remapF;
+@property (assign)              rowFunction_t rowF;
 @property (assign)              transform_t type;
 @property (assign)              BitmapIndex_t * _Nullable remapTable;
 @property (assign)              int low, param, high;
@@ -69,9 +76,11 @@ typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapFunction_t)(Image_t
 
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;
++ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
+                  rowTransform:(rowFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 areaTransform:(areaFunction_t) f;
-+ (Transform *) remapTransform:(NSString *) n description:(NSString *) d
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                          remap:(remapFunction_t) f;
 
 @end

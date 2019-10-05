@@ -77,9 +77,10 @@ Image_t sources[2];
     return self;
 }
 
-- (void) computeTransform:(Transform *) transform {
+- (void) precomputeTransform:(Transform *) transform {
     assert(currentFormat.bytes_per_row != 0);
     switch (transform.type) {
+        case RowTrans:
         case ColorTrans: {
             break;
         }
@@ -139,7 +140,7 @@ Image_t sources[2];
 
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
-        [self computeTransform:transform];
+        [self precomputeTransform:transform];
     }
 }
 
@@ -148,9 +149,34 @@ Image_t sources[2];
         Transform *transform = [executeList objectAtIndex:i];
         if (!transform.changed)
             continue;
-        [self computeTransform:transform];
+        [self precomputeTransform:transform];
     }
 }
+
+#ifdef DEBUG_TRANSFORMS
+
+#define PI(imt, x,y)    dPI((imt), (x), (y))    // DEBUG version
+
+int dPI(Image_t *im, int x, int y) {
+    assert(x >= 0);
+    assert(x < im->w);
+    assert(y >= 0);
+    assert(y < im->h);
+    return im->bytes_per_row/sizeof(Pixel) * y + x;
+}
+
+#else
+
+// Pixel array index for pixel x,y
+#define PI(imt, x,y)     (((y)*imt->bytes_per_row/sizeof(Pixel)) + (x))
+
+#endif
+
+// Pixel at coordinates in image
+#define P(imt, x,y)  imt->image[PI(imt, x, y)]
+
+// Address Pixel at coordinates in image
+#define PA(imt, x,y)    (&P(imt, x,y))
 
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context {
     if (listChanged) {
@@ -219,6 +245,14 @@ Image_t sources[2];
                 transform.pointF(source->image, source->w * source->h);
                 break;
             }
+            case RowTrans: {
+                assert(transform.rowF);
+                for (int y=0; y<source->h; y++) {
+                    transform.rowF(PA(source, 0, y), PA(dest,0,y), source->w);
+                }
+                sourceImageIndex = 1 - sourceImageIndex;
+                break;
+            }
             case GeometricTrans:
                 break;
             case RemapTrans: {
@@ -256,31 +290,6 @@ Image_t sources[2];
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
 }
 
-#ifdef DEBUG_TRANSFORMS
-
-#define PI(imt, x,y)    dPI((imt), (x), (y))    // DEBUG version
-
-int dPI(Image_t *im, int x, int y) {
-    assert(x >= 0);
-    assert(x < im->w);
-    assert(y >= 0);
-    assert(y < im->h);
-    return im->bytes_per_row/sizeof(Pixel) * y + x;
-}
-
-#else
-
-// Pixel array index for pixel x,y
-#define PI(imt, x,y)     (((y)*imt->bytes_per_row/sizeof(Pixel)) + (x))
-
-#endif
-
-// Pixel at coordinates in image
-#define P(imt, x,y)  imt->image[PI(imt, x, y)]
-
-// Address Pixel at coordinates in image
-#define PA(imt, x,y)    (&P(imt, x,y))
-
 
 - (void) remapWithTable:(BitmapIndex_t *)table from:(Image_t *)src to:(Image_t *)dest {
     int i=0;
@@ -298,27 +307,45 @@ int dPI(Image_t *im, int x, int y) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    lastTransform = [Transform remapTransform: @"DEBUG"
-                                  description: @"DEBUG"
-                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
-        if (x == 0)
-            NSLog(@" at zero, y=%d", y);
-        return PI(im, 0, 0);    // XXX
-                                        return PI(im, x, y);
+#ifdef notyet
+    lastTransform = [Transform areaTransform: @"Terry's kite"
+                                  description: @"Designed by an 8-year old"
+                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
+             int ndots;
+            if (y <= im->w/2)
+                ndots = (y*(im->w-1))/im->h;
+            else
+                ndots = ((im->h-y-1)*(im->w))/im->h;
+
+            (*rmp)[CENTER_X][y] = (Point){CENTER_X,y};
+            (*rmp)[0][y] = (Point){Remap_White,0};
+            
+            for (x=1; x<=ndots; x++) {
+                int dist = (x*(CENTER_X-1))/ndots;
+
+                (*rmp)[CENTER_X+x][y] = (Point){CENTER_X + dist,y};
+                (*rmp)[CENTER_X-x][y] = (Point){CENTER_X - dist,y};
+            }
+            for (x=ndots; x<CENTER_X; x++)
+                (*rmp)[CENTER_X+x][y] = (*rmp)[CENTER_X-x][y] =
+                    (Point){Remap_White,0};
+        }
     }];
+    lastTransform.param = 4; lastTransform.low = 3; lastTransform.high = 10;
     [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform remapTransform: @"Pixelate"
+#endif
+
+    lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
-                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
+                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
         return PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
     }];
     lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
     [transformList addObject:lastTransform];
     
-    lastTransform = [Transform remapTransform: @"Mirror right"
+    lastTransform = [Transform areaTransform: @"Mirror right"
                                   description: @"Reflect the right half of the screen on the left"
-                                        remap:^PixelIndex_t (Image_t *im, int x, int y, int v) {
+                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
         if (x < im->w/2)
             return PI(im, im->w - 1 - x, y);
         else
@@ -403,10 +430,7 @@ int dPI(Image_t *im, int x, int y) {
                     P(src, (x-1),(y+1)).r - P(src, (x),(y+1)).r * 2 -
                     P(src, (x+1),(y+1)).r;
                 s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.r = Z;
-                else
-                    p.r = s;
+                p.r = CLIP(s);
 
                 aa = P(src, x-1,y-1).g + P(src, x-1,y).g * 2 +
                     P(src, (x-1),(y+1)).g -
@@ -417,10 +441,7 @@ int dPI(Image_t *im, int x, int y) {
                     P(src, (x-1),(y+1)).g - P(src, (x),(y+1)).g * 2 -
                     P(src, (x+1),(y+1)).g;
                 s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.g = Z;
-                else
-                    p.g = s;
+                p.g = CLIP(s);
 
                 aa = P(src, x-1,y-1).b + P(src, x-1,y).b * 2 +
                      P(src, (x-1),(y+1)).b -
@@ -431,10 +452,8 @@ int dPI(Image_t *im, int x, int y) {
                      P(src, (x-1),(y+1)).b - P(src, (x),(y+1)).b * 2 -
                      P(src, (x+1),(y+1)).b;
                 s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.b = Z;
-                else
-                    p.b = s;
+                p.b = CLIP(s);
+
                 p.r = Z - p.r;
                 p.g = Z - p.g;
                 p.b = Z - p.b;
@@ -444,20 +463,16 @@ int dPI(Image_t *im, int x, int y) {
         
     }]];
         
-    [transformList addObject:[Transform areaTransform: @"Mirror left"
-                                          description: @"Reflect the left half of the screen on the right"
-                                        areaTransform: ^(Image_t *src, Image_t *dest) {
-        int maxY = src->h;
-        int maxX = src->w;
-        //        size_t bpr = src->bytes_per_row;
-        int x, y;
-        
-        for (x=0; x<maxX; x++) {
-            for (y=0; y<maxY; y++) {
-                P(dest,x,y) = P(src,maxX-x-1,y);
-            }
-        }
-    }]];
+    
+    lastTransform = [Transform areaTransform: @"Mirror left"
+                                  description: @"Reflect the left half of the screen to the right"
+                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
+        if (x < im->w/2)
+            return PI(im, x,y);
+        else
+            return PI(im, im->w - 1 - x, y);
+    }];
+    [transformList addObject:lastTransform];
 
 #ifdef notyet
     extern  init_proc init_zoom;
@@ -542,42 +557,75 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    [transformList addObject:[Transform colorTransform: @"Luminance"
-                                           description: @"Convert to brightness"
-                                        pointTransform: ^(Pixel *p, size_t n) {
-        while (n-- > 0) {
-            channel lum = LUM(*p);
-            *p++ = SETRGB(lum, lum, lum);
-        }
-    }]];
-    
-    [transformList addObject:[Transform colorTransform: @"Brighten"
-                                           description: @"Make brighter"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            Pixel p = *pp;
-            *pp++ = SETRGB(p.r+(Z-p.r)/8,
-                           p.g+(Z-p.g)/8,
-                           p.b+(Z-p.b)/8);
-        }
-    }]];
-    
     [transformList addObject:[Transform colorTransform: @"Colorize"
                                            description: @"Add color"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            Pixel p = *pp;
-            channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-            *pp++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-        }
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+                    *destRow++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+                }
     }]];
     
-    [transformList addObject:[Transform colorTransform: @"Green"
-                                           description: @"Set to green"
-                                        pointTransform: ^(Pixel *pp, size_t n) {
-        while (n-- > 0) {
-            *pp++ = SETRGB(0,Z,0);
-        }
+    [transformList addObject:[Transform colorTransform: @"Solarize"
+                                           description: @""
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    *destRow++ = SETRGB(    p.r < Z/2 ? p.r : Z-p.r,
+                                            p.g < Z/2 ? p.g : Z-p.g,
+                                        p.b < Z/2 ? p.b : Z-p.r);
+                }
+    }]];
+
+    [transformList addObject:[Transform colorTransform: @"Luminance"
+                                           description: @"Convert to brightness"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    int v = LUM(p);
+                    *destRow++ = SETRGB(v,v,v);
+                }
+    }]];
+    
+#define TMASK 0xe0  // XX make variable
+
+    [transformList addObject:[Transform colorTransform: @"Truncate pixels"
+                                           description: @"Truncate pixel values"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    *destRow++ = SETRGB(p.r&TMASK, p.g&TMASK, p.b&TMASK);
+                }
+    }]];
+    
+    [transformList addObject:[Transform colorTransform: @"Swap colors"
+                                           description: @"R -> G -> B -> Ryy"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    *destRow++ = SETRGB(p.g, p.b, p.r);
+                }
+    }]];
+
+    [transformList addObject:[Transform colorTransform: @"Negative"
+                                           description: @"Invert pixel colors"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    *destRow++ = SETRGB(Z-p.r, Z-p.g, Z-p.b);
+                }
+    }]];
+
+    [transformList addObject:[Transform colorTransform: @"Brighten" // XXX needs parameter
+                                           description: @"Make brighter"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    *destRow++ = SETRGB(p.r+(Z-p.r)/8,
+                                        p.g+(Z-p.g)/8,
+                                        p.b+(Z-p.b)/8);
+                }
     }]];
 }
 
@@ -601,16 +649,9 @@ extern  init_proc init_twist;
 extern  init_proc init_kentwist;
 extern  init_proc init_slicer;
 
-extern  init_proc init_colorize;
-extern  init_proc init_swapcolors;
-extern  init_proc init_lum;
 extern  init_proc init_high;
-extern  init_proc init_lum;
-extern  init_proc init_solarize;
-extern  init_proc init_truncatepix;
-extern  init_proc init_brighten;
 extern  init_proc init_auto;
-extern  init_proc init_negative;
+
 
 extern  void init_polar(void);
 #endif
@@ -620,8 +661,6 @@ extern  void init_polar(void);
 #define CRGB(r,g,b)     SETRGB(CLIP(r), CLIP(g), CLIP(b))
 #define HALF_Z          (Z/2)
 
-#define Remap_White     (-1)
-#define Remap_Black     (-2)
 
 typedef Point remap[MAX_X][MAX_Y];
 typedef void *init_proc(void);
