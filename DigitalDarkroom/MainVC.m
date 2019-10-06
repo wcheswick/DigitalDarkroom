@@ -74,7 +74,7 @@ enum {
     frameDisplay = [[UILabel alloc] init];
     frameDisplay.hidden = YES;  // performance debugging....too soon
     [videoView addSubview:frameDisplay];
-    videoView.backgroundColor = [UIColor blueColor];
+    videoView.backgroundColor = [UIColor whiteColor];
     videoView.userInteractionEnabled = YES;
 //    videoView.contentMode = UIViewContentModeScaleAspectFit;
     [self.view addSubview:videoView];

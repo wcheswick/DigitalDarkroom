@@ -13,7 +13,8 @@
 @synthesize name, description;
 @synthesize pointF;
 @synthesize areaF;
-@synthesize remapF;
+@synthesize remapPixelF;
+@synthesize remapImageF;
 @synthesize rowF;
 @synthesize type;
 @synthesize remapTable;
@@ -27,7 +28,8 @@
         remapTable = nil;
         pointF = nil;
         areaF = nil;
-        remapF = nil;
+        remapPixelF = nil;
+        remapImageF = nil;
         rowF = nil;
         low = param = high = 0;
         changed = YES;
@@ -66,12 +68,22 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remap:(remapFunction_t) f {
+                remapPixel:(remapPixelFunction_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
     t.type = RemapTrans;
-    t.remapF = f;
+    t.remapPixelF = f;
+    return t;
+}
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                remapImage:(remapImageFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RemapTrans;
+    t.remapImageF = f;
     return t;
 }
 
@@ -82,13 +94,19 @@
     copy.description = description;
     copy.pointF = pointF;
     copy.areaF = areaF;
-    copy.remapF = remapF;
+    copy.remapImageF = remapImageF;
+    copy.remapPixelF = remapPixelF;
     copy.rowF = rowF;
     copy.low = low;
     copy.param = param;
     copy.high = high;
     copy.remapTable = nil;
     return copy;
+}
+
+- (void) dealloc {
+    if (remapTable)
+        free(remapTable);
 }
 
 @end

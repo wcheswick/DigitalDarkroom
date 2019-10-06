@@ -99,10 +99,12 @@ Image_t sources[2];
             NSLog(@"table size is %lu, %lu, %lu bytes",
                   entryCount, sizeof(BitmapIndex_t), entryCount * sizeof(BitmapIndex_t));
             assert(table);
+            
+            if (transform.remapPixelF) {    // compute remap one pixel at a time
             int i = 0;
             for (int y=0; y<currentFormat.h; y++)
                 for (int x=0; x<currentFormat.w; x++) {
-                    BitmapIndex_t s = transform.remapF(&currentFormat, x, y, transform.param);
+                    BitmapIndex_t s = transform.remapPixelF(&currentFormat, x, y, transform.param);
                     table[i++] = s;
                 }
 #ifdef notdef
@@ -110,6 +112,9 @@ Image_t sources[2];
             for (int i=0; i<16; i++)
                 NSLog(@"      %d", table[i]);
 #endif
+            } else {
+                transform.remapImageF(&currentFormat, table, transform.param);
+            }
             transform.remapTable = table;
             break;
         case GeometricTrans:
@@ -307,37 +312,69 @@ int dPI(Image_t *im, int x, int y) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-#ifdef notyet
+#define RT(x,y) remapTable[(y)*im->w + x]
+    
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                   description: @"Designed by an 8-year old"
-                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
-             int ndots;
-            if (y <= im->w/2)
+                                  remapImage: ^void (Image_t *im, BitmapIndex_t *remapTable, int p) {
+        int centerX = im->w/2;
+        int centerY = im->h/2;
+        for (int y=0; y<im->h; y++) {
+            int ndots;
+            if (y <= centerY)
                 ndots = (y*(im->w-1))/im->h;
             else
                 ndots = ((im->h-y-1)*(im->w))/im->h;
 
-            (*rmp)[CENTER_X][y] = (Point){CENTER_X,y};
-            (*rmp)[0][y] = (Point){Remap_White,0};
-            
-            for (x=1; x<=ndots; x++) {
-                int dist = (x*(CENTER_X-1))/ndots;
-
-                (*rmp)[CENTER_X+x][y] = (Point){CENTER_X + dist,y};
-                (*rmp)[CENTER_X-x][y] = (Point){CENTER_X - dist,y};
+            RT(centerX, y) = PI(im, centerX,y);
+            RT(0,y) = Remap_White;
+                 
+            for (int x=1; x<=ndots; x++) {
+                int dist = (x*(centerX-1))/ndots;
+                assert(centerX+x < im->w);
+                assert(centerX+dist < im->w);
+                RT(centerX+x, y) = PI(im, centerX + dist,y);
+                assert(centerX-x >= 0);
+                assert(centerX-dist >= 0);
+                RT(centerX-x, y) = PI(im, centerX - dist,y);
             }
-            for (x=ndots; x<CENTER_X; x++)
-                (*rmp)[CENTER_X+x][y] = (*rmp)[CENTER_X-x][y] =
-                    (Point){Remap_White,0};
+            for (int x=ndots; x<centerX; x++) {
+                assert(centerX+x < im->w);
+                RT(centerX+x, y) = Remap_White;
+                assert(centerX-x >= 0);
+                RT(centerX-x, y) = Remap_White;
+            }
         }
     }];
-    lastTransform.param = 4; lastTransform.low = 3; lastTransform.high = 10;
     [transformList addObject:lastTransform];
+    
+#ifdef notdef
+    for (y=0; y<MAX_Y; y++) {
+        int ndots;
+
+        if (y <= CENTER_Y)
+            ndots = (y*(MAX_X-1))/MAX_Y;
+        else
+            ndots = ((MAX_Y-y-1)*(MAX_X))/MAX_Y;
+
+        (*rmp)[CENTER_X][y] = (Point){CENTER_X,y};
+        (*rmp)[0][y] = (Point){Remap_White,0};
+        
+        for (x=1; x<=ndots; x++) {
+            int dist = (x*(CENTER_X-1))/ndots;
+
+            (*rmp)[CENTER_X+x][y] = (Point){CENTER_X + dist,y};
+            (*rmp)[CENTER_X-x][y] = (Point){CENTER_X - dist,y};
+        }
+        for (x=ndots; x<CENTER_X; x++)
+            (*rmp)[CENTER_X+x][y] = (*rmp)[CENTER_X-x][y] =
+                (Point){Remap_White,0};
+    }
 #endif
 
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
-                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
         return PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
     }];
     lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
@@ -345,7 +382,7 @@ int dPI(Image_t *im, int x, int y) {
     
     lastTransform = [Transform areaTransform: @"Mirror right"
                                   description: @"Reflect the right half of the screen on the left"
-                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
         if (x < im->w/2)
             return PI(im, im->w - 1 - x, y);
         else
@@ -463,10 +500,9 @@ int dPI(Image_t *im, int x, int y) {
         
     }]];
         
-    
     lastTransform = [Transform areaTransform: @"Mirror left"
                                   description: @"Reflect the left half of the screen to the right"
-                                        remap:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
         if (x < im->w/2)
             return PI(im, x,y);
         else
