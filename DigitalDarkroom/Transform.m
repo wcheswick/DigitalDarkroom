@@ -15,6 +15,7 @@
 @synthesize areaF;
 @synthesize remapPixelF;
 @synthesize remapImageF;
+@synthesize remapPolarF;
 @synthesize rowF;
 @synthesize type;
 @synthesize remapTable;
@@ -30,6 +31,7 @@
         areaF = nil;
         remapPixelF = nil;
         remapImageF = nil;
+        remapPolarF = nil;
         rowF = nil;
         low = param = high = 0;
         changed = YES;
@@ -78,6 +80,16 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                remapPolarPixel:(remapPolarPixelFunction_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RemapTrans;
+    t.remapPolarF = f;
+    return t;
+}
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 remapImage:(remapImageFunction_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
@@ -96,6 +108,7 @@
     copy.areaF = areaF;
     copy.remapImageF = remapImageF;
     copy.remapPixelF = remapPixelF;
+    copy.remapPolarF = remapPolarF;
     copy.rowF = rowF;
     copy.low = low;
     copy.param = param;

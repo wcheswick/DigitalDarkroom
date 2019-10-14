@@ -32,6 +32,32 @@
 #define G(x) x.g
 #define B(x) x.b
 
+
+#ifdef DEBUG_TRANSFORMS
+
+#define PI(imt, x,y)    dPI((imt), (x), (y))    // DEBUG version
+
+int dPI(Image_t *im, int x, int y) {
+    assert(x >= 0);
+    assert(x < im->w);
+    assert(y >= 0);
+    assert(y < im->h);
+    return im->bytes_per_row/sizeof(Pixel) * y + x;
+}
+
+#else
+
+// Pixel array index for pixel x,y
+#define PI(imt, x,y)     (((y)*imt->bytes_per_row/sizeof(Pixel)) + (x))
+
+#endif
+
+// Pixel at coordinates in image
+#define P(imt, x,y)  imt->image[PI(imt, x, y)]
+
+// Address Pixel at coordinates in image
+#define PA(imt, x,y)    (&P(imt, x,y))
+
 @interface Transforms ()
 
 @property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
@@ -77,6 +103,23 @@ Image_t sources[2];
     return self;
 }
 
+// Some of our transforms might be a little buggy around the edges.  Make sure
+// all the points are in range.
+
+#define TA(x,y) table[(x) + currentFormat.w * (y)]
+
+- (void) setRemapInTable:(BitmapIndex_t *)table x:(int)x y:(int)y from:(RemapPoint_t) point {
+    if (point.x < 0)
+        point.x = 0;
+    else if (point.x >= currentFormat.w)
+        point.x = currentFormat.w - 1;
+    if (point.y < 0)
+        point.y = 0;
+    else if (point.y >= currentFormat.h)
+        point.y = currentFormat.h - 1;
+    TA(x,y) = PI(&currentFormat, point.x, point.y);
+}
+
 - (void) precomputeTransform:(Transform *) transform {
     assert(currentFormat.bytes_per_row != 0);
     switch (transform.type) {
@@ -99,20 +142,37 @@ Image_t sources[2];
             NSLog(@"table size is %lu, %lu, %lu bytes",
                   entryCount, sizeof(BitmapIndex_t), entryCount * sizeof(BitmapIndex_t));
             assert(table);
+            BitmapIndex_t bmi;
             
             if (transform.remapPixelF) {    // compute remap one pixel at a time
-            int i = 0;
-            for (int y=0; y<currentFormat.h; y++)
-                for (int x=0; x<currentFormat.w; x++) {
-                    BitmapIndex_t s = transform.remapPixelF(&currentFormat, x, y, transform.param);
-                    table[i++] = s;
+                int i = 0;
+                for (int y=0; y<currentFormat.h; y++)
+                    for (int x=0; x<currentFormat.w; x++) {
+                        bmi = transform.remapPixelF(&currentFormat, x, y, transform.param);
+                        table[i++] = bmi;
+                    }
+            } else if (transform.remapPolarF) {     // polar remap
+                int centerX = currentFormat.w/2;
+                int centerY = currentFormat.h/2;
+                for (int x=0; x<centerX; x++) {
+                    for (int y=0; y<centerY; y++) {
+                        double r = hypot(x, y);
+                        double a;
+                        if (x == 0 && y == 0)
+                            a = 0;
+                        else
+                            a = atan2(y, x);
+                        [self setRemapInTable:table x:centerX-x y:centerY-y from:transform.remapPolarF(r, M_PI+a, transform.param)];
+                        if (centerY+y < currentFormat.h)
+                            [self setRemapInTable:table x:centerX-x y:centerY+y from:transform.remapPolarF(r, M_PI-a, transform.param)];
+                        if (centerX+x < currentFormat.w) {
+                            if (centerY+y < currentFormat.h)
+                                [self setRemapInTable:table x:centerX+x y:centerY+y from:transform.remapPolarF(r, a, transform.param)];
+                            [self setRemapInTable:table x:centerX+x y:centerY-y from:transform.remapPolarF(r, -a, transform.param)];
+                        }
+                    }
                 }
-#ifdef notdef
-            NSLog(@"Table: ");
-            for (int i=0; i<16; i++)
-                NSLog(@"      %d", table[i]);
-#endif
-            } else {
+            } else {        // whole screen remap
                 transform.remapImageF(&currentFormat, table, transform.param);
             }
             transform.remapTable = table;
@@ -124,6 +184,7 @@ Image_t sources[2];
     }
     transform.changed = NO;
 }
+
 
 // currentFormat has the bitmap details
 - (void) setupForTransforming {
@@ -158,30 +219,6 @@ Image_t sources[2];
     }
 }
 
-#ifdef DEBUG_TRANSFORMS
-
-#define PI(imt, x,y)    dPI((imt), (x), (y))    // DEBUG version
-
-int dPI(Image_t *im, int x, int y) {
-    assert(x >= 0);
-    assert(x < im->w);
-    assert(y >= 0);
-    assert(y < im->h);
-    return im->bytes_per_row/sizeof(Pixel) * y + x;
-}
-
-#else
-
-// Pixel array index for pixel x,y
-#define PI(imt, x,y)     (((y)*imt->bytes_per_row/sizeof(Pixel)) + (x))
-
-#endif
-
-// Pixel at coordinates in image
-#define P(imt, x,y)  imt->image[PI(imt, x, y)]
-
-// Address Pixel at coordinates in image
-#define PA(imt, x,y)    (&P(imt, x,y))
 
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context {
     if (listChanged) {
@@ -260,12 +297,11 @@ int dPI(Image_t *im, int x, int y) {
             }
             case GeometricTrans:
                 break;
-            case RemapTrans: {
+            case RemapTrans:     // all these pixel moves are recomputed, for speed
                 assert(transform.remapTable);
                 [self remapWithTable:transform.remapTable from:source to:dest];
                 sourceImageIndex = 1 - sourceImageIndex;
                 break;
-                }
             case AreaTrans:
                 assert(source->image);
                 assert(dest->image);
@@ -307,12 +343,12 @@ int dPI(Image_t *im, int x, int y) {
     }
 }
 
+    #define RT(x,y) remapTable[(y)*(im)->w + x]
+
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
-#define RT(x,y) remapTable[(y)*im->w + x]
     
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                   description: @"Designed by an 8-year old"
@@ -524,10 +560,50 @@ int dPI(Image_t *im, int x, int y) {
 #endif
 }
 
+#define CenterX (currentFormat.w/2)
+#define CenterY (currentFormat.h/2)
+#define MAX_R   (MAX(CenterX, CenterY))
+
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+    
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                  description: @""
+                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
+        double r1 = sqrt(r*MAX_R);
+        int y = CenterY+(int)(r1*sin(a));
+        if (y < 0)
+            y = 0;
+        else if (y >= currentFormat.h)
+            y = currentFormat.h - 1;
+        return (RemapPoint_t){CenterX + (int)(r1*cos(a)), y};
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Andrew's projection"
+                                  description: @""
+                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
+        int x = CenterX + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int y = CenterY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        return (RemapPoint_t){x, y};
+#ifdef notdef
+        if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
+        else
+            return PI(&currentFormat,CenterX + r*cos(a), CenterX + r*sin(a));
+#endif
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Fish eye"
+                                  description: @""
+                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
+        double r1 = r*r/(r/2);
+        return (RemapPoint_t){CenterX+(int)(r1*cos(a)), CenterY+(int)(r1*sin(a))};
+    }];
+    [transformList addObject:lastTransform];
+
 #ifdef notyet
     extern  init_proc init_kite;
     extern  init_proc init_pixels4;
@@ -677,6 +753,10 @@ extern  init_proc init_escher;
 }
 
 #ifdef notdef
+
+double r1 = r*r/(R/2);
+return (Point){CENTER_X+(int)(r1*cos(a)), CENTER_Y+(int)(r1*sin(a))};
+
 extern  init_proc init_cone;
 extern  init_proc init_bignose;
 extern  init_proc init_fisheye;

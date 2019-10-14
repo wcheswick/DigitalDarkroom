@@ -33,6 +33,13 @@ typedef struct Image_t {
     Pixel *image;
 } Image_t;
 
+// a possibly-out-of-bounds source pixel coordinate
+// To be translated to a BitmapIndex_t after range checking.
+
+typedef struct RemapPoint_t {
+    int x,y;
+} RemapPoint_t;
+
 // PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
 typedef UInt32 PixelIndex_t;
 
@@ -48,6 +55,7 @@ typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest);
 typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
 typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, int x, int y, int p);
+typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);
 typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(Image_t *im, BitmapIndex_t *remapTable, int p);
 
 // typedef int transform_t(void *param, int low, int high);
@@ -59,6 +67,7 @@ typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(Image_t *im
     pointFunction_t pointF;
     areaFunction_t areaF;
     remapPixelFunction_t remapPixelF;
+    remapPolarPixelFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
     rowFunction_t rowF;
     int low, param, high;   // parameter setting and range for transform
@@ -70,6 +79,7 @@ typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(Image_t *im
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              remapPixelFunction_t remapPixelF;
+@property (assign)              remapPolarPixelFunction_t remapPolarF;
 @property (assign)              remapImageFunction_t remapImageF;
 @property (assign)              rowFunction_t rowF;
 @property (assign)              transform_t type;
@@ -87,6 +97,9 @@ typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(Image_t *im
                          remapPixel:(remapPixelFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                    remapImage:(remapImageFunction_t) f;
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+              remapPolarPixel:(remapPolarPixelFunction_t) f;
+
 @end
 
 NS_ASSUME_NONNULL_END
