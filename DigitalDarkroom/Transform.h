@@ -52,7 +52,7 @@ typedef int32_t BitmapIndex_t;
 
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
-typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest);
+typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest, int p);
 typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
 typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, int x, int y, int p);
 typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);

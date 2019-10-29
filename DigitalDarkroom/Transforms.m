@@ -307,7 +307,7 @@ Image_t sources[2];
                 assert(dest->image);
                 assert(dest->image != (Pixel *)1);
                 
-                transform.areaF(source, dest);
+                transform.areaF(source, dest, transform.param);
                 sourceImageIndex = 1 - sourceImageIndex;
                 assert(executeList.count > 0);
                 break;
@@ -428,7 +428,7 @@ Image_t sources[2];
     
     [transformList addObject:[Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
-                                        areaTransform: ^(Image_t *src, Image_t *dest) {
+                                        areaTransform: ^(Image_t *src, Image_t *dest, int p) {
         int maxY = src->h;
         int maxX = src->w;
         //        int bpr = src->bytes_per_row;
@@ -485,7 +485,7 @@ Image_t sources[2];
     
     [transformList addObject:[Transform areaTransform: @"Negative Sobel"
                                           description: @"Negative Sobel filter"
-                                        areaTransform: ^(Image_t *src, Image_t *dest) {
+                                        areaTransform: ^(Image_t *src, Image_t *dest, int p) {
         int maxY = src->h;
         int maxX = src->w;
 
@@ -644,17 +644,81 @@ Image_t sources[2];
 #endif
 }
 
+// For Tom's logo algorithm
+
+int
+stripe(Image_t *buf, int x, int p0, int p1, int c){
+    if(p0==p1){
+        if(c>Z){
+            P(buf,x,p0).r = Z;
+            return c-Z;
+        }
+        P(buf,x,p0).r = c;
+        return 0;
+    }
+    if (c>2*Z) {
+        P(buf,x,p0).r = Z;
+        P(buf,x,p1).r = Z;
+         return c-2*Z;
+    }
+    P(buf,x,p0).r = c/2;
+    P(buf,x,p1).r = c - c/2;
+    return 0;
+}
 
 - (void) addMiscTransforms {
     [categoryNames addObject:@"Misc. transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-#ifdef notdef
-    extern  transform_t do_diff;
-    extern  transform_t do_logo;
-    extern  transform_t do_color_logo;
-    extern  transform_t do_spectrum;
-#endif
+
+    lastTransform = [Transform areaTransform: @"Old AT&T logo"
+                                                  description: @"Tom Duff's logo transform"
+                                                areaTransform: ^(Image_t *src, Image_t *dest, int p) {
+        int maxY = src->h;
+        int maxX = src->w;
+        int x, y;
+            
+        for (y=0; y<maxY; y++) {
+            for (x=0; x<maxX; x++) {
+                    channel c = LUM(P(src, x,y));
+                    P(src,x,y) = SETRGB(c,c,c);
+                }
+            }
+            
+        int hgt = p;
+        int c;
+        int y0, y1;
+
+        for (y=0; y<maxY; y+= hgt) {
+            if (y+hgt>maxY)
+                hgt = maxY-y;
+            for (x=0; x < maxX; x++) {
+                c=0;
+                for(y0=0; y0<hgt; y0++)
+                    c += R(P(src, x, y+y0));
+
+                y0 = y+(hgt-1)/2;
+                y1 = y+(hgt-1-(hgt-1)/2);
+                for (; y0 >= y; --y0, ++y1)
+                    c = stripe(src, x, y0, y1, c);
+            }
+        }
+                    
+        for (y=0; y<maxY; y++) {
+            for (x=0; x<maxX; x++) {
+                channel c = R(P(src, x, y));
+                    P(dest, x,y) = SETRGB(c, c, c);
+            }
+        }
+    }];
+    lastTransform.param = 12; lastTransform.low = 4; lastTransform.high = 50;
+    [transformList addObject:lastTransform];
+
+    #ifdef notdef
+        extern  transform_t do_diff;
+        extern  transform_t do_color_logo;
+        extern  transform_t do_spectrum;
+    #endif
 }
 
 
