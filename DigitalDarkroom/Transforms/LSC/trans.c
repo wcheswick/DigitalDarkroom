@@ -264,6 +264,8 @@ do_remap(void *param, image in, image out) {
 				out[y][x] = White;
 			else if (from.x == Remap_Black)
 				out[y][x] = Black;
+            else if (from.x == Remap_Red)
+                out[y][x] = Red;
 			else
 				out[y][x] = in[from.y][from.x];
 		}

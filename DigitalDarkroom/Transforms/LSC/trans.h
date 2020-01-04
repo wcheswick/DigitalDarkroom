@@ -37,6 +37,7 @@
 
 #define	Remap_White	(-1)
 #define	Remap_Black	(-2)
+#define Remap_Red   (-3)
 
 typedef Point remap[MAX_X][MAX_Y];
 typedef void *init_proc(void);

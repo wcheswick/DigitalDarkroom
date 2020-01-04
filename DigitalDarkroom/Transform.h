@@ -49,6 +49,7 @@ typedef int32_t BitmapIndex_t;
 
 #define Remap_White     (-1)    // special bitmap index for White
 #define Remap_Black     (-2)    // special bitmap index for Black
+#define Remap_Red       (-3)    // special bitmap index for Red
 
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);

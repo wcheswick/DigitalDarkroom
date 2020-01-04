@@ -25,6 +25,8 @@
 #define GREEN           SETRGB(0,Z,0)
 #define BLUE            SETRGB(0,0,Z)
 
+#define White_Pixel     0
+
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
 
@@ -173,6 +175,7 @@ Image_t sources[2];
                     }
                 }
             } else {        // whole screen remap
+                // broken,  unused
                 transform.remapImageF(&currentFormat, table, transform.param);
             }
             transform.remapTable = table;
@@ -273,7 +276,7 @@ Image_t sources[2];
         assert(sourceImageIndex == 0);
     
     // for debugging, three useful pixels
-    source->image[0] = RED;
+    source->image[White_Pixel] = White;   // not just for debugging
     source->image[1] = GREEN;
     source->image[2] = BLUE;
     
@@ -343,7 +346,28 @@ Image_t sources[2];
     }
 }
 
-    #define RT(x,y) remapTable[(y)*(im)->w + x]
+
+#ifdef NOTDEF // DEBUG_TRANSFORMS
+
+// remap table source for pixel x,y
+
+#define RT(x,y) (*(dRT(remapTable, im, x, y)))
+
+BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int y) {
+    assert(remapTable);
+    assert(im);
+    assert(x >= 0);
+    assert(x < im->w);
+    assert(y >= 0);
+    assert(y < im->h);
+    return remapTable[(y)*((im)->w) + (x)];
+}
+
+#else
+
+#define RT(x,y) remapTable[(y)*((im)->w) + (x)]
+
+#endif
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area transforms"];
@@ -352,16 +376,36 @@ Image_t sources[2];
     
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                   description: @"Designed by an 8-year old"
-                                  remapImage: ^void (Image_t *im, BitmapIndex_t *remapTable, int p) {
-        int centerX = im->w/2;
+                                  remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
         int centerY = im->h/2;
+        float display_frac = ((float)centerY - abs(y - centerY))/(float)centerY;
+        int display_w = display_frac * im->w;
+        int unused_marg = (im->w - display_w)/2;
+        if (x <= unused_marg || x > (im->w - unused_marg))
+            return PI(im, White_Pixel, 0);
+        return PI(im, x,y);
+#ifdef broken
+    return PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
+    remapImage: ^void (Image_t *im, BitmapIndex_t *remapTable, int p) {
+        int centerX = im->w/2;
         for (int y=0; y<im->h; y++) {
+            float frac;
             int ndots;
             if (y <= centerY)
-                ndots = (y*(im->w-1))/im->h;
+                frac = (float)(y-centerY)/(float)centerY;
             else
-                ndots = ((im->h-y-1)*(im->w))/im->h;
+                frac = (float)(im->h - y)/(float)centerY;
 
+//            RT(0,y) = Remap_White;
+            for (int x=1; x<im->w; x++) {
+                RT(x,y) = Remap_Black;
+                int dots = im->w * frac;
+                if (x < dots || x > dots)
+                    RT(x,y) = Remap_White;
+                else
+                    RT(x,y) = Remap_Red;
+                
+            }
             RT(centerX, y) = PI(im, centerX,y);
             RT(0,y) = Remap_White;
                  
@@ -381,6 +425,7 @@ Image_t sources[2];
                 RT(centerX-x, y) = Remap_White;
             }
         }
+#endif
     }];
     [transformList addObject:lastTransform];
     
