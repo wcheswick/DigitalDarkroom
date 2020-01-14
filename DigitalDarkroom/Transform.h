@@ -36,7 +36,7 @@ typedef struct Image_t {
 // a possibly-out-of-bounds source pixel coordinate
 // To be translated to a BitmapIndex_t after range checking.
 
-typedef struct RemapPoint_t {
+typedef struct {
     int x,y;
 } RemapPoint_t;
 
@@ -47,17 +47,12 @@ typedef UInt32 PixelIndex_t;
 // where EOR is number of bytes in row / sizeof(Pixel)
 typedef int32_t BitmapIndex_t;
 
-#define Remap_White     (-1)    // special bitmap index for White
-#define Remap_Black     (-2)    // special bitmap index for Black
-#define Remap_Red       (-3)    // special bitmap index for Red
-
-
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest, int p);
 typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
 typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, int x, int y, int p);
 typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);
-typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(Image_t *im, BitmapIndex_t *remapTable, int p);
+typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(int x, int y, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();

@@ -39,7 +39,10 @@
 #define	Remap_Black	(-2)
 #define Remap_Red   (-3)
 
-typedef Point remap[MAX_X][MAX_Y];
+typedef Point struct {
+    int x, y;
+};
+
 typedef void *init_proc(void);
 
 typedef int transform_t(void *param, image in, image out);
