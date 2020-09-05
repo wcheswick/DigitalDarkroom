@@ -249,6 +249,7 @@ init_kentwist(void) {
 	return setup_polar(compute_kentwist);
 }
 
+#ifdef NOTUSED
 int
 do_remap(void *param, image in, image out) {
 	remap *map = (remap *)param;
@@ -266,11 +267,14 @@ do_remap(void *param, image in, image out) {
 				out[y][x] = Black;
             else if (from.x == Remap_Red)
                 out[y][x] = Red;
+            else if (from.x == Remap_Yellow)
+                out[y][x] = Yellow;
 			else
 				out[y][x] = in[from.y][from.x];
 		}
 	return 1;
 }
+#endif
 
 static Pixel
 ave(Pixel p1, Pixel p2) {

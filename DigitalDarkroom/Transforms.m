@@ -24,7 +24,8 @@
 #define Red             SETRGB(Z,0,0)
 #define Green           SETRGB(0,Z,0)
 #define Blue            SETRGB(0,0,Z)
-#define UnsetColor      (Pixel){Z,Z,Z,Z-1}
+#define Yellow          SETRGB(Z,Z,0)
+#define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
 
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -39,7 +40,8 @@ enum SpecialRemaps {
     Remap_Green = -3,
     Remap_Blue = -4,
     Remap_Black = -5,
-    Remap_Unset = -6,
+    Remap_Yellow = -6,
+    Remap_Unset = -7,
 };
 
 #ifdef NOTDEF //DEBUG_TRANSFORMS
@@ -115,7 +117,7 @@ Image_t sources[2];
 // Some of our transforms might be a little buggy around the edges.  Make sure
 // all the points are in range.
 
-#define TA(x,y) ((x) + currentFormat.w * (y))
+#define TI(x,y,w) ((x) + (w) * (y))
 
 - (void) setRemapForTransform:(Transform *)transform
                             x:(int)x y:(int)y
@@ -128,20 +130,19 @@ Image_t sources[2];
         point.y = 0;
     else if (point.y >= currentFormat.h)
         point.y = currentFormat.h - 1;
-    transform.remapTable[TA(x,y)] = PI(&currentFormat, point.x, point.y);
+    transform.remapTable[TI(x,y,currentFormat.w)] = PI(&currentFormat, point.x, point.y);
 }
 
 - (void) setRemapForTransform:(Transform *)transform
                             x:(int)x y:(int)y
                          color: (enum SpecialRemaps) remapColor {
-    transform.remapTable[TA(x,y)] = remapColor;
+    transform.remapTable[TI(x,y,currentFormat.w)] = remapColor;
 }
 
-#ifdef NOTDEF // DEBUG_TRANSFORMS
-
+#ifdef NOTDEF
 // remap table source for pixel x,y
 
-#define RT(x,y) (*(dRT(remapTable, im, x, y)))
+#define dRT(x,y) (*(dRT(remapTable, im, x, y)))
 
 BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int y) {
     assert(remapTable);
@@ -152,11 +153,6 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     assert(y < im->h);
     return remapTable[(y)*((im)->w) + (x)];
 }
-
-#else
-
-#define RT(x,y) remapTable[(y)*((im)->w) + (x)]
-
 #endif
 
 - (void) remapPixel:(RemapPoint_t)p color:(enum SpecialRemaps) color {
@@ -164,10 +160,12 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     assert(p.x < currentFormat.w);
     assert(p.y >= 0);
     assert(p.y < currentFormat.h);
+    //RT(p.x, p.y, currentFormat.w) = color;
 }
 
 - (void) remapPixel:(RemapPoint_t)p from:(RemapPoint_t) src {
-    
+    NSLog(@"unused?");
+    NSLog(@"unused?");
 }
 
 - (void) precomputeTransform:(Transform *) transform {
@@ -195,9 +193,11 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
             BitmapIndex_t bmi;
             
 #ifdef DEBUG_TRANSFORMS
+            int i = 0;
             for (int y=0; y<currentFormat.h; y++)
-                for (int x=0; x<currentFormat.w; x++)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Unset]; // make unmapped pixels stand out
+                for (int x=0; x<currentFormat.w; x++) {
+                    transform.remapTable[i++] = Remap_Unset;
+                }
 #endif
 
             if (transform.remapPixelF) {    // compute remap one pixel at a time
@@ -235,7 +235,9 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                     }
                 }
             } else {        // whole screen remap
-                transform.remapImageF(currentFormat.w, currentFormat.h, transform.param);
+                NSLog(@"transform: %@", transform);
+                
+                transform.remapImageF(transform.remapTable, currentFormat.w, currentFormat.h, transform.param);
             }
             break;
         case GeometricTrans:
@@ -352,7 +354,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
             }
             case GeometricTrans:
                 break;
-            case RemapTrans:    // all these pixel moves are recomputed, for speed
+            case RemapTrans:    // all these pixel moves are precomputed, for speed
                 assert(transform.remapTable);
                 BitmapIndex_t *table = transform.remapTable;
                 int i=0;
@@ -375,6 +377,9 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                                 break;
                             case Remap_Black:
                                 *p++ = Black;
+                                break;
+                            case Remap_Yellow:
+                                *p++ = Yellow;
                                 break;
                             case Remap_Unset:
                                 *p++ = UnsetColor;
@@ -421,60 +426,103 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    lastTransform = [Transform areaTransform: @"Test"
-                                 description: @"Test"
-                                  remapImage:^void (int w, int h, int p) {
+    lastTransform = [Transform areaTransform: @"Test frame"
+                                 description: @"Test frame"
+                                  remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                if (x <= 10 || y <= 10)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Red];
-                else if (x <= 20 || y <= 20)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Blue];
-                else if (x <= 30 || y <= 30)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Green];
-                else if (x >= w - 10 || y >= h - 10)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Black];
+                if (x <= 10 || y <= 10 || x > w-10 || y > h-10)
+                    *table++ = Remap_Red;
+                else if (x <= 20 || y <= 20 || x > w-20 || y > h-20)
+                    *table++ = Remap_Blue;
+                else if (x <= 30 || y <= 30 || x > w-30 || y > h-30)
+                    *table++ = Remap_Green;
                 else
-                    [self remapPixel:(RemapPoint_t){x,y} from:(RemapPoint_t){x-30, y}];
+                    *table++ = Remap_Yellow;
             }
         }
     }];
     [transformList addObject:lastTransform];
     
+    [transformList addObject:[Transform colorTransform: @"Colorize"
+                                           description: @"Add color"
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                for (int x=0; x<w; x++) {
+                    Pixel p = *srcRow++;
+                    channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+                    *destRow++ = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+                }
+    }]];
+    
+        
+        lastTransform = [Transform areaTransform: @"remap test"
+                                         description: @"testing"
+                                          remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
+                for (int y=0; y<h; y++) {
+                    for (int x=w-100; x<w; x++) {
+                        table[TI(x,y,w)] = TI(x, y, w);
+                        table[TI(x - (w-100),y,w)] = TI(x, y, w);
+                    }
+                }
+            }];
+        [transformList addObject:lastTransform];
+
+    
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
-                                  remapImage:^void (int w, int h, int p) {
+                                  remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
         int centerY = h/2;
         for (int y=0; y<h; y++) {
-            float display_frac = ((float)centerY - abs(y - centerY))/(float)centerY;
-            int kiteW = display_frac * w;
+            float display_frac;
+            if (y <= centerY)
+                display_frac = (float)y / (float)centerY;
+            else
+                display_frac = ((float)h - (float)y)/(float)centerY;
+            int kiteW = round(display_frac * (float)w);
             if (kiteW == 0)
                 kiteW = 1;
 
+            int xw = display_frac * (float)w;
+            int xInset = (w - xw)/2.0;
+            int firstX = xInset;
+            int lastX = w - xInset;
+            float xStride;
+            xStride = w * (1.0 - display_frac);
+            xStride = 1;
+            
+            int srcX = 0;
+            for (int x=firstX; x<lastX; x++) {
+                table[TI(x,y,w)] = TI(w-x, y, w);
+                srcX += xStride;
+            }
+#ifdef NEW
             int firstX = (w - kiteW - 1)/2;
             int lastX = firstX + kiteW - 1;
             int x;
-            
+
             for (x=0; x<firstX; x++) {
-                [self remapPixel:(RemapPoint_t){x,y} color:Remap_White];
+                table[TI(x,y,w)] = Remap_White;
             }
             int strideX = w / kiteW;
             strideX = 1;
             for (; x<=lastX; x++) {
                 int srcX = (x - firstX)*strideX;
-                srcX = w/2 + x-firstX;
+                //srcX = w/2 + x-firstX;
                 if (srcX >= w)
-                    [self remapPixel:(RemapPoint_t){x,y} color:Remap_Red];
+                    table[TI(x,y,w)] = Remap_Red;
                 else {
                     assert(srcX >= 0 && srcX <w);
-                    [self remapPixel:(RemapPoint_t){x,y} from:(RemapPoint_t){srcX, y}];
+                    table[TI(x,y,w)] = TI(srcX, y, w);
+//                    [self remapPixel:(RemapPoint_t){x,y} from:(RemapPoint_t){srcX, y}];
                 }
             }
             for (; x<w; x++) {
                 [self remapPixel:(RemapPoint_t){x,y} color:Remap_Blue];
             }
+#endif
         }
     }];
+    NSLog(@"RemapImageF: %p", lastTransform);
 
 #ifdef notdef
     lastTransform = [Transform areaTransform: @"Terry's kite"
@@ -540,7 +588,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     [transformList addObject:[Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
-                                        areaTransform: ^(Image_t *src, Image_t *dest, int p) {
+                                        areaFunction: ^(Image_t *src, Image_t *dest, int p) {
         int maxY = src->h;
         int maxX = src->w;
         //        int bpr = src->bytes_per_row;
@@ -596,7 +644,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     [transformList addObject:[Transform areaTransform: @"Negative Sobel"
                                           description: @"Negative Sobel filter"
-                                        areaTransform: ^(Image_t *src, Image_t *dest, int p) {
+                                        areaFunction: ^(Image_t *src, Image_t *dest, int p) {
         int maxY = src->h;
         int maxX = src->w;
 
@@ -784,7 +832,7 @@ stripe(Image_t *buf, int x, int p0, int p1, int c){
 
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                                   description: @"Tom Duff's logo transform"
-                                                areaTransform: ^(Image_t *src, Image_t *dest, int p) {
+                                                areaFunction: ^(Image_t *src, Image_t *dest, int p) {
         int maxY = src->h;
         int maxX = src->w;
         int x, y;

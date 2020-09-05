@@ -60,7 +60,7 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                areaTransform:(areaFunction_t) f {
+                areaFunction:(areaFunction_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
@@ -100,15 +100,18 @@
 }
 
 - (id)copyWithZone:(NSZone *)zone {
-    Transform *copy = [[Transform alloc] init];
+    Transform *copy = [[self class] allocWithZone:zone];
     copy.name = name;
     copy.type = type;
     copy.description = description;
     copy.pointF = pointF;
     copy.areaF = areaF;
-    copy.remapImageF = remapImageF;
     copy.remapPixelF = remapPixelF;
     copy.remapPolarF = remapPolarF;
+    NSLog(@"remapImageF: %p", remapImageF);
+    copy.remapImageF = remapImageF;
+    NSLog(@"remapImageF: %p", remapImageF);
+    NSLog(@"remaps: %p", copy.remapImageF);
     copy.rowF = rowF;
     copy.low = low;
     copy.param = param;

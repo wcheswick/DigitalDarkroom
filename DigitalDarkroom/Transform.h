@@ -52,7 +52,7 @@ typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Ima
 typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
 typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, int x, int y, int p);
 typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);
-typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(int x, int y, int p);
+typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapIndex_t *table, int x, int y, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();
@@ -76,19 +76,23 @@ typedef void (^ __nullable __unsafe_unretained remapImageFunction_t)(int x, int 
 @property (assign)              areaFunction_t areaF;
 @property (assign)              remapPixelFunction_t remapPixelF;
 @property (assign)              remapPolarPixelFunction_t remapPolarF;
-@property (assign)              remapImageFunction_t remapImageF;
+@property (copy)              remapImageFunction_t remapImageF;
 @property (assign)              rowFunction_t rowF;
 @property (assign)              transform_t type;
 @property (assign)              BitmapIndex_t * _Nullable remapTable;
 @property (assign)              int low, param, high;
 @property (assign)              volatile BOOL changed;
 
+// not used
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;
+// works:
 + (Transform *) colorTransform:(NSString *) n description:(NSString *) d
                   rowTransform:(rowFunction_t) f;
+// works:
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                areaTransform:(areaFunction_t) f;
+                areaFunction:(areaFunction_t) f;
+// sometimes?
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                          remapPixel:(remapPixelFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
