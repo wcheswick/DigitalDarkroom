@@ -43,6 +43,9 @@ enum {
 @property (nonatomic, strong)   UIView *videoPreview;   // not shown
 @property (nonatomic, strong)   UIBarButtonItem *addButton;
 
+@property (assign)              enum cameras inputCamera;   // camera if inputImage is nil
+@property (nonatomic, strong)   UIImage *inputImage;
+
 @end
 
 @implementation MainVC
@@ -57,6 +60,7 @@ enum {
 @synthesize videoPreview;
 @synthesize addButton;
 @synthesize undoButton, trashButton;
+@synthesize inputCamera, inputImage;
 
 
 - (id)init {
@@ -64,12 +68,22 @@ enum {
     if (self) {
         transforms = [[Transforms alloc] init];
     }
+    inputCamera = FrontCamera;
+    inputImage = nil;
+    
     return self;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
 
+    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc]
+                                      initWithTitle:@"Source"
+                                      style:UIBarButtonItemStylePlain
+                                      target:self
+                                      action:@selector(doSelectInput:)];
+    self.navigationItem.leftBarButtonItem = leftBarButton;
+    
     videoView = [[UIImageView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     frameDisplay = [[UILabel alloc] init];
     frameDisplay.hidden = YES;  // performance debugging....too soon
@@ -173,9 +187,15 @@ enum {
     if (!cameraController) {
         NSLog(@"************ no cameras available, help");
     }
-    
-    [cameraController selectCaptureDevice];
-    NSString *err = [cameraController configureForCaptureWithCaller:self];
+    [self configureCamera];
+}
+
+- (void) configureCamera {
+    NSString *err;
+    if (![cameraController selectCaptureDevice: inputCamera])
+        err = @"camera not available";
+    else
+        err = [cameraController configureForCaptureWithCaller:self];
     if (err) {
         UIAlertController *alert = [UIAlertController
                                     alertControllerWithTitle:@"Camera connection failed"
@@ -306,6 +326,37 @@ enum {
 
 - (IBAction) didSwipeVideoRight:(UISwipeGestureRecognizer *)recognizer {
     NSLog(@"did swipe video right");
+}
+
+- (IBAction) doSelectInput:(UIBarButtonItem *)sender {
+    SelectInputVC *siVC = [[SelectInputVC alloc] init];
+    siVC.caller = self;
+//    siVC.view.frame = CGRectMake(0, 0, 100, 44*4 + 40);
+    siVC.preferredContentSize = siVC.view.frame.size; //CGSizeMake(100, 44*4 + 40);
+    siVC.modalPresentationStyle = UIModalPresentationPopover;
+    
+    UIPopoverPresentationController *popvc = siVC.popoverPresentationController;
+    popvc.sourceView = self.navigationController.navigationBar;
+    popvc.sourceRect = siVC.view.frame;
+    popvc.delegate = self;
+    popvc.sourceView = siVC.view;
+    popvc.barButtonItem = sender;
+    [self presentViewController:siVC animated:YES completion:nil];
+}
+
+- (void) selectCamera:(enum cameras) c {
+    NSLog(@"use camera %d", c);
+    inputCamera = c;
+    inputImage = nil;
+    [self configureCamera];
+    [cameraController startCamera];
+    [cameraController startCapture];
+}
+
+- (void) useImage:(UIImage *)image {
+    NSLog(@"use image");
+    inputImage = image;
+    [cameraController stopCamera];
 }
 
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {

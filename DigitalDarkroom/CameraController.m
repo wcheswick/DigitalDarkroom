@@ -45,7 +45,8 @@
     return self;
 }
 
-- (void) selectCaptureDevice {
+- (BOOL) selectCaptureDevice: (enum cameras) camera {
+    captureDevice = nil;
     frontVideoDevice = [AVCaptureDevice
                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                         mediaType: AVMediaTypeVideo
@@ -66,12 +67,18 @@
                            mediaType: AVMediaTypeVideo
                            position: AVCaptureDevicePositionBack];
     
-    if (frontVideoDevice)
-        captureDevice = frontVideoDevice;
-    else if (backVideoDevice)
-        captureDevice = backVideoDevice;
-    else
-        captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    switch (camera) {
+        case FrontCamera:
+            if (frontVideoDevice)
+                captureDevice = frontVideoDevice;
+            break;
+        case BackCamera:
+            if (backVideoDevice)
+                captureDevice = backVideoDevice;
+            break;
+    }
+    //captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    return captureDevice != nil;
 }
 
 #define MAX_FRAME_RATE  24

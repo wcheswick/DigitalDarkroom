@@ -8,9 +8,13 @@
 
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import "SelectInputVC.h"
 
 @interface MainVC : UIViewController
     <UITableViewDelegate, UITableViewDataSource,
+    UIScrollViewDelegate,
+    UIPopoverPresentationControllerDelegate,
+    SelectInputProto,
     AVCaptureVideoDataOutputSampleBufferDelegate> {
 }
 

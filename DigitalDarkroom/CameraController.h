@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import "SelectInputVC.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -18,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 
-- (void) selectCaptureDevice;
+- (BOOL) selectCaptureDevice: (enum cameras) camera;
 - (CGSize) cameraVideoSizeFor: (CGSize) s;
 - (void) setVideoOrientation;
 - (void) setFrame: (CGRect) frame;
