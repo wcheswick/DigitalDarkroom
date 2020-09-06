@@ -28,9 +28,12 @@
     [super viewDidLoad];
     
     fileNames = [[NSArray alloc] initWithObjects:
-                 @"ishihara6.jpeg", @"ishihara8.jpeg",
+                 @"hsvrainbow.jpeg",
+                 @"ishihara6.jpeg",
+                 @"cube.jpeg",
+                 @"ishihara8.jpeg",
                  @"ishihara25.jpeg", @"ishihara29.jpeg",
-                 @"ishihara45.jpeg", @"ishihara56.jpeg", @"cube.jpeg",
+                 @"ishihara45.jpeg", @"ishihara56.jpeg",
                  @"rainbow.gif", nil];
     images = [[NSMutableArray alloc] initWithCapacity:fileNames.count];
     for (NSString *name in fileNames) {
@@ -41,7 +44,12 @@
             [images addObject:@""];
         } else {
             UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
-            [images addObject:image];
+            NSLog(@"%@", imagePath);
+            NSLog(@"  size: %.0f x %.0f", image.size.width, image.size.height);
+            if (!image)
+                NSLog(@"*** image failed to load: %@", imagePath);
+            else
+                [images addObject:image];
         }
     }
     NSLog(@"%lu images found", (unsigned long)images.count);

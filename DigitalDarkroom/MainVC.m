@@ -45,6 +45,7 @@ enum {
 
 @property (assign)              enum cameras inputCamera;   // camera if inputImage is nil
 @property (nonatomic, strong)   UIImage *inputImage;
+@property (assign, atomic)      BOOL capturing;
 
 @end
 
@@ -61,6 +62,7 @@ enum {
 @synthesize addButton;
 @synthesize undoButton, trashButton;
 @synthesize inputCamera, inputImage;
+@synthesize capturing;
 
 
 - (id)init {
@@ -102,11 +104,20 @@ enum {
     press.minimumPressDuration = 1.0;
     [videoView addGestureRecognizer:press];
 
+    // save image to photos
     UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
                                             initWithTarget:self action:@selector(didSwipeVideoLeft:)];
     swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
     [videoView addGestureRecognizer:swipeLeft];
     
+    // save screen to photos
+    UISwipeGestureRecognizer *twoSwipeLeft = [[UISwipeGestureRecognizer alloc]
+                                            initWithTarget:self action:@selector(didTwoSwipeVideoLeft:)];
+    twoSwipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+    twoSwipeLeft.numberOfTouchesRequired = 2;
+    [videoView addGestureRecognizer:twoSwipeLeft];
+
+    // undo
     UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
                                             initWithTarget:self action:@selector(didSwipeVideoRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
@@ -131,7 +142,7 @@ enum {
     undoButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                    target:self
-                                   action:@selector(doRemoveLastTransform:)];
+                                   action:@selector(doRemoveLastTransform)];
     activeListVC.navigationItem.leftBarButtonItem = undoButton;
     trashButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
@@ -186,8 +197,9 @@ enum {
     cameraController = [[CameraController alloc] init];
     if (!cameraController) {
         NSLog(@"************ no cameras available, help");
-    }
-    [self configureCamera];
+        capturing = NO;
+    } else
+        [self configureCamera];
 }
 
 - (void) configureCamera {
@@ -209,14 +221,17 @@ enum {
                                         ];
         [alert addAction:defaultAction];
         [self presentViewController:alert animated:YES completion:nil];
+        capturing = NO;
         return;
     }
     [videoPreview.layer addSublayer:cameraController.captureVideoPreviewLayer];
+    capturing = YES;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [cameraController stopCamera];
+    capturing = NO;
 //    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -311,6 +326,7 @@ enum {
 - (void) viewDidAppear:(BOOL)animated {
     frameCount = droppedCount = 0;
     [self updateFrameCounter];
+    capturing = YES;
     [cameraController startCamera];
     [cameraController startCapture];
     [self.view setNeedsDisplay];
@@ -318,14 +334,29 @@ enum {
 
 - (IBAction) didTapVideo:(UITapGestureRecognizer *)recognizer {
     NSLog(@"video tapped");
+    if (inputImage) // tapping non-moving image does nothing
+        return;
+    if (capturing) {
+        [cameraController stopCapture];
+    } else {
+        [cameraController startCamera];
+        [cameraController startCapture];
+    }
+    capturing = !capturing;
 }
 
 - (IBAction) didSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
-    NSLog(@"did swipe video left");
+    NSLog(@"did swipe video left, save output to photos");
 }
+
+- (IBAction) didTwoSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
+    NSLog(@"did two swipe video right, save screen to photos");
+}
+
 
 - (IBAction) didSwipeVideoRight:(UISwipeGestureRecognizer *)recognizer {
     NSLog(@"did swipe video right");
+    [self doRemoveLastTransform];
 }
 
 - (IBAction) doSelectInput:(UIBarButtonItem *)sender {
@@ -349,6 +380,7 @@ enum {
     inputCamera = c;
     inputImage = nil;
     [self configureCamera];
+    capturing = YES;
     [cameraController startCamera];
     [cameraController startCapture];
 }
@@ -356,6 +388,7 @@ enum {
 - (void) useImage:(UIImage *)image {
     NSLog(@"use image");
     inputImage = image;
+    capturing = NO;
     [cameraController stopCamera];
 }
 
@@ -498,7 +531,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-- (IBAction) doRemoveLastTransform:(UIBarButtonItem *)button {
+- (IBAction) doRemoveLastTransform {
     [self changeTransformList:^{
         self->transforms.listChanged = YES;
         [self->transforms.list removeLastObject];
@@ -553,6 +586,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
+    if (!capturing)
+        return;
     
     if (transforms.busy) {  // drop the frame
         return;
