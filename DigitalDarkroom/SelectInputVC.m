@@ -89,12 +89,10 @@
             cell.textLabel.font = [UIFont boldSystemFontOfSize:20];
             break;
         default: {
+            UIImageView *thumbView = [[UIImageView alloc] initWithFrame:cell.contentView.frame];
+            thumbView.contentMode =  UIViewContentModeScaleAspectFit;
             UIImage *image = [images objectAtIndex:indexPath.row - NCAMERA];
-            UIImageView *thumbView = [[UIImageView alloc] initWithImage:image];
-            CGRect f = thumbView.frame;
-            f.size.height = THUMB_H;
-            thumbView.frame = f;
-            thumbView.contentMode = UIViewContentModeScaleAspectFit;
+            thumbView.image = image;
             [cell.contentView addSubview:thumbView];
         }
     }
@@ -125,7 +123,7 @@
         case BackCamera:
             return 60;
         default:
-            return 100;
+            return 60;
     }
 }
 

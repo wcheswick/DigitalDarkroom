@@ -14,11 +14,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define A(im, x,y)  (Pixel *)((im).image + (x) + (y)*(im).bytes_per_row) // address of Pixel at x, y
 
+#define BITMAP_OPTS kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst
+
 @interface Transforms : NSObject {
     NSMutableArray *categoryNames;
     NSMutableArray *categoryList;
     size_t bytesPerRow;
-    NSMutableArray *list;
+    NSMutableArray *masterTransformList;
     volatile BOOL listChanged, paramsChanged, busy;
 }
 
@@ -26,10 +28,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSArray *categoryList;
 @property (assign)              NSMutableArray *transforms;
 @property (assign)              size_t bytesPerRow;
-@property (nonatomic, strong)   NSMutableArray *list;
+@property (nonatomic, strong)   NSMutableArray *masterTransformList;
 @property (assign)              volatile BOOL listChanged, paramsChanged, busy;
 
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context;
+- (UIImage *) executeTransformsWithImage:(UIImage *)image;
 
 @end
 

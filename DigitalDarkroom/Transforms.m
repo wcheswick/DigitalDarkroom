@@ -81,7 +81,7 @@ int dPI(Image_t *im, int x, int y) {
 
 @synthesize categoryNames;
 @synthesize categoryList;
-@synthesize list;
+@synthesize masterTransformList;
 @synthesize listChanged, paramsChanged;
 @synthesize executeList;
 @synthesize bytesPerRow;
@@ -90,7 +90,6 @@ int dPI(Image_t *im, int x, int y) {
 @synthesize busy;
 
 Image_t currentFormat;
-
 Image_t sources[2];
 
 - (id)init {
@@ -99,7 +98,7 @@ Image_t sources[2];
         sources[1].image = 0;
         currentFormat.bytes_per_row = 0;    // no current format
         
-        list = [[NSMutableArray alloc] init];
+        masterTransformList = [[NSMutableArray alloc] init];
         listChanged = NO;
         busy = NO;
         categoryNames = [[NSMutableArray alloc] init];
@@ -258,7 +257,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     assert(currentFormat.bytes_per_row != 0);   // we need real values now
     
-    executeList = [NSArray arrayWithArray:list];
+    executeList = [NSArray arrayWithArray:masterTransformList];
     listChanged = NO;
     NSLog(@"recompute transforms");
     // source[0] gets all its data from the call context.  If we need a destination image,
@@ -282,12 +281,30 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     }
 }
 
+#define BITS_PER_COLOR  8
+#define BYTES_PER_PIXEL 4
+
+- (UIImage *) executeTransformsWithImage:(UIImage *)image {
+    CGImageRef imageRef = [image CGImage];
+    NSUInteger width = CGImageGetWidth(imageRef);
+    NSUInteger height = CGImageGetHeight(imageRef);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
+    NSUInteger bytesPerPixel = BYTES_PER_PIXEL;
+    NSUInteger bytesPerRow = bytesPerPixel * width;
+    NSUInteger bitsPerComponent = BITS_PER_COLOR;
+    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
+                    bitsPerComponent, bytesPerRow, colorSpace,BITMAP_OPTS);
+    CGColorSpaceRelease(colorSpace);
+
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    UIImage *transformed = [self executeTransformsWithContext:context];
+    CGContextRelease(context);
+    free(rawData);
+    return transformed;
+}
+
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context {
-    if (listChanged) {
-        [self setupForTransforming];
-    } else if (paramsChanged) { // recompute one or more parameter changes
-        [self updateParams];
-    }
     
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
     size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
@@ -296,26 +313,35 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     // that greatly speed up and simplify them.  Make sure these assumptions
     // are valid.
     
-    assert(channelSize == 8);   // eight bits per color
+    assert(channelSize == BITS_PER_COLOR);   // eight bits per color
     assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
     
     int w = (int)CGBitmapContextGetWidth(context);
     int h = (int)CGBitmapContextGetHeight(context);
     int bpr = (int)CGBitmapContextGetBytesPerRow(context);
     
-    if (currentFormat.bytes_per_row == 0 |
+    if (listChanged || currentFormat.bytes_per_row == 0 |
         currentFormat.bytes_per_row != bpr ||
         currentFormat.w != w ||
         currentFormat.h != h) {     // first or changed format, compute new transforms
+        NSLog(@">>> format was %4d %4d %4d",
+              currentFormat.bytes_per_row,
+              currentFormat.w,
+              currentFormat.h);
         currentFormat = (Image_t){w,h,bpr,(Pixel *)0};
+        NSLog(@">>> format is  %4d %4d %4d",
+              currentFormat.bytes_per_row,
+              currentFormat.w,
+              currentFormat.h);
         busy = YES;
         [self setupForTransforming];
-        busy = NO;
-        return nil;     // We don't even try, this probably took too long
+//        busy = NO;
+//        return nil;     // We don't even try, this probably took too long
+    } else if (paramsChanged) { // recompute one or more parameter changes
+        [self updateParams];
     }
     
     int sourceImageIndex = 0;   // incoming image is at zero
-    
     sources[sourceImageIndex] = currentFormat;
     sources[sourceImageIndex].image = CGBitmapContextGetData(context);
 
@@ -329,7 +355,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     if (needsAlloc)
         sources[1].image = (Pixel *)calloc(sources[1].bytes_per_row * sources[1].h, sizeof(Pixel));
     
-    Image_t *source= &sources[0];
+    Image_t *source = &sources[0];
     Image_t *dest = 0;
     if (executeList.count == 0)
         assert(sourceImageIndex == 0);
@@ -405,6 +431,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                 break;
         }
     }
+#ifdef NOMORE   // just copy the image into place
     // temp kludge, copy bytes back into main context, if needed
     if (sourceImageIndex) {
         assert(executeList.count > 0);
@@ -414,6 +441,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
         memcpy(dest->image, sources[0].image,
                dest->w * dest->h * sizeof(Pixel));
     }
+#endif
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     UIImage *out = [UIImage imageWithCGImage:quartzImage];
     CGImageRelease(quartzImage);
