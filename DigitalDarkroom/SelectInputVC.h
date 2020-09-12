@@ -8,12 +8,14 @@
 
 #import <UIKit/UIKit.h>
 
+#ifdef REFERENCE
 NS_ASSUME_NONNULL_BEGIN
 
-enum cameras {
+typedef enum cameras {
     FrontCamera,
     BackCamera,
-};
+    NotACamera,
+} cameras;
 #define NCAMERA (BackCamera+1)
 
 @protocol SelectInputProto <NSObject>
@@ -24,13 +26,17 @@ enum cameras {
 @end
 
 @interface SelectInputVC : UITableViewController
-
-<UIPopoverPresentationControllerDelegate> {
+    <UITableViewDelegate, UITableViewDataSource,
+    UIPopoverPresentationControllerDelegate> {
     __unsafe_unretained id<SelectInputProto> caller;
 }
 
 @property (assign)  __unsafe_unretained id<SelectInputProto> caller;
 
++ (UIImage *)imageWithImage:(UIImage *)image scaledToSize:(CGSize)newSize;
+
 @end
 
 NS_ASSUME_NONNULL_END
+#endif
+

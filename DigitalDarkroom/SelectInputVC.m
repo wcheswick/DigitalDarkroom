@@ -6,10 +6,11 @@
 //  Copyright © 2020 Cheswick.com. All rights reserved.
 //
 
+#ifdef REFERENCE
 #import "SelectInputVC.h"
 
 #define THUMB_H 100
-#define W   200
+#define W   150
 
 @interface SelectInputVC ()
 
@@ -27,6 +28,8 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
     fileNames = [[NSArray alloc] initWithObjects:
                  @"hsvrainbow.jpeg",
                  @"ishihara6.jpeg",
@@ -44,8 +47,8 @@
             [images addObject:@""];
         } else {
             UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
-            NSLog(@"%@", imagePath);
-            NSLog(@"  size: %.0f x %.0f", image.size.width, image.size.height);
+//            NSLog(@"%@", imagePath);
+//            NSLog(@"  size: %.0f x %.0f", image.size.width, image.size.height);
             if (!image)
                 NSLog(@"*** image failed to load: %@", imagePath);
             else
@@ -91,8 +94,11 @@
         default: {
             UIImageView *thumbView = [[UIImageView alloc] initWithFrame:cell.contentView.frame];
             thumbView.contentMode =  UIViewContentModeScaleAspectFit;
+            thumbView.clipsToBounds = YES;
             UIImage *image = [images objectAtIndex:indexPath.row - NCAMERA];
-            thumbView.image = image;
+            CGSize thumbSize = CGSizeMake(cell.contentView.frame.size.width, THUMB_H);
+            thumbView.image = [SelectInputVC imageWithImage:image
+                                               scaledToSize:thumbSize];
             [cell.contentView addSubview:thumbView];
         }
     }
@@ -123,8 +129,79 @@
         case BackCamera:
             return 60;
         default:
-            return 60;
+            return THUMB_H;
     }
 }
 
++ (UIImage *)imageWithImage:(UIImage *)image scaledToSize:(CGSize)newSize {
+    //UIGraphicsBeginImageContext(newSize);
+    UIGraphicsBeginImageContextWithOptions(newSize, YES, 0.0);
+    float AR = image.size.width/image.size.height;
+    float newAR = newSize.width/newSize.height;
+    NSLog(@" ar  %.3f %.0f x %.0f", AR, image.size.width, image.size.height);
+    NSLog(@" nar %.3f %.0f x %.0f", newAR, newSize.width, newSize.height);
+    float scale;
+    if (newAR > AR) { // we have extra width, use Y
+        scale = newSize.height/image.size.height;
+    } else {
+        scale = newSize.width/image.size.width;
+    }
+    CGSize targetSize = CGSizeMake(image.size.width*scale, image.size.height*scale);
+    [image drawInRect:CGRectMake(0, 0, targetSize.width, targetSize.height)];
+    UIImage *newImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return newImage;
+}
+
 @end
+
+#ifdef REFERENCE
+- (IBAction) doSelectInput:(UIBarButtonItem *)sender {
+    SelectInputVC *siVC = [[SelectInputVC alloc] init];
+    siVC.caller = self;
+//    siVC.view.frame = CGRectMake(0, 0, 100, 44*4 + 40);
+    siVC.preferredContentSize = siVC.view.frame.size; //CGSizeMake(100, 44*4 + 40);
+    siVC.modalPresentationStyle = UIModalPresentationPopover;
+    
+    UIPopoverPresentationController *popvc = siVC.popoverPresentationController;
+    popvc.sourceView = self.navigationController.navigationBar;
+    popvc.sourceRect = siVC.view.frame;
+    popvc.delegate = self;
+    popvc.sourceView = siVC.view;
+    popvc.barButtonItem = sender;
+    [self presentViewController:siVC animated:YES completion:nil];
+}
+#endif
+
+- (void) configureCamera {
+    NSString *err;
+    
+    if (
+    
+    if (![cameraController selectCaptureDevice: inputCamera])
+        err = @"camera not available";
+    else
+        err = [cameraController configureForCaptureWithCaller:self];
+    if (err) {
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:@"Camera connection failed"
+                                    message:err
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction* defaultAction = [UIAlertAction
+                                        actionWithTitle:@"Dismiss"
+                                        style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction * action) {}
+                                        ];
+        [alert addAction:defaultAction];
+        [self presentViewController:alert animated:YES completion:nil];
+        capturing = NO;
+        return;
+    }
+    [cameraPreview.layer addSublayer:cameraController.captureVideoPreviewLayer];
+
+    capturing = YES;
+}
+
+#endif
+

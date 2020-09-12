@@ -8,13 +8,16 @@
 
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
-#import "SelectInputVC.h"
+#import "InputSource.h"
+
+#define NO_INPUT_SOURCE   (-1)
 
 @interface MainVC : UIViewController
     <UITableViewDelegate, UITableViewDataSource,
     UIScrollViewDelegate,
     UIPopoverPresentationControllerDelegate,
-    SelectInputProto,
+    UICollectionViewDataSource,
+    UICollectionViewDelegateFlowLayout,
     AVCaptureVideoDataOutputSampleBufferDelegate> {
 }
 

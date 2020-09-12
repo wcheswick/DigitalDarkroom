@@ -69,6 +69,10 @@ int dPI(Image_t *im, int x, int y) {
 // Address Pixel at coordinates in image
 #define PA(imt, x,y)    (&P(imt, x,y))
 
+
+Image_t currentFormat;
+Image_t sources[2];
+
 @interface Transforms ()
 
 @property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
@@ -88,14 +92,12 @@ int dPI(Image_t *im, int x, int y) {
 @synthesize sourceImageIndicies;
 @synthesize lastTransform;
 @synthesize busy;
-
-Image_t currentFormat;
-Image_t sources[2];
+@synthesize outputSize;
 
 - (id)init {
     self = [super init];
     if (self) {
-        sources[1].image = 0;
+        sources[0].image = sources[1].image = NULL;
         currentFormat.bytes_per_row = 0;    // no current format
         
         masterTransformList = [[NSMutableArray alloc] init];
@@ -103,6 +105,7 @@ Image_t sources[2];
         busy = NO;
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
+        outputSize = CGSizeZero;
         
         [self addAreaTransforms];
         [self addColorTransforms];
@@ -284,28 +287,25 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
 #define BITS_PER_COLOR  8
 #define BYTES_PER_PIXEL 4
 
-- (UIImage *) executeTransformsWithImage:(UIImage *)image {
+- (UIImage *) executeTransformsWithImage:(UIImage *) image {
     CGImageRef imageRef = [image CGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    unsigned char *rawData = (unsigned char*) calloc(height * width * 4, sizeof(unsigned char));
     NSUInteger bytesPerPixel = BYTES_PER_PIXEL;
     NSUInteger bytesPerRow = bytesPerPixel * width;
     NSUInteger bitsPerComponent = BITS_PER_COLOR;
-    CGContextRef context = CGBitmapContextCreate(rawData, width, height,
-                    bitsPerComponent, bytesPerRow, colorSpace,BITMAP_OPTS);
-    CGColorSpaceRelease(colorSpace);
-
+    CGContextRef context = CGBitmapContextCreate(NULL, width, height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace, BITMAP_OPTS);
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     UIImage *transformed = [self executeTransformsWithContext:context];
     CGContextRelease(context);
-    free(rawData);
+    CGColorSpaceRelease(colorSpace);
     return transformed;
 }
 
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context {
-    
+    assert(outputSize.width > 0);   // must be set before call
     size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
     size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
     

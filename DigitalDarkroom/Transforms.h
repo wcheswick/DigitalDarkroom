@@ -22,6 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bytesPerRow;
     NSMutableArray *masterTransformList;
     volatile BOOL listChanged, paramsChanged, busy;
+    CGSize outputSize;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -30,9 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesPerRow;
 @property (nonatomic, strong)   NSMutableArray *masterTransformList;
 @property (assign)              volatile BOOL listChanged, paramsChanged, busy;
+@property (assign)              CGSize outputSize;
 
 - (UIImage *) executeTransformsWithContext:(CGContextRef)context;
-- (UIImage *) executeTransformsWithImage:(UIImage *)image;
+- (UIImage *) executeTransformsWithImage:(UIImage *) image;
 
 @end
 

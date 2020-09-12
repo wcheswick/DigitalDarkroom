@@ -8,6 +8,7 @@
 
 #import "MainVC.h"
 #import "CameraController.h"
+#import "InputSource.h"
 
 @interface CameraController ()
 
@@ -41,55 +42,74 @@
         captureVideoPreviewLayer = [[AVCaptureVideoPreviewLayer alloc] init];
         connection = nil;
         selectedFormat = nil;
+        
+        frontVideoDevice = [AVCaptureDevice
+                            defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                            mediaType: AVMediaTypeVideo
+                            position: AVCaptureDevicePositionFront];
+        if (!frontVideoDevice)
+            frontVideoDevice = [AVCaptureDevice
+                                defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                mediaType: AVMediaTypeVideo
+                                position: AVCaptureDevicePositionFront];
+        
+        backVideoDevice = [AVCaptureDevice
+                           defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                           mediaType: AVMediaTypeVideo
+                           position: AVCaptureDevicePositionBack];
+        if (!backVideoDevice)
+            backVideoDevice = [AVCaptureDevice
+                               defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                               mediaType: AVMediaTypeVideo
+                               position: AVCaptureDevicePositionBack];
+        NSLog(@"cameras available: front:%d  back:%d",
+              [self cameraAvailable:FrontCamera],
+              [self cameraAvailable:BackCamera]);
+        captureDevice = nil;
     }
     return self;
 }
 
-- (BOOL) selectCaptureDevice: (enum cameras) camera {
-    captureDevice = nil;
-    frontVideoDevice = [AVCaptureDevice
-                        defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                        mediaType: AVMediaTypeVideo
-                        position: AVCaptureDevicePositionFront];
-    if (!frontVideoDevice)
-        frontVideoDevice = [AVCaptureDevice
-                            defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                            mediaType: AVMediaTypeVideo
-                            position: AVCaptureDevicePositionFront];
-    
-    backVideoDevice = [AVCaptureDevice
-                       defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                       mediaType: AVMediaTypeVideo
-                       position: AVCaptureDevicePositionBack];
-    if (!backVideoDevice)
-        backVideoDevice = [AVCaptureDevice
-                           defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                           mediaType: AVMediaTypeVideo
-                           position: AVCaptureDevicePositionBack];
-    
+- (BOOL) cameraAvailable:(cameras) c {
+    switch (c) {
+        case FrontCamera:
+            return frontVideoDevice != nil;
+        case BackCamera:
+            return backVideoDevice != nil;
+        default:
+            return NO;
+    }
+}
+
+- (void) selectCaptureDevice: (cameras) camera {
+    NSLog(@"selectCaptureDevice: %d", camera);
+    if ([self cameraAvailable:camera])
     switch (camera) {
         case FrontCamera:
-            if (frontVideoDevice)
-                captureDevice = frontVideoDevice;
-            break;
+            captureDevice = frontVideoDevice;
+            return;
         case BackCamera:
-            if (backVideoDevice)
-                captureDevice = backVideoDevice;
-            break;
+            captureDevice = backVideoDevice;
+            return;
+        default:
+            captureDevice = nil;
     }
     //captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    return captureDevice != nil;
 }
 
 #define MAX_FRAME_RATE  24
 
 - (CGSize) cameraVideoSizeFor: (CGSize) availableSize {
+    NSLog(@"cameraVideoSizeFor %.0f x %.0f", availableSize.width, availableSize.height);
     NSError *error;
-
+    if (!captureDevice) {
+        NSLog(@"*** nconceivable, camera size with no camera capture device");
+        return CGSizeZero;
+    }
+    
     BOOL isPortrait = (videoOrientation == AVCaptureVideoOrientationPortrait) ||
         (videoOrientation == AVCaptureVideoOrientationPortraitUpsideDown);
     
-    assert(captureDevice);
     AVCaptureDeviceFormat *selectedFormat = nil;
     CGSize bestSize;
     for (AVCaptureDeviceFormat *format in captureDevice.formats) {
@@ -112,7 +132,8 @@
               availableSize.width, availableSize.height);
         return (CGSize){0,0};
     }
-    NSLog(@" format %@", selectedFormat);
+    NSLog(@" for orientation: %@",
+          isPortrait ? @"port" : @"land");
     
     if (![captureDevice lockForConfiguration:&error]) {
         NSLog(@"could not lock device for configuration");
@@ -134,6 +155,7 @@
 - (NSString *) configureForCaptureWithCaller: (MainVC *)caller {
     NSError *error;
     
+    NSLog(@"configure camera");
     assert(captureDevice);
     if (![captureDevice lockForConfiguration:&error])
         return [NSString stringWithFormat:@"error locking camera: %@", error.localizedDescription];
@@ -175,14 +197,6 @@
     return nil;
 }
 
-- (void) startCapture {
-    connection.enabled = YES;
-}
-
-- (void) stopCapture {
-    connection.enabled = NO;
-}
-
 - (void) setVideoOrientation {
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
     switch (deviceOrientation) {
@@ -216,12 +230,23 @@
 }
 
 - (void) startCamera {
+    NSLog(@"startCamera");
     assert(captureSession);
+    connection.enabled = YES;
     [captureSession startRunning];
 }
 
 - (void) stopCamera {
-    [captureSession stopRunning];
+    NSLog(@"stopCamera");
+    if (!captureSession) {
+        NSLog(@" *** inconceivable: stopping a non-existant camera session");
+    } else
+        [captureSession stopRunning];
+    connection.enabled = NO;
+}
+
+- (BOOL) cameraOn {
+    return connection.enabled;
 }
 
 @end
