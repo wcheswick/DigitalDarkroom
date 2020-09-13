@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) startCamera;
 - (void) stopCamera;
-- (BOOL) cameraOn;
+- (BOOL) isCameraOn;
 - (BOOL) cameraAvailable: (cameras) c;
 
 - (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;

@@ -245,7 +245,7 @@
     connection.enabled = NO;
 }
 
-- (BOOL) cameraOn {
+- (BOOL) isCameraOn {
     return connection.enabled;
 }
 

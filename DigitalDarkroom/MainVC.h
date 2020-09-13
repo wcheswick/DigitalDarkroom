@@ -16,8 +16,6 @@
     <UITableViewDelegate, UITableViewDataSource,
     UIScrollViewDelegate,
     UIPopoverPresentationControllerDelegate,
-    UICollectionViewDataSource,
-    UICollectionViewDelegateFlowLayout,
     AVCaptureVideoDataOutputSampleBufferDelegate> {
 }
 

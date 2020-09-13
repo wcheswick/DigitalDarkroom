@@ -11,8 +11,9 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-#define SELECTION_THUMB_H   40
-#define SELECTION_H         (2*SELECTION_THUMB_H)
+#define SELECTION_THUMB_H   100
+
+#define TRANSTEXT_H 25
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -26,8 +27,6 @@ enum {
     ActiveTag,
 } tableTags;
 
-#define SELECT_THUMB_W  (50.0 * 4.0/3.0)
-#define SELECT_THUMB_H  50
 
 @interface MainVC ()
 
@@ -36,8 +35,8 @@ enum {
 @property (nonatomic, strong)   UIImageView *inputThumb;
 @property (nonatomic, strong)   UIImageView *cameraPreview;
 
-@property (nonatomic, strong)   UICollectionView *selectInputView;
-@property (nonatomic, strong)   UICollectionViewLayout *selectLayout;
+@property (nonatomic, strong)   UIScrollView *selectInputScroll;
+@property (nonatomic, strong)   UIView *selectInputButtonsView;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign           )   int inputSource;
 
@@ -65,7 +64,7 @@ enum {
 
 @synthesize inputView, inputThumb, cameraPreview;
 @synthesize outputView, transformedView, outputLabel;
-@synthesize selectInputView, selectLayout;
+@synthesize selectInputScroll, selectInputButtonsView;
 @synthesize inputSources, inputSource;
 
 @synthesize cameraController;
@@ -78,7 +77,7 @@ enum {
 @synthesize selectedImage;
 @synthesize capturing;
 
-- (id)init {
+- (id) init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
@@ -87,13 +86,14 @@ enum {
         [self addCameraSource:FrontCamera label:@"Front camera"];
         [self addCameraSource:BackCamera label:@"Back camera"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
+        [self addFileSource:@"ches.png" label:@"Ches"];
         [self addFileSource:@"ishihara6.jpeg" label:@"Ishibara 6"];
         [self addFileSource:@"cube.jpeg" label:@"Rubix cube"];
         [self addFileSource:@"ishihara8.jpeg" label:@"Ishibara 8"];
         [self addFileSource:@"ishihara25.jpeg" label:@"Ishibara 25"];
         [self addFileSource:@"ishihara45.jpeg" label:@"Ishibara 45"];
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
-        [self addFileSource:@"rainbow.jpeg" label:@"Rainbow"];
+        [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
     }
     NSLog(@"%lu input sources loaded", (unsigned long)inputSources.count);
     inputSource = NO_INPUT_SOURCE;
@@ -132,14 +132,19 @@ enum {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-
+    
     outputView = [[UIView alloc] init];
-    transformedView = [[UIImageView alloc] init];
+    transformedView = [[UIImageView alloc] initWithFrame:CGRectMake(0, LATER, LATER, TRANSTEXT_H)];
     //transformedView.contentMode = UIViewContentModeScaleAspectFit;
     //    transformedView.contentMode = UIViewContentModeScaleAspectFit;
     [outputView addSubview:transformedView];
     outputLabel = [[UILabel alloc] init];
-    //outputLabel.backgroundColor = [UIColor grayColor];
+    outputLabel.font = [UIFont
+                        monospacedSystemFontOfSize:transformedView.frame.size.height-4
+                        weight:UIFontWeightMedium];
+    [outputView addSubview:outputLabel];
+    [self updateOutputLabel];
+    
     outputView.userInteractionEnabled = YES;
     outputView.backgroundColor = [UIColor orangeColor];
     [self.view addSubview:outputView];
@@ -181,18 +186,22 @@ enum {
     self.navigationItem.leftBarButtonItem = leftBarButton;
 #endif
     
-    selectLayout = [[UICollectionViewFlowLayout alloc] init];
-    selectInputView = [[UICollectionView alloc]
-                       initWithFrame:CGRectMake(0, LATER, LATER, SELECTION_H)
-                       collectionViewLayout:selectLayout];
-    selectInputView.dataSource = self;
-    selectInputView.delegate = self;
-#define SELECTION_ID    @"Selection id"
-    [selectInputView registerClass:[UICollectionViewCell class]
-        forCellWithReuseIdentifier:SELECTION_ID];
-    [self.view addSubview:selectInputView];
+    selectInputScroll = [[UIScrollView alloc]
+                       initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+    selectInputScroll.delegate = self;
+//    selectInputScroll.contentSize =
+    selectInputScroll.pagingEnabled = NO;
+    selectInputScroll.showsHorizontalScrollIndicator = YES;
+    selectInputScroll.userInteractionEnabled = YES;
+    selectInputScroll.exclusiveTouch = NO;
+    selectInputScroll.bounces = NO;
+    selectInputScroll.delaysContentTouches = YES;
+    selectInputScroll.canCancelContentTouches = YES;
+    selectInputScroll.delegate = self;
     
-    [selectInputView setBackgroundColor:[UIColor redColor]];
+    selectInputButtonsView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
+    [selectInputScroll addSubview:selectInputButtonsView];
+    [self.view addSubview:selectInputScroll];
 
     inputView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
     inputView.backgroundColor = [UIColor whiteColor];
@@ -266,15 +275,16 @@ enum {
     self.title = @"Digital Darkroom";
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = YES;
-    self.navigationController.toolbarHidden = YES;
-    self.navigationController.toolbar.opaque = NO;
+//    self.navigationController.toolbarHidden = YES;
+    //self.navigationController.toolbar.opaque = NO;
     
     cameraController = [[CameraController alloc] init];
     if ([cameraController cameraAvailable:FrontCamera])
         [self newInputSource:FrontCamera];
     else if  ([cameraController cameraAvailable:BackCamera])
         [self newInputSource:BackCamera];
-    else [self newInputSource: NotACamera];
+    else
+        [self newInputSource: NotACamera];
     [cameraController configureForCaptureWithCaller:self];
 }
 
@@ -284,8 +294,11 @@ enum {
     frameCount = droppedCount = 0;
     [self updateOutputLabel];
     [self.view setNeedsDisplay];
-    if (inputSource != NotACamera)
+    if (inputSource != NotACamera) {
+        capturing = YES;
+        transforms.outputSize = transformedView.frame.size;
         [cameraController startCamera];
+    }
 }
 
 - (void) newInputSource: (cameras)newInput {
@@ -321,8 +334,6 @@ enum {
 #define INSET 3 // from screen edges
 #define MIN_TABLE_W 300
 
-#define TRANSTEXT_H 15
-
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     
@@ -335,8 +346,8 @@ enum {
     CGRect workingFrame = self.view.frame;
     workingFrame.origin.x = INSET;
     workingFrame.size.width -= 2*INSET;
-    workingFrame.origin.y = BELOW(self.navigationController.navigationBar.frame);
-    workingFrame.size.height -= workingFrame.origin.y + INSET;  // space at the bottom
+    workingFrame.origin.y = self.navigationController.navigationBar.frame.size.height;
+    workingFrame.size.height -= workingFrame.origin.y;  // space at the bottom
     CGRect f = workingFrame;
 
     [cameraController setVideoOrientation];
@@ -377,15 +388,17 @@ enum {
         } else {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
+            [cameraController cameraVideoSizeFor:CGSizeZero];
         }
         transformedView.backgroundColor = [UIColor redColor];
 
         f.origin.y += f.size.height;
         f.size.height = TRANSTEXT_H;
         outputLabel.backgroundColor = [UIColor orangeColor];
+        outputLabel.font = [UIFont boldSystemFontOfSize:TRANSTEXT_H-4];
         outputLabel.frame = f;
         
-        f.origin = CGPointZero;
+        f.origin = workingFrame.origin;
         f.size.height = BELOW(outputLabel.frame);
         outputView.backgroundColor = [UIColor yellowColor];
         outputView.frame = f;
@@ -393,13 +406,66 @@ enum {
         cameraPreview.frame = f;
         f.origin = CGPointZero;
         
-        f.origin.x = INSET;
+        f = workingFrame;
         f.origin.y = BELOW(outputView.frame) + SEP;
         f.size.width = outputView.frame.size.width;
         f.size.height = workingFrame.size.height - INSET - f.origin.y;
-        selectInputView.backgroundColor = [UIColor greenColor];
-        selectInputView.frame = f;
+        selectInputScroll.frame = f;
+        
+        CGFloat thumbH = SELECTION_THUMB_H;
+        if (thumbH > f.size.height)
+            thumbH = f.size.height;
+        int thumbsPerColumn = floor(f.size.height / thumbH);
+        f.origin = CGPointZero;
+        f.size.height = thumbsPerColumn * thumbH;
+        f.size.width = thumbH * floor(inputSources.count + NCAMERA + thumbsPerColumn - 1)/thumbsPerColumn;
+        selectInputButtonsView.frame = f;
+        selectInputScroll.contentSize = f.size;
 
+        for (int i=0; i<inputSources.count + NCAMERA; i++) {
+            int row = i % thumbsPerColumn;
+            int col = i / thumbsPerColumn;
+            CGRect bf = CGRectMake(col*thumbH, row*thumbH,
+                                   thumbH-1, thumbH);
+            
+            UIButton *but = [UIButton buttonWithType:UIButtonTypeCustom];
+            but.frame = bf;
+            but.tag = i;
+            but.titleLabel.textAlignment = NSTextAlignmentCenter;
+            but.titleLabel.numberOfLines = 0;
+            but.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+            but.titleLabel.adjustsFontSizeToFitWidth = YES;
+            
+            but.layer.borderWidth = 0.5;
+            but.layer.borderColor = [UIColor blueColor].CGColor;
+            but.layer.cornerRadius = 4.0;
+            
+            switch (i) {
+                case FrontCamera:
+                    [but setTitle:@"Front camera" forState:UIControlStateNormal];
+                    but.enabled = [cameraController cameraAvailable:i];
+                    but.backgroundColor = [UIColor blueColor];
+                    break;
+                case BackCamera:
+                    [but setTitle:@"Back camera" forState:UIControlStateNormal];
+                    but.enabled = [cameraController cameraAvailable:i];
+                    but.backgroundColor = [UIColor blueColor];
+                    break;
+                default: {
+                    InputSource *source = [inputSources objectAtIndex:i - NCAMERA];
+                    UIImage *thumb = [self imageWithImage:source.image
+                                             scaledToSize:but.frame.size];
+                    [but setTitle:source.label forState:UIControlStateNormal];
+                    [but setBackgroundImage:thumb forState:UIControlStateNormal];
+                }
+            }
+            but.titleLabel.font = [UIFont boldSystemFontOfSize:20];
+            but.showsTouchWhenHighlighted = YES;
+            [but addTarget:self action:@selector(doInputSelect:)
+                forControlEvents:UIControlEventTouchUpInside];
+            [selectInputButtonsView addSubview:but];
+        }
+        
         f.origin.x = RIGHT(outputView.frame) + SEP;
         f.origin.y = workingFrame.origin.y;
         f.size.width = workingFrame.size.width - INSET - f.origin.x;
@@ -420,6 +486,10 @@ enum {
     [transformsVC.tableView reloadData];    // ... needed
 }
 
+- (IBAction) doInputSelect:(UIButton *)button {
+    NSLog(@"button tapped: %ld", (long)button.tag);
+}
+
 - (void) updateOutputLabel {
     outputLabel.text = [NSString stringWithFormat:@"frame: %5d   dropped: %5d",
                          frameCount, droppedCount];
@@ -430,7 +500,7 @@ enum {
     NSLog(@"video tapped");
     if (selectedImage) // tapping non-moving image does nothing
         return;
-    if ([cameraController cameraOn]) {
+    if ([cameraController isCameraOn]) {
         [cameraController stopCamera];
     } else {
         [cameraController startCamera];
@@ -506,6 +576,8 @@ enum {
 }
 
 - (void) updateOutputImage:(UIImage *)newImage {
+    transformedView.image = newImage;
+    [transformedView setNeedsDisplay];
 #ifdef notyet
     UIImage *scaledImage = [SelectInputVC imageWithImage:newImage
                                             scaledToSize:transformedView.frame.size];
@@ -523,7 +595,10 @@ enum {
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
-    NSLog(@"captured");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateOutputLabel];
+    });
+    
     if (!capturing)
         return;
     
@@ -561,7 +636,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
 
 //    UIImage *transformed = [self->transforms executeTransformsWithContext:context];
-    UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+//    UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
 
     // Free up the context and color space
     CGContextRelease(context);
@@ -571,7 +646,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     dispatch_async(dispatch_get_main_queue(), ^{
 //        transformedView.image = capturedImage;
         [self updateThumb:capturedImage];
-        [self updateOutputImage:transformed];
+//        [self updateOutputImage:transformed];
+        [self updateOutputImage:capturedImage];
         [self updateOutputLabel];
     });
     
@@ -801,47 +877,6 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     }
     changeTransforms();
     transforms.listChanged = YES;
-}
-
-- (NSInteger)collectionView:(UICollectionView *)collectionView
-     numberOfItemsInSection:(NSInteger)section {
-    return inputSources.count;
-}
-
-- (__kindof UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
-                           cellForItemAtIndexPath:(NSIndexPath *)indexPath {
-    UICollectionViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:SELECTION_ID
-                                                                           forIndexPath:indexPath];
-    
-    InputSource *is = [inputSources objectAtIndex:indexPath.row];
-    UILabel *label = [[UILabel alloc] initWithFrame:cell.frame];
-    label.text = is.label;
-    label.numberOfLines = 0;
-    label.lineBreakMode = NSLineBreakByWordWrapping;
-    label.font = [UIFont systemFontOfSize:12];
-    
-    switch (is.sourceType) {
-        case FrontCamera:
-        case BackCamera: {
-        }
-        case NotACamera: {
-            UIImageView *iv = [[UIImageView alloc] initWithFrame:cell.frame];
-            iv.image = is.image;
-            iv.contentMode = UIViewContentModeScaleAspectFit;
-            [cell.contentView addSubview:iv];
-            break;
-        }
-    }
-    [cell.contentView addSubview:label];
-    [cell.contentView bringSubviewToFront:label];
-
-    return cell;
-}
-
-- (CGSize)collectionView:(UICollectionView *)collectionView
-                  layout:(UICollectionViewLayout*)collectionViewLayout
-  sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    return CGSizeMake(SELECT_THUMB_W, SELECT_THUMB_H);
 }
 
 #ifdef OLDCOMPLICATED
