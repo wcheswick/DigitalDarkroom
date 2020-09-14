@@ -142,7 +142,6 @@
     captureDevice.activeFormat = selectedFormat;
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-
     [captureDevice unlockForConfiguration];
     
     if (isPortrait) // this is a hack I can't figure out how to avoid

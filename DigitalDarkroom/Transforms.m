@@ -335,8 +335,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
               currentFormat.h);
         busy = YES;
         [self setupForTransforming];
-//        busy = NO;
-//        return nil;     // We don't even try, this probably took too long
+        busy = NO;
     } else if (paramsChanged) { // recompute one or more parameter changes
         [self updateParams];
     }

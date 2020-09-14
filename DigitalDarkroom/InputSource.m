@@ -13,12 +13,14 @@
 @synthesize sourceType;
 @synthesize label;
 @synthesize image;
+@synthesize button;
 
 - (id)init {
     self = [super init];
     if (self) {
         label = nil;
         image = nil;
+        button = nil;
     }
     return self;
 }

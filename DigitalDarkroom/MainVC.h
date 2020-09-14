@@ -10,8 +10,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
 
-#define NO_INPUT_SOURCE   (-1)
-
 @interface MainVC : UIViewController
     <UITableViewDelegate, UITableViewDataSource,
     UIScrollViewDelegate,
