@@ -13,11 +13,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef enum {
     FrontCamera,
-    BackCamera,
+    RearCamera,
     NotACamera,
 } cameras;
 
-#define NCAMERA (BackCamera+1)
+#define NCAMERA (RearCamera+1)
 #define ISCAMERA(i) ((i) < NCAMERA)
 
 @interface InputSource : NSObject {

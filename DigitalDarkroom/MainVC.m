@@ -40,7 +40,7 @@ enum {
 @property (nonatomic, strong)   UIView *selectInputButtonsView;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
-@property (nonatomic, strong)   UIButton *frontButton, *backButton;
+@property (nonatomic, strong)   UIButton *frontButton, *rearButton;
 
 @property (nonatomic, strong)   UIView *outputView;
 @property (nonatomic, strong)   UIImageView *transformedView;
@@ -69,7 +69,7 @@ enum {
 @synthesize outputView, transformedView, outputLabel;
 @synthesize selectInputScroll, selectInputButtonsView;
 @synthesize inputSources, currentSource;
-@synthesize frontButton, backButton;
+@synthesize frontButton, rearButton;
 
 @synthesize cameraController;
 @synthesize transformsNavVC;
@@ -88,9 +88,11 @@ enum {
         inputSources = [[NSMutableArray alloc] init];
         
         [self addCameraSource:FrontCamera label:@"Front camera"];
-        [self addCameraSource:BackCamera label:@"Back camera"];
-        [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-        [self addFileSource:@"ches.png" label:@"Ches"];
+        [self addCameraSource:RearCamera label:@"Rear camera"];
+        [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
+        [self addFileSource:@"ches.jpg" label:@"Ches"];
+        [self addFileSource:@"800px-RCA_Indian_Head_test_pattern.jpg"
+                      label:@"RCA test pattern"];
         [self addFileSource:@"ishihara6.jpeg" label:@"Ishibara 6"];
         [self addFileSource:@"cube.jpeg" label:@"Rubix cube"];
         [self addFileSource:@"ishihara8.jpeg" label:@"Ishibara 8"];
@@ -98,12 +100,14 @@ enum {
         [self addFileSource:@"ishihara45.jpeg" label:@"Ishibara 45"];
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
+        [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
     }
     NSLog(@"%lu input sources loaded", (unsigned long)inputSources.count);
     currentSource = nil;
-    frontButton = backButton = nil;
+    frontButton = rearButton = nil;
     cameraThumbView = nil;
-//    [self selectCamera:FrontCamera];
+    
+    cameraController = [[CameraController alloc] init];
     
     return self;
 }
@@ -151,7 +155,7 @@ enum {
     [self updateOutputLabel];
     
     outputView.userInteractionEnabled = YES;
-    outputView.backgroundColor = [UIColor blueColor];
+    outputView.backgroundColor = [UIColor whiteColor];
     [containerView addSubview:outputView];
     
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
@@ -278,21 +282,6 @@ enum {
     self.navigationController.navigationBar.opaque = YES;
 //    self.navigationController.toolbarHidden = YES;
     //self.navigationController.toolbar.opaque = NO;
-    
-    cameraController = [[CameraController alloc] init];
-    
-    if (!currentSource) {   // simulate button press for starting input source
-        InputSource *startSource;
-        
-        if ([cameraController cameraAvailable:FrontCamera]) {
-            startSource = [inputSources objectAtIndex:FrontCamera];
-        } else if ([cameraController cameraAvailable:BackCamera]) {
-            startSource = [inputSources objectAtIndex:BackCamera];
-        } else {    // use first image.
-            startSource = [inputSources objectAtIndex:NCAMERA];
-        }
-        [self doInputSelect:startSource.button];
-    }
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -304,11 +293,23 @@ enum {
     transforms.outputSize = transformedView.frame.size;
 }
 
-- (IBAction) doInputSelect:(UIButton *)button {
-    NSLog(@"input button tapped: %ld", (long)button.tag);
+- (void) setupSource:(InputSource *)newSource {
+    if (ISCAMERA(newSource.sourceType) && ! [cameraController cameraAvailable:newSource.sourceType]) {
+        UIAlertController *alert = [UIAlertController
+                                    alertControllerWithTitle:@"Camera not available"
+                                    message:nil
+                                    preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction* defaultAction = [UIAlertAction
+                                        actionWithTitle:@"Dismiss"
+                                        style:UIAlertActionStyleDefault
+                                        handler:^(UIAlertAction * action) {}
+                                        ];
+        [alert addAction:defaultAction];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
     
-    InputSource *newSource = [inputSources objectAtIndex:button.tag];
-
     if (currentSource && [currentSource.label isEqualToString:newSource.label])
         return;
     
@@ -323,7 +324,6 @@ enum {
     
     currentSource = newSource;
     if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController selectCaptureDevice:currentSource.sourceType];
         [cameraController configureForCaptureWithCaller:self];
         currentSource.button.highlighted = YES;
         capturing = YES;
@@ -331,6 +331,13 @@ enum {
     } else {
         [self useImage:currentSource.image];
     }
+}
+
+- (IBAction) doInputSelect:(UIButton *)button {
+    NSLog(@"input button tapped: %ld", (long)button.tag);
+    
+    InputSource *newSource = [inputSources objectAtIndex:button.tag];
+    [self setupSource:newSource];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -360,7 +367,7 @@ enum {
                           LATER);
     f.size.height = self.view.frame.size.height - f.origin.y - INSET;
     containerView.frame = f;
-    [cameraController setVideoOrientation];
+    //[cameraController setVideoOrientation];
     
     if (isPortrait) {   // video on the top
 #ifdef notdef
@@ -412,27 +419,35 @@ enum {
 
         f.origin = CGPointZero;
         f.size = outputView.frame.size;
-        if (ISCAMERA(currentSource.sourceType)) {
-            CGSize cameraSize = [cameraController cameraVideoSizeFor:f.size];
-            assert(cameraSize.width > 0);
-            f.size = cameraSize;
+        if ([cameraController camerasAvailable] && ISCAMERA(currentSource.sourceType)) {
+            [cameraController setupCamerasForCurrentOrientationAndSizeOf:f.size];
+            CGSize frontSize = [cameraController captureSizeFor:FrontCamera];
+            CGSize rearSize = [cameraController captureSizeFor:RearCamera];
+            
+            NSLog(@"for desired size %.0fx%.0f, front: %.0fx%.0f, rear: %.0fx%.0f",
+                  f.size.width, f.size.height,
+                  frontSize.width, frontSize.height,
+                  rearSize.width, rearSize.height);
+
+            f.size = (currentSource.sourceType == FrontCamera) ? frontSize : rearSize;
             transformedView.frame = f;
         } else {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
-            [cameraController cameraVideoSizeFor:CGSizeZero];
         }
-        f.origin.y = BELOW(transformedView.frame);
+        transforms.outputSize = transformedView.frame.size;
+        
+        f.origin.y = BELOW(transformedView.frame) + SEP;
         f.size.height = TRANSTEXT_H;
-        outputLabel.backgroundColor = [UIColor greenColor];
+        outputLabel.backgroundColor = [UIColor whiteColor];
         outputLabel.font = [UIFont boldSystemFontOfSize:TRANSTEXT_H-4];
         outputLabel.frame = f;
         
-        transformedView.backgroundColor = [UIColor orangeColor];
+        transformedView.backgroundColor = [UIColor whiteColor];
         SET_VIEW_HEIGHT(outputView, BELOW(outputLabel.frame));
         
         selectInputScroll.frame = outputView.frame;
-        SET_VIEW_Y(selectInputScroll, BELOW(outputView.frame));
+        SET_VIEW_Y(selectInputScroll, BELOW(outputView.frame)+SEP);
         
         CGFloat heightLeft = containerView.frame.size.height - selectInputScroll.frame.origin.y;
         CGFloat thumbH = SELECTION_THUMB_H;
@@ -454,8 +469,8 @@ enum {
             int col = i / thumbsPerColumn;
             
             UIButton *but = [UIButton buttonWithType:UIButtonTypeCustom];
-            but.frame = CGRectMake(col*thumbH, row*thumbH,
-                                   thumbH-1, thumbH);;
+            but.frame = CGRectMake(col*thumbH + 2*col, row*thumbH + 2*row,
+                                   thumbH-1, thumbH);
             but.tag = i;
             but.titleLabel.textAlignment = NSTextAlignmentCenter;
             but.titleLabel.numberOfLines = 0;
@@ -463,7 +478,7 @@ enum {
             but.titleLabel.adjustsFontSizeToFitWidth = YES;
             
             but.layer.borderWidth = 0.5;
-            but.layer.borderColor = [UIColor blueColor].CGColor;
+            but.layer.borderColor = [UIColor blackColor].CGColor;
             but.layer.cornerRadius = 4.0;
             
             InputSource *source = [inputSources objectAtIndex:i];
@@ -471,22 +486,24 @@ enum {
             switch (i) {
                 case FrontCamera:
                     [but setTitle:@"Front camera" forState:UIControlStateNormal];
+                    [but setTitle:@"Front camera (unavailable)" forState:UIControlStateDisabled];
                     but.enabled = [cameraController cameraAvailable:i];
                     but.backgroundColor = [UIColor blueColor];
                     frontButton = but;
                     break;
-                case BackCamera:
-                    [but setTitle:@"Back camera" forState:UIControlStateNormal];
+                case RearCamera:
+                    [but setTitle:@"Rear camera" forState:UIControlStateNormal];
+                    [but setTitle:@"Rear camera (unavailable)" forState:UIControlStateDisabled];
                     but.enabled = [cameraController cameraAvailable:i];
                     but.backgroundColor = [UIColor blueColor];
-                    backButton = but;
+                    rearButton = but;
                     break;
                 default: {
                     UIImage *thumb = [self centerImage:source.image inSize:but.frame.size];
                     if (!thumb)
                         continue;
                     [but setTitle:source.label forState:UIControlStateNormal];
-                    but.backgroundColor = [UIColor yellowColor];
+                    but.backgroundColor = [UIColor whiteColor];
                     [but setBackgroundImage:thumb forState:UIControlStateNormal];
                 }
             }
@@ -501,6 +518,20 @@ enum {
     
     [transformsNavVC.view setNeedsDisplay];
     [transformsVC.tableView reloadData];    // ... needed
+    
+    if (!currentSource) {   // simulate button press for starting input source
+        InputSource *startSource;
+        
+        if ([cameraController cameraAvailable:FrontCamera]) {
+            startSource = [inputSources objectAtIndex:FrontCamera];
+        } else if ([cameraController cameraAvailable:RearCamera]) {
+            startSource = [inputSources objectAtIndex:RearCamera];
+        } else {    // use first image.
+            startSource = [inputSources objectAtIndex:NCAMERA];
+        }
+        [self setupSource:startSource];
+    }
+
 }
 
 - (void) updateOutputLabel {
@@ -547,23 +578,26 @@ enum {
 #endif
 
 - (UIImage *)centerImage:(UIImage *)image inSize:(CGSize)size {
-    float scale;
-    CGRect targetRect;
-    
-    CGFloat screenScale = [[UIScreen mainScreen] scale];
+    //CGFloat screenScale = [[UIScreen mainScreen] scale];
     
     float xScale = size.width/image.size.width;
     float yScale = size.height/image.size.height;
-    scale = MIN(xScale,yScale);
-    if (xScale < yScale) {  // slop above and below
-        targetRect.origin.x = 0;
-        targetRect.origin.y = 0;
-    } else {
-        targetRect.origin.x = 0;
-        targetRect.origin.y = 0;
-    }
-    targetRect.size = size;
+    float scale = MIN(xScale,yScale);
     
+    CGRect scaledRect;
+    scaledRect.size.width = scale*image.size.width;
+    scaledRect.size.height = scale*image.size.height;
+    //NSLog(@"scale is %.2f", scale);
+    if (xScale < yScale) {  // slop above and below
+        scaledRect.origin.x = 0;
+        scaledRect.origin.y = (size.height - scaledRect.size.height)/2.0;
+    } else {
+        scaledRect.origin.x = (size.width - scaledRect.size.width)/2.0;
+        scaledRect.origin.y = 0;
+    }
+    
+    //NSLog(@"scaled image size: %.0fx%.0f", scaledRect.size.width, scaledRect.size.height);
+
     UIGraphicsBeginImageContextWithOptions(size, NO, 0.0);
     CGContextRef ctx = UIGraphicsGetCurrentContext();
     if (!ctx) {
@@ -573,8 +607,9 @@ enum {
     CGContextSetFillColorWithColor(ctx, [UIColor clearColor].CGColor);
     CGContextFillRect(ctx, CGRectMake(0, 0, size.width, size.height));
     //CGContextConcatCTM(ctx, CGAffineTransformMakeScale(scale, scale));
-    [image drawInRect:targetRect];
+    [image drawInRect:scaledRect];
     UIImage *newImage = UIGraphicsGetImageFromCurrentImageContext();
+    //NSLog(@"new image size: %.0fx%.0f", newImage.size.width, newImage.size.height);
     UIGraphicsEndImageContext();
     return newImage;
 }

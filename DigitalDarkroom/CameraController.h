@@ -19,17 +19,22 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 
-- (void) selectCaptureDevice: (cameras) c;
-- (CGSize) cameraVideoSizeFor: (CGSize) s;
-- (void) setVideoOrientation;
+- (void) setupCamerasForCurrentOrientationAndSizeOf:(CGSize) s;
+- (CGSize) captureSizeFor:(cameras) camera;
+- (void) selectCamera:(cameras) camera;
+
+- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;
+
+//- (void) selectCaptureDevice: (cameras) c;
 - (void) setFrame: (CGRect) frame;
 
 - (void) startCamera;
 - (void) stopCamera;
 - (BOOL) isCameraOn;
 - (BOOL) cameraAvailable: (cameras) c;
+- (BOOL) camerasAvailable;
 
-- (NSString *) configureForCaptureWithCaller: (id<AVCaptureVideoDataOutputSampleBufferDelegate>)caller;
+
 @end
 
 NS_ASSUME_NONNULL_END
