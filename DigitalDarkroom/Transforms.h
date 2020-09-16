@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              volatile BOOL listChanged, paramsChanged, busy;
 @property (assign)              CGSize outputSize;
 
-- (UIImage *) executeTransformsWithContext:(CGContextRef)context;
+// - (UIImage *) executeTransformsWithContext:(CGContextRef)context;
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 
 @end

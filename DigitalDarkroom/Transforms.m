@@ -6,6 +6,9 @@
 //  Copyright © 2019 Cheswick.com. All rights reserved.
 //
 
+// color effect filters from apple:
+// https://developer.apple.com/documentation/coreimage/methods_and_protocols_for_filter_creation/color_effect_filters?language=objc
+
 #import "Transforms.h"
 #import "Defines.h"
 
@@ -289,46 +292,23 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image {
     CGImageRef imageRef = [image CGImage];
-    NSUInteger width = CGImageGetWidth(imageRef);
-    NSUInteger height = CGImageGetHeight(imageRef);
+    int width = (int)CGImageGetWidth(imageRef);
+    int height = (int)CGImageGetHeight(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    NSUInteger bytesPerPixel = BYTES_PER_PIXEL;
-    NSUInteger bytesPerRow = bytesPerPixel * width;
-    NSUInteger bitsPerComponent = BITS_PER_COLOR;
+    
+    int bytesPerPixel = BYTES_PER_PIXEL;
+    int bytesPerRow = bytesPerPixel * width;
+    int bitsPerComponent = BITS_PER_COLOR;
     CGContextRef context = CGBitmapContextCreate(NULL, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace, BITMAP_OPTS);
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    UIImage *transformed = [self executeTransformsWithContext:context];
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-    return transformed;
-}
-
-- (UIImage *) executeTransformsWithContext:(CGContextRef)context {
-    assert(outputSize.width > 0);   // must be set before call
-    size_t channelSize = CGBitmapContextGetBitsPerComponent(context);
-    size_t pixelSize = CGBitmapContextGetBitsPerPixel(context);
     
-    // These transforms make certain assumptions about the bitmaps encountered
-    // that greatly speed up and simplify them.  Make sure these assumptions
-    // are valid.
-    
-    assert(channelSize == BITS_PER_COLOR);   // eight bits per color
-    assert(pixelSize == channelSize * sizeof(Pixel));   // GBRA is a Pixel
-    
-    int w = (int)CGBitmapContextGetWidth(context);
-    int h = (int)CGBitmapContextGetHeight(context);
-    int bpr = (int)CGBitmapContextGetBytesPerRow(context);
-    
-    if (listChanged || currentFormat.bytes_per_row == 0 |
-        currentFormat.bytes_per_row != bpr ||
-        currentFormat.w != w ||
-        currentFormat.h != h) {     // first or changed format, compute new transforms
+    if (listChanged) {
         NSLog(@">>> format was %4d %4d %4d",
               currentFormat.bytes_per_row,
               currentFormat.w,
               currentFormat.h);
-        currentFormat = (Image_t){w,h,bpr,(Pixel *)0};
+        currentFormat = (Image_t){width,height,bytesPerRow,(Pixel *)0};
         NSLog(@">>> format is  %4d %4d %4d",
               currentFormat.bytes_per_row,
               currentFormat.w,
@@ -343,7 +323,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     int sourceImageIndex = 0;   // incoming image is at zero
     sources[sourceImageIndex] = currentFormat;
     sources[sourceImageIndex].image = CGBitmapContextGetData(context);
-
+    
     // We can have extra bytes at the end of a bitmap row, but it has to come out
     // to an integer number of Pixels.  The code assumes this.
     assert(sources[sourceImageIndex].bytes_per_row % sizeof(Pixel) == 0); //no slop on the rows
@@ -358,7 +338,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     Image_t *dest = 0;
     if (executeList.count == 0)
         assert(sourceImageIndex == 0);
-
+    
     for (int i=0; i<executeList.count; i++) {
         assert(executeList.count > 0);
         source = &sources[sourceImageIndex];
@@ -414,7 +394,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                         }
                     }
                 }
-//                assert(p - transform.remapTable <= transform.)
+                //                assert(p - transform.remapTable <= transform.)
                 sourceImageIndex = 1 - sourceImageIndex;
                 break;
             case AreaTrans:
@@ -430,22 +410,15 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                 break;
         }
     }
-#ifdef NOMORE   // just copy the image into place
-    // temp kludge, copy bytes back into main context, if needed
-    if (sourceImageIndex) {
-        assert(executeList.count > 0);
-        assert(dest != 0);
-        assert(dest->image != (Pixel *)1);
-        // XXX bad exec addr 1
-        memcpy(dest->image, sources[0].image,
-               dest->w * dest->h * sizeof(Pixel));
-    }
-#endif
+    
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    UIImage *out = [UIImage imageWithCGImage:quartzImage];
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
     CGImageRelease(quartzImage);
-    return out;
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
+    return transformed;
 }
 
 - (void) addAreaTransforms {

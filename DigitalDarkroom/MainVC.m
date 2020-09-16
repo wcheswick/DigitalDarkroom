@@ -36,6 +36,8 @@ enum {
 @property (nonatomic, strong)   UIImageView *inputThumb;
 @property (nonatomic, strong)   UIImageView *cameraThumbView;
 
+@property (nonatomic, strong)   UIView *previewView;
+
 @property (nonatomic, strong)   UIScrollView *selectInputScroll;
 @property (nonatomic, strong)   UIView *selectInputButtonsView;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
@@ -66,6 +68,7 @@ enum {
 
 @synthesize containerView;
 @synthesize inputView, inputThumb, cameraThumbView;
+@synthesize previewView;
 @synthesize outputView, transformedView, outputLabel;
 @synthesize selectInputScroll, selectInputButtonsView;
 @synthesize inputSources, currentSource;
@@ -102,12 +105,12 @@ enum {
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
     }
-    NSLog(@"%lu input sources loaded", (unsigned long)inputSources.count);
     currentSource = nil;
     frontButton = rearButton = nil;
     cameraThumbView = nil;
     
     cameraController = [[CameraController alloc] init];
+    cameraController.delegate = self;
     
     return self;
 }
@@ -324,7 +327,7 @@ enum {
     
     currentSource = newSource;
     if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController configureForCaptureWithCaller:self];
+        [cameraController selectCamera:currentSource.sourceType];
         currentSource.button.highlighted = YES;
         capturing = YES;
         [cameraController startCamera];
@@ -367,7 +370,6 @@ enum {
                           LATER);
     f.size.height = self.view.frame.size.height - f.origin.y - INSET;
     containerView.frame = f;
-    //[cameraController setVideoOrientation];
     
     if (isPortrait) {   // video on the top
 #ifdef notdef
@@ -431,12 +433,17 @@ enum {
 
             f.size = (currentSource.sourceType == FrontCamera) ? frontSize : rearSize;
             transformedView.frame = f;
+
         } else {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
         }
         transforms.outputSize = transformedView.frame.size;
         
+        previewView = transformedView;
+        AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformedView.layer;
+        cameraController.captureVideoPreviewLayer = previewLayer;
+
         f.origin.y = BELOW(transformedView.frame) + SEP;
         f.size.height = TRANSTEXT_H;
         outputLabel.backgroundColor = [UIColor whiteColor];
@@ -477,9 +484,9 @@ enum {
             but.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
             but.titleLabel.adjustsFontSizeToFitWidth = YES;
             
-            but.layer.borderWidth = 0.5;
+            but.layer.borderWidth = 2.0;
             but.layer.borderColor = [UIColor blackColor].CGColor;
-            but.layer.cornerRadius = 4.0;
+            but.layer.cornerRadius = 6.0;
             
             InputSource *source = [inputSources objectAtIndex:i];
 
@@ -488,14 +495,14 @@ enum {
                     [but setTitle:@"Front camera" forState:UIControlStateNormal];
                     [but setTitle:@"Front camera (unavailable)" forState:UIControlStateDisabled];
                     but.enabled = [cameraController cameraAvailable:i];
-                    but.backgroundColor = [UIColor blueColor];
+                    but.backgroundColor = [UIColor whiteColor];
                     frontButton = but;
                     break;
                 case RearCamera:
                     [but setTitle:@"Rear camera" forState:UIControlStateNormal];
                     [but setTitle:@"Rear camera (unavailable)" forState:UIControlStateDisabled];
                     but.enabled = [cameraController cameraAvailable:i];
-                    but.backgroundColor = [UIColor blueColor];
+                    but.backgroundColor = [UIColor whiteColor];
                     rearButton = but;
                     break;
                 default: {
@@ -566,17 +573,6 @@ enum {
     [self doRemoveLastTransform];
 }
 
-#ifdef NOMORE
-- (void) selectCamera:(cameras) c {
-    NSLog(@"use camera %d", c);
-    inputCamera = c;
-    selectedImage = nil;
-    [self configureCamera];
-    capturing = YES;
-    [cameraController startCamera];
-}
-#endif
-
 - (UIImage *)centerImage:(UIImage *)image inSize:(CGSize)size {
     //CGFloat screenScale = [[UIScreen mainScreen] scale];
     
@@ -634,7 +630,6 @@ enum {
     });
 }
 
-
 - (void) updateThumb: (UIImage *)image {
     if (currentSource && ISCAMERA(currentSource.sourceType)) {
         UIButton *currentButton = currentSource.button;
@@ -655,6 +650,33 @@ enum {
     [transformedView setNeedsDisplay];
 }
 
+- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
+    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+
+    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
+    size_t width = CVPixelBufferGetWidth(imageBuffer);
+    size_t height = CVPixelBufferGetHeight(imageBuffer);
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
+                                                 bytesPerRow, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+
+//    float xScale = transformedView.frame.size.width / width;
+//    float yScale = transformedView.frame.size.height / height;
+    
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
+                                         scale:(CGFloat)1.0
+                                   orientation:[cameraController imageOrientation]];
+    CGImageRelease(quartzImage);
+    return image;
+}
+
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
@@ -669,45 +691,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     if (transforms.busy) {  // drop the frame
         return;
     }
-//    dispatch_async(dispatch_get_main_queue(), ^{    // XXXXX always?
-//      [self->activeListVC.tableView reloadData];
-//});
-    
-//    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
-    // Lock the base address of the pixel buffer
-    CVPixelBufferRef imageBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
-    
-    // Get the number of bytes per row for the pixel buffer
-    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
 
-    // Get the number of bytes per row for the pixel buffer
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-    
-    // Get the pixel buffer width and height
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
-
-    // Create a device-dependent RGB color space
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
-                                                  bytesPerRow, colorSpace,
-                                                 BITMAP_OPTS);
-    // get the captured image for thumbnail display
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-
-    UIImage *capturedImage = [UIImage imageWithCGImage:quartzImage];
-    CGImageRelease(quartzImage);
-     
     dispatch_async(dispatch_get_main_queue(), ^{
-//        transformedView.image = capturedImage;
+        UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
         [self updateThumb:capturedImage];
-//        [self updateOutputImage:transformed];
-        [self updateOutputImage:capturedImage];
-        [self updateOutputLabel];
+        UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        [self updateOutputImage:transformed];
+        //[self updateOutputImage:capturedImage];
     });
     
 //    CMFormatDescriptionRef formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer);
