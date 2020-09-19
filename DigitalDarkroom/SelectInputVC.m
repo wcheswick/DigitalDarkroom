@@ -202,6 +202,32 @@
 
     capturing = YES;
 }
+- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
+    
+    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+
+    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
+    size_t width = CVPixelBufferGetWidth(imageBuffer);
+    size_t height = CVPixelBufferGetHeight(imageBuffer);
+    //NSLog(@"incoming image: %zu x %zu, AR %.2f", width, height, (float)width/(float)height);
+
+    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
+                                                 bytesPerRow, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    CGContextRelease(context);
+
+//    float xScale = transformedView.frame.size.width / width;
+//    float yScale = transformedView.frame.size.height / height;
+    
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
+                                         scale:(CGFloat)1.0
+                                   orientation:[cameraController imageOrientation]];
+    CGImageRelease(quartzImage);
+    return image;
+}
 
 #endif
 

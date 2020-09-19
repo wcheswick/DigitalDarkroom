@@ -125,7 +125,7 @@ Image_t sources[2];
 #define TI(x,y,w) ((x) + (w) * (y))
 
 - (void) setRemapForTransform:(Transform *)transform
-                            x:(int)x y:(int)y
+                            x:(size_t)x y:(size_t)y
                          from:(RemapPoint_t) point {
     if (point.x < 0)
         point.x = 0;
@@ -214,8 +214,8 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                     }
                 assert(i <= entryCount);
             } else if (transform.remapPolarF) {     // polar remap
-                int centerX = currentFormat.w/2;
-                int centerY = currentFormat.h/2;
+                size_t centerX = currentFormat.w/2;
+                size_t centerY = currentFormat.h/2;
                 for (int x=0; x<centerX; x++) {
                     for (int y=0; y<centerY; y++) {
                         double r = hypot(x, y);
@@ -287,29 +287,44 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     }
 }
 
-#define BITS_PER_COLOR  8
-#define BYTES_PER_PIXEL 4
-
 - (UIImage *) executeTransformsWithImage:(UIImage *) image {
     CGImageRef imageRef = [image CGImage];
-    int width = (int)CGImageGetWidth(imageRef);
-    int height = (int)CGImageGetHeight(imageRef);
+    CGImageRetain(imageRef);
+    size_t width = (int)CGImageGetWidth(imageRef);
+    size_t height = (int)CGImageGetHeight(imageRef);
+    size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
+    size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
+    assert(bitsPerPixel/8 == sizeof(Pixel));
+    size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
+    assert(bitsPerComponent == 8);
+    
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(NULL, width, height,
+                                                 bitsPerComponent, bytesPerRow,
+                                                 colorSpace, BITMAP_OPTS);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);\
+    
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
+    CGImageRelease(quartzImage);
+    return transformed;
+#ifdef notdef
     
     int bytesPerPixel = BYTES_PER_PIXEL;
     int bytesPerRow = bytesPerPixel * width;
     int bitsPerComponent = BITS_PER_COLOR;
-    CGContextRef context = CGBitmapContextCreate(NULL, width, height,
-                                                 bitsPerComponent, bytesPerRow, colorSpace, BITMAP_OPTS);
-    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    
+#endif
+#ifdef notdef
     if (listChanged) {
-        NSLog(@">>> format was %4d %4d %4d",
+        NSLog(@">>> format was %4zu %4zu %4zu",
               currentFormat.bytes_per_row,
               currentFormat.w,
               currentFormat.h);
-        currentFormat = (Image_t){width,height,bytesPerRow,(Pixel *)0};
-        NSLog(@">>> format is  %4d %4d %4d",
+        currentFormat = (Image_t){image.size.width,image.size.height,bytesPerRow,(Pixel *)0};
+        NSLog(@">>> format is  %4zu %4zu %4zu",
               currentFormat.bytes_per_row,
               currentFormat.w,
               currentFormat.h);
@@ -419,6 +434,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     CGImageRelease(quartzImage);
     //    CIImage * imageFromCoreImageLibrary = [CIImage imageWithCVPixelBuffer: pixelBuffer];
     return transformed;
+#endif
 }
 
 - (void) addAreaTransforms {
@@ -428,7 +444,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     lastTransform = [Transform areaTransform: @"Test frame"
                                  description: @"Test frame"
-                                  remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
+                                  remapImage:^void (BitmapIndex_t *table, size_t w, size_t h, int p) {
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
                 if (x <= 10 || y <= 10 || x > w-10 || y > h-10)
@@ -446,7 +462,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     [transformList addObject:[Transform colorTransform: @"Colorize"
                                            description: @"Add color"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
@@ -457,9 +473,9 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
         
         lastTransform = [Transform areaTransform: @"remap test"
                                          description: @"testing"
-                                          remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
+                                          remapImage:^void (BitmapIndex_t *table, size_t w, size_t h, int p) {
                 for (int y=0; y<h; y++) {
-                    for (int x=w-100; x<w; x++) {
+                    for (int x=(int)w-100; x<(int)w; x++) {
                         table[TI(x,y,w)] = TI(x, y, w);
                         table[TI(x - (w-100),y,w)] = TI(x, y, w);
                     }
@@ -470,8 +486,8 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
-                                  remapImage:^void (BitmapIndex_t *table, int w, int h, int p) {
-        int centerY = h/2;
+                                  remapImage:^void (BitmapIndex_t *table, size_t w, size_t h, int p) {
+        size_t centerY = h/2;
         for (int y=0; y<h; y++) {
             float display_frac;
             if (y <= centerY)
@@ -485,7 +501,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
             int xw = display_frac * (float)w;
             int xInset = (w - xw)/2.0;
             int firstX = xInset;
-            int lastX = w - xInset;
+            int lastX = (int)w - xInset;
             float xStride;
             xStride = w * (1.0 - display_frac);
             xStride = 1;
@@ -570,7 +586,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
 
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
-                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int pixsize) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, size_t x, size_t y, int pixsize) {
         return PI(im, (x/pixsize)*pixsize, (y/pixsize)*pixsize);
     }];
     lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
@@ -578,7 +594,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     
     lastTransform = [Transform areaTransform: @"Mirror right"
                                   description: @"Reflect the right half of the screen on the left"
-                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, size_t x, size_t y, int v) {
         if (x < im->w/2)
             return PI(im, im->w - 1 - x, y);
         else
@@ -589,8 +605,8 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     [transformList addObject:[Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
                                         areaFunction: ^(Image_t *src, Image_t *dest, int p) {
-        int maxY = src->h;
-        int maxX = src->w;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
         //        int bpr = src->bytes_per_row;
         int x, y;
         
@@ -645,8 +661,8 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     [transformList addObject:[Transform areaTransform: @"Negative Sobel"
                                           description: @"Negative Sobel filter"
                                         areaFunction: ^(Image_t *src, Image_t *dest, int p) {
-        int maxY = src->h;
-        int maxX = src->w;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
 
         int x, y;
         for (y=1; y<maxY-1; y++) {
@@ -697,7 +713,7 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
         
     lastTransform = [Transform areaTransform: @"Mirror left"
                                   description: @"Reflect the left half of the screen to the right"
-                                        remapPixel:^BitmapIndex_t (Image_t *im, int x, int y, int v) {
+                                        remapPixel:^BitmapIndex_t (Image_t *im, size_t x, size_t y, int v) {
         if (x < im->w/2)
             return PI(im, x,y);
         else
@@ -732,11 +748,11 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
                                   description: @""
                              remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
         double r1 = sqrt(r*MAX_R);
-        int y = CenterY+(int)(r1*sin(a));
+        int y = (int)CenterY+(int)(r1*sin(a));
         if (y < 0)
             y = 0;
         else if (y >= currentFormat.h)
-            y = currentFormat.h - 1;
+            y = (int)currentFormat.h - 1;
         return (RemapPoint_t){CenterX + (int)(r1*cos(a)), y};
     }];
     [transformList addObject:lastTransform];
@@ -833,8 +849,8 @@ stripe(Image_t *buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                                   description: @"Tom Duff's logo transform"
                                                 areaFunction: ^(Image_t *src, Image_t *dest, int p) {
-        int maxY = src->h;
-        int maxX = src->w;
+        size_t maxY = src->h;
+        size_t maxX = src->w;
         int x, y;
             
         for (y=0; y<maxY; y++) {
@@ -850,7 +866,7 @@ stripe(Image_t *buf, int x, int p0, int p1, int c){
 
         for (y=0; y<maxY; y+= hgt) {
             if (y+hgt>maxY)
-                hgt = maxY-y;
+                hgt = (int)maxY-(int)y;
             for (x=0; x < maxX; x++) {
                 c=0;
                 for(y0=0; y0<hgt; y0++)
@@ -894,7 +910,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     [transformList addObject:[Transform colorTransform: @"Colorize"
                                            description: @"Add color"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
@@ -904,7 +920,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     [transformList addObject:[Transform colorTransform: @"Solarize"
                                            description: @""
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     *destRow++ = SETRGB(    p.r < Z/2 ? p.r : Z-p.r,
@@ -915,7 +931,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     [transformList addObject:[Transform colorTransform: @"Luminance"
                                            description: @"Convert to brightness"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     int v = LUM(p);
@@ -927,7 +943,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     [transformList addObject:[Transform colorTransform: @"Truncate pixels"
                                            description: @"Truncate pixel values"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     *destRow++ = SETRGB(p.r&TMASK, p.g&TMASK, p.b&TMASK);
@@ -936,7 +952,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     [transformList addObject:[Transform colorTransform: @"Swap colors"
                                            description: @"R -> G -> B -> Ryy"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     *destRow++ = SETRGB(p.g, p.b, p.r);
@@ -945,7 +961,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     [transformList addObject:[Transform colorTransform: @"Negative"
                                            description: @"Invert pixel colors"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     *destRow++ = SETRGB(Z-p.r, Z-p.g, Z-p.b);
@@ -954,7 +970,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     [transformList addObject:[Transform colorTransform: @"Brighten" // XXX needs parameter
                                            description: @"Make brighter"
-                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, int w) {
+                                          rowTransform:^(Pixel * _Nonnull srcRow, Pixel * _Nonnull destRow, size_t w) {
                 for (int x=0; x<w; x++) {
                     Pixel p = *srcRow++;
                     *destRow++ = SETRGB(p.r+(Z-p.r)/8,

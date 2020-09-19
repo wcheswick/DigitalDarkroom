@@ -154,6 +154,8 @@
     [captureSession beginConfiguration];
     for (AVCaptureDeviceInput *input in captureSession.inputs)
         [captureSession removeInput:input];
+    
+    captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession addInput:input];
     [captureSession commitConfiguration];
 }
@@ -169,7 +171,11 @@
     AVCaptureVideoDataOutput *videoOutput = [[AVCaptureVideoDataOutput alloc] init];
     assert(videoOutput);
     
-    videoOutput.videoSettings = @{ (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA) };
+    videoOutput.automaticallyConfiguresOutputBufferDimensions = YES;
+    videoOutput.videoSettings = @{
+        (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
+    };
+    
     dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
     [videoOutput setSampleBufferDelegate:delegate queue:queue];
     videoOutput.alwaysDiscardsLateVideoFrames = YES;

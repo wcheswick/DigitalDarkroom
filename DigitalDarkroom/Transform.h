@@ -28,8 +28,8 @@ typedef struct {
 } Pixel;
 
 typedef struct Image_t {
-    int w, h;
-    int bytes_per_row;
+    size_t w, h;
+    size_t bytes_per_row;
     Pixel *image;
 } Image_t;
 
@@ -37,7 +37,7 @@ typedef struct Image_t {
 // To be translated to a BitmapIndex_t after range checking.
 
 typedef struct {
-    int x,y;
+    size_t x,y;
 } RemapPoint_t;
 
 // PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
@@ -45,14 +45,14 @@ typedef UInt32 PixelIndex_t;
 
 // BitmapIndex_t: index into bitmap, 0..EOR X 0..h-1
 // where EOR is number of bytes in row / sizeof(Pixel)
-typedef int32_t BitmapIndex_t;
+typedef size_t BitmapIndex_t;
 
 typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest, int p);
-typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, int w);
-typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, int x, int y, int p);
+typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, size_t w);
+typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, size_t x, size_t y, int p);
 typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);
-typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapIndex_t *table, int x, int y, int p);
+typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapIndex_t *table, size_t x, size_t y, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();

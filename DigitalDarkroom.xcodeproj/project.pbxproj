@@ -212,7 +212,7 @@
 		FBF5B39E232E973E00DDFC4E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1030;
+				LastUpgradeCheck = 1200;
 				ORGANIZATIONNAME = Cheswick.com;
 				TargetAttributes = {
 					FBF5B3A5232E973F00DDFC4E = {

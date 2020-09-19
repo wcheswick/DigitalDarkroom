@@ -27,6 +27,7 @@ enum {
     ActiveTag,
 } tableTags;
 
+
 @interface MainVC ()
 
 @property (nonatomic, strong)   CameraController *cameraController;
@@ -46,7 +47,8 @@ enum {
 
 @property (nonatomic, strong)   UIView *outputView;
 @property (nonatomic, strong)   UIImageView *transformedView;
-@property (nonatomic, strong)   UILabel *outputLabel;
+@property (nonatomic, strong)   UILabel *statsLabel;
+@property (nonatomic, strong)   NSTimer *statsTimer;
 
 @property (nonatomic, strong)   UINavigationController *transformsNavVC;
 @property (nonatomic, strong)   UITableViewController *transformsVC;
@@ -55,7 +57,8 @@ enum {
 @property (nonatomic, strong)   UITableViewController *activeListVC;
 @property (nonatomic, strong)   UIBarButtonItem *undoButton, *trashButton;
 
-@property (assign)              int frameCount, droppedCount;
+@property (assign)              volatile int frameCount, droppedCount, busyCount;
+@property (assign)              float cps, dps, mps;
 
 @property (nonatomic, strong)   UIBarButtonItem *addButton;
 
@@ -69,7 +72,7 @@ enum {
 @synthesize containerView;
 @synthesize inputView, inputThumb, cameraThumbView;
 @synthesize previewView;
-@synthesize outputView, transformedView, outputLabel;
+@synthesize outputView, transformedView, statsLabel;
 @synthesize selectInputScroll, selectInputButtonsView;
 @synthesize inputSources, currentSource;
 @synthesize frontButton, rearButton;
@@ -77,7 +80,8 @@ enum {
 @synthesize cameraController;
 @synthesize transformsNavVC;
 @synthesize transformsVC, activeListVC;
-@synthesize frameCount, droppedCount;
+@synthesize frameCount, droppedCount, busyCount, cps, dps, mps;
+@synthesize statsTimer;
 @synthesize transforms;
 @synthesize addButton;
 @synthesize undoButton, trashButton;
@@ -150,12 +154,9 @@ enum {
     transformedView = [[UIImageView alloc] init];
     [outputView addSubview:transformedView];
     
-    outputLabel = [[UILabel alloc] init];
-    outputLabel.font = [UIFont
-                        monospacedSystemFontOfSize:transformedView.frame.size.height-4
-                        weight:UIFontWeightMedium];
-    [outputView addSubview:outputLabel];
-    [self updateOutputLabel];
+    statsLabel= [[UILabel alloc] init];
+    statsLabel.backgroundColor = [UIColor whiteColor];
+    [outputView addSubview:statsLabel];
     
     outputView.userInteractionEnabled = YES;
     outputView.backgroundColor = [UIColor whiteColor];
@@ -290,10 +291,23 @@ enum {
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     
-    frameCount = droppedCount = 0;
-    [self updateOutputLabel];
+    frameCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     transforms.outputSize = transformedView.frame.size;
+    
+#define TICK_INTERVAL   1.0
+    statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
+                                                target:self
+                                              selector:@selector(doTick:)
+                                              userInfo:NULL
+                                               repeats:YES];
+}
+
+- (void) doTick:(NSTimer *)sender {
+    [self updateStatsLabel: frameCount/TICK_INTERVAL
+                       droppedPerSec:droppedCount/TICK_INTERVAL
+                       busyPerSec:busyCount/TICK_INTERVAL];
+    frameCount = droppedCount = busyCount = 0;
 }
 
 - (void) setupSource:(InputSource *)newSource {
@@ -444,14 +458,18 @@ enum {
         AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformedView.layer;
         cameraController.captureVideoPreviewLayer = previewLayer;
 
+        f.origin.x = 0;
         f.origin.y = BELOW(transformedView.frame) + SEP;
         f.size.height = TRANSTEXT_H;
-        outputLabel.backgroundColor = [UIColor whiteColor];
-        outputLabel.font = [UIFont boldSystemFontOfSize:TRANSTEXT_H-4];
-        outputLabel.frame = f;
-        
+        f.size.width = transformedView.frame.size.width;
+        statsLabel.frame = f;
+        statsLabel.font = [UIFont
+                            monospacedSystemFontOfSize:TRANSTEXT_H-4
+                            weight:UIFontWeightMedium];
+        statsLabel.backgroundColor = [UIColor yellowColor];
+
         transformedView.backgroundColor = [UIColor whiteColor];
-        SET_VIEW_HEIGHT(outputView, BELOW(outputLabel.frame));
+        SET_VIEW_HEIGHT(outputView, BELOW(statsLabel.frame));
         
         selectInputScroll.frame = outputView.frame;
         SET_VIEW_Y(selectInputScroll, BELOW(outputView.frame)+SEP);
@@ -462,7 +480,7 @@ enum {
             thumbH = heightLeft;
         int thumbsPerColumn = floor(heightLeft / thumbH);
         thumbH = heightLeft / (CGFloat)thumbsPerColumn;
-        NSLog(@"thumbs wanted %.0d, got %.0f actual %.0f, %d thumbs",
+        NSLog(@"thumbs wanted %.0d, got %.0f actual %.0f, %d thumb row(s)",
               SELECTION_THUMB_H, heightLeft, thumbH, thumbsPerColumn);
         f.origin = CGPointZero;
         f.size.height = thumbsPerColumn * thumbH;
@@ -538,13 +556,14 @@ enum {
         }
         [self setupSource:startSource];
     }
-
 }
 
-- (void) updateOutputLabel {
-    outputLabel.text = [NSString stringWithFormat:@"frame: %5d   dropped: %5d",
-                         frameCount, droppedCount];
-    [outputLabel setNeedsDisplay];
+- (void) updateStatsLabel: (float) fps droppedPerSec:(float)dps busyPerSec:(float)bps {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f  dropped/s: %.1f  busy/s: %.1f",
+                                 fps, dps, bps];
+        [self->statsLabel setNeedsDisplay];
+    });
 }
 
 - (IBAction) didTapVideo:(UITapGestureRecognizer *)recognizer {
@@ -626,7 +645,8 @@ enum {
     UIImage *transformed = [transforms executeTransformsWithImage:image];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateOutputImage:transformed];
+        self->transformedView.image = transformed;
+        [self->transformedView setNeedsDisplay];
     });
 }
 
@@ -642,13 +662,6 @@ enum {
     }
 }
 
-- (void) updateOutputImage:(UIImage *)newImage {
-    UIImage *im = [self centerImage:newImage inSize: transformedView.frame.size];
-    if (!im)
-        return;
-    transformedView.image = im;
-    [transformedView setNeedsDisplay];
-}
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
@@ -681,23 +694,86 @@ enum {
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateOutputLabel];
-    });
     
-    if (!capturing)
+    if (!capturing) {
+        busyCount++;
         return;
+    }
     
     if (transforms.busy) {  // drop the frame
         return;
     }
 
+    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
+    
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
         [self updateThumb:capturedImage];
         UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        self->transformedView.image = transformed;
+        [self->transformedView setNeedsDisplay];
+    });
+}
+
+#ifdef NEW
+- (void)captureOutput:(AVCaptureOutput *)captureOutput
+didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
+       fromConnection:(AVCaptureConnection *)captureConnection {
+    frameCount++;
+    [self updateOutputLabel];
+
+    if (transforms.busy) {  // drop the frame
+        return;
+    }
+//    dispatch_async(dispatch_get_main_queue(), ^{    // XXXXX always?
+//      [self->activeListVC.tableView reloadData];
+//});
+    
+//    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
+    // Lock the base address of the pixel buffer
+    CVPixelBufferRef imageBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
+    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+    
+    // Get the number of bytes per row for the pixel buffer
+    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
+
+    // Get the number of bytes per row for the pixel buffer
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
+    
+    // Get the pixel buffer width and height
+    size_t width = CVPixelBufferGetWidth(imageBuffer);
+    size_t height = CVPixelBufferGetHeight(imageBuffer);
+
+    // Create a device-dependent RGB color space
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
+                                                  bytesPerRow, colorSpace, kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst);
+
+#ifdef ORIG
+    UIImage *transformed = [transforms executeTransformsWithContext:(CGContextRef)context];
+#else
+    UIGraphicsBeginImageContext(CGSizeMake(width, height));
+    //CGContextRotateCTM(context, 2*M_PI);
+    UIImage *capturedImage =  UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+
+#endif
+    // Free up the context and color space
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+#ifdef ORIG
+//        [self updateFrameCounter];
+        self->videoView.image = transformed;
+#else
+        [self updateThumb:capturedImage];
+        //UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        UIImage *transformed = capturedImage;
         [self updateOutputImage:transformed];
+
         //[self updateOutputImage:capturedImage];
+#endif
     });
     
 //    CMFormatDescriptionRef formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer);
@@ -707,6 +783,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
     // Add your code here that uses the image.
 }
+#endif
 
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
   didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
@@ -716,7 +793,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
     // Add your code here that uses the image.
 }
-// Don't change the list datastructure while running through the list.
 
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state == UIGestureRecognizerStateEnded) {
