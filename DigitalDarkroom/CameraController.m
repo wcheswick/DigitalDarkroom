@@ -198,7 +198,6 @@
     connection.enabled = NO;
     connection.videoOrientation = UIImageOrientationLeftMirrored;
     
-    
     let videoConnection = videoOutput.connection(with: .video)
     videoConnection?.videoOrientation = .portrait
     

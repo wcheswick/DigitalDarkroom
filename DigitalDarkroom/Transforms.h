@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSMutableArray *masterTransformList;
     volatile BOOL listChanged, paramsChanged, busy;
     CGSize outputSize;
+    UIImageOrientation imageOrientation;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -32,6 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSMutableArray *masterTransformList;
 @property (assign)              volatile BOOL listChanged, paramsChanged, busy;
 @property (assign)              CGSize outputSize;
+@property (assign)              UIImageOrientation imageOrientation;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 

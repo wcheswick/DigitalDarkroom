@@ -95,7 +95,7 @@ Image_t sources[2];
 @synthesize sourceImageIndicies;
 @synthesize lastTransform;
 @synthesize busy;
-@synthesize outputSize;
+@synthesize outputSize, imageOrientation;
 
 - (id)init {
     self = [super init];
@@ -307,8 +307,11 @@ BitmapIndex_t dRT(BitmapIndex_t * _Nullable remapTable, Image_t *im, int x, int 
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
-    
-    UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
+
+    UIImage *transformed = [UIImage imageWithCGImage:quartzImage
+                                               scale:(CGFloat)1.0
+                                         orientation:imageOrientation];
+    CGImageRelease(imageRef);
     CGImageRelease(quartzImage);
     return transformed;
 #ifdef notdef

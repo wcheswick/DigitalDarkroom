@@ -342,6 +342,7 @@ enum {
     currentSource = newSource;
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController selectCamera:currentSource.sourceType];
+        transforms.imageOrientation = cameraController.imageOrientation;
         currentSource.button.highlighted = YES;
         capturing = YES;
         [cameraController startCamera];
@@ -679,9 +680,6 @@ enum {
     CVPixelBufferUnlockBaseAddress(imageBuffer,0);
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
-
-//    float xScale = transformedView.frame.size.width / width;
-//    float yScale = transformedView.frame.size.height / height;
     
     UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:(CGFloat)1.0
@@ -695,12 +693,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
     
-    if (!capturing) {
-        busyCount++;
+    if (!capturing)
         return;
-    }
     
     if (transforms.busy) {  // drop the frame
+        busyCount++;
         return;
     }
 
@@ -714,84 +711,10 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     });
 }
 
-#ifdef NEW
-- (void)captureOutput:(AVCaptureOutput *)captureOutput
-didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
-       fromConnection:(AVCaptureConnection *)captureConnection {
-    frameCount++;
-    [self updateOutputLabel];
-
-    if (transforms.busy) {  // drop the frame
-        return;
-    }
-//    dispatch_async(dispatch_get_main_queue(), ^{    // XXXXX always?
-//      [self->activeListVC.tableView reloadData];
-//});
-    
-//    captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait;
-    // Lock the base address of the pixel buffer
-    CVPixelBufferRef imageBuffer = (CVPixelBufferRef)CMSampleBufferGetImageBuffer(sampleBuffer);
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
-    
-    // Get the number of bytes per row for the pixel buffer
-    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
-
-    // Get the number of bytes per row for the pixel buffer
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-    
-    // Get the pixel buffer width and height
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
-
-    // Create a device-dependent RGB color space
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
-                                                  bytesPerRow, colorSpace, kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst);
-
-#ifdef ORIG
-    UIImage *transformed = [transforms executeTransformsWithContext:(CGContextRef)context];
-#else
-    UIGraphicsBeginImageContext(CGSizeMake(width, height));
-    //CGContextRotateCTM(context, 2*M_PI);
-    UIImage *capturedImage =  UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-
-#endif
-    // Free up the context and color space
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-#ifdef ORIG
-//        [self updateFrameCounter];
-        self->videoView.image = transformed;
-#else
-        [self updateThumb:capturedImage];
-        //UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
-        UIImage *transformed = capturedImage;
-        [self updateOutputImage:transformed];
-
-        //[self updateOutputImage:capturedImage];
-#endif
-    });
-    
-//    CMFormatDescriptionRef formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer);
-//    CMVideoDimensions d = CMVideoFormatDescriptionGetDimensions( formatDescription );
-    
-//    NSLog(@"***************** %s", __PRETTY_FUNCTION__);
-    //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
-    // Add your code here that uses the image.
-}
-#endif
-
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
   didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
        fromConnection:(nonnull AVCaptureConnection *)connection {
     droppedCount++;
-    //    NSLog(@"***************** %s", __PRETTY_FUNCTION__);
-    //    UIImage *image = imageFromSampleBuffer(sampleBuffer);
-    // Add your code here that uses the image.
 }
 
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {
