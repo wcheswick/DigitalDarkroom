@@ -14,7 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef enum {
     ColorTrans,
-    RowTrans,
     GeometricTrans,
     RemapTrans,
     AreaTrans,
@@ -27,32 +26,14 @@ typedef struct {
     channel b, g, r, a;
 } Pixel;
 
-typedef struct Image_t {
-    size_t w, h;
-    size_t bytes_per_row;
-    Pixel *image;
-} Image_t;
-
-// a possibly-out-of-bounds source pixel coordinate
-// To be translated to a BitmapIndex_t after range checking.
-
-typedef struct {
-    size_t x,y;
-} RemapPoint_t;
-
 // PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
-typedef UInt32 PixelIndex_t;
+typedef size_t PixelIndex_t;
 
-// BitmapIndex_t: index into bitmap, 0..EOR X 0..h-1
-// where EOR is number of bytes in row / sizeof(Pixel)
-typedef size_t BitmapIndex_t;
+typedef Pixel (^ __nullable __unsafe_unretained pointFunction_t)(Pixel p);
+typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Pixel *src, Pixel *dest, int p);
 
-typedef void (^ __nullable __unsafe_unretained pointFunction_t)(Pixel *p, size_t count);
-typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Image_t *src, Image_t *dest, int p);
-typedef void (^ __nullable __unsafe_unretained rowFunction_t)(Pixel *srcRow, Pixel *destRow, size_t w);
-typedef BitmapIndex_t (^ __nullable __unsafe_unretained remapPixelFunction_t)(Image_t *im, size_t x, size_t y, int p);
-typedef RemapPoint_t (^ __nullable __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p);
-typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapIndex_t *table, size_t x, size_t y, int p);
+typedef PixelIndex_t (^ __unsafe_unretained remapPolarPixelFunction_t)(float r, float a, int p, size_t w, size_t h);
+typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable, size_t w, size_t h, int p);
 
 // typedef int transform_t(void *param, int low, int high);
 //typedef void *b_init_func();
@@ -62,24 +43,20 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapI
     transform_t type;
     pointFunction_t pointF;
     areaFunction_t areaF;
-    remapPixelFunction_t remapPixelF;
     remapPolarPixelFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
-    rowFunction_t rowF;
     int low, param, high;   // parameter setting and range for transform
-    BitmapIndex_t * _Nullable remapTable;      // PixelIndex_t long table of BitmapTable_t values
+    PixelIndex_t * _Nullable remapTable;      // PixelIndex_t table of where to move pixels to
     volatile BOOL changed;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
-@property (assign)              remapPixelFunction_t remapPixelF;
 @property (assign)              remapPolarPixelFunction_t remapPolarF;
-@property (copy)              remapImageFunction_t remapImageF;
-@property (assign)              rowFunction_t rowF;
+@property (copy)                remapImageFunction_t remapImageF;
 @property (assign)              transform_t type;
-@property (assign)              BitmapIndex_t * _Nullable remapTable;
+@property (assign)              PixelIndex_t * _Nullable remapTable;
 @property (assign)              int low, param, high;
 @property (assign)              volatile BOOL changed;
 
@@ -87,14 +64,9 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapI
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d
                pointTransform: (pointFunction_t) f;
 // works:
-+ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
-                  rowTransform:(rowFunction_t) f;
-// works:
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                areaFunction:(areaFunction_t) f;
+                 areaFunction:(areaFunction_t) f;
 // sometimes?
-+ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                         remapPixel:(remapPixelFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                    remapImage:(remapImageFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
@@ -103,7 +75,3 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(BitmapI
 @end
 
 NS_ASSUME_NONNULL_END
-
-//           function:(Pixel (^) (Pixel p))pointFunction;
-//function:(Pixel (^) (Pixel p))pointFunction;
-

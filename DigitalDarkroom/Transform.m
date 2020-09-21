@@ -13,10 +13,8 @@
 @synthesize name, description;
 @synthesize pointF;
 @synthesize areaF;
-@synthesize remapPixelF;
 @synthesize remapImageF;
 @synthesize remapPolarF;
-@synthesize rowF;
 @synthesize type;
 @synthesize remapTable;
 @synthesize low, param, high;
@@ -29,10 +27,8 @@
         remapTable = nil;
         pointF = nil;
         areaF = nil;
-        remapPixelF = nil;
         remapImageF = nil;
         remapPolarF = nil;
-        rowF = nil;
         low = param = high = 0;
         changed = YES;
     }
@@ -49,16 +45,6 @@
     return t;
 }
 
-+ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
-                rowTransform:(rowFunction_t) f {
-    Transform *t = [[Transform alloc] init];
-    t.name = n;
-    t.description = d;
-    t.type = RowTrans;
-    t.rowF = f;
-    return t;
-}
-
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 areaFunction:(areaFunction_t) f {
     Transform *t = [[Transform alloc] init];
@@ -66,16 +52,6 @@
     t.description = d;
     t.type = AreaTrans;
     t.areaF = f;
-    return t;
-}
-
-+ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapPixel:(remapPixelFunction_t) f {
-    Transform *t = [[Transform alloc] init];
-    t.name = n;
-    t.description = d;
-    t.type = RemapTrans;
-    t.remapPixelF = f;
     return t;
 }
 
@@ -106,13 +82,11 @@
     copy.description = description;
     copy.pointF = pointF;
     copy.areaF = areaF;
-    copy.remapPixelF = remapPixelF;
     copy.remapPolarF = remapPolarF;
     NSLog(@"remapImageF: %p", remapImageF);
     copy.remapImageF = remapImageF;
     NSLog(@"remapImageF: %p", remapImageF);
     NSLog(@"remaps: %p", copy.remapImageF);
-    copy.rowF = rowF;
     copy.low = low;
     copy.param = param;
     copy.high = high;
@@ -134,5 +108,4 @@ function:^(Pixel p) {
     channel lum = LUM(p);   /* wasteful, but cleaner code */
     return SETRGB(lum, lum, lum);
 }];
-//          function:(Pixel (^) (Pixel p))pointFunction {
 #endif

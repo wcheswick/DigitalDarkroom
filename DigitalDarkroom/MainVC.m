@@ -49,6 +49,7 @@ enum {
 @property (nonatomic, strong)   UIImageView *transformedView;
 @property (nonatomic, strong)   UILabel *statsLabel;
 @property (nonatomic, strong)   NSTimer *statsTimer;
+@property (nonatomic, strong)   NSDate *lastTime;
 
 @property (nonatomic, strong)   UINavigationController *transformsNavVC;
 @property (nonatomic, strong)   UITableViewController *transformsVC;
@@ -81,7 +82,7 @@ enum {
 @synthesize transformsNavVC;
 @synthesize transformsVC, activeListVC;
 @synthesize frameCount, droppedCount, busyCount, cps, dps, mps;
-@synthesize statsTimer;
+@synthesize statsTimer, lastTime;
 @synthesize transforms;
 @synthesize addButton;
 @synthesize undoButton, trashButton;
@@ -301,12 +302,16 @@ enum {
                                               selector:@selector(doTick:)
                                               userInfo:NULL
                                                repeats:YES];
+    lastTime = [NSDate now];
 }
 
 - (void) doTick:(NSTimer *)sender {
-    [self updateStatsLabel: frameCount/TICK_INTERVAL
-                       droppedPerSec:droppedCount/TICK_INTERVAL
-                       busyPerSec:busyCount/TICK_INTERVAL];
+    NSDate *now = [NSDate now];
+    NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];
+    lastTime = now;
+    [self updateStatsLabel: frameCount/elapsed
+                       droppedPerSec:droppedCount/elapsed
+                       busyPerSec:busyCount/elapsed];
     frameCount = droppedCount = busyCount = 0;
 }
 
