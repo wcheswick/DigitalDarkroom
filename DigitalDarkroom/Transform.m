@@ -16,21 +16,21 @@
 @synthesize remapImageF;
 @synthesize remapPolarF;
 @synthesize type;
+@synthesize low, initial, high;
+@synthesize p, updatedP;
 @synthesize remapTable;
-@synthesize low, param, high;
-@synthesize changed;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        remapTable = nil;
         pointF = nil;
         areaF = nil;
         remapImageF = nil;
         remapPolarF = nil;
-        low = param = high = 0;
-        changed = YES;
+        low = initial = high = 0;
+        p = updatedP = initial;
+        remapTable = NULL;
     }
     return self;
 }
@@ -75,37 +75,30 @@
     return t;
 }
 
+- (void) clearRemap {
+    if (remapTable) {
+        free(remapTable);
+        remapTable = nil;
+    }
+}
+
+- (void) dealloc {
+    [self clearRemap];
+}
+
 - (id)copyWithZone:(NSZone *)zone {
-    Transform *copy = [[self class] allocWithZone:zone];
+    Transform *copy = [[Transform alloc] init];
     copy.name = name;
     copy.type = type;
     copy.description = description;
     copy.pointF = pointF;
     copy.areaF = areaF;
-    copy.remapPolarF = remapPolarF;
-    NSLog(@"remapImageF: %p", remapImageF);
     copy.remapImageF = remapImageF;
-    NSLog(@"remapImageF: %p", remapImageF);
-    NSLog(@"remaps: %p", copy.remapImageF);
+    copy.remapPolarF = remapPolarF;
     copy.low = low;
-    copy.param = param;
     copy.high = high;
-    copy.remapTable = nil;
+    copy.remapTable = NULL;
     return copy;
 }
 
-- (void) dealloc {
-    if (remapTable)
-        free(remapTable);
-}
-
 @end
-
-#ifdef notdef
-initWithName:@"Luminance"
-description:@"Convert to pixel brightness"
-function:^(Pixel p) {
-    channel lum = LUM(p);   /* wasteful, but cleaner code */
-    return SETRGB(lum, lum, lum);
-}];
-#endif

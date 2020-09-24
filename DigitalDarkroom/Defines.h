@@ -9,6 +9,15 @@
 #ifndef Defines_h
 #define Defines_h
 
+typedef u_char channel;
+
+typedef struct {
+    channel b, g, r, a;
+} Pixel;
+
+// PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
+typedef size_t PixelIndex_t;
+
 #define LATER   0   /*later*/
 
 // view tools

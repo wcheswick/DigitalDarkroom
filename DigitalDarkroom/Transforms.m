@@ -49,8 +49,7 @@ enum SpecialRemaps {
 
 @interface Transforms ()
 
-@property (strong, nonatomic)   NSMutableArray *sourceImageIndicies;
-@property (strong, nonatomic)   NSArray *executeList;
+@property (strong, nonatomic)   NSMutableArray *executeList;
 @property (strong, nonatomic)   Transform *lastTransform;
 
 @end
@@ -62,36 +61,33 @@ size_t configuredBytesPerRow, configuredPixelsInImage;
 
 @synthesize categoryNames;
 @synthesize categoryList;
-@synthesize masterTransformList;
-@synthesize listChanged, paramsChanged;
+@synthesize sequence, sequenceChanged;
 @synthesize executeList;
 @synthesize bytesPerRow;
-@synthesize sourceImageIndicies;
 @synthesize lastTransform;
-@synthesize busy;
-@synthesize outputSize, imageOrientation;
+@synthesize imageOrientation;
 
 - (id)init {
     self = [super init];
     if (self) {
         configuredBytesPerRow = 0;    // no current configuration
-        
-        masterTransformList = [[NSMutableArray alloc] init];
-        listChanged = NO;
-        busy = NO;
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
-        outputSize = CGSizeZero;
-        
-        [self addAreaTransforms];
-        [self addColorTransforms];
-        [self addGeometricTransforms];
-        [self addMiscTransforms];
-        [self addArtTransforms];
+        sequence = [[NSMutableArray alloc] init];
+        sequenceChanged = NO;
+        executeList = [[NSMutableArray alloc] init];
+        [self buildTransformList];
     }
     return self;
 }
 
+- (void) buildTransformList {
+    [self addAreaTransforms];
+    [self addColorTransforms];
+    [self addGeometricTransforms];
+    [self addMiscTransforms];
+    [self addArtTransforms];
+}
 
 #ifdef DEBUG_TRANSFORMS
 
@@ -165,103 +161,95 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 }
 #endif
 
-- (void) precomputeTransform:(Transform *) transform {
+- (PixelIndex_t *) computeMappingFor:(Transform *) transform {
     assert(configuredBytesPerRow);
-    switch (transform.type) {
-        case ColorTrans: {
-            break;
-        }
-        case RemapTrans:    // precompute new pixel locations
-            if (transform.remapTable) {
-                free(transform.remapTable);
-                transform.remapTable = nil;
-            }
-            NSLog(@"remap %@", transform.name);
-            // we compute a table of indices into a bitmap, which may have extra unused Pixels
-            // at the end of each row.  Our computed index takes these into account, but we
-            // only have to compute entries for actual useful x,y coordinates.
-            
-            size_t entryCount = configuredHeight * configuredWidth;
-            transform.remapTable = (PixelIndex_t *)calloc(entryCount, sizeof(PixelIndex_t));
-            assert(transform.remapTable);
-            NSLog(@"table size is %lu, %lu, %lu bytes",
-                  entryCount, sizeof(PixelIndex_t), entryCount * sizeof(PixelIndex_t));
-            
+    assert(transform.type == RemapTrans);
+    NSLog(@"remap %@", transform.name);
+    PixelIndex_t *remapTable = (PixelIndex_t *)calloc(configuredPixelsInImage, sizeof(PixelIndex_t));
+    
 #ifdef DEBUG_TRANSFORMS
-            int i = 0;
-            for (int y=0; y<configuredHeight; y++) {
-                for (int x=0; x<configuredWidth; x++) {
-                    transform.remapTable[i++] = Remap_Unset;
-                }
-            }
+    int i = 0;
+    for (int y=0; y<configuredHeight; y++) {
+        for (int x=0; x<configuredWidth; x++) {
+            transform.remapTable[i++] = Remap_Unset;
+        }
+    }
 #endif
-            if (transform.remapPolarF) {     // polar remap
-                size_t centerX = configuredWidth/2;
-                size_t centerY = configuredHeight/2;
-                for (int y=0; y<configuredHeight; y++) {
-                    for (int x=0; x<configuredWidth; x++) {
-                        double rx = x - centerX;
-                        double ry = y - centerY;
-                        double r = hypot(rx, ry);
-                        double a = atan2(ry, rx);
-                        transform.remapTable[PI(x,y)] = transform.remapPolarF(r, /* M_PI+ */ a,
-                                                                              transform.param,
-                                                                              configuredWidth,
-                                                                              configuredHeight);
-                    }
-                }
-            } else {        // whole screen remap
-                NSLog(@"transform: %@", transform);
-                transform.remapImageF(transform.remapTable,
-                                      configuredWidth, configuredHeight,
-                                      transform.param);
+    
+    if (transform.remapPolarF) {     // polar remap
+        size_t centerX = configuredWidth/2;
+        size_t centerY = configuredHeight/2;
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                double rx = x - centerX;
+                double ry = y - centerY;
+                double r = hypot(rx, ry);
+                double a = atan2(ry, rx);
+                remapTable[PI(x,y)] = transform.remapPolarF(r, /* M_PI+ */ a,
+                                                            transform.p,
+                                                            configuredWidth,
+                                                            configuredHeight);
             }
-            break;
-        case GeometricTrans:
-        case AreaTrans:
-        case EtcTrans:
-            return;
+        }
+    } else {        // whole screen remap
+        NSLog(@"transform: %@", transform);
+        transform.remapImageF(remapTable,
+                              configuredWidth, configuredHeight,
+                              transform.p);
     }
-    transform.changed = NO;
+    return remapTable;
 }
 
-- (void) setupForTransforming {
-    // we can't have this routine execute off the official list, because that can get changed
-    // by the user in mid-transform.  So we keep a separate copy here.  This copy still
-    // points to each individual transform, whose parameter can change in mid-transform,
-    // so we have to keep a local copy of that parameter in the actual transform processor.
-    
-    assert(configuredBytesPerRow);   // we need real values
-    
-    executeList = [NSArray arrayWithArray:masterTransformList];
-    listChanged = NO;
-    NSLog(@"recompute transforms");
-    // source[0] gets all its data from the call context.  If we need a destination image,
-    // we have to allocate one.  Set it to the invalid address 1 if we need an alloc.
-
-    // Some transforms are best done in place, but some need to go to a destination
-    // other than the source.   Here are the two possible sources.
-
-    for (int i=0; i<executeList.count; i++) {
-        Transform *transform = [executeList objectAtIndex:i];
-        [self precomputeTransform:transform];
-    }
-}
-
+#ifdef notdef
 - (void) updateParams {
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
-        if (!transform.changed)
-            continue;
-        [self precomputeTransform:transform];
+        if (transform.changed)
+            [self precomputeTransform:transform];
     }
 }
+#endif
 
-// Address Pixel at coordinates in image
-#define PA(imt, x,y)    (&P(imt, x,y))
+
+// It is important that the user interface doesn't change the transform list
+// while we are running through it.  There are several changes of interest:
+//  1) adding or deleting one or more transforms
+//  2) changing the parameter on a particular transform
+//  3) changing the display area size (via source or orientation change
+//
+// The master list of transforms to be executed is 'sequence', and is managed by
+// the GUI. We can't run from this list, because a change in the middle of transforming would
+// mess up everything.
+//
+// So the GUI changes this sequence as it wants to, using @synchronize on the array. It sets
+// a flag, sequenceChanged, when changes occur.  Right here, just before we run through a
+// transform sequence, we check for changes, and update our current transform sequence,
+// 'executeList' from a locked copy of the sequence list.
+//
+// We keep our own local list of current transforms, and keep the parameters
+// for each (a transform could appear more than once, with different params.)
+//
+// A number of transforms simply involve moving pixels around just based on position.
+// we recompute the table of pixel indicies and just use that.  That table needs to
+// be computed the first time the transform is used, whenever the param changes, or
+// when the screen size changes.  If it needs updating, the table pointer is NULL.
+// Only this routine changes this pointer.
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image {
-
+    if (sequenceChanged) {
+        [executeList removeAllObjects];
+        
+        @synchronized (sequence) {
+            for (Transform *t in sequence) {
+                if (t.p != t.updatedP) {
+                    t.p = t.updatedP;
+                    [t clearRemap];
+                }
+                [executeList addObject:t];
+            }
+        }
+    }
+    
     CGImageRef imageRef = [image CGImage];
     CGImageRetain(imageRef);
     size_t width = (int)CGImageGetWidth(imageRef);
@@ -273,14 +261,14 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     assert(bitsPerComponent == 8);
     configuredPixelsInImage = width * height;
     
-    if (listChanged  ||
-        configuredBytesPerRow != bytesPerRow ||
+    if (configuredBytesPerRow != bytesPerRow ||
         configuredWidth != width ||
         configuredHeight != height) {
-        NSLog(@">>> format was %4zu %4zu %4zu",
+        NSLog(@">>> format was %4zu %4zu %4zu   %4zu %4zu %4zu",
               configuredBytesPerRow,
               configuredWidth,
-              configuredHeight);
+              configuredHeight,
+              bytesPerRow, width, height);
         configuredBytesPerRow = bytesPerRow;
         configuredHeight = height;
         configuredWidth = width;
@@ -289,13 +277,11 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
               configuredWidth,
               configuredHeight);
         assert(configuredBytesPerRow % sizeof(Pixel) == 0); //no slop on the rows
-       busy = YES;
-        [self setupForTransforming];
-        busy = NO;
-    } else if (paramsChanged) { // recompute one or more parameter changes
-        [self updateParams];
+        for (Transform *t in executeList) {
+            [t clearRemap];
+        }
     }
-
+    
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     
     // We set up two buffers we can operate between.
@@ -318,6 +304,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
+        
         [self performTransform:transform
                           from:im[source].buf
                             to:im[dest].buf
@@ -329,7 +316,6 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     }
 
 #ifdef TEST0
-
         memcpy(im[dest].buf, im[source].buf, pixelBufSize);
    for (int y=10; y< height/2; y+=3) {
         for (int x= 10; x<100; x++)
@@ -367,11 +353,12 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         case GeometricTrans:
             return;
             break;
-        case RemapTrans:    // all these pixel moves are precomputed, for speed
-            assert(transform.remapTable);
-            PixelIndex_t *table = transform.remapTable;
+        case RemapTrans:
+            if (!transform.remapTable) {
+                transform.remapTable = [self computeMappingFor:transform];
+            }
             for (int i=0; i<configuredPixelsInImage; i++) {
-                PixelIndex_t target = table[i++];
+                PixelIndex_t target = transform.remapTable[i++];
                 Pixel p;
                 switch (target) {
                     case Remap_White:
@@ -402,10 +389,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
             }
             break;
         case AreaTrans:
-            transform.areaF(source, dest, transform.param);
+            transform.areaF(source, dest, transform.p);
             break;
         case EtcTrans:
-            
             break;
     }
 }
@@ -548,7 +534,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 #endif
 #endif
 
-    lastTransform.param = 20; lastTransform.low = 4; lastTransform.high = 200;
+    lastTransform.initial = 20; lastTransform.low = 4; lastTransform.high = 200;
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Pixelate"
@@ -863,7 +849,7 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
             }
         }
     }];
-    lastTransform.param = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.initial = 12; lastTransform.low = 4; lastTransform.high = 50;
     [transformList addObject:lastTransform];
 
     #ifdef notdef

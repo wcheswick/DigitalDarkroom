@@ -93,6 +93,7 @@ enum {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
+        
         inputSources = [[NSMutableArray alloc] init];
         
         [self addCameraSource:FrontCamera label:@"Front camera"];
@@ -276,7 +277,7 @@ enum {
 }
 
 - (void) adjustButtons {
-    undoButton.enabled = trashButton.enabled = transforms.masterTransformList.count > 0;
+    undoButton.enabled = trashButton.enabled = transforms.sequence.count > 0;
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -294,7 +295,6 @@ enum {
     
     frameCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
-    transforms.outputSize = transformedView.frame.size;
     
 #define TICK_INTERVAL   1.0
     statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
@@ -458,7 +458,6 @@ enum {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
         }
-        transforms.outputSize = transformedView.frame.size;
         
         previewView = transformedView;
         AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformedView.layer;
@@ -641,15 +640,10 @@ enum {
     [cameraController stopCamera];
     selectedImage = image;
     
-    [self changeTransformList:^{
-        [self updateThumb:self->selectedImage];
-        self->transforms.listChanged = YES;
-        [self adjustButtons];
-    }];
+    [self updateThumb:self->selectedImage];
+    [self adjustButtons];
     
-    transforms.outputSize = transformedView.frame.size;
     UIImage *transformed = [transforms executeTransformsWithImage:image];
-
     dispatch_async(dispatch_get_main_queue(), ^{
         self->transformedView.image = transformed;
         [self->transformedView setNeedsDisplay];
@@ -700,14 +694,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
     if (!capturing)
         return;
-    
-    if (transforms.busy) {  // drop the frame
-        busyCount++;
-        return;
-    }
 
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
-    
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
         UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
@@ -750,7 +738,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             return transformList.count;
         }
         case ActiveTag:
-            return transforms.masterTransformList.count;
+            return transforms.sequence.count;
     }
     return 1;
 }
@@ -790,18 +778,18 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                           reuseIdentifier:CellIdentifier];
         }
-        Transform *transform = [transforms.masterTransformList objectAtIndex:indexPath.row];
+        Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
         cell.textLabel.text = [NSString stringWithFormat:
                                @"%2ld: %@", indexPath.row+1, transform.name];
         cell.layer.borderWidth = 0;
         cell.tag = 0;
-        if (transform.param) {  // we need a slider
+        if (transform.p) {  // we need a slider
             CGRect f = CGRectInset(cell.contentView.frame, 2, 2);
             f.origin.x += f.size.width - 80;
             f.size.width = 80;
             f.origin.x = cell.contentView.frame.size.width - f.size.width;
             UISlider *slider = [[UISlider alloc] initWithFrame:f];
-            slider.value = transform.param;
+            slider.value = transform.p;
             slider.minimumValue = transform.low;
             slider.maximumValue = transform.high;
             slider.tag = indexPath.row + SLIDER_TAG_OFFSET;
@@ -837,11 +825,14 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) adjustParam:(UISlider *)slider {
     if (slider.tag < SLIDER_TAG_OFFSET)
         return;
-    [self changeTransformList:^{    // XXXXXX these parameters need per-execute values
-        Transform *transform = [self->transforms.masterTransformList objectAtIndex:slider.tag - SLIDER_TAG_OFFSET];
-        transform.param = slider.value;
-        transform.changed = YES;
-    }];
+#ifdef notdef
+    @synchronized (transforms.sequence) {
+        Trans
+        <#statements#>
+    }
+    [transforms changeParamFor:(int)slider.tag - SLIDER_TAG_OFFSET
+                         to:(int)slider.value];
+#endif
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -850,31 +841,33 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         //        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
     } else {    // Selection table display table list
         NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-        Transform *transform = [[transformList objectAtIndex:indexPath.row] copy];
-        [self changeTransformList:^{
-            transform.changed = YES;
-            [self->transforms.masterTransformList addObject:transform];
-            [self->activeListVC.tableView reloadData];
-            [self adjustButtons];
-        }];
+        Transform *transform = [transformList objectAtIndex:indexPath.row];
+        Transform *thisTransform = [transform copy];
+        assert(thisTransform.remapTable == NULL);
+        @synchronized (transforms.sequence) {
+            [transforms.sequence addObject:transform];
+            transforms.sequenceChanged = YES;
+        }
+        [self.activeListVC.tableView reloadData];
+        [self adjustButtons];
     }
 }
 
 - (IBAction) doRemoveLastTransform {
-    [self changeTransformList:^{
-        self->transforms.listChanged = YES;
-        [self->transforms.masterTransformList removeLastObject];
-        [self adjustButtons];
-    }];
+    @synchronized (transforms.sequence) {
+        [transforms.sequence removeLastObject];
+        transforms.sequenceChanged = YES;
+    }
+    [self adjustButtons];
     [activeListVC.tableView reloadData];
 }
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
-    [self changeTransformList:^{
-        self->transforms.listChanged = YES;
-        [self->transforms.masterTransformList removeAllObjects];
-        [self adjustButtons];
-    }];
+    @synchronized (transforms.sequence) {
+        [transforms.sequence removeAllObjects];
+        transforms.sequenceChanged = YES;
+    }
+    [self adjustButtons];
     [activeListVC.tableView reloadData];
 }
 
@@ -883,10 +876,11 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
         case UITableViewCellEditingStyleDelete: {
-            [self changeTransformList:^{
-                [self->transforms.masterTransformList removeObjectAtIndex:indexPath.row];
-                [self adjustButtons];
-            }];
+            @synchronized (transforms.sequence) {
+                [transforms.sequence removeObjectAtIndex:indexPath.row];
+                transforms.sequenceChanged = YES;
+            }
+            [self adjustButtons];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             break;
@@ -902,41 +896,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView
 moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
-    Transform *t = [transforms.masterTransformList objectAtIndex:fromIndexPath.row];
-    [self changeTransformList:^{
-        self->transforms.listChanged = YES;
-        [self->transforms.masterTransformList removeObjectAtIndex:fromIndexPath.row];
-        [self->transforms.masterTransformList insertObject:t atIndex:toIndexPath.row];
-    }];
+    @synchronized (transforms.sequence) {
+        Transform *t = [transforms.sequence objectAtIndex:fromIndexPath.row];
+        [transforms.sequence removeObjectAtIndex:fromIndexPath.row];
+        [transforms.sequence insertObject:t atIndex:toIndexPath.row];
+        transforms.sequenceChanged = YES;
+    }
     [tableView reloadData];
 }
-
-#define SPIN_WAIT_MS    10
-
-- (void) changeTransformList:(void (^)(void))changeTransforms {
-    // It is possible that the transformer engine hasn't processed some
-    // previous changes we made.  Wait until it has.  This should
-    // almost never happen.
-    
-    if (transforms.listChanged) {
-        NSLog(@"prevous change pending");
-        int msWait = 0;
-        while(transforms.listChanged) {
-            usleep(SPIN_WAIT_MS);
-            msWait += SPIN_WAIT_MS;
-        }
-        NSLog(@"Spin wait for transform change took %dms", msWait);
-    }
-    changeTransforms();
-    transforms.listChanged = YES;
-}
-
-#ifdef OLDCOMPLICATED
-- (void) changeTransformList:(void (^)(void))changeTransforms {
-    assert(!listChangePending); //  XXX right now, this is a race we hope not to lose
-    pendingTransformChanges = changeTransforms;
-    listChangePending = YES;
-}
-#endif
 
 @end
