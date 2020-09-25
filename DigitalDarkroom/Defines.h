@@ -15,8 +15,11 @@ typedef struct {
     channel b, g, r, a;
 } Pixel;
 
-// PixelIndex_t: index into only pixel addresses, 0..w-1 X 0..h-1
-typedef size_t PixelIndex_t;
+// PixelIndex_t: index into an image, range 0..configuredPixelsInImage, or
+//  several small negative numbers indicating a particular color instead of
+//  an existing pixel.
+
+typedef u_long PixelIndex_t;
 
 #define LATER   0   /*later*/
 

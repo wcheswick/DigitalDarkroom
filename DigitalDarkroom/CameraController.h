@@ -23,19 +23,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate>delegate;
 @property (assign)  UIImageOrientation imageOrientation;
 
-- (void) setupCamerasForCurrentOrientationAndSizeOf:(CGSize) s;
-- (CGSize) captureSizeFor:(cameras) camera;
+- (BOOL) isCameraAvailable:(cameras) camera;
 - (void) selectCamera:(cameras) camera;
-
+- (CGSize) setupCameraForSize:(CGSize) availableSize;
+- (void) startSession;
 - (void) startCamera;
 - (void) stopCamera;
 - (BOOL) isCameraOn;
-
-//- (void) selectCaptureDevice: (cameras) c;
-
-- (BOOL) cameraAvailable: (cameras) c;
-- (BOOL) camerasAvailable;
-
 
 @end
 

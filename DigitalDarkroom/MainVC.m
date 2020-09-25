@@ -111,13 +111,19 @@ enum {
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
     }
-    currentSource = nil;
-    frontButton = rearButton = nil;
-    cameraThumbView = nil;
     
     cameraController = [[CameraController alloc] init];
     cameraController.delegate = self;
     
+    cameras sourceIndex;
+    for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
+        if ([cameraController isCameraAvailable:sourceIndex])
+            break;
+    }
+    currentSource = [inputSources objectAtIndex:sourceIndex];
+    // [self.view setNeedsLayout];  // we do this anyway
+    frontButton = rearButton = nil;
+    cameraThumbView = nil;
     return self;
 }
 
@@ -315,52 +321,11 @@ enum {
     frameCount = droppedCount = busyCount = 0;
 }
 
-- (void) setupSource:(InputSource *)newSource {
-    if (ISCAMERA(newSource.sourceType) && ! [cameraController cameraAvailable:newSource.sourceType]) {
-        UIAlertController *alert = [UIAlertController
-                                    alertControllerWithTitle:@"Camera not available"
-                                    message:nil
-                                    preferredStyle:UIAlertControllerStyleAlert];
-        
-        UIAlertAction* defaultAction = [UIAlertAction
-                                        actionWithTitle:@"Dismiss"
-                                        style:UIAlertActionStyleDefault
-                                        handler:^(UIAlertAction * action) {}
-                                        ];
-        [alert addAction:defaultAction];
-        [self presentViewController:alert animated:YES completion:nil];
-        return;
-    }
-    
-    if (currentSource && [currentSource.label isEqualToString:newSource.label])
-        return;
-    
-    if (currentSource && ISCAMERA(currentSource.sourceType)) {
-        [cameraController stopCamera];
-        currentSource.button.highlighted = NO;
-        currentSource.button.selected = NO;
-        [currentSource.button setBackgroundImage:NULL forState:UIControlStateNormal];
-        [currentSource.button setNeedsDisplay];
-        capturing = NO;
-    }
-    
-    currentSource = newSource;
-    if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController selectCamera:currentSource.sourceType];
-        transforms.imageOrientation = cameraController.imageOrientation;
-        currentSource.button.highlighted = YES;
-        capturing = YES;
-        [cameraController startCamera];
-    } else {
-        [self useImage:currentSource.image];
-    }
-}
-
 - (IBAction) doInputSelect:(UIButton *)button {
     NSLog(@"input button tapped: %ld", (long)button.tag);
     
-    InputSource *newSource = [inputSources objectAtIndex:button.tag];
-    [self setupSource:newSource];
+    currentSource = [inputSources objectAtIndex:button.tag];
+    [self.view setNeedsLayout];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -420,7 +385,7 @@ enum {
         // top left side
         f.origin = CGPointZero;
         f.size.width = containerView.frame.size.width - SEP - MIN_TABLE_W;  // work on the left side
-        outputView.frame = f;   // adjust height in a moment.
+        outputView.frame = f;   // adjust height later
         
         // do the right side
         f.origin.x = RIGHT(outputView.frame) + SEP;
@@ -437,23 +402,18 @@ enum {
         f.size.height -= f.origin.y;
         transformsVC.tableView.frame = f;
 
-        // now the left side, taking into account the size of camera images, if available
+        // now the left side, taking into account the size of the input source
 
         f.origin = CGPointZero;
         f.size = outputView.frame.size;
-        if ([cameraController camerasAvailable] && ISCAMERA(currentSource.sourceType)) {
-            [cameraController setupCamerasForCurrentOrientationAndSizeOf:f.size];
-            CGSize frontSize = [cameraController captureSizeFor:FrontCamera];
-            CGSize rearSize = [cameraController captureSizeFor:RearCamera];
-            
-            NSLog(@"for desired size %.0fx%.0f, front: %.0fx%.0f, rear: %.0fx%.0f",
-                  f.size.width, f.size.height,
-                  frontSize.width, frontSize.height,
-                  rearSize.width, rearSize.height);
-
-            f.size = (currentSource.sourceType == FrontCamera) ? frontSize : rearSize;
+        
+        // we recompute the output display for each layout or input source change.
+        // the size and aspect ratio of the source guides us.  For cameras, find
+        // out what is available for the current camera and orientation.
+        
+        if (ISCAMERA(currentSource.sourceType)) {
+            f.size = [cameraController setupCameraForSize:f.size];
             transformedView.frame = f;
-
         } else {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
@@ -512,19 +472,40 @@ enum {
             but.layer.cornerRadius = 6.0;
             
             InputSource *source = [inputSources objectAtIndex:i];
-
+#ifdef notdef
+            
+            if (currentSource && ISCAMERA(currentSource.sourceType)) {
+                [cameraController stopCamera];
+                currentSource.button.highlighted = NO;
+                currentSource.button.selected = NO;
+                [currentSource.button setBackgroundImage:NULL forState:UIControlStateNormal];
+                [currentSource.button setNeedsDisplay];
+                capturing = NO;
+            }
+            
+            currentSource = newSource;
+            if (ISCAMERA(currentSource.sourceType)) {
+                [cameraController selectCamera:currentSource.sourceType];
+                transforms.imageOrientation = cameraController.imageOrientation;
+                currentSource.button.highlighted = YES;
+                capturing = YES;
+                [cameraController startCamera];
+            } else {
+                [self useImage:currentSource.image];
+            }
+#endif
             switch (i) {
                 case FrontCamera:
                     [but setTitle:@"Front camera" forState:UIControlStateNormal];
                     [but setTitle:@"Front camera (unavailable)" forState:UIControlStateDisabled];
-                    but.enabled = [cameraController cameraAvailable:i];
+                    but.enabled = [cameraController isCameraAvailable:i];
                     but.backgroundColor = [UIColor whiteColor];
                     frontButton = but;
                     break;
                 case RearCamera:
                     [but setTitle:@"Rear camera" forState:UIControlStateNormal];
                     [but setTitle:@"Rear camera (unavailable)" forState:UIControlStateDisabled];
-                    but.enabled = [cameraController cameraAvailable:i];
+                    but.enabled = [cameraController isCameraAvailable:i];
                     but.backgroundColor = [UIColor whiteColor];
                     rearButton = but;
                     break;
@@ -548,20 +529,8 @@ enum {
     
     [transformsNavVC.view setNeedsDisplay];
     [transformsVC.tableView reloadData];    // ... needed
-    
-    if (!currentSource) {   // simulate button press for starting input source
-        InputSource *startSource;
-        
-        if ([cameraController cameraAvailable:FrontCamera]) {
-            startSource = [inputSources objectAtIndex:FrontCamera];
-        } else if ([cameraController cameraAvailable:RearCamera]) {
-            startSource = [inputSources objectAtIndex:RearCamera];
-        } else {    // use first image.
-            startSource = [inputSources objectAtIndex:NCAMERA];
-        }
-        [self setupSource:startSource];
-    }
 }
+
 
 - (void) updateStatsLabel: (float) fps droppedPerSec:(float)dps busyPerSec:(float)bps {
     dispatch_async(dispatch_get_main_queue(), ^{

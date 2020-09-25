@@ -358,9 +358,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                 transform.remapTable = [self computeMappingFor:transform];
             }
             for (int i=0; i<configuredPixelsInImage; i++) {
-                PixelIndex_t target = transform.remapTable[i++];
+                PixelIndex_t pixelSource = transform.remapTable[i];
                 Pixel p;
-                switch (target) {
+                switch (pixelSource) {
                     case Remap_White:
                         p = White;
                         break;
@@ -383,9 +383,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                         p = UnsetColor;
                         break;
                     default:
-                        p = source[i];
+                        p = source[pixelSource];
                 }
-                dest[target] = p;
+                dest[i] = p;
             }
             break;
         case AreaTrans:
@@ -401,8 +401,8 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    lastTransform = [Transform areaTransform: @"Test frame"
-                                 description: @"Test frame"
+    lastTransform = [Transform areaTransform: @"Test remap color frame"
+                                 description: @"Test remap color frame"
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
@@ -487,7 +487,6 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 #endif
         }
     }];
-    NSLog(@"RemapImageF: %p", lastTransform);
 
 #ifdef notdef
     lastTransform = [Transform areaTransform: @"Terry's kite"
@@ -546,6 +545,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
             }
         }
     }];
+    lastTransform.low = 3;
+    lastTransform.initial = 10;
+    lastTransform.high = 200;
     [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Mirror"
