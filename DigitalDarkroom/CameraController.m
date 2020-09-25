@@ -20,7 +20,6 @@
 @property (assign)              BOOL frontCamera;
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
-@property (strong, nonatomic)   AVCaptureConnection *connection;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 
 @end
@@ -31,10 +30,9 @@
 @synthesize delegate;
 @synthesize imageOrientation;
 
-@synthesize captureDevice;
+@synthesize captureDevice, captureSize;
 @synthesize frontCamera;
 @synthesize captureVideoPreviewLayer;
-@synthesize connection;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
 
@@ -43,7 +41,6 @@
     self = [super init];
     if (self) {
         captureVideoPreviewLayer = nil;
-        connection = nil;
         selectedFormat = nil;
         delegate = nil;
         captureDevice = nil;
@@ -94,10 +91,9 @@
 // Zero size if none works.  This should never happen.
 - (CGSize) setupCameraForSize:(CGSize) availableSize {
     assert(captureDevice);
-    CGSize bestSize = CGSizeZero;
+    CGSize capTureSize = CGSizeZero;
     
-    AVCaptureDeviceFormat *selectedFormat = nil;
-    AVCaptureDeviceFormat *bestFormat;
+    selectedFormat = nil;
     for (AVCaptureDeviceFormat *format in captureDevice.formats) {
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
@@ -107,50 +103,40 @@
         if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
             continue;
         if (selectedFormat) {   // this one fits.  Is it better?
-            if (dimensions.width < bestSize.width || dimensions.height < bestSize.height)
+            if (dimensions.width < capTureSize.width || dimensions.height < capTureSize.height)
                 continue;
         }
         selectedFormat = format;
-        bestSize = (CGSize){dimensions.width, dimensions.height};
-        bestFormat = format;
+        capTureSize = (CGSize){dimensions.width, dimensions.height};
     }
     if (!selectedFormat) {
         NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }
-    
-    NSError *error;
-    if (![captureDevice lockForConfiguration:&error]) {
-        NSLog(@"** could not lock video camera: %@", [error localizedDescription]);
-        return CGSizeZero;
-    };
-    captureDevice.activeFormat = bestFormat;
-    [captureDevice unlockForConfiguration];
-    return bestSize;
+    // selectedFormat doesn't work here.  Do it after the session starts.
+    return capTureSize;
 }
 
 - (void) startSession {
-    UIDeviceOrientation deviceOrientation = [UIDevice currentDevice].orientation;
-    switch (deviceOrientation) {    // XXXX portrait and others
-        case UIDeviceOrientationLandscapeLeft:       // Device oriented horizontally, home button on the right
-            imageOrientation = frontCamera ? UIImageOrientationDownMirrored : UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationFaceUp:              // Device oriented flat, face up
-        case UIDeviceOrientationLandscapeRight:      // Device oriented horizontally, home button on the left
-            imageOrientation = frontCamera ? UIImageOrientationUpMirrored : UIImageOrientationDown;
-            break;
-        case UIDeviceOrientationFaceDown :            // Device oriented flat, face down
-        case UIDeviceOrientationUnknown:
-        case UIDeviceOrientationPortrait:            // Device oriented vertically, home button on the bottom
-        case UIDeviceOrientationPortraitUpsideDown:  // Device oriented vertically, home button on the top        default:
-            imageOrientation = frontCamera ? UIImageOrientationDownMirrored : UIImageOrientationDown;
-    }
-    NSLog(@"orientation: device: %ld  image:%ld",
-          (long)deviceOrientation, (long)imageOrientation);
-
     NSError *error;
-    AVCaptureDeviceInput *input = [AVCaptureDeviceInput
+    assert(delegate);
+    
+    // XXX if we already have a session, do we need to shut it down?
+    
+    if (captureSession) {
+        [captureSession stopRunning];
+        captureSession = nil;
+    }
+
+    captureSession = [[AVCaptureSession alloc] init];
+    if (error) {
+        NSLog(@"startSession: could not lock camera: %@",
+              [error localizedDescription]);
+        return;
+    }
+    
+    AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
                                    deviceInputWithDevice:captureDevice
                                    error:&error];
     if (error) {
@@ -158,52 +144,65 @@
               [error localizedDescription]);
         return;
     }
-
-    captureSession = [[AVCaptureSession alloc] init];
-    assert(delegate);
-    AVCaptureVideoDataOutput *videoOutput = [[AVCaptureVideoDataOutput alloc] init];
-    assert(videoOutput);
+    if ([captureSession canAddInput:videoInput]) {
+        [captureSession addInput:videoInput];
+    } else {
+        NSLog(@"**** could not add camera input");
+    }
     
-    [captureSession beginConfiguration];
-    for (AVCaptureDeviceInput *input in captureSession.inputs)
-        [captureSession removeInput:input];
-    
-    captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
-    [captureSession addInput:input];
-    [captureSession commitConfiguration];
-
-    videoOutput.automaticallyConfiguresOutputBufferDimensions = YES;
-    videoOutput.videoSettings = @{
+    AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
+    assert(dataOutput);
+    dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
+    dataOutput.videoSettings = @{
         (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
     };
-    
+    dataOutput.alwaysDiscardsLateVideoFrames = YES;
     dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
-    [videoOutput setSampleBufferDelegate:delegate queue:queue];
-    videoOutput.alwaysDiscardsLateVideoFrames = YES;
+    [dataOutput setSampleBufferDelegate:delegate queue:queue];
 
-    [captureSession beginConfiguration];
-    if (![captureSession canAddOutput:videoOutput]) {
-        NSLog(@"** inconceivable, cannot add data output");
-        captureSession = nil;
-        return;
+    if ([captureSession canAddOutput:dataOutput]) {
+        [captureSession addOutput:dataOutput];
+    } else {
+        NSLog(@"**** could not add data output");
     }
-    [captureSession addOutput:videoOutput];
-    [captureSession commitConfiguration];
     
-#ifdef doesntmatter
-- (void) setFrame: (CGRect) frame {
-    captureVideoPreviewLayer.frame = frame;
-    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    [captureSession beginConfiguration];
+    captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
+    [captureSession commitConfiguration];
 
-    captureVideoPreviewLayer.connection.videoOrientation = [UIDevice currentDevice].orientation == UIDeviceOrientationPortrait ?
-        AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeRight;
-}
-#endif
-
-#ifdef notyet
+    AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
+    NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
+    
+    //    imageOrientation = frontCamera ? UIImageOrientationDownMirrored : UIImageOrientationDown;
+    
+    AVCaptureVideoOrientation videoOrientation;
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationUnknown:
+        case UIDeviceOrientationPortrait:
+        case UIDeviceOrientationFaceDown:
+            videoOrientation = AVCaptureVideoOrientationPortrait;
+            break;
+        case UIDeviceOrientationPortraitUpsideDown:
+            videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            imageOrientation = frontCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+            break;
+        case UIDeviceOrientationFaceUp:
+        case UIDeviceOrientationLandscapeRight:
+            videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+            imageOrientation = frontCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            break;
+    }
+    videoConnection.videoOrientation = videoOrientation;
+    videoConnection.videoMirrored = YES;
+    videoConnection.enabled = YES;
+    
+    [captureDevice lockForConfiguration:&error];
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, 24 );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-
     if (captureDevice.lowLightBoostSupported)
         [captureDevice automaticallyEnablesLowLightBoostWhenAvailable];
     if ([captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure])
@@ -212,7 +211,22 @@
         captureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
     if (captureDevice.smoothAutoFocusSupported)
         captureDevice.smoothAutoFocusEnabled = YES;
+    captureDevice.activeFormat = selectedFormat;
     [captureDevice unlockForConfiguration];
+    
+#ifdef notdef
+    AVCaptureVideoPreviewLayer *previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
+    previewLayer.frame = self.view.layer.bounds;
+    [self.view.layer addSublayer:previewLayer];
+
+
+    - (void) setFrame: (CGRect) frame {
+    captureVideoPreviewLayer.frame = frame;
+    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
+
+    captureVideoPreviewLayer.connection.videoOrientation = [UIDevice currentDevice].orientation == UIDeviceOrientationPortrait ?
+        AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeRight;
+}
 
     connection = [videoOutput.connections objectAtIndex:0];
     if (connection.supportsVideoMirroring)
@@ -229,12 +243,10 @@
     captureVideoPreviewLayer.session = captureSession;
     return nil;
 #endif
-
 }
 
 - (void) startCamera {
     NSLog(@"startCamera");
-    NSLog(@"  orientation: %ld", (long)connection.videoOrientation);
     if (![self isCameraOn])
         [captureSession startRunning];
 }

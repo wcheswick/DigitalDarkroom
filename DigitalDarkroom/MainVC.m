@@ -412,16 +412,17 @@ enum {
         // out what is available for the current camera and orientation.
         
         if (ISCAMERA(currentSource.sourceType)) {
+            [cameraController selectCamera:currentSource.sourceType];
             f.size = [cameraController setupCameraForSize:f.size];
             transformedView.frame = f;
         } else {
             f.size.height = 0.8*f.size.height;
             transformedView.frame = f;
+            transformedView.image = [self centerImage:currentSource.image
+                                               inSize:f.size];
         }
         
-        previewView = transformedView;
-        AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformedView.layer;
-        cameraController.captureVideoPreviewLayer = previewLayer;
+        previewView = transformedView;  // used?
 
         f.origin.x = 0;
         f.origin.y = BELOW(transformedView.frame) + SEP;
@@ -431,7 +432,7 @@ enum {
         statsLabel.font = [UIFont
                             monospacedSystemFontOfSize:TRANSTEXT_H-4
                             weight:UIFontWeightMedium];
-        statsLabel.backgroundColor = [UIColor yellowColor];
+        statsLabel.backgroundColor = [UIColor whiteColor];
 
         transformedView.backgroundColor = [UIColor whiteColor];
         SET_VIEW_HEIGHT(outputView, BELOW(statsLabel.frame));
@@ -472,28 +473,6 @@ enum {
             but.layer.cornerRadius = 6.0;
             
             InputSource *source = [inputSources objectAtIndex:i];
-#ifdef notdef
-            
-            if (currentSource && ISCAMERA(currentSource.sourceType)) {
-                [cameraController stopCamera];
-                currentSource.button.highlighted = NO;
-                currentSource.button.selected = NO;
-                [currentSource.button setBackgroundImage:NULL forState:UIControlStateNormal];
-                [currentSource.button setNeedsDisplay];
-                capturing = NO;
-            }
-            
-            currentSource = newSource;
-            if (ISCAMERA(currentSource.sourceType)) {
-                [cameraController selectCamera:currentSource.sourceType];
-                transforms.imageOrientation = cameraController.imageOrientation;
-                currentSource.button.highlighted = YES;
-                capturing = YES;
-                [cameraController startCamera];
-            } else {
-                [self useImage:currentSource.image];
-            }
-#endif
             switch (i) {
                 case FrontCamera:
                     [but setTitle:@"Front camera" forState:UIControlStateNormal];
@@ -527,10 +506,17 @@ enum {
         }
     }
     
+    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformedView.layer;
+    //cameraController.captureVideoPreviewLayer = previewLayer;
+
+    if (ISCAMERA(currentSource.sourceType)) {
+        [cameraController startSession];
+        [cameraController startCamera];
+    }
+    
     [transformsNavVC.view setNeedsDisplay];
     [transformsVC.tableView reloadData];    // ... needed
 }
-
 
 - (void) updateStatsLabel: (float) fps droppedPerSec:(float)dps busyPerSec:(float)bps {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -631,6 +617,27 @@ enum {
     }
 }
 
+- (void)captureOutput:(AVCaptureOutput *)captureOutput
+didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
+       fromConnection:(AVCaptureConnection *)captureConnection {
+    frameCount++;
+
+    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateThumb:capturedImage];
+        UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        self->transformedView.image = transformed;
+        [self->transformedView setNeedsDisplay];
+    });
+}
+
+- (void)captureOutput:(AVCaptureOutput *)captureOutput
+  didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
+       fromConnection:(nonnull AVCaptureConnection *)connection {
+    NSLog(@"dropped");
+    droppedCount++;
+}
+
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
@@ -654,29 +661,6 @@ enum {
                                    orientation:[cameraController imageOrientation]];
     CGImageRelease(quartzImage);
     return image;
-}
-
-- (void)captureOutput:(AVCaptureOutput *)captureOutput
-didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
-       fromConnection:(AVCaptureConnection *)captureConnection {
-    frameCount++;
-    
-    if (!capturing)
-        return;
-
-    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateThumb:capturedImage];
-        UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
-        self->transformedView.image = transformed;
-        [self->transformedView setNeedsDisplay];
-    });
-}
-
-- (void)captureOutput:(AVCaptureOutput *)captureOutput
-  didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
-       fromConnection:(nonnull AVCaptureConnection *)connection {
-    droppedCount++;
 }
 
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {

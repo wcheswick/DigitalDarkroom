@@ -28,6 +28,7 @@
 		FBB1D9FA232FE56700845DF1 /* Links in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F1232FE56700845DF1 /* Links */; };
 		FBB1D9FB232FE56700845DF1 /* images in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F2232FE56700845DF1 /* images */; };
 		FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9FD2330FD0900845DF1 /* Transform.m */; };
+		FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */; };
 		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
 		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
 		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
@@ -63,6 +64,8 @@
 		FBB1D9F3232FE56700845DF1 /* colorblind.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = colorblind.h; sourceTree = "<group>"; };
 		FBB1D9FC2330FD0900845DF1 /* Transform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Transform.h; sourceTree = "<group>"; };
 		FBB1D9FD2330FD0900845DF1 /* Transform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Transform.m; sourceTree = "<group>"; };
+		FBB4E3D2251E5998000D99B7 /* ThimblebySRDS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThimblebySRDS.h; sourceTree = "<group>"; };
+		FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = InglisEtAlSRDS.c; sourceTree = "<group>"; };
 		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -172,6 +175,8 @@
 				FBB1D9FD2330FD0900845DF1 /* Transform.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
+				FBB4E3D2251E5998000D99B7 /* ThimblebySRDS.h */,
+				FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */,
 				FBB1D9F2232FE56700845DF1 /* images */,
 				FBB1D9D9232FE3F400845DF1 /* Transforms */,
 				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
@@ -267,6 +272,7 @@
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
+				FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */,
 				FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */,
 				FBB1D9E7232FE44400845DF1 /* etc.c in Sources */,
 				FBB1D9E3232FE44400845DF1 /* geom.c in Sources */,
