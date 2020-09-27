@@ -50,6 +50,8 @@ enum {
 @property (nonatomic, strong)   UILabel *statsLabel;
 @property (nonatomic, strong)   NSTimer *statsTimer;
 @property (nonatomic, strong)   NSDate *lastTime;
+@property (assign)              NSTimeInterval transformTotalElapsed;
+@property (assign)              int transformCount;
 
 @property (nonatomic, strong)   UINavigationController *transformsNavVC;
 @property (nonatomic, strong)   UITableViewController *transformsVC;
@@ -81,6 +83,7 @@ enum {
 @synthesize cameraController;
 @synthesize transformsNavVC;
 @synthesize transformsVC, activeListVC;
+@synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, droppedCount, busyCount, cps, dps, mps;
 @synthesize statsTimer, lastTime;
 @synthesize transforms;
@@ -93,6 +96,8 @@ enum {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
+        transformTotalElapsed = 0;
+        transformCount = 0;
         
         inputSources = [[NSMutableArray alloc] init];
         
@@ -315,10 +320,18 @@ enum {
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];
     lastTime = now;
+    float transformAveTime;
+    if (transformCount)
+        transformAveTime = 1000.0 *(transformTotalElapsed/transformCount);
+    else
+        transformAveTime = NAN;
+    
     [self updateStatsLabel: frameCount/elapsed
-                       droppedPerSec:droppedCount/elapsed
-                       busyPerSec:busyCount/elapsed];
+             droppedPerSec:droppedCount/elapsed
+                busyPerSec:busyCount/elapsed
+              transformAve:transformAveTime];
     frameCount = droppedCount = busyCount = 0;
+    transformCount = transformTotalElapsed = 0;
 }
 
 - (IBAction) doInputSelect:(UIButton *)button {
@@ -518,10 +531,13 @@ enum {
     [transformsVC.tableView reloadData];    // ... needed
 }
 
-- (void) updateStatsLabel: (float) fps droppedPerSec:(float)dps busyPerSec:(float)bps {
+- (void) updateStatsLabel: (float) fps
+            droppedPerSec:(float)dps
+               busyPerSec:(float)bps
+             transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f  dropped/s: %.1f  busy/s: %.1f",
-                                 fps, dps, bps];
+        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f  dropped/s: %.1f  busy/s: %.1f  exec ave: %.1fms",
+                                 fps, dps, bps, tams];
         [self->statsLabel setNeedsDisplay];
     });
 }
@@ -625,7 +641,13 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
+        
+        NSDate *transformStart = [NSDate now];
         UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
+        self->transformTotalElapsed += elapsed;
+        self->transformCount++;
+        
         self->transformedView.image = transformed;
         [self->transformedView setNeedsDisplay];
     });
@@ -637,7 +659,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     NSLog(@"dropped");
     droppedCount++;
 }
-
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
@@ -778,14 +799,12 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) adjustParam:(UISlider *)slider {
     if (slider.tag < SLIDER_TAG_OFFSET)
         return;
-#ifdef notdef
+    int row = (int)slider.tag - SLIDER_TAG_OFFSET;
+    Transform *t = [transforms.sequence objectAtIndex:row];
     @synchronized (transforms.sequence) {
-        Trans
-        <#statements#>
+        t.p = slider.value;
+        t.pUpdated = YES;
     }
-    [transforms changeParamFor:(int)slider.tag - SLIDER_TAG_OFFSET
-                         to:(int)slider.value];
-#endif
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -797,8 +816,9 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         Transform *transform = [transformList objectAtIndex:indexPath.row];
         Transform *thisTransform = [transform copy];
         assert(thisTransform.remapTable == NULL);
+        thisTransform.p = thisTransform.initial;
         @synchronized (transforms.sequence) {
-            [transforms.sequence addObject:transform];
+            [transforms.sequence addObject:thisTransform];
             transforms.sequenceChanged = YES;
         }
         [self.activeListVC.tableView reloadData];

@@ -38,8 +38,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 
-//- (void) changeParamFor:(int)executeIndex  to:(NSUInteger) v;
-
 @end
 
 NS_ASSUME_NONNULL_END

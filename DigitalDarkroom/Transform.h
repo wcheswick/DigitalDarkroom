@@ -41,8 +41,10 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
     remapPolarPixelFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
     int low, initial, high;   // parameter setting and range for transform
-    int p, updatedP;           // parameter, and updated value
+    int p;              // parameter
+    BOOL pUpdated;      // if it has changed
     PixelIndex_t * _Nullable remapTable;
+    NSTimeInterval elapsedProcessingTime;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
@@ -52,8 +54,10 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
 @property (copy)                remapImageFunction_t remapImageF;
 @property (assign)              transform_t type;
 @property (assign)              int low, initial, high;
-@property (assign)              int p, updatedP;
+@property (assign)              int p;
+@property (assign)              BOOL pUpdated;
 @property (assign)              PixelIndex_t * _Nullable remapTable;
+@property (assign)              NSTimeInterval elapsedProcessingTime;
 
 // not used
 + (Transform *)colorTransform:(NSString *)n description:(NSString *)d

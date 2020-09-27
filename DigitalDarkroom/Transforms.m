@@ -241,9 +241,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         
         @synchronized (sequence) {
             for (Transform *t in sequence) {
-                if (t.p != t.updatedP) {
-                    t.p = t.updatedP;
+                if (t.pUpdated) {
                     [t clearRemap];
+                    t.pUpdated = NO;
                 }
                 [executeList addObject:t];
             }
@@ -305,6 +305,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
         
+        NSDate *transformStart = [NSDate now];
         [self performTransform:transform
                           from:im[source].buf
                             to:im[dest].buf
@@ -313,6 +314,8 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         int t = source;     // swap
         source = dest;
         dest = t;
+        NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
+        transform.elapsedProcessingTime += elapsed;
     }
 
 #ifdef TEST0
@@ -340,19 +343,19 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 }
 
 - (void) performTransform:(Transform *)transform
-                     from:(Pixel *)source
-                       to:(Pixel *)dest
+                     from:(Pixel *)srcBuf
+                       to:(Pixel *)dstBuf
                    height:(size_t) h
                     width:(size_t) w {
     switch (transform.type) {
         case ColorTrans: {
-            for (int i=0; i<configuredPixelsInImage; i++)
-            dest[i] = transform.pointF(source[i]);
+            for (int i=0; i<configuredPixelsInImage; i++) {
+                dstBuf[i] = transform.pointF(srcBuf[i]);
+            }
             return;
         }
         case GeometricTrans:
             return;
-            break;
         case RemapTrans:
             if (!transform.remapTable) {
                 transform.remapTable = [self computeMappingFor:transform];
@@ -383,15 +386,16 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                         p = UnsetColor;
                         break;
                     default:
-                        p = source[pixelSource];
+                        p = srcBuf[pixelSource];
                 }
-                dest[i] = p;
+                dstBuf[i] = p;
             }
             break;
         case AreaTrans:
-            transform.areaF(source, dest, transform.p);
+            transform.areaF(srcBuf, dstBuf, transform.p);
             break;
         case EtcTrans:
+            NSLog(@"stub - etctrans");
             break;
     }
 }
@@ -400,26 +404,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
-    lastTransform = [Transform areaTransform: @"Test remap color frame"
-                                 description: @"Test remap color frame"
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                if (x <= 10 || y <= 10 || x > w-10 || y > h-10)
-                    *table++ = Remap_Red;
-                else if (x <= 20 || y <= 20 || x > w-20 || y > h-20)
-                    *table++ = Remap_Blue;
-                else if (x <= 30 || y <= 30 || x > w-30 || y > h-30)
-                    *table++ = Remap_Green;
-                else
-                    *table++ = Remap_Yellow;
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
 
 #ifdef NOTYET
+
         lastTransform = [Transform areaTransform: @"remap test"
                                          description: @"testing"
                                           remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
@@ -488,7 +475,6 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         }
     }];
 
-#ifdef notdef
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                   description: @"Designed by an 8-year old"
                                   remapPixel:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
@@ -505,7 +491,6 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         srcX = (x - firstX);
         return PI(im, srcX, y);
     }];
-#endif
     [transformList addObject:lastTransform];
     
 #ifdef notdef
@@ -530,11 +515,11 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
             (*rmp)[CENTER_X+x][y] = (*rmp)[CENTER_X-x][y] =
                 (Point){Remap_White,0};
     }
-#endif
-#endif
 
     lastTransform.initial = 20; lastTransform.low = 4; lastTransform.high = 200;
     [transformList addObject:lastTransform];
+#endif
+#endif
     
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
@@ -873,54 +858,73 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-    [transformList addObject:[Transform colorTransform: @"Colorize"
-                                           description: @"Add color"
-                                        pointTransform:^Pixel (Pixel p) {
-        channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-        return SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-    }]];
+    lastTransform = [Transform areaTransform: @"Solarize"
+                                 description: @"Simulate extreme overexposure"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                PixelIndex_t pi = PI(x,y);
+                Pixel p = src[pi];
+                dest[pi] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
+                                       p.g < Z/2 ? p.g : Z-p.g,
+                                       p.b < Z/2 ? p.b : Z-p.r);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
     
-    [transformList addObject:[Transform colorTransform: @"Solarize"
-                                           description: @""
-                                        pointTransform:^Pixel (Pixel p) {
-        return SETRGB(p.r < Z/2 ? p.r : Z-p.r,
-                      p.g < Z/2 ? p.g : Z-p.g,
-                      p.b < Z/2 ? p.b : Z-p.r);
-    }]];
+    lastTransform = [Transform areaTransform: @"Luminance"
+                                 description: @"Convert to brightness"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        // 5.2ms
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            int v = LUM(p);
+            *dest++ = SETRGB(v,v,v);
+        }
+#ifdef notdef
+        // 5.4ms
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            int v = LUM(src[pi]);
+            dest[pi] = SETRGB(v,v,v);
+        }
+        // 6ms:
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                PixelIndex_t pi = PI(x,y);
+                Pixel p = src[pi];
+                int v = LUM(p);
+                dest[pi] = SETRGB(v,v,v);
+            }
+        }
+#endif
+    }];
+    [transformList addObject:lastTransform];
     
-    [transformList addObject:[Transform colorTransform: @"Luminance"
-                                           description: @"Convert to brightness"
-                                        pointTransform:^Pixel (Pixel p) {
-        int v = LUM(p);
-        return SETRGB(v,v,v);
-    }]];
+    lastTransform = [Transform areaTransform: @"Colorize"
+                                 description: @"Add color"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+                dest[PI(x,y)] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
     
-#define TMASK 0xe0  // XX make variable
-    [transformList addObject:[Transform colorTransform: @"Truncate pixels"
-                                           description: @"Truncate pixel colors"
-                                        pointTransform:^Pixel (Pixel p) {
-        return  SETRGB(p.r&TMASK, p.g&TMASK, p.b&TMASK);
-    }]];
-
-    [transformList addObject:[Transform colorTransform: @"Swap colors"
-                                           description: @"R -> G -> B -> R"
-                                        pointTransform:^Pixel (Pixel p) {
-        return SETRGB(p.g, p.b, p.r);
-    }]];
-
-    [transformList addObject:[Transform colorTransform: @"Negative"
-                                           description: @"Invert pixel colors"
-                                        pointTransform:^Pixel (Pixel p) {
-        return SETRGB(Z-p.r, Z-p.g, Z-p.b);
-    }]];
-
-    [transformList addObject:[Transform colorTransform: @"Brighten"
-                                           description: @"Make brighter"
-                                        pointTransform:^Pixel (Pixel p) {
-        return SETRGB(p.r+(Z-p.r)/8,
-                      p.g+(Z-p.g)/8,
-                      p.b+(Z-p.b)/8);
-    }]];
+    lastTransform = [Transform areaTransform: @"Truncate pixels"
+                                 description: @"Truncate pixel colors"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        channel mask = ((1<<param) - 1) << (8 - param);
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
+        }
+    }];
+    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
+    [transformList addObject:lastTransform];
     
     // auto contrast?  guess that's an area transform
 }

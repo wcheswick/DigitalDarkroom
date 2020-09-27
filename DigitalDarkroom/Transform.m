@@ -17,8 +17,9 @@
 @synthesize remapPolarF;
 @synthesize type;
 @synthesize low, initial, high;
-@synthesize p, updatedP;
+@synthesize p, pUpdated;
 @synthesize remapTable;
+@synthesize elapsedProcessingTime;
 
 
 - (id)init {
@@ -29,8 +30,10 @@
         remapImageF = nil;
         remapPolarF = nil;
         low = initial = high = 0;
-        p = updatedP = initial;
+        p = initial;
+        pUpdated = NO;
         remapTable = NULL;
+        elapsedProcessingTime = 0;
     }
     return self;
 }
@@ -97,6 +100,9 @@
     copy.remapPolarF = remapPolarF;
     copy.low = low;
     copy.high = high;
+    copy.initial = initial;
+    copy.p = p;
+    copy.pUpdated = NO;
     copy.remapTable = NULL;
     return copy;
 }
