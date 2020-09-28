@@ -39,6 +39,7 @@
 /* Begin PBXFileReference section */
 		FB3012BD250BA85C0062A1FA /* InputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InputSource.h; sourceTree = "<group>"; };
 		FB3012BE250BA85C0062A1FA /* InputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InputSource.m; sourceTree = "<group>"; };
+		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
 		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
 		FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
@@ -93,6 +94,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		FB3A386B252226C6001FE7AB /* OptimizationProfiles */ = {
+			isa = PBXGroup;
+			children = (
+				FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */,
+			);
+			path = OptimizationProfiles;
+			sourceTree = "<group>";
+		};
 		FBB1D9CA232EBD7200845DF1 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -148,6 +157,7 @@
 				FBF5B3A8232E973F00DDFC4E /* DigitalDarkroom */,
 				FBF5B3A7232E973F00DDFC4E /* Products */,
 				FBB1D9CA232EBD7200845DF1 /* Frameworks */,
+				FB3A386B252226C6001FE7AB /* OptimizationProfiles */,
 			);
 			sourceTree = "<group>";
 		};
@@ -398,6 +408,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = HK64XTSZFA;
@@ -418,6 +429,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_USE_OPTIMIZATION_PROFILE = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = HK64XTSZFA;

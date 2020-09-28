@@ -119,20 +119,20 @@ enum {
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
+        
+        cameraController = [[CameraController alloc] init];
+        cameraController.delegate = self;
+        
+        cameras sourceIndex;
+        for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
+            if ([cameraController isCameraAvailable:sourceIndex])
+                break;
+        }
+        currentSource = [inputSources objectAtIndex:sourceIndex];
+        // [self.view setNeedsLayout];  // we do this anyway
+        frontButton = rearButton = nil;
+        cameraThumbView = nil;
     }
-    
-    cameraController = [[CameraController alloc] init];
-    cameraController.delegate = self;
-    
-    cameras sourceIndex;
-    for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
-        if ([cameraController isCameraAvailable:sourceIndex])
-            break;
-    }
-    currentSource = [inputSources objectAtIndex:sourceIndex];
-    // [self.view setNeedsLayout];  // we do this anyway
-    frontButton = rearButton = nil;
-    cameraThumbView = nil;
     return self;
 }
 

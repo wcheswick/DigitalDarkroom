@@ -12,7 +12,7 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+//#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)

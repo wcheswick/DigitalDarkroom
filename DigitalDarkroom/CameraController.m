@@ -201,8 +201,6 @@
     videoConnection.enabled = YES;
     
     [captureDevice lockForConfiguration:&error];
-    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, 24 );
-    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     if (captureDevice.lowLightBoostSupported)
         [captureDevice automaticallyEnablesLowLightBoostWhenAvailable];
     if ([captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure])
@@ -212,6 +210,10 @@
     if (captureDevice.smoothAutoFocusSupported)
         captureDevice.smoothAutoFocusEnabled = YES;
     captureDevice.activeFormat = selectedFormat;
+    // these must be after the activeFormat is set.  there are other conditions, see
+    // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
+    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     [captureDevice unlockForConfiguration];
     
 #ifdef notdef
