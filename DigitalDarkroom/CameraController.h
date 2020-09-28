@@ -26,8 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)  CGSize captureSize;
 
 
-- (BOOL) isCameraAvailable:(cameras) camera;
-- (void) selectCamera:(cameras) camera;
+- (BOOL) isCameraAvailable:(Cameras) camera;
+- (void) selectCamera:(Cameras) camera;
 - (CGSize) setupCameraForSize:(CGSize) availableSize;
 - (void) startSession;
 - (void) startCamera;

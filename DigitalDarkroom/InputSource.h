@@ -14,20 +14,22 @@ NS_ASSUME_NONNULL_BEGIN
 typedef enum {
     FrontCamera,
     RearCamera,
+    Front3DCamera,
+    Rear3DCamera,
     NotACamera,
-} cameras;
+} Cameras;
 
-#define NCAMERA (RearCamera+1)
+#define NCAMERA (NotACamera)
 #define ISCAMERA(i) ((i) < NCAMERA)
 
 @interface InputSource : NSObject {
-    cameras sourceType;
+    Cameras sourceType;
     NSString *label;
     UIImage *image;
     UIButton *button;
 }
 
-@property (assign)  cameras sourceType;
+@property (assign)  Cameras sourceType;
 @property (nonatomic, strong)   NSString *label;
 @property (nonatomic, strong)   UIImage *image;
 @property (nonatomic, strong)   UIButton *button;

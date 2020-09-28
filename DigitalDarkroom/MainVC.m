@@ -107,6 +107,8 @@ enum {
         
         [self addCameraSource:FrontCamera label:@"Front camera"];
         [self addCameraSource:RearCamera label:@"Rear camera"];
+        [self addCameraSource:Front3DCamera label:@"Front 3D camera"];
+        [self addCameraSource:Rear3DCamera label:@"Rear 3D camera"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
         [self addFileSource:@"ches.jpg" label:@"Ches"];
         [self addFileSource:@"800px-RCA_Indian_Head_test_pattern.jpg"
@@ -123,7 +125,7 @@ enum {
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
         
-        cameras sourceIndex;
+        Cameras sourceIndex;
         for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
             if ([cameraController isCameraAvailable:sourceIndex])
                 break;
@@ -136,7 +138,7 @@ enum {
     return self;
 }
 
-- (void) addCameraSource:(cameras)c label:(NSString *)l {
+- (void) addCameraSource:(Cameras)c label:(NSString *)l {
     InputSource *is = [[InputSource alloc] init];
     is.sourceType = c;
     is.label = l;
@@ -484,6 +486,8 @@ enum {
             but.titleLabel.numberOfLines = 0;
             but.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
             but.titleLabel.adjustsFontSizeToFitWidth = YES;
+            [but setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
+            but.titleLabel.textColor = [UIColor blueColor];
             
             but.layer.borderWidth = 2.0;
             but.layer.borderColor = [UIColor blackColor].CGColor;

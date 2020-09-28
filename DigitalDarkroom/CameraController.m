@@ -17,7 +17,7 @@
 
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
 @property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
-@property (assign)              BOOL frontCamera;
+@property (assign)              BOOL frontFacingCamera, depthAvailable;
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
@@ -31,7 +31,7 @@
 @synthesize imageOrientation;
 
 @synthesize captureDevice, captureSize;
-@synthesize frontCamera;
+@synthesize frontFacingCamera, depthAvailable;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -49,41 +49,66 @@
     return self;
 }
 
-- (AVCaptureDevice *) captureDevice:(BOOL) front {
+- (AVCaptureDevice *) captureDevice:(Cameras) camera {
     AVCaptureDevice *captureDevice = nil;
-    if (front) {
-        captureDevice = [AVCaptureDevice
-                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                         mediaType: AVMediaTypeVideo
-                         position: AVCaptureDevicePositionFront];
-        if (!captureDevice) {
+    switch (camera) {
+        case FrontCamera:
+            frontFacingCamera = YES;
+            depthAvailable = NO;
             captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeVideo
                              position: AVCaptureDevicePositionFront];
-        }
-    } else {
-        captureDevice = [AVCaptureDevice
-                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                         mediaType: AVMediaTypeVideo
-                         position: AVCaptureDevicePositionBack];
-        if (!captureDevice)
+            if (!captureDevice) {
+                captureDevice = [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                 mediaType: AVMediaTypeVideo
+                                 position: AVCaptureDevicePositionFront];
+            }
+            break;
+        case Front3DCamera:
+            frontFacingCamera = YES;
+            depthAvailable = YES;
             captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
+                             mediaType: AVMediaTypeVideo
+                             position: AVCaptureDevicePositionFront];
+            break;
+        case RearCamera:
+            frontFacingCamera = NO;
+            depthAvailable = NO;
+            captureDevice = [AVCaptureDevice
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeVideo
                              position: AVCaptureDevicePositionBack];
+            if (!captureDevice)
+                captureDevice = [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                 mediaType: AVMediaTypeVideo
+                                 position: AVCaptureDevicePositionBack];
+            break;
+        case Rear3DCamera:
+            frontFacingCamera = NO;
+            depthAvailable = YES;
+            captureDevice = [AVCaptureDevice
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                             mediaType: AVMediaTypeVideo
+                             position: AVCaptureDevicePositionBack];
+            break;
+       default:
+            NSLog(@" *** inconceivable, selected non-existant camera, %d", camera);
+            return nil;
     }
     return captureDevice;
 }
 
-- (BOOL) isCameraAvailable:(cameras) camera {
+- (BOOL) isCameraAvailable:(Cameras) camera {
     assert(ISCAMERA(camera));
-    return [self captureDevice:(camera == FrontCamera)];
+    return [self captureDevice:camera];
 }
 
-- (void) selectCamera:(cameras) camera {
-    frontCamera = (camera == FrontCamera);
-    captureDevice = [self captureDevice:frontCamera];
+- (void) selectCamera:(Cameras) camera {
+    captureDevice = [self captureDevice:camera];
     assert(captureDevice);
 }
 
@@ -114,6 +139,7 @@
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }
+    
     // selectedFormat doesn't work here.  Do it after the session starts.
     return capTureSize;
 }
@@ -173,7 +199,7 @@
     AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
     NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
     
-    //    imageOrientation = frontCamera ? UIImageOrientationDownMirrored : UIImageOrientationDown;
+    //    imageOrientation = frontFacingCamera ? UIImageOrientationDownMirrored : UIImageOrientationDown;
     
     AVCaptureVideoOrientation videoOrientation;
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
@@ -187,13 +213,13 @@
             videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
             break;
         case UIDeviceOrientationLandscapeLeft:
-            imageOrientation = frontCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            imageOrientation = frontFacingCamera ? UIImageOrientationUp : UIImageOrientationUp;
             videoOrientation = AVCaptureVideoOrientationLandscapeRight;
             break;
         case UIDeviceOrientationFaceUp:
         case UIDeviceOrientationLandscapeRight:
             videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-            imageOrientation = frontCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            imageOrientation = frontFacingCamera ? UIImageOrientationUp : UIImageOrientationUp;
             break;
     }
     videoConnection.videoOrientation = videoOrientation;
@@ -210,6 +236,10 @@
     if (captureDevice.smoothAutoFocusSupported)
         captureDevice.smoothAutoFocusEnabled = YES;
     captureDevice.activeFormat = selectedFormat;
+ 
+    if (depthAvailable) {
+        
+    }
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );

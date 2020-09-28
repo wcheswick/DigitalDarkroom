@@ -111,11 +111,12 @@ Pixel *imBufs[2];
 }
 
 - (void) buildTransformList {
-    [self addAreaTransforms];
-    [self addColorTransforms];
     [self addGeometricTransforms];
     [self addMiscTransforms];
     [self addArtTransforms];
+    // tested:
+    [self addAreaTransforms];
+    [self addColorTransforms];
 }
 
 #ifdef notyet
@@ -693,6 +694,28 @@ int sourceImageIndex, destImageIndex;
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+#ifdef notyet
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                  description: @""
+                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
+        for (int y=0; y<h; y++) {
+            for (int x=(int)w-100; x<(int)w; x++) {
+                table[TI(x,y,w)] = TI(x, y, w);
+                table[TI(x - (w-100),y,w)] = TI(x, y, w);
+            }
+        }
+    }];
+        double r1 = sqrt(r*MAX_R);
+        int y = (int)CenterY+(int)(r1*sin(a));
+        if (y < 0)
+            y = 0;
+        else if (y >= currentFormat.h)
+            y = (int)currentFormat.h - 1;
+        return (RemapPoint_t){CenterX + (int)(r1*cos(a)), y};
+    }];
+    [transformList addObject:lastTransform];
+#endif
+
 #ifdef notyet
     lastTransform = [Transform areaTransform: @"Cone projection"
                                   description: @""
