@@ -61,6 +61,7 @@ enum {
 @property (nonatomic, strong)   UIBarButtonItem *undoButton, *trashButton;
 
 @property (assign)              volatile int frameCount, droppedCount, busyCount;
+@property (assign)              BOOL busy;
 @property (assign)              float cps, dps, mps;
 
 @property (nonatomic, strong)   UIBarButtonItem *addButton;
@@ -85,6 +86,7 @@ enum {
 @synthesize transformsVC, activeListVC;
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, droppedCount, busyCount, cps, dps, mps;
+@synthesize busy;
 @synthesize statsTimer, lastTime;
 @synthesize transforms;
 @synthesize addButton;
@@ -98,6 +100,8 @@ enum {
         transforms = [[Transforms alloc] init];
         transformTotalElapsed = 0;
         transformCount = 0;
+        busy = NO;
+        
         
         inputSources = [[NSMutableArray alloc] init];
         
@@ -638,6 +642,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
 
+    if (busy) {
+        busyCount++;
+        return;
+    }
+    busy = YES;
+
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
@@ -647,6 +657,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
         self->transformTotalElapsed += elapsed;
         self->transformCount++;
+        self->busy = NO;
         
         self->transformedView.image = transformed;
         [self->transformedView setNeedsDisplay];
@@ -767,6 +778,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             slider.minimumValue = transform.low;
             slider.maximumValue = transform.high;
             slider.tag = indexPath.row + SLIDER_TAG_OFFSET;
+            //UILabel *valueLabel = [[UILabel alloc] init];
             [slider addTarget:self action:@selector(adjustParam:)
              forControlEvents:UIControlEventValueChanged];
             [cell.contentView addSubview:slider];
@@ -803,6 +815,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     Transform *t = [transforms.sequence objectAtIndex:row];
     @synchronized (transforms.sequence) {
         t.p = slider.value;
+        NSLog(@"value is %f", slider.value);
         t.pUpdated = YES;
     }
 }

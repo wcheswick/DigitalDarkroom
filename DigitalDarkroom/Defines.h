@@ -19,7 +19,7 @@ typedef struct {
 //  several small negative numbers indicating a particular color instead of
 //  an existing pixel.
 
-typedef u_long PixelIndex_t;
+typedef long PixelIndex_t;
 
 #define LATER   0   /*later*/
 

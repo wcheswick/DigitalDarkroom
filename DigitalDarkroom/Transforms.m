@@ -12,7 +12,7 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-// #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
@@ -33,9 +33,9 @@
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
 
-#define R(x) x.r
-#define G(x) x.g
-#define B(x) x.b
+#define R(x) (x).r
+#define G(x) (x).g
+#define B(x) (x).b
 
 enum SpecialRemaps {
     Remap_White = -1,
@@ -57,6 +57,34 @@ enum SpecialRemaps {
 size_t configuredWidth, configuredHeight;
 size_t configuredBytesPerRow, configuredPixelsInImage;
 
+
+#define RPI(x,y)    (PixelIndex_t)(((y)*configuredWidth) + (x))
+
+#ifdef DEBUG_TRANSFORMS
+
+// Some of our transforms might be a little buggy around the edges.  Make sure
+// all the points are in range.
+
+#define PI(x,y)   dPI((int)(x),(int)(y))   // pixel index in a buffer
+
+PixelIndex_t dPI(int x, int y) {
+    assert(x >= 0);
+    assert(x < configuredWidth);
+    assert(y >= 0);
+    assert(y < configuredHeight);
+    PixelIndex_t index = RPI(x,y);
+    assert(index >= 0 && index < configuredPixelsInImage);
+    return index;
+}
+
+#else
+
+#define PI(x,y)   RPI((x),(y))
+
+#endif
+
+Pixel *imBufs[2];
+
 @implementation Transforms
 
 @synthesize categoryNames;
@@ -75,6 +103,7 @@ size_t configuredBytesPerRow, configuredPixelsInImage;
         categoryList = [[NSMutableArray alloc] init];
         sequence = [[NSMutableArray alloc] init];
         sequenceChanged = NO;
+        imBufs[0] = imBufs[1] = NULL;
         executeList = [[NSMutableArray alloc] init];
         [self buildTransformList];
     }
@@ -88,27 +117,6 @@ size_t configuredBytesPerRow, configuredPixelsInImage;
     [self addMiscTransforms];
     [self addArtTransforms];
 }
-
-#ifdef DEBUG_TRANSFORMS
-
-// Some of our transforms might be a little buggy around the edges.  Make sure
-// all the points are in range.
-
-#define PI(x,y)   dPI(x,y)(((y)*configuredWidth) + (x))   // pixel index in a buffer
-
-PixelIndex_t dPI(int x, int y) {
-    assert(x >= 0);
-    assert(x < configuredWidth);
-    assert(y >= 0);
-    assert(y < configuredHeight);
-    return (((y)*configuredWidth) + (x));
-}
-
-#else
-
-#define PI(x,y)   (PixelIndex_t)(((y)*configuredWidth) + (x))   // pixel index in a buffer
-
-#endif
 
 #ifdef notyet
 - (void) setRemapForTransform:(Transform *)transform
@@ -168,14 +176,11 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     PixelIndex_t *remapTable = (PixelIndex_t *)calloc(configuredPixelsInImage, sizeof(PixelIndex_t));
     
 #ifdef DEBUG_TRANSFORMS
-    int i = 0;
-    for (int y=0; y<configuredHeight; y++) {
-        for (int x=0; x<configuredWidth; x++) {
-            transform.remapTable[i++] = Remap_Unset;
-        }
-    }
+    for (int i=0; i<configuredPixelsInImage; i++)
+        remapTable[i] = Remap_Unset;
 #endif
-    
+    transform.remapTable = remapTable;
+
     if (transform.remapPolarF) {     // polar remap
         size_t centerX = configuredWidth/2;
         size_t centerY = configuredHeight/2;
@@ -199,16 +204,6 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     }
     return remapTable;
 }
-
-#ifdef notdef
-- (void) updateParams {
-    for (int i=0; i<executeList.count; i++) {
-        Transform *transform = [executeList objectAtIndex:i];
-        if (transform.changed)
-            [self precomputeTransform:transform];
-    }
-}
-#endif
 
 
 // It is important that the user interface doesn't change the transform list
@@ -235,6 +230,9 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 // when the screen size changes.  If it needs updating, the table pointer is NULL.
 // Only this routine changes this pointer.
 
+
+int sourceImageIndex, destImageIndex;
+
 - (UIImage *) executeTransformsWithImage:(UIImage *) image {
     if (sequenceChanged) {
         [executeList removeAllObjects];
@@ -255,6 +253,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     size_t width = (int)CGImageGetWidth(imageRef);
     size_t height = (int)CGImageGetHeight(imageRef);
     size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
+    assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
     size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
     assert(bitsPerPixel/8 == sizeof(Pixel));
     size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
@@ -280,65 +279,56 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         for (Transform *t in executeList) {
             [t clearRemap];
         }
+        
+        // reallocate source and destination image buffers
+        NSLog(@" ** reallocate image buffers to new size");
+        for (int i=0; i<2; i++) {
+            if (imBufs[i])
+                free(imBufs[i]);
+            imBufs[i] = (Pixel *)calloc(configuredPixelsInImage, sizeof(Pixel));
+        }
     }
     
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    
-    // We set up two buffers we can operate between.
-    struct bufs {
-        CGContextRef ctx;
-        Pixel *buf;
-    } im[2];
+    int sourceImageIndex = 0;
+    int destImageIndex = 1;
 
-    for (int i=0; i<2; i++) {
-        im[i].ctx = CGBitmapContextCreate(NULL, width, height,
-                                          bitsPerComponent, bytesPerRow,
-                                          colorSpace, BITMAP_OPTS);
-        CGContextDrawImage(im[i].ctx, CGRectMake(0, 0, width, height), imageRef);
-        im[i].buf = (Pixel *)CGBitmapContextGetData(im[i].ctx);
-        assert(((u_long)im[i].buf & 0x03) == 0); // word-aligned pixels
-    }
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(imBufs[sourceImageIndex], width, height,
+                                                 bitsPerComponent, bytesPerRow, colorSpace,
+                                                 BITMAP_OPTS);
+    CGColorSpaceRelease(colorSpace);
     
-    int source = 0;
-    int dest = 1;
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGImageRelease(imageRef);
     
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
         
         NSDate *transformStart = [NSDate now];
         [self performTransform:transform
-                          from:im[source].buf
-                            to:im[dest].buf
+                          from:imBufs[sourceImageIndex]
+                            to:imBufs[destImageIndex]
                         height:height
                          width:width];
-        int t = source;     // swap
-        source = dest;
-        dest = t;
+        int t = sourceImageIndex;     // swap
+        sourceImageIndex = destImageIndex;
+        destImageIndex = t;
         NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
         transform.elapsedProcessingTime += elapsed;
     }
-
-#ifdef TEST0
-        memcpy(im[dest].buf, im[source].buf, pixelBufSize);
-   for (int y=10; y< height/2; y+=3) {
-        for (int x= 10; x<100; x++)
-        im[dest].buf[PIN(x,y)] = Green;
+    
+    // copy our bytes into the context.  This is a kludge.
+    
+    if (sourceImageIndex) {
+        memcpy(imBufs[0], imBufs[sourceImageIndex], configuredPixelsInImage*sizeof(Pixel));
     }
-#endif
-    
-    // Extract the image, and we are done.
-    
-    CGImageRef quartzImage = CGBitmapContextCreateImage(im[source].ctx);
-    for (int i=0; i<2; i++) {
-        CGContextRelease(im[i].ctx);
-    }
-    CGColorSpaceRelease(colorSpace);
-    
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
                                                scale:(CGFloat)1.0
                                          orientation:imageOrientation];
     CGImageRelease(quartzImage);
-    CGImageRelease(imageRef);
+    CGContextRelease(context);
+
     return transformed;
 }
 
@@ -530,8 +520,8 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
             }
         }
     }];
-    lastTransform.low = 3;
-    lastTransform.initial = 10;
+    lastTransform.low = 4;
+    lastTransform.initial = 6;
     lastTransform.high = 200;
     [transformList addObject:lastTransform];
 
@@ -560,64 +550,75 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     }];
     [transformList addObject:lastTransform];
 
-#ifdef notyet
-    //(^ __nullable __unsafe_unretained remapPixelFunction_t)(size_t x, size_t y, int p, size_t w, size_t h);
-    [transformList addObject:[Transform areaTransform: @"Sobel"
+    lastTransform = [Transform areaTransform: @"Sobel"
                                           description: @"Sobel filter"
-                                        areaFunction: ^(Image_t *src, Image_t *dest, int p) {
-        size_t maxY = src->h;
-        size_t maxX = src->w;
-        //        int bpr = src->bytes_per_row;
-        int x, y;
-        
-        for (y=1; y<maxY-1; y++) {
-            for (x=1; x<maxX-1; x++) {
+                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
+#define P(b,x,y)    (b)[PI(x,y)]
+        for (int y=1; y<configuredHeight-1-1; y++) {
+            for (int x=1; x<configuredWidth-1-1; x++) {
                 int aa, bb, s;
                 Pixel p = {0,0,0,Z};
-                aa = R(P(src,x-1, y-1)) + R(P(src,x-1, y))*2 + R(P(src,x-1, y+1)) -
-                    R(P(src,x+1, y-1)) - R(P(src,x+1, y))*2 - R(P(src,x+1, y+1));
-                bb = R(P(src,x-1, y-1)) + R(P(src,x, y-1))*2+
-                    R(P(src,x+1, y-1)) -
-                    R(P(src,x-1, y+1)) - R(P(src,x, y+1))*2-
-                    R(P(src,x+1, y+1));
+                aa = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x-1, y))*2 + R(P(srcBuf,x-1, y+1)) -
+                    R(P(srcBuf,x+1, y-1)) - R(P(srcBuf,x+1, y))*2 - R(P(srcBuf,x+1, y+1));
+                bb = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x, y-1))*2+
+                    R(P(srcBuf,x+1, y-1)) -
+                    R(P(srcBuf,x-1, y+1)) - R(P(srcBuf,x, y+1))*2-
+                    R(P(srcBuf,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.r = Z;
                 else
                     p.r = s;
                 
-                aa = G(P(src,x-1, y-1))+G(P(src,x-1, y))*2+
-                    G(P(src,x-1, y+1))-
-                    G(P(src,x+1, y-1))-G(P(src,x+1, y))*2-
-                    G(P(src,x+1, y+1));
-                bb = G(P(src,x-1, y-1))+G(P(src,x, y-1))*2+
-                    G(P(src,x+1, y-1))-
-                    G(P(src,x-1, y+1))-G(P(src,x, y+1))*2-
-                    G(P(src,x+1, y+1));
+                aa = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x-1, y))*2+
+                    G(P(srcBuf,x-1, y+1))-
+                    G(P(srcBuf,x+1, y-1))-G(P(srcBuf,x+1, y))*2-
+                    G(P(srcBuf,x+1, y+1));
+                bb = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x, y-1))*2+
+                    G(P(srcBuf,x+1, y-1))-
+                    G(P(srcBuf,x-1, y+1))-G(P(srcBuf,x, y+1))*2-
+                    G(P(srcBuf,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.g = Z;
                 else
                     p.g = s;
                 
-                aa = B(P(src,x-1, y-1))+B(P(src,x-1, y))*2+
-                    B(P(src,x-1, y+1))-
-                    B(P(src,x+1, y-1))-B(P(src,x+1, y))*2-
-                    B(P(src,x+1, y+1));
-                bb = B(P(src,x-1, y-1))+B(P(src,x, y-1))*2+
-                    R(P(src,x+1, y-1))-
-                    B(P(src,x-1, y+1))-B(P(src,x, y+1))*2-
-                    B(P(src,x+1, y+1));
+                aa = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x-1, y))*2+
+                    B(P(srcBuf,x-1, y+1))-
+                    B(P(srcBuf,x+1, y-1))-B(P(srcBuf,x+1, y))*2-
+                    B(P(srcBuf,x+1, y+1));
+                bb = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x, y-1))*2+
+                    R(P(srcBuf,x+1, y-1))-
+                    B(P(srcBuf,x-1, y+1))-B(P(srcBuf,x, y+1))*2-
+                    B(P(srcBuf,x+1, y+1));
                 s = sqrt(aa*aa + bb*bb);
                 if (s > Z)
                     p.b = Z;
                 else
                     p.b = s;
-                P(dest,x,y) = p;
+                dstBuf[PI(x,y)] = p;
             }
         }
-    }]];
-    
+#ifdef SLOW
+        //       memcpy(dstBuf, srcBuf, configuredPixelsInImage*sizeof(Pixel)/2);
+        for (int busy=0; busy<2; busy++) {
+            for (int y=1; y<configuredHeight-1-1; y++) {
+                for (int x=1; x<configuredWidth-1-1; x++) {
+                    Pixel p;
+                    if (y % 2 == 0)
+                        p = Green;
+                    else
+                        p = P(srcBuf,x,y);
+                    dstBuf[PI(x,y)] = p;
+                }
+            }
+        }
+#endif
+    }];
+    [transformList addObject:lastTransform];
+
+#ifdef notdef
     [transformList addObject:[Transform areaTransform: @"Negative Sobel"
                                           description: @"Negative Sobel filter"
                                         areaFunction: ^(Pixel *src, Pixel *dest, int p, size_t maxX, size_t maxY) {
