@@ -18,5 +18,6 @@
     AVCaptureDepthDataOutputDelegate> {
 }
 
++ (UIImageOrientation) imageOrientationForDeviceOrientation;
 
 @end

@@ -93,7 +93,6 @@ Pixel *imBufs[2];
 @synthesize executeList;
 @synthesize bytesPerRow;
 @synthesize lastTransform;
-@synthesize imageOrientation;
 
 - (id)init {
     self = [super init];
@@ -250,6 +249,8 @@ int sourceImageIndex, destImageIndex;
     }
     
     CGImageRef imageRef = [image CGImage];
+    UIImageOrientation incomingOrientation = image.imageOrientation;
+    
     CGImageRetain(imageRef);
     size_t width = (int)CGImageGetWidth(imageRef);
     size_t height = (int)CGImageGetHeight(imageRef);
@@ -324,9 +325,13 @@ int sourceImageIndex, destImageIndex;
         memcpy(imBufs[0], imBufs[sourceImageIndex], configuredPixelsInImage*sizeof(Pixel));
     }
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
                                                scale:(CGFloat)1.0
-                                         orientation:imageOrientation];
+                                         orientation:incomingOrientation];
+
+    //UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
+    
     CGImageRelease(quartzImage);
     CGContextRelease(context);
 

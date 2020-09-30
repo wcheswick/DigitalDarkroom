@@ -658,6 +658,44 @@ enum {
     }
 }
 
++ (UIImageOrientation) imageOrientationForDeviceOrientation {
+    UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
+    //NSLog(@"do %ld", (long)devo);
+    UIImageOrientation orient;
+    switch (devo) {
+        case UIDeviceOrientationPortrait:
+            orient = UIImageOrientationUp;
+            break;
+        case UIDeviceOrientationPortraitUpsideDown:
+            orient = UIImageOrientationDown;
+            break;
+        case UIDeviceOrientationLandscapeRight:
+            orient = UIImageOrientationUpMirrored;  // fine
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            orient = UIImageOrientationDownMirrored;    // fine
+           break;
+        case UIDeviceOrientationUnknown:
+            NSLog(@"%ld", (long)devo);
+        case UIDeviceOrientationFaceUp:
+            NSLog(@"%ld", (long)devo);
+        case UIDeviceOrientationFaceDown:
+            NSLog(@"%ld", (long)devo);
+        default:
+            NSLog(@"Inconceivable video orientation: %ld",
+                  (long)devo);
+            orient = UIImageOrientationUp;
+    }
+#ifdef notdef
+    NSLog(@"orient: %ld, %ld, %ld, %ld",
+          [[UIDevice currentDevice] orientation],
+          [CameraController videoOrientationForDeviceOrientation],
+          (long)connection.videoOrientation,
+          (long)orient);
+#endif
+    return orient;
+}
+
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
      didOutputDepthData:(AVDepthData *)depthData
               timestamp:(CMTime)timestamp
@@ -668,27 +706,8 @@ enum {
         return;
     }
     busy = YES;
-
-    UIImageOrientation orient;
-    switch (connection.videoOrientation) {
-        case AVCaptureVideoOrientationPortrait:
-            orient = UIImageOrientationUp;
-            break;
-        case AVCaptureVideoOrientationPortraitUpsideDown:
-            orient = UIImageOrientationDown;
-            break;
-        case AVCaptureVideoOrientationLandscapeRight:
-            orient = UIImageOrientationLeft;
-            break;
-        case AVCaptureVideoOrientationLandscapeLeft:
-            orient = UIImageOrientationRight;
-            break;
-        default:
-            NSLog(@"Inconceivable video orientation: %ld",
-                  (long)connection.videoOrientation);
-            break;
-    }
     
+    UIImageOrientation orient = [MainVC imageOrientationForDeviceOrientation];
     UIImage *capturedImage = [self imageFromDepthDataBuffer:depthData
                                                 orientation:orient];
     
@@ -701,7 +720,7 @@ enum {
         self->transformCount++;
         self->busy = NO;
         
-        self->transformedView.image = capturedImage;
+        self->transformedView.image = transformed;
         [self->transformedView setNeedsDisplay];
     });
 }
@@ -719,7 +738,7 @@ enum {
 
     UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
-                                   orientation:UIImageOrientationDownMirrored];
+                                   orientation:orientation];
     CGImageRelease(quartzImage);
     return image;
 }
@@ -734,7 +753,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         return;
     }
     busy = YES;
-    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
+    UIImageOrientation orient = [MainVC imageOrientationForDeviceOrientation];
+    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer
+                                             orientation:orient];
     
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
@@ -767,7 +788,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     droppedCount++;
 }
 
-- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
+- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer
+                        orientation:(UIImageOrientation) orientation {
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
 
@@ -786,7 +808,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
     UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:(CGFloat)1.0
-                                   orientation:[cameraController imageOrientation]];
+                                   orientation:orientation];
     CGImageRelease(quartzImage);
     return image;
 }

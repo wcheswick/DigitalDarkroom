@@ -230,30 +230,12 @@
 
     //NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
     
-#define FRONT_FACING_CAMERA    (captureDevice.position == AVCaptureDevicePositionFront)
-    AVCaptureVideoOrientation videoOrientation;
-    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
-    switch (deviceOrientation) {
-        case UIDeviceOrientationUnknown:
-        case UIDeviceOrientationPortrait:
-        case UIDeviceOrientationFaceDown:
-            videoOrientation = AVCaptureVideoOrientationPortrait;
-            break;
-        case UIDeviceOrientationPortraitUpsideDown:
-            videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
-            break;
-        case UIDeviceOrientationLandscapeLeft:
-            imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            videoOrientation = AVCaptureVideoOrientationLandscapeRight;
-            break;
-        case UIDeviceOrientationFaceUp:
-        case UIDeviceOrientationLandscapeRight:
-            videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-            imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            break;
-    }
-    videoConnection.videoOrientation = videoOrientation;
-    videoConnection.videoMirrored = YES;
+//    videoConnection.videoOrientation = [CameraController videoOrientationForDeviceOrientation];
+    // for some reason, this orientation setting works for both landscape settings. Why? Beats me.
+    // why is the cast ok?  Again, dunno.
+    
+    videoConnection.videoOrientation = (AVCaptureVideoOrientation)[MainVC imageOrientationForDeviceOrientation];
+    //videoConnection.videoMirrored = YES;
     videoConnection.enabled = YES;
     
     [captureDevice lockForConfiguration:&error];
@@ -318,7 +300,27 @@
 
 - (BOOL) isCameraOn {
     assert(captureSession);
-   return captureSession.isRunning;
+    return captureSession.isRunning;
+}
+
++ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationUnknown:
+        case UIDeviceOrientationPortrait:
+        case UIDeviceOrientationFaceDown:
+            return AVCaptureVideoOrientationPortrait;
+        case UIDeviceOrientationPortraitUpsideDown:
+            return AVCaptureVideoOrientationPortraitUpsideDown;
+        case UIDeviceOrientationLandscapeLeft:
+            //imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
+            return AVCaptureVideoOrientationLandscapeRight;
+            break;
+        case UIDeviceOrientationFaceUp:
+        case UIDeviceOrientationLandscapeRight:
+            // imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
+            return AVCaptureVideoOrientationLandscapeLeft;
+    }
 }
 
 @end

@@ -36,6 +36,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) stopCamera;
 - (BOOL) isCameraOn;
 
++ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation;
+
 @end
 
 NS_ASSUME_NONNULL_END
