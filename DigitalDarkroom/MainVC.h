@@ -14,7 +14,8 @@
     <UITableViewDelegate, UITableViewDataSource,
     UIScrollViewDelegate,
     UIPopoverPresentationControllerDelegate,
-    AVCaptureVideoDataOutputSampleBufferDelegate> {
+    AVCaptureVideoDataOutputSampleBufferDelegate,
+    AVCaptureDepthDataOutputDelegate> {
 }
 
 

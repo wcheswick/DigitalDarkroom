@@ -15,13 +15,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface CameraController : NSObject {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
-    __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate>delegate;
+    __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
+            AVCaptureDepthDataOutputDelegate>delegate;
     UIImageOrientation imageOrientation;
     CGSize captureSize;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
-@property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate>delegate;
+@property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
+                    AVCaptureDepthDataOutputDelegate>delegate;
 @property (assign)  UIImageOrientation imageOrientation;
 @property (assign)  CGSize captureSize;
 

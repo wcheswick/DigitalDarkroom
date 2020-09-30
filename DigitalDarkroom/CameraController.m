@@ -17,9 +17,9 @@
 
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
 @property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
-@property (assign)              BOOL frontFacingCamera, depthAvailable;
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
+@property (assign)              Cameras selectedCamera;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 
 @end
@@ -30,8 +30,7 @@
 @synthesize delegate;
 @synthesize imageOrientation;
 
-@synthesize captureDevice, captureSize;
-@synthesize frontFacingCamera, depthAvailable;
+@synthesize captureDevice, captureSize, selectedCamera;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -42,6 +41,7 @@
     if (self) {
         captureVideoPreviewLayer = nil;
         selectedFormat = nil;
+        selectedCamera = NotACamera;
         delegate = nil;
         captureDevice = nil;
         captureSession = nil;
@@ -49,12 +49,10 @@
     return self;
 }
 
-- (AVCaptureDevice *) captureDevice:(Cameras) camera {
+- (AVCaptureDevice *) captureDeviceForCamera:(Cameras) camera {
     AVCaptureDevice *captureDevice = nil;
     switch (camera) {
         case FrontCamera:
-            frontFacingCamera = YES;
-            depthAvailable = NO;
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeVideo
@@ -67,16 +65,12 @@
             }
             break;
         case Front3DCamera:
-            frontFacingCamera = YES;
-            depthAvailable = YES;
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
                              mediaType: AVMediaTypeVideo
                              position: AVCaptureDevicePositionFront];
             break;
         case RearCamera:
-            frontFacingCamera = NO;
-            depthAvailable = NO;
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeVideo
@@ -88,8 +82,6 @@
                                  position: AVCaptureDevicePositionBack];
             break;
         case Rear3DCamera:
-            frontFacingCamera = NO;
-            depthAvailable = YES;
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeVideo
@@ -99,40 +91,61 @@
             NSLog(@" *** inconceivable, selected non-existant camera, %d", camera);
             return nil;
     }
+    //NSLog(@"***** captureDevice: cam %d %@", camera, captureDevice.activeFormat.supportedDepthDataFormats);
     return captureDevice;
 }
 
 - (BOOL) isCameraAvailable:(Cameras) camera {
     assert(ISCAMERA(camera));
-    return [self captureDevice:camera];
+    return [self captureDeviceForCamera:camera];
 }
 
 - (void) selectCamera:(Cameras) camera {
-    captureDevice = [self captureDevice:camera];
+    captureDevice = [self captureDeviceForCamera:camera];
     assert(captureDevice);
+    selectedCamera = camera;
+    NSLog(@" -- camera selected: %d", selectedCamera);
 }
 
 // find and return the largest size that fits into the given size. Return
 // Zero size if none works.  This should never happen.
 - (CGSize) setupCameraForSize:(CGSize) availableSize {
     assert(captureDevice);
-    CGSize capTureSize = CGSizeZero;
+    CGSize captureSize = CGSizeZero;
     
     selectedFormat = nil;
-    for (AVCaptureDeviceFormat *format in captureDevice.formats) {
+    NSArray *availableFormats = captureDevice.formats;
+#ifdef notdef
+    AVCaptureDeviceFormat *format = [availableFormats objectAtIndex:0];
+    if (format.supportedDepthDataFormats != nil && format.supportedDepthDataFormats.count) { // use the 3D format list
+        availableFormats = format.supportedDepthDataFormats;
+    }
+#endif
+    
+    for (AVCaptureDeviceFormat *format in availableFormats) {
+        if (IS_3D_CAMERA(selectedCamera)) {
+            //NSLog(@"-- format selected: %@", format.description);
+            //NSLog(@"-- format selected: %@", format.supportedDepthDataFormats);
+            if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
+                continue;
+            
+       }
+
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
         if (mediaType != kCMMediaType_Video)
             continue;
         CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
+//            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
+//            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
         if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
             continue;
         if (selectedFormat) {   // this one fits.  Is it better?
-            if (dimensions.width < capTureSize.width || dimensions.height < capTureSize.height)
+            if (dimensions.width < captureSize.width || dimensions.height < captureSize.height)
                 continue;
         }
         selectedFormat = format;
-        capTureSize = (CGSize){dimensions.width, dimensions.height};
+        captureSize = (CGSize){dimensions.width, dimensions.height};
     }
     if (!selectedFormat) {
         NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
@@ -141,7 +154,8 @@
     }
     
     // selectedFormat doesn't work here.  Do it after the session starts.
-    return capTureSize;
+    //NSLog(@"-- format selected: %@", selectedFormat.description);
+    return captureSize;
 }
 
 - (void) startSession {
@@ -175,32 +189,48 @@
     } else {
         NSLog(@"**** could not add camera input");
     }
-    
-    AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
-    assert(dataOutput);
-    dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
-    dataOutput.videoSettings = @{
-        (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
-    };
-    dataOutput.alwaysDiscardsLateVideoFrames = YES;
-    dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
-    [dataOutput setSampleBufferDelegate:delegate queue:queue];
 
-    if ([captureSession canAddOutput:dataOutput]) {
-        [captureSession addOutput:dataOutput];
+    AVCaptureConnection *videoConnection;
+    if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!
+        // useful source: https://www.raywenderlich.com/5999357-video-depth-maps-tutorial-for-ios-getting-started
+        
+        AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
+        assert(depthOutput);
+        dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
+        [depthOutput setDelegate:delegate callbackQueue:queue];
+        depthOutput.filteringEnabled = YES;
+        if ([captureSession canAddOutput:depthOutput]) {
+            [captureSession addOutput:depthOutput];
+        } else {
+            NSLog(@"**** could not add data output");
+        }
+        videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeVideo];
     } else {
-        NSLog(@"**** could not add data output");
+        AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
+        assert(dataOutput);
+        dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
+        dataOutput.videoSettings = @{
+            (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
+        };
+        dataOutput.alwaysDiscardsLateVideoFrames = YES;
+        dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
+        [dataOutput setSampleBufferDelegate:delegate queue:queue];
+
+        if ([captureSession canAddOutput:dataOutput]) {
+            [captureSession addOutput:dataOutput];
+        } else {
+            NSLog(@"**** could not add data output");
+        }
+        videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
     }
     
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
 
-    AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
-    NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
+    //NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
     
-    //    imageOrientation = frontFacingCamera ? UIImageOrientationDownMirrored : UIImageOrientationDown;
-    
+#define FRONT_FACING_CAMERA    (captureDevice.position == AVCaptureDevicePositionFront)
     AVCaptureVideoOrientation videoOrientation;
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
     switch (deviceOrientation) {
@@ -213,13 +243,13 @@
             videoOrientation = AVCaptureVideoOrientationPortraitUpsideDown;
             break;
         case UIDeviceOrientationLandscapeLeft:
-            imageOrientation = frontFacingCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
             videoOrientation = AVCaptureVideoOrientationLandscapeRight;
             break;
         case UIDeviceOrientationFaceUp:
         case UIDeviceOrientationLandscapeRight:
             videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-            imageOrientation = frontFacingCamera ? UIImageOrientationUp : UIImageOrientationUp;
+            imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
             break;
     }
     videoConnection.videoOrientation = videoOrientation;
@@ -237,9 +267,6 @@
         captureDevice.smoothAutoFocusEnabled = YES;
     captureDevice.activeFormat = selectedFormat;
  
-    if (depthAvailable) {
-        
-    }
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );

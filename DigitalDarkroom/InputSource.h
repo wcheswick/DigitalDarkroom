@@ -21,6 +21,8 @@ typedef enum {
 
 #define NCAMERA (NotACamera)
 #define ISCAMERA(i) ((i) < NCAMERA)
+#define IS_2D_CAMERA(i)    ((i) < Front3DCamera)
+#define IS_3D_CAMERA(i)    ((i) == Front3DCamera || (i) == Rear3DCamera)
 
 @interface InputSource : NSObject {
     Cameras sourceType;

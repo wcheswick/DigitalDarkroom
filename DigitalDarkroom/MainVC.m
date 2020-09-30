@@ -60,7 +60,7 @@ enum {
 @property (nonatomic, strong)   UITableViewController *activeListVC;
 @property (nonatomic, strong)   UIBarButtonItem *undoButton, *trashButton;
 
-@property (assign)              volatile int frameCount, droppedCount, busyCount;
+@property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 @property (assign)              BOOL busy;
 @property (assign)              float cps, dps, mps;
 
@@ -85,7 +85,7 @@ enum {
 @synthesize transformsNavVC;
 @synthesize transformsVC, activeListVC;
 @synthesize transformTotalElapsed, transformCount;
-@synthesize frameCount, droppedCount, busyCount, cps, dps, mps;
+@synthesize frameCount, depthCount, droppedCount, busyCount, cps, dps, mps;
 @synthesize busy;
 @synthesize statsTimer, lastTime;
 @synthesize transforms;
@@ -126,7 +126,7 @@ enum {
         cameraController.delegate = self;
         
         Cameras sourceIndex;
-        for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
+        for (sourceIndex=0; IS_2D_CAMERA(sourceIndex) && sourceIndex<NCAMERA; sourceIndex++) {
             if ([cameraController isCameraAvailable:sourceIndex])
                 break;
         }
@@ -310,7 +310,7 @@ enum {
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     
-    frameCount = droppedCount = busyCount = 0;
+    frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     
 #define TICK_INTERVAL   1.0
@@ -333,10 +333,11 @@ enum {
         transformAveTime = NAN;
     
     [self updateStatsLabel: frameCount/elapsed
+                depthPerSec:depthCount/elapsed
              droppedPerSec:droppedCount/elapsed
                 busyPerSec:busyCount/elapsed
               transformAve:transformAveTime];
-    frameCount = droppedCount = busyCount = 0;
+    frameCount = depthCount = droppedCount = busyCount = 0;
     transformCount = transformTotalElapsed = 0;
 }
 
@@ -472,6 +473,7 @@ enum {
         f.size.width = thumbH * floor(inputSources.count + thumbsPerColumn - 1)/thumbsPerColumn;
         selectInputButtonsView.frame = f;
         selectInputScroll.contentSize = f.size;
+        [selectInputButtonsView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
         SET_VIEW_HEIGHT(selectInputScroll, f.size.height);
         
         for (int i=0; i<inputSources.count; i++) {
@@ -487,8 +489,8 @@ enum {
             but.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
             but.titleLabel.adjustsFontSizeToFitWidth = YES;
             [but setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
-            but.titleLabel.textColor = [UIColor blueColor];
-            
+            [but setTitleColor:[UIColor lightGrayColor] forState:UIControlStateDisabled];
+
             but.layer.borderWidth = 2.0;
             but.layer.borderColor = [UIColor blackColor].CGColor;
             but.layer.cornerRadius = 6.0;
@@ -502,6 +504,13 @@ enum {
                     but.backgroundColor = [UIColor whiteColor];
                     frontButton = but;
                     break;
+                case Front3DCamera:
+                    [but setTitle:@"Front 3D camera" forState:UIControlStateNormal];
+                    [but setTitle:@"Front 3D camera (unavailable)" forState:UIControlStateDisabled];
+                    but.enabled = [cameraController isCameraAvailable:i];
+                    but.backgroundColor = [UIColor whiteColor];
+                    frontButton = but;
+                    break;
                 case RearCamera:
                     [but setTitle:@"Rear camera" forState:UIControlStateNormal];
                     [but setTitle:@"Rear camera (unavailable)" forState:UIControlStateDisabled];
@@ -509,7 +518,14 @@ enum {
                     but.backgroundColor = [UIColor whiteColor];
                     rearButton = but;
                     break;
-                default: {
+                case Rear3DCamera:
+                    [but setTitle:@"Rear 3D camera" forState:UIControlStateNormal];
+                    [but setTitle:@"Rear 3D camera (unavailable)" forState:UIControlStateDisabled];
+                    but.enabled = [cameraController isCameraAvailable:i];
+                    but.backgroundColor = [UIColor whiteColor];
+                    rearButton = but;
+                    break;
+               default: {
                     UIImage *thumb = [self centerImage:source.image inSize:but.frame.size];
                     if (!thumb)
                         continue;
@@ -540,12 +556,13 @@ enum {
 }
 
 - (void) updateStatsLabel: (float) fps
+               depthPerSec:(float) depthps
             droppedPerSec:(float)dps
                busyPerSec:(float)bps
              transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f  dropped/s: %.1f  busy/s: %.1f  exec ave: %.1fms",
-                                 fps, dps, bps, tams];
+        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f  depth/s: %.1f  dropped/s: %.1f  busy/s: %.1f  exec ave: %.1fms",
+                                 fps, depthps, dps, bps, tams];
         [self->statsLabel setNeedsDisplay];
     });
 }
@@ -641,6 +658,72 @@ enum {
     }
 }
 
+- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
+     didOutputDepthData:(AVDepthData *)depthData
+              timestamp:(CMTime)timestamp
+             connection:(AVCaptureConnection *)connection {
+    depthCount++;
+    if (busy) {
+        busyCount++;
+        return;
+    }
+    busy = YES;
+
+    UIImageOrientation orient;
+    switch (connection.videoOrientation) {
+        case AVCaptureVideoOrientationPortrait:
+            orient = UIImageOrientationUp;
+            break;
+        case AVCaptureVideoOrientationPortraitUpsideDown:
+            orient = UIImageOrientationDown;
+            break;
+        case AVCaptureVideoOrientationLandscapeRight:
+            orient = UIImageOrientationLeft;
+            break;
+        case AVCaptureVideoOrientationLandscapeLeft:
+            orient = UIImageOrientationRight;
+            break;
+        default:
+            NSLog(@"Inconceivable video orientation: %ld",
+                  (long)connection.videoOrientation);
+            break;
+    }
+    
+    UIImage *capturedImage = [self imageFromDepthDataBuffer:depthData
+                                                orientation:orient];
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self updateThumb:capturedImage];
+        NSDate *transformStart = [NSDate now];
+        UIImage *transformed = [self->transforms executeTransformsWithImage:capturedImage];
+        NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
+        self->transformTotalElapsed += elapsed;
+        self->transformCount++;
+        self->busy = NO;
+        
+        self->transformedView.image = capturedImage;
+        [self->transformedView setNeedsDisplay];
+    });
+}
+
+- (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) depthData
+                           orientation:(UIImageOrientation) orientation {
+    CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
+    size_t width = CVPixelBufferGetWidth(pixelBufferRef);
+    size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+    CGRect r = CGRectMake(0, 0, width, height);
+
+    CIContext *ctx = [CIContext contextWithOptions:nil];
+    CIImage *ciimage = [CIImage imageWithCVPixelBuffer:pixelBufferRef];
+    CGImageRef quartzImage = [ctx createCGImage:ciimage fromRect:r];
+
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
+                                         scale:1.0
+                                   orientation:UIImageOrientationDownMirrored];
+    CGImageRelease(quartzImage);
+    return image;
+}
+
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
@@ -651,8 +734,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         return;
     }
     busy = YES;
-
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
+    
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
         
@@ -672,6 +755,15 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
   didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
        fromConnection:(nonnull AVCaptureConnection *)connection {
     NSLog(@"dropped");
+    droppedCount++;
+}
+
+- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
+       didDropDepthData:(AVDepthData *)depthData
+              timestamp:(CMTime)timestamp
+             connection:(AVCaptureConnection *)connection
+                 reason:(AVCaptureOutputDataDroppedReason)reason {
+    NSLog(@"depth data dropped: %ld", (long)reason);
     droppedCount++;
 }
 
