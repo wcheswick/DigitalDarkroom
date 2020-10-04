@@ -11,7 +11,8 @@
 #import "InputSource.h"
 
 @interface MainVC : UIViewController
-    <UITableViewDelegate, UITableViewDataSource,
+    <UITableViewDelegate,
+    UITableViewDataSource,
     UIScrollViewDelegate,
     UIPopoverPresentationControllerDelegate,
     AVCaptureVideoDataOutputSampleBufferDelegate,

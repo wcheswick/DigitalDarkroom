@@ -30,7 +30,8 @@
 @synthesize delegate;
 @synthesize imageOrientation;
 
-@synthesize captureDevice, captureSize, selectedCamera;
+@synthesize captureDevice, selectedCamera;
+@synthesize displaySize;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -45,6 +46,7 @@
         delegate = nil;
         captureDevice = nil;
         captureSession = nil;
+        displaySize = CGSizeZero;
     }
     return self;
 }
@@ -293,13 +295,15 @@
 }
 
 - (void) stopCamera {
-    NSLog(@"stopCamera");
-    if ([self isCameraOn])
+    if ([self isCameraOn]) {
+        NSLog(@"stopping camera");
         [captureSession stopRunning];
+    }
 }
 
 - (BOOL) isCameraOn {
-    assert(captureSession);
+    if (!captureSession)
+        return NO;
     return captureSession.isRunning;
 }
 

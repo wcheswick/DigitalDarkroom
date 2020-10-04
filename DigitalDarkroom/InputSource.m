@@ -12,15 +12,15 @@
 
 @synthesize sourceType;
 @synthesize label;
-@synthesize image;
+@synthesize imagePath;
 @synthesize button;
+@synthesize imageSize;
 
 - (id)init {
     self = [super init];
     if (self) {
-        label = nil;
-        image = nil;
-        button = nil;
+        sourceType = NotACamera;
+        imageSize = CGSizeZero;
     }
     return self;
 }

@@ -27,14 +27,16 @@ typedef enum {
 @interface InputSource : NSObject {
     Cameras sourceType;
     NSString *label;
-    UIImage *image;
+    NSString *imagePath;
+    CGSize imageSize;
     UIButton *button;
 }
 
 @property (assign)  Cameras sourceType;
 @property (nonatomic, strong)   NSString *label;
-@property (nonatomic, strong)   UIImage *image;
+@property (nonatomic, strong)   NSString *imagePath;
 @property (nonatomic, strong)   UIButton *button;
+@property (assign)              CGSize imageSize;
 
 @end
 
