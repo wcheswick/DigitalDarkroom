@@ -19,7 +19,9 @@
 #define CONTROL_H   40
 #define TRANSFORM_LIST_W    (1194 - 1024)
 
-#define SOURCES_W   SOURCE_THUMB_SIZE
+#define SOURCES_W   200
+#define SOURCES_FONT_SIZE   14
+#define SOURCES_H   (SOURCE_THUMB_SIZE+SOURCES_FONT_SIZE+2)
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -120,8 +122,10 @@ enum {
         [self addCameraSource:Rear3DCamera label:@"Rear 3D camera"];
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
+#ifdef wrongformat
         [self addFileSource:@"800px-RCA_Indian_Head_test_pattern.jpg"
                       label:@"RCA test pattern"];
+#endif
         [self addFileSource:@"ishihara6.jpeg" label:@"Ishibara 6"];
         [self addFileSource:@"cube.jpeg" label:@"Rubix cube"];
         [self addFileSource:@"ishihara8.jpeg" label:@"Ishibara 8"];
@@ -843,10 +847,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     switch (tableView.tag) {
-        case SourceSelectTag:
-            return 1;
         case TransformTag:
             return transforms.categoryNames.count;
+        case SourceSelectTag:
         case ActiveTag:
             return 1;
     }
@@ -878,8 +881,19 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     return @"bogus";
 }
 
--(CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(nonnull NSIndexPath *)indexPath {
+    switch (tableView.tag) {
+        case ActiveTag:
+        case TransformTag:
+            return 30;
+        case SourceSelectTag:
+            return SOURCES_H;
+    }
     return 30;
+}
+
+-(CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return 50;
 }
 
 - (BOOL)tableView:(UITableView *)tableView
@@ -901,33 +915,37 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         case SourceSelectTag: {
             NSString *CellIdentifier = @"SourceCell";
             cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-            
+            if (cell == nil) {
+                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                              reuseIdentifier:CellIdentifier];
+            }
+            UIListContentConfiguration *content = cell.defaultContentConfiguration;
             InputSource *source = [inputSources objectAtIndex:indexPath.row];
             switch (source.sourceType) {
                 case FrontCamera:
-                    cell.textLabel.text = @"Front camera";
+                    content.text = @"Front camera";
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case Front3DCamera:
-                    cell.textLabel.text = @"Front 3D camera";
+                    content.text = @"Front 3D camera";
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case RearCamera:
-                    cell.textLabel.text = @"FRear camera";
+                    content.text = @"Rear camera";
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case Rear3DCamera:
-                    cell.textLabel.text = @"Front 3D camera";
+                    content.text = @"Front 3D camera";
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 default: {
-                    cell.textLabel.text = source.label;
-                    UIImage *image = [UIImage imageWithContentsOfFile:source.imagePath];
-                    UIImage *thumb = [self centerImage:image inSize:cell.frame.size];
-                    if (thumb)
-                        cell.backgroundView = [[UIImageView alloc] initWithImage:thumb];
+                    content.text = source.label;
+                    content.image = [UIImage imageWithContentsOfFile:source.imagePath];
                 }
             }
+            cell.contentConfiguration = content;
+            cell.tag = indexPath.row;
+            return cell;
         }
         case ActiveTag: {
             NSString *CellIdentifier = @"ListingCell";
@@ -1086,7 +1104,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     f.size.width = SOURCES_W;
     sourcesTableVC.tableView.frame = f;
     sourcesTableVC.tableView.tag = SourceSelectTag;
-    
+    sourcesTableVC.tableView.delegate = self;
+    sourcesTableVC.tableView.dataSource = self;
     sourcesTableVC.modalPresentationStyle = UIModalPresentationPopover;
     sourcesTableVC.preferredContentSize = f.size;
     
