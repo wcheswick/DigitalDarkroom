@@ -15,10 +15,11 @@
 #define STATS_FONT_SIZE     20
 #define STATS_W             450
 
-#define SELECTION_THUMB_SIZE   100
+#define SOURCE_THUMB_SIZE   50
 #define CONTROL_H   40
-#define TRANSFORM_LIST_W    250
+#define TRANSFORM_LIST_W    (1194 - 1024)
 
+#define SOURCES_W   SOURCE_THUMB_SIZE
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -28,6 +29,7 @@ char * _NonnullcategoryLabels[] = {
 };
 
 enum {
+    SourceSelectTag,
     TransformTag,
     ActiveTag,
 } tableTags;
@@ -43,7 +45,6 @@ enum {
 @property (nonatomic, strong)   UIView *controlsView;            // controls for current execute transform
 @property (nonatomic, strong)   UIScrollView *selectionsView;
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
-@property (nonatomic, strong)   UIScrollView *sourcesScrollView;    // one or more columns of thumbs, scrolling vertically
 @property (nonatomic, strong)   UITableViewController *availableTransformsVC;
 
 // in controlsView
@@ -54,7 +55,6 @@ enum {
 @property (nonatomic, strong)   UITableViewController *executeTableVC;
 
 // in sources view
-@property (nonatomic, strong)   UIView *sourceButtonsView;
 @property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
@@ -83,12 +83,10 @@ enum {
 @synthesize controlsView;
 @synthesize selectionsView;
 @synthesize executeNavVC;
-@synthesize sourcesScrollView;
 @synthesize availableTransformsVC;
 
 @synthesize executeTableVC;
 
-@synthesize sourceButtonsView;
 @synthesize currentCameraButton;
 
 @synthesize statsLabel;
@@ -115,7 +113,6 @@ enum {
         busy = NO;
         
         inputSources = [[NSMutableArray alloc] init];
-        sourceButtonsView = [[UIView alloc] init];
 
         [self addCameraSource:FrontCamera label:@"Front camera"];
         [self addCameraSource:RearCamera label:@"Rear camera"];
@@ -133,8 +130,6 @@ enum {
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-        
-        [self setupSourceButtons];
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -179,6 +174,7 @@ enum {
     [inputSources addObject:source];
 }
 
+#ifdef OLD
 // We create the input selection buttons only once.  We put them in place each time the
 // screen has a new layout.
 
@@ -244,6 +240,7 @@ enum {
         source.button = button;
     }
 }
+#endif
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -274,7 +271,6 @@ enum {
     statsLabel.adjustsFontSizeToFitWidth = YES;
     [controlsView addSubview:statsLabel];
     
-    sourcesScrollView = [[UIScrollView alloc] init];
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
     availableTransformsVC = [[UITableViewController alloc]
@@ -282,12 +278,10 @@ enum {
     
     if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
         selectionsView = nil;
-        [containerView addSubview:sourcesScrollView];
         [containerView addSubview:executeNavVC.view];
         [containerView addSubview:availableTransformsVC.view];
     } else {    // we have to put these in a horizontal scroll region on small devices
         selectionsView = [[UIScrollView alloc] init];
-        [selectionsView addSubview:sourcesScrollView];
         [selectionsView addSubview:executeNavVC.view];
         [selectionsView addSubview:availableTransformsVC.view];
         
@@ -332,19 +326,6 @@ enum {
     selectionsView.delaysContentTouches = YES;
     selectionsView.canCancelContentTouches = YES;
     //selectionsView.delegate = self;
-
-    sourceButtonsView.userInteractionEnabled = YES;
-    
-    // sources scroll view,
-    sourcesScrollView.pagingEnabled = NO;
-    sourcesScrollView.showsVerticalScrollIndicator = YES;
-    sourcesScrollView.userInteractionEnabled = YES;
-    sourcesScrollView.exclusiveTouch = NO;
-    sourcesScrollView.bounces = NO;
-    sourcesScrollView.delaysContentTouches = NO;
-    sourcesScrollView.canCancelContentTouches = YES;
-    sourcesScrollView.delegate = self;
-    [sourcesScrollView addSubview:sourceButtonsView];
     
     availableTransformsVC.tableView.tag = TransformTag;
     availableTransformsVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -394,8 +375,16 @@ enum {
     [super viewWillAppear:animated];
     
     self.title = @"Digital Darkroom";
-    self.navigationController.navigationBarHidden = YES;    // not useful, and takes space
-    self.navigationController.navigationBar.opaque = YES;
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.navigationBar.opaque = NO;
+    
+    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc]
+                                      initWithTitle:@"Sources"
+                                      style:UIBarButtonItemStylePlain
+                                      target:self action:@selector(doSelectSource:)];
+    leftBarButton.enabled = YES;
+    self.navigationItem.leftBarButtonItem = leftBarButton;
+
 //    self.navigationController.toolbarHidden = YES;
     //self.navigationController.toolbar.opaque = NO;
 }
@@ -441,10 +430,10 @@ enum {
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
     CGRect f = containerView.frame;
-    BOOL narrow = f.size.width < 1024 - TRANSFORM_LIST_W;
+    BOOL narrow = (f.size.width - TRANSFORM_LIST_W) < 1024;
     
     if (!narrow) {
-        f.size.width = 1024;
+        f.size.width = 1024 - TRANSFORM_LIST_W;
     }
     transformedView.frame = f;
     
@@ -474,53 +463,40 @@ enum {
     controlsView.frame = f;
     controlsView.backgroundColor = [UIColor whiteColor];
     
-    if (selectionsView) {   // all three inputs go into a scroll area
+    if (selectionsView) {   // both inputs go into a scroll area
         if (isPortrait) {   // goes under the transform display
             f.origin = CGPointMake(0, BELOW(controlsView.frame));
             f.size.height = containerView.frame.size.height - f.origin.y;
             assert(f.size.height >= 100);
-            f.size.width = 2.5*SELECTION_THUMB_SIZE;
+            f.size.width = 222;
         } else {        // goes to the right of the transform display
             f.origin = CGPointMake(RIGHT(controlsView.frame), 0);
             f.size.height = containerView.frame.size.height;
             f.size.width = LATER;
         }
-        sourcesScrollView.frame = f;
-        [self layoutSourceButtonsViewInScrollView];
     } else {    // ipad, a place for everyone
         if (isPortrait) {   // all three go below transform view
-            // exec and avail are fixed size. Source buttons fill in the rest
-            // on the right
-            f.size.width = TRANSFORM_LIST_W;
-            f.origin.x = containerView.frame.size.width - f.size.width;
+            // split the area in two, vertically.
+            f.origin.x = 0;
             f.origin.y = BELOW(controlsView.frame);
             f.size.height = containerView.frame.size.height - f.origin.y;
-            availableTransformsVC.view.frame = f;
-            
-            f.origin.x -= f.size.width;
+            f.size.width = containerView.frame.size.width/2;
             executeNavVC.view.frame = f;
             
-            f.size.width = f.origin.x;
-            f.origin.x = 0;
-            sourcesScrollView.frame = f;
-            [self layoutSourceButtonsViewInScrollView];
-        } else {    // put available to the right, and other two underneath
+            f.origin.x += f.size.width;
+            availableTransformsVC.view.frame = f;
+        } else {    // put available to the right, and execute
             f.origin.x = RIGHT(transformedView.frame);
             f.size.width = containerView.frame.size.width - f.origin.x;
             f.origin.y = 0;
             f.size.height = containerView.frame.size.height;
             availableTransformsVC.view.frame = f;
             
-            f.size.width = TRANSFORM_LIST_W;
-            f.origin.x -= f.size.width;
+            f.size.width = f.origin.x;
+            f.origin.x = 0;
             f.origin.y = BELOW(controlsView.frame);
             f.size.height = containerView.frame.size.height - f.origin.y;
             executeNavVC.view.frame = f;
-            
-            f.size.width = f.origin.x;
-            f.origin.x = 0;
-            sourcesScrollView.frame = f;
-            [self layoutSourceButtonsViewInScrollView];
         }
         f = executeNavVC.navigationBar.frame;
         f.origin.x = 0;
@@ -551,6 +527,7 @@ enum {
     }
 }
 
+#ifdef notdef
 // sourcesScrollView contains the display size.  Layout the input source buttons
 // with the size and shape of this view in mind, and set the contentsize.
 // The buttonsview scrolls vertically only, so it doesn't confuse some
@@ -593,6 +570,7 @@ enum {
     f.size.height = lastH;
     sourcesScrollView.contentSize = f.size;
 }
+#endif
 
 - (void) updateStatsLabel: (float) fps
                depthPerSec:(float) depthps
@@ -865,6 +843,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     switch (tableView.tag) {
+        case SourceSelectTag:
+            return 1;
         case TransformTag:
             return transforms.categoryNames.count;
         case ActiveTag:
@@ -875,6 +855,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     switch (tableView.tag) {
+        case SourceSelectTag:
+            return inputSources.count;
         case TransformTag: {
             NSArray *transformList = [transforms.categoryList objectAtIndex:section];
             return transformList.count;
@@ -890,6 +872,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         case TransformTag:
             return [transforms.categoryNames objectAtIndex:section];
         case ActiveTag:
+        case SourceSelectTag:
             return @"";
     }
     return @"bogus";
@@ -913,71 +896,114 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell;
-    if (tableView.tag == ActiveTag) {
-        NSString *CellIdentifier = @"ListingCell";
-        cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-        if (cell == nil) {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                          reuseIdentifier:CellIdentifier];
+    
+    switch (tableView.tag) {
+        case SourceSelectTag: {
+            NSString *CellIdentifier = @"SourceCell";
+            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+            
+            InputSource *source = [inputSources objectAtIndex:indexPath.row];
+            switch (source.sourceType) {
+                case FrontCamera:
+                    cell.textLabel.text = @"Front camera";
+                    cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
+                    break;
+                case Front3DCamera:
+                    cell.textLabel.text = @"Front 3D camera";
+                    cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
+                    break;
+                case RearCamera:
+                    cell.textLabel.text = @"FRear camera";
+                    cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
+                    break;
+                case Rear3DCamera:
+                    cell.textLabel.text = @"Front 3D camera";
+                    cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
+                    break;
+                default: {
+                    cell.textLabel.text = source.label;
+                    UIImage *image = [UIImage imageWithContentsOfFile:source.imagePath];
+                    UIImage *thumb = [self centerImage:image inSize:cell.frame.size];
+                    if (thumb)
+                        cell.backgroundView = [[UIImageView alloc] initWithImage:thumb];
+                }
+            }
         }
-        Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-        cell.textLabel.text = [NSString stringWithFormat:
-                               @"%2ld: %@", indexPath.row+1, transform.name];
-        cell.layer.borderWidth = 0;
-        cell.tag = 0;
+        case ActiveTag: {
+            NSString *CellIdentifier = @"ListingCell";
+            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+            if (cell == nil) {
+                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                              reuseIdentifier:CellIdentifier];
+            }
+            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
+            cell.textLabel.text = [NSString stringWithFormat:
+                                   @"%2ld: %@", indexPath.row+1, transform.name];
+            cell.layer.borderWidth = 0;
+            cell.tag = 0;
 #ifdef brokenloop
-        if (indexPath.row == transforms.list.count - 1)
-            [tableView scrollToRowAtIndexPath:indexPath
-                             atScrollPosition:UITableViewScrollPositionBottom
-                                     animated:YES];
+            if (indexPath.row == transforms.list.count - 1)
+                [tableView scrollToRowAtIndexPath:indexPath
+                                 atScrollPosition:UITableViewScrollPositionBottom
+                                         animated:YES];
 #endif
-    } else {    // Selection table display table list
-        NSString *CellIdentifier = @"SelectionCell";
-        cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-        if (cell == nil) {
-            cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                          reuseIdentifier:CellIdentifier];
         }
-        NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-        Transform *transform = [transformList objectAtIndex:indexPath.row];
-        cell.textLabel.text = transform.name;
-        cell.detailTextLabel.text = transform.description;
-        cell.indentationLevel = 1;
-        cell.indentationWidth = 10;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        cell.selected = NO;
+        case TransformTag: {   // Selection table display table list
+            NSString *CellIdentifier = @"SelectionCell";
+            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+            if (cell == nil) {
+                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                              reuseIdentifier:CellIdentifier];
+            }
+            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
+            Transform *transform = [transformList objectAtIndex:indexPath.row];
+            cell.textLabel.text = transform.name;
+            cell.detailTextLabel.text = transform.description;
+            cell.indentationLevel = 1;
+            cell.indentationWidth = 10;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            cell.selected = NO;
+        }
     }
     return cell;
 }
 
-- (IBAction) moveControlSlider:(UISlider *)slider {
-    if (slider.tag < SLIDER_TAG_OFFSET)
-        return;
-    int row = (int)slider.tag - SLIDER_TAG_OFFSET;
-    Transform *t = [transforms.sequence objectAtIndex:row];
-    @synchronized (transforms.sequence) {
-        t.p = slider.value;
-        NSLog(@"value is %f", slider.value);
-        t.pUpdated = YES;
-    }
-}
-
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (tableView.tag == ActiveTag) {
-        // Nothing happens
-        //        Transform *transform = [transforms.list objectAtIndex:indexPath.row];
-    } else {    // Selection table display table list
-        NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-        Transform *transform = [transformList objectAtIndex:indexPath.row];
-        Transform *thisTransform = [transform copy];
-        assert(thisTransform.remapTable == NULL);
-        thisTransform.p = thisTransform.initial;
-        @synchronized (transforms.sequence) {
-            [transforms.sequence addObject:thisTransform];
-            transforms.sequenceChanged = YES;
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    switch (tableView.tag) {
+        case SourceSelectTag: { // select input
+            NSLog(@"input button tapped: %ld", (long)cell.tag);
+            InputSource *source = [inputSources objectAtIndex:cell.tag];
+            currentSource = source;
+            [self.view setNeedsLayout];
+            break;
         }
-        [self.executeTableVC.tableView reloadData];
-        [self adjustButtons];
+        case ActiveTag: {   // select active step, and turn on slide if appropriate
+            NSIndexPath *selectedPath = tableView.indexPathForSelectedRow;
+            if (selectedPath) { // deselect previous cell, and disconnect possible slider connection
+                UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:selectedPath];
+                oldCell.selected = NO;
+                [oldCell setNeedsDisplay];
+            }
+            cell.selected = YES;
+            // XXX setup slider if appropriate
+            // InputSource *source = [inputSources objectAtIndex:cell.tag];
+            [cell setNeedsDisplay];
+            break;
+        }
+        case TransformTag: {   // Append a transform to the active list
+            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
+            Transform *transform = [transformList objectAtIndex:indexPath.row];
+            Transform *thisTransform = [transform copy];
+            assert(thisTransform.remapTable == NULL);
+            thisTransform.p = thisTransform.initial;
+            @synchronized (transforms.sequence) {
+                [transforms.sequence addObject:thisTransform];
+                transforms.sequenceChanged = YES;
+            }
+            [self.executeTableVC.tableView reloadData];
+            [self adjustButtons];
+        }
     }
 }
 
@@ -1052,11 +1078,36 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     transformCount = transformTotalElapsed = 0;
 }
 
-- (IBAction) doInputSelect:(UIButton *)button {
-    NSLog(@"input button tapped: %ld", (long)button.tag);
+- (IBAction) doSelectSource:(UIBarButtonItem *)sender {
+    UITableViewController *sourcesTableVC = [[UITableViewController alloc]
+                                   initWithStyle:UITableViewStylePlain];
+    CGRect f = containerView.frame;
+    f.size.height *= 0.75;
+    f.size.width = SOURCES_W;
+    sourcesTableVC.tableView.frame = f;
+    sourcesTableVC.tableView.tag = SourceSelectTag;
     
-    currentSource = [inputSources objectAtIndex:button.tag];
-    [self.view setNeedsLayout];
+    sourcesTableVC.modalPresentationStyle = UIModalPresentationPopover;
+    sourcesTableVC.preferredContentSize = f.size;
+    
+    UIPopoverPresentationController *popvc = sourcesTableVC.popoverPresentationController;
+    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
+    popvc.delegate = self;
+    popvc.sourceView = sourcesTableVC.tableView;
+    popvc.barButtonItem = sender;
+    [self presentViewController:sourcesTableVC animated:YES completion:nil];
+}
+
+- (IBAction) moveControlSlider:(UISlider *)slider {
+    if (slider.tag < SLIDER_TAG_OFFSET)
+        return;
+    int row = (int)slider.tag - SLIDER_TAG_OFFSET;
+    Transform *t = [transforms.sequence objectAtIndex:row];
+    @synchronized (transforms.sequence) {
+        t.p = slider.value;
+        NSLog(@"value is %f", slider.value);
+        t.pUpdated = YES;
+    }
 }
 
 @end
