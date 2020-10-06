@@ -143,7 +143,7 @@
         if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
             continue;
         if (selectedFormat) {   // this one fits.  Is it better?
-            if (dimensions.width < captureSize.width || dimensions.height < captureSize.height)
+            if (dimensions.width <= captureSize.width || dimensions.height <= captureSize.height)
                 continue;
         }
         selectedFormat = format;

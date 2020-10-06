@@ -16,7 +16,7 @@
 #define STATS_W             450
 
 #define SOURCE_THUMB_SIZE   50
-#define CONTROL_H   40
+#define CONTROL_H   30
 #define TRANSFORM_LIST_W    (1194 - 1024)
 
 #define SOURCES_W   200
@@ -45,7 +45,6 @@ enum {
 // screen views in containerView
 @property (nonatomic, strong)   UIImageView *transformedView;   // final image
 @property (nonatomic, strong)   UIView *controlsView;            // controls for current execute transform
-@property (nonatomic, strong)   UIScrollView *selectionsView;
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
 @property (nonatomic, strong)   UITableViewController *availableTransformsVC;
 
@@ -83,7 +82,6 @@ enum {
 @synthesize containerView;
 @synthesize transformedView;
 @synthesize controlsView;
-@synthesize selectionsView;
 @synthesize executeNavVC;
 @synthesize availableTransformsVC;
 
@@ -178,74 +176,6 @@ enum {
     [inputSources addObject:source];
 }
 
-#ifdef OLD
-// We create the input selection buttons only once.  We put them in place each time the
-// screen has a new layout.
-
-- (void) setupSourceButtons {
-    for (int i=0; i<inputSources.count; i++) {
-        InputSource *source = [inputSources objectAtIndex:i];
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-        button.titleLabel.textAlignment = NSTextAlignmentCenter;
-        button.titleLabel.numberOfLines = 0;
-        button.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
-        button.titleLabel.adjustsFontSizeToFitWidth = YES;
-        [button setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
-        [button setTitleColor:[UIColor lightGrayColor] forState:UIControlStateDisabled];
-        
-        button.frame = CGRectMake(LATER, LATER, SELECTION_THUMB_SIZE, SELECTION_THUMB_SIZE);
-        button.layer.borderWidth = 2.0;
-        button.layer.borderColor = [UIColor blackColor].CGColor;
-        button.layer.cornerRadius = 6.0;
-        
-        button.titleLabel.font = [UIFont boldSystemFontOfSize:BUTTON_FONT_SIZE];
-        button.showsTouchWhenHighlighted = YES;
-        button.tag = i;
-        [button addTarget:self action:@selector(doInputSelect:)
-            forControlEvents:UIControlEventTouchUpInside];
-
-        switch (i) {
-            case FrontCamera:
-                [button setTitle:@"Front camera" forState:UIControlStateNormal];
-                [button setTitle:@"Front camera (unavailable)" forState:UIControlStateDisabled];
-                button.enabled = [cameraController isCameraAvailable:i];
-                button.backgroundColor = [UIColor whiteColor];
-                break;
-            case Front3DCamera:
-                [button setTitle:@"Front 3D camera" forState:UIControlStateNormal];
-                [button setTitle:@"Front 3D camera (unavailable)" forState:UIControlStateDisabled];
-                button.enabled = [cameraController isCameraAvailable:i];
-                button.backgroundColor = [UIColor whiteColor];
-                break;
-            case RearCamera:
-                [button setTitle:@"Rear camera" forState:UIControlStateNormal];
-                [button setTitle:@"Rear camera (unavailable)" forState:UIControlStateDisabled];
-                button.enabled = [cameraController isCameraAvailable:i];
-                button.backgroundColor = [UIColor whiteColor];
-                break;
-            case Rear3DCamera:
-                [button setTitle:@"Rear 3D camera" forState:UIControlStateNormal];
-                [button setTitle:@"Rear 3D camera (unavailable)" forState:UIControlStateDisabled];
-                button.enabled = [cameraController isCameraAvailable:i];
-                button.backgroundColor = [UIColor whiteColor];
-                break;
-            default: {
-                UIImage *image = [UIImage imageWithContentsOfFile:source.imagePath];
-                UIImage *thumb = [self centerImage:image inSize:button.frame.size];
-                if (!thumb)
-                    continue;
-                [button setTitle:source.label forState:UIControlStateNormal];
-                button.backgroundColor = [UIColor whiteColor];
-                [button setBackgroundImage:thumb forState:UIControlStateNormal];
-                button.enabled = YES;
-                currentCameraButton = nil;
-            }
-        }
-        source.button = button;
-    }
-}
-#endif
-
 - (void)viewDidLoad {
     [super viewDidLoad];
     
@@ -280,17 +210,8 @@ enum {
     availableTransformsVC = [[UITableViewController alloc]
                                initWithStyle:UITableViewStylePlain];
     
-    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
-        selectionsView = nil;
-        [containerView addSubview:executeNavVC.view];
-        [containerView addSubview:availableTransformsVC.view];
-    } else {    // we have to put these in a horizontal scroll region on small devices
-        selectionsView = [[UIScrollView alloc] init];
-        [selectionsView addSubview:executeNavVC.view];
-        [selectionsView addSubview:availableTransformsVC.view];
-        
-        [containerView addSubview:selectionsView];
-    }
+    [containerView addSubview:executeNavVC.view];
+    [containerView addSubview:availableTransformsVC.view];
     
     // execute has a nav bar (with stats) and is a table
     executeTableVC.tableView.tag = ActiveTag;
@@ -322,14 +243,6 @@ enum {
                                                       flexSpacer,
                                                       trashButton,
                                                       nil];
-
-    selectionsView.showsHorizontalScrollIndicator = YES;
-    selectionsView.userInteractionEnabled = YES;
-    selectionsView.exclusiveTouch = NO;
-    selectionsView.bounces = NO;
-    selectionsView.delaysContentTouches = YES;
-    selectionsView.canCancelContentTouches = YES;
-    //selectionsView.delegate = self;
     
     availableTransformsVC.tableView.tag = TransformTag;
     availableTransformsVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -382,12 +295,12 @@ enum {
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = NO;
     
-    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc]
+    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
                                       initWithTitle:@"Sources"
                                       style:UIBarButtonItemStylePlain
                                       target:self action:@selector(doSelectSource:)];
-    leftBarButton.enabled = YES;
-    self.navigationItem.leftBarButtonItem = leftBarButton;
+    rightBarButton.enabled = YES;
+    self.navigationItem.rightBarButtonItem = rightBarButton;
 
 //    self.navigationController.toolbarHidden = YES;
     //self.navigationController.toolbar.opaque = NO;
@@ -434,28 +347,41 @@ enum {
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
     CGRect f = containerView.frame;
-    BOOL narrow = (f.size.width - TRANSFORM_LIST_W) < 1024;
+    CGRect sRect;
     
-    if (!narrow) {
-        f.size.width = 1024 - TRANSFORM_LIST_W;
+    sRect.origin = CGPointZero;
+    if (isPortrait) {   // both tables are below
+        ;
+    } else {    // one table is on the entire right side, the other is under
+        f.size.width -= TRANSFORM_LIST_W;
     }
-    transformedView.frame = f;
-    
-    // given the maximum output width, get the best source width for it
+    f.size.height -= CONTROL_H;
     
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController selectCamera:currentSource.sourceType];
-        f.size = [cameraController setupCameraForSize:f.size];
+        sRect.size = [cameraController setupCameraForSize:f.size];
     } else {
-        f.size = currentSource.imageSize;
+        sRect.size = currentSource.imageSize;
+    }
+
+#ifdef notdef
+    CGFloat hScale = containerView.frame.size.height / sRect.size.height;
+    CGFloat wScale = containerView.frame.size.width / sRect.size.width;
+    CGFloat scale;
+    if (isPortrait) {
+        scale = wScale;
+    } else
+        scale = hScale;
+    sRect.size.width *= scale;
+    sRect.size.height *= scale;
+#endif
+    transformedView.frame = sRect;
+
+    if (isPortrait) {   // transformed image spans the top
+    } else {
     }
     
-    NSLog(@" source image size: %.0f x %.0f", f.size.width, f.size.height);
-    // the after the last step of the transform, we scale the results to our
-    // transform size.  Using f.size, figure out the height of the transformed image.
-    CGFloat wScale = transformedView.frame.size.width / f.size.width;
-    CGFloat h = f.size.height * wScale;
-    SET_VIEW_HEIGHT(transformedView, h);
+    NSLog(@" source image size: %.0f x %.0f", sRect.size.width, sRect.size.height);
     NSLog(@" transform target size: %.0f x %.0f", transformedView.frame.size.width, transformedView.frame.size.height);
 
     cameraController.displaySize = transformedView.frame.size;
@@ -467,48 +393,33 @@ enum {
     controlsView.frame = f;
     controlsView.backgroundColor = [UIColor whiteColor];
     
-    if (selectionsView) {   // both inputs go into a scroll area
-        if (isPortrait) {   // goes under the transform display
-            f.origin = CGPointMake(0, BELOW(controlsView.frame));
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            assert(f.size.height >= 100);
-            f.size.width = 222;
-        } else {        // goes to the right of the transform display
-            f.origin = CGPointMake(RIGHT(controlsView.frame), 0);
-            f.size.height = containerView.frame.size.height;
-            f.size.width = LATER;
-        }
-    } else {    // ipad, a place for everyone
-        if (isPortrait) {   // all three go below transform view
-            // split the area in two, vertically.
-            f.origin.x = 0;
-            f.origin.y = BELOW(controlsView.frame);
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            f.size.width = containerView.frame.size.width/2;
-            executeNavVC.view.frame = f;
-            
-            f.origin.x += f.size.width;
-            availableTransformsVC.view.frame = f;
-        } else {    // put available to the right, and execute
-            f.origin.x = RIGHT(transformedView.frame);
-            f.size.width = containerView.frame.size.width - f.origin.x;
-            f.origin.y = 0;
-            f.size.height = containerView.frame.size.height;
-            availableTransformsVC.view.frame = f;
-            
-            f.size.width = f.origin.x;
-            f.origin.x = 0;
-            f.origin.y = BELOW(controlsView.frame);
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            executeNavVC.view.frame = f;
-        }
-        f = executeNavVC.navigationBar.frame;
-        f.origin.x = 0;
-        f.origin.y = f.size.height;
-        f.size.height = executeNavVC.view.frame.size.height - f.origin.y;
-        executeTableVC.view.frame = f;
+    if (isPortrait) {   // both go under the transform view
+        f.origin = CGPointMake(0, BELOW(controlsView.frame));
+        f.size.height = containerView.frame.size.height - f.origin.y;
+        assert(f.size.height >= 100);
+        f.size.width = containerView.frame.size.width/2;
+        executeNavVC.view.frame = f;
+        
+        f.origin.x = RIGHT(f);
+        availableTransformsVC.view.frame = f;
+    } else {        // available goes right of display, execute under
+        f.origin = CGPointMake(RIGHT(controlsView.frame), 0);
+        f.size.height = containerView.frame.size.height;
+        f.size.width = containerView.frame.size.width - f.origin.x;
+        availableTransformsVC.view.frame = f;
+        
+        f.size.width = f.origin.x;
+        f.origin = CGPointMake(0, BELOW(controlsView.frame));
+        f.size.height = containerView.frame.size.height - f.origin.y;
+        assert(f.size.height >= 100);
+        executeNavVC.view.frame = f;
     }
-    
+    f = executeNavVC.navigationBar.frame;
+    f.origin.x = 0;
+    f.origin.y = f.size.height;
+    f.size.height = executeNavVC.view.frame.size.height - f.origin.y;
+    executeTableVC.view.frame = f;
+
     f = controlsView.frame;
     f.origin.x = 0;
     f.origin.y = 0;
@@ -875,8 +786,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         case TransformTag:
             return [transforms.categoryNames objectAtIndex:section];
         case ActiveTag:
-        case SourceSelectTag:
             return @"";
+        case SourceSelectTag:
+            return @"Sources";
     }
     return @"bogus";
 }
