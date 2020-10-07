@@ -15,13 +15,12 @@
 #define STATS_FONT_SIZE     20
 #define STATS_W             450
 
-#define SOURCE_THUMB_SIZE   50
 #define CONTROL_H   30
-#define TRANSFORM_LIST_W    (1194 - 1024)
+#define TRANSFORM_LIST_W    200
 
-#define SOURCES_W   200
-#define SOURCES_FONT_SIZE   14
-#define SOURCES_H   (SOURCE_THUMB_SIZE+SOURCES_FONT_SIZE+2)
+#define SOURCE_THUMB_W  80
+#define SOURCE_THUMB_H  80
+#define SOURCE_BUTTON_FONT_SIZE 16
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -46,7 +45,7 @@ enum {
 @property (nonatomic, strong)   UIImageView *transformedView;   // final image
 @property (nonatomic, strong)   UIView *controlsView;            // controls for current execute transform
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
-@property (nonatomic, strong)   UITableViewController *availableTransformsVC;
+@property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
 
 // in controlsView
 @property (nonatomic, strong)   UISlider *controlSlider;
@@ -54,6 +53,9 @@ enum {
 
 // in execute view
 @property (nonatomic, strong)   UITableViewController *executeTableVC;
+
+// in available VC
+@property (nonatomic, strong)   UITableViewController *availableTableVC;
 
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
@@ -69,7 +71,7 @@ enum {
 @property (assign)              int transformCount;
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 
-@property (nonatomic, strong)   UIBarButtonItem *undoButton, *trashButton;
+@property (nonatomic, strong)   UIBarButtonItem *trashButton;
 
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
@@ -83,9 +85,10 @@ enum {
 @synthesize transformedView;
 @synthesize controlsView;
 @synthesize executeNavVC;
-@synthesize availableTransformsVC;
+@synthesize availableNavVC;
 
 @synthesize executeTableVC;
+@synthesize availableTableVC;
 
 @synthesize currentCameraButton;
 
@@ -100,7 +103,7 @@ enum {
 @synthesize busy;
 @synthesize statsTimer, lastTime;
 @synthesize transforms;
-@synthesize undoButton, trashButton;
+@synthesize trashButton;
 @synthesize selectedImage;
 @synthesize capturing;
 
@@ -179,6 +182,17 @@ enum {
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    self.title = @"Digital Darkroom";
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.navigationBar.opaque = YES;
+    
+    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
+                                      initWithTitle:@"Sources"
+                                      style:UIBarButtonItemStylePlain
+                                      target:self action:@selector(doSelectSource:)];
+    rightBarButton.enabled = YES;
+    self.navigationItem.rightBarButtonItem = rightBarButton;
+
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor greenColor];
     [self.view addSubview:containerView];
@@ -207,11 +221,12 @@ enum {
     
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
-    availableTransformsVC = [[UITableViewController alloc]
+    availableTableVC = [[UITableViewController alloc]
                                initWithStyle:UITableViewStylePlain];
-    
+    availableNavVC = [[UINavigationController alloc] initWithRootViewController:availableTableVC];
+
     [containerView addSubview:executeNavVC.view];
-    [containerView addSubview:availableTransformsVC.view];
+    [containerView addSubview:availableNavVC.view];
     
     // execute has a nav bar (with stats) and is a table
     executeTableVC.tableView.tag = ActiveTag;
@@ -225,31 +240,21 @@ enum {
                                    target:self
                                    action:@selector(doEditActiveList:)];
     executeTableVC.navigationItem.rightBarButtonItem = editButton;
-    undoButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                                   target:self
-                                   action:@selector(doRemoveLastTransform)];
-    executeTableVC.navigationItem.leftBarButtonItem = undoButton;
     trashButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
                                    target:self
                                    action:@selector(doRemoveAllTransforms:)];
-    UIBarButtonItem *flexSpacer = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                   target:nil
-                                   action:nil];
     executeTableVC.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:
-                                                      undoButton,
-                                                      flexSpacer,
                                                       trashButton,
                                                       nil];
     
-    availableTransformsVC.tableView.tag = TransformTag;
-    availableTransformsVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    availableTransformsVC.tableView.delegate = self;
-    availableTransformsVC.tableView.dataSource = self;
-    availableTransformsVC.tableView.showsVerticalScrollIndicator = YES;
-    availableTransformsVC.title = @"Transforms";
+
+    availableTableVC.tableView.tag = TransformTag;
+    availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    availableTableVC.tableView.delegate = self;
+    availableTableVC.tableView.dataSource = self;
+    availableTableVC.tableView.showsVerticalScrollIndicator = YES;
+    availableTableVC.title = @"Transforms";
  
     // touching the transformView
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
@@ -285,25 +290,7 @@ enum {
 }
 
 - (void) adjustButtons {
-    undoButton.enabled = trashButton.enabled = transforms.sequence.count > 0;
-}
-
-- (void) viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    
-    self.title = @"Digital Darkroom";
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.navigationBar.opaque = NO;
-    
-    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
-                                      initWithTitle:@"Sources"
-                                      style:UIBarButtonItemStylePlain
-                                      target:self action:@selector(doSelectSource:)];
-    rightBarButton.enabled = YES;
-    self.navigationItem.rightBarButtonItem = rightBarButton;
-
-//    self.navigationController.toolbarHidden = YES;
-    //self.navigationController.toolbar.opaque = NO;
+    trashButton.enabled = transforms.sequence.count > 0;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -342,17 +329,18 @@ enum {
           UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]),
           isPortrait ? @"Portrait" : @"Landscape");
 
-    containerView.frame = self.view.frame;
+    CGRect f = self.view.frame;
+    f.origin.y = BELOW(self.navigationController.navigationBar.frame);
+    f.size.height = f.size.height - f.origin.y;
+    containerView.frame = f;
 
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
-    CGRect f = containerView.frame;
     CGRect sRect;
-    
     sRect.origin = CGPointZero;
     if (isPortrait) {   // both tables are below
         ;
-    } else {    // one table is on the entire right side, the other is under
+    } else {    // one table is on top of the other on the right
         f.size.width -= TRANSFORM_LIST_W;
     }
     f.size.height -= CONTROL_H;
@@ -361,7 +349,7 @@ enum {
         [cameraController selectCamera:currentSource.sourceType];
         sRect.size = [cameraController setupCameraForSize:f.size];
     } else {
-        sRect.size = currentSource.imageSize;
+        sRect.size = [self fitSize:currentSource.imageSize toSize:f.size];
     }
 
 #ifdef notdef
@@ -401,18 +389,16 @@ enum {
         executeNavVC.view.frame = f;
         
         f.origin.x = RIGHT(f);
-        availableTransformsVC.view.frame = f;
-    } else {        // available goes right of display, execute under
+        availableNavVC.view.frame = f;
+    } else {        // available and execute goes right of display
         f.origin = CGPointMake(RIGHT(controlsView.frame), 0);
-        f.size.height = containerView.frame.size.height;
+        f.size.height = containerView.frame.size.height*0.3;
         f.size.width = containerView.frame.size.width - f.origin.x;
-        availableTransformsVC.view.frame = f;
-        
-        f.size.width = f.origin.x;
-        f.origin = CGPointMake(0, BELOW(controlsView.frame));
-        f.size.height = containerView.frame.size.height - f.origin.y;
-        assert(f.size.height >= 100);
         executeNavVC.view.frame = f;
+
+        f.origin.y = BELOW(f);
+        f.size.height = containerView.frame.size.height - f.origin.y;
+        availableNavVC.view.frame = f;
     }
     f = executeNavVC.navigationBar.frame;
     f.origin.x = 0;
@@ -525,23 +511,27 @@ enum {
     [self doRemoveLastTransform];
 }
 
-- (UIImage *)centerImage:(UIImage *)image inSize:(CGSize)size {
-    //CGFloat screenScale = [[UIScreen mainScreen] scale];
-    
-    float xScale = size.width/image.size.width;
-    float yScale = size.height/image.size.height;
+- (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size {
+    float xScale = size.width/srcSize.width;
+    float yScale = size.height/srcSize.height;
     float scale = MIN(xScale,yScale);
     
-    CGRect scaledRect;
-    scaledRect.size.width = scale*image.size.width;
-    scaledRect.size.height = scale*image.size.height;
+    CGSize scaledSize;
     //NSLog(@"scale is %.2f", scale);
-    if (xScale < yScale) {  // slop above and below
-        scaledRect.origin.x = 0;
-        scaledRect.origin.y = (size.height - scaledRect.size.height)/2.0;
-    } else {
+    scaledSize.width = scale*srcSize.width;
+    scaledSize.height = scale*srcSize.height;
+    return scaledSize;
+}
+
+- (UIImage *)fitImage:(UIImage *)image
+               toSize:(CGSize)size
+             centered:(BOOL) centered {
+    CGRect scaledRect;
+    scaledRect.size = [self fitSize:image.size toSize:size];
+    scaledRect.origin = CGPointZero;
+    if (!centered) {
         scaledRect.origin.x = (size.width - scaledRect.size.width)/2.0;
-        scaledRect.origin.y = 0;
+        scaledRect.origin.y = (size.height - scaledRect.size.height)/2.0;
     }
     
     //NSLog(@"scaled image size: %.0fx%.0f", scaledRect.size.width, scaledRect.size.height);
@@ -582,7 +572,7 @@ enum {
     if (currentSource && ISCAMERA(currentSource.sourceType)) {
         UIButton *currentButton = currentSource.button;
         
-        UIImage *buttonImage = [self centerImage:image inSize:currentButton.frame.size];
+        UIImage *buttonImage = [self fitImage:image toSize:currentButton.frame.size centered:NO];
         if (!buttonImage)
             return;
         [currentButton setBackgroundImage:buttonImage forState:UIControlStateNormal];
@@ -799,7 +789,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         case TransformTag:
             return 30;
         case SourceSelectTag:
-            return SOURCES_H;
+            return SOURCE_THUMB_H;
     }
     return 30;
 }
@@ -819,6 +809,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 
 #define SLIDER_TAG_OFFSET   100
 
+
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell;
@@ -831,31 +822,46 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                               reuseIdentifier:CellIdentifier];
             }
-            UIListContentConfiguration *content = cell.defaultContentConfiguration;
-            InputSource *source = [inputSources objectAtIndex:indexPath.row];
+            size_t sourceIndex = indexPath.row;
+            InputSource *source = [inputSources objectAtIndex:sourceIndex];
+            // UIView *sourceView = [[UIView alloc] initWithFrame:cell.contentView.frame];
+            UIButton *sourceButton = [UIButton buttonWithType:UIButtonTypeCustom];
+            sourceButton.frame = CGRectMake(0, 0, SOURCE_THUMB_W, SOURCE_THUMB_H);
+            sourceButton.tag = sourceIndex;
+            sourceButton.titleLabel.lineBreakMode = NSLineBreakByWordWrapping;
+            sourceButton.titleLabel.numberOfLines = 0;
+            sourceButton.titleLabel.adjustsFontSizeToFitWidth = YES;
+            sourceButton.titleLabel.font = [UIFont
+                                            systemFontOfSize:SOURCE_BUTTON_FONT_SIZE
+                                            weight:UIFontWeightMedium];
+            [sourceButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+            [sourceButton setTitleColor:[UIColor grayColor] forState:UIControlStateDisabled];
             switch (source.sourceType) {
                 case FrontCamera:
-                    content.text = @"Front camera";
+                    [sourceButton setTitle:@"Front camera" forState:UIControlStateNormal];
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case Front3DCamera:
-                    content.text = @"Front 3D camera";
+                    [sourceButton setTitle:@"Front 3D camera" forState:UIControlStateNormal];
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case RearCamera:
-                    content.text = @"Rear camera";
+                    [sourceButton setTitle:@"Rear camera" forState:UIControlStateNormal];
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 case Rear3DCamera:
-                    content.text = @"Front 3D camera";
+                    [sourceButton setTitle:@"Rear 3D camera" forState:UIControlStateNormal];
                     cell.userInteractionEnabled = [cameraController isCameraAvailable:source.sourceType];
                     break;
                 default: {
-                    content.text = source.label;
-                    content.image = [UIImage imageWithContentsOfFile:source.imagePath];
+                    [sourceButton setTitle:source.label forState:UIControlStateNormal];
+                    UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
+                    UIImage *thumbImage = [self fitImage:sourceImage toSize:sourceButton.frame.size centered:NO];
+                    [sourceButton setBackgroundImage:thumbImage forState:UIControlStateNormal];
+                    break;
                 }
             }
-            cell.contentConfiguration = content;
+            [cell.contentView addSubview:sourceButton];
             cell.tag = indexPath.row;
             return cell;
         }
@@ -1013,7 +1019,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
                                    initWithStyle:UITableViewStylePlain];
     CGRect f = containerView.frame;
     f.size.height *= 0.75;
-    f.size.width = SOURCES_W;
+    f.size.width = 200;
     sourcesTableVC.tableView.frame = f;
     sourcesTableVC.tableView.tag = SourceSelectTag;
     sourcesTableVC.tableView.delegate = self;
@@ -1022,7 +1028,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     sourcesTableVC.preferredContentSize = f.size;
     
     UIPopoverPresentationController *popvc = sourcesTableVC.popoverPresentationController;
-    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
+//    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
     popvc.delegate = self;
     popvc.sourceView = sourcesTableVC.tableView;
     popvc.barButtonItem = sender;
