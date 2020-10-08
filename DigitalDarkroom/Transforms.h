@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
     
     size_t bytesPerRow;
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
+    CGFloat finalScale;   // to reach the desired display dimensions
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -33,6 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesPerRow;
 @property (nonatomic, strong)   NSArray *updatedTransformList;
 @property (assign)              volatile BOOL paramsChanged;
+@property (assign)              CGFloat finalScale;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 

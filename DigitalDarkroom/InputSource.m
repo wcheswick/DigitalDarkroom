@@ -8,13 +8,15 @@
 
 #import "InputSource.h"
 
+
 @implementation InputSource
 
 @synthesize sourceType;
 @synthesize label;
 @synthesize imagePath;
-@synthesize button;
+@synthesize thumbImage;
 @synthesize imageSize;
+@synthesize cameraNames;
 
 - (id)init {
     self = [super init];
@@ -23,6 +25,15 @@
         imageSize = CGSizeZero;
     }
     return self;
+}
+
++ (NSString *)cameraNameFor:(Cameras)camera {
+    assert(ISCAMERA(camera));
+    NSArray *cameraNames = @[@"Front camera",
+                             @"Rear camera",
+                             @"Front 3D camera",
+                             @"Rear 3D camera"];
+    return [cameraNames objectAtIndex:camera];
 }
 
 @end

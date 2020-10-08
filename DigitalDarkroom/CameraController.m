@@ -31,7 +31,6 @@
 @synthesize imageOrientation;
 
 @synthesize captureDevice, selectedCamera;
-@synthesize displaySize;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -46,7 +45,6 @@
         delegate = nil;
         captureDevice = nil;
         captureSession = nil;
-        displaySize = CGSizeZero;
     }
     return self;
 }

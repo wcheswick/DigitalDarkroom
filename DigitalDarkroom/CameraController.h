@@ -18,14 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
             AVCaptureDepthDataOutputDelegate>delegate;
     UIImageOrientation imageOrientation;
-    CGSize displaySize;     // the final (possibly scaled) size of the final transform
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
 @property (assign)  UIImageOrientation imageOrientation;
-@property (assign)  CGSize displaySize;
 
 
 - (BOOL) isCameraAvailable:(Cameras) camera;

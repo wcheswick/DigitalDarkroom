@@ -29,14 +29,17 @@ typedef enum {
     NSString *label;
     NSString *imagePath;
     CGSize imageSize;
-    UIButton *button;
+    UIImageView *thumbImage;
 }
 
 @property (assign)  Cameras sourceType;
 @property (nonatomic, strong)   NSString *label;
 @property (nonatomic, strong)   NSString *imagePath;
-@property (nonatomic, strong)   UIButton *button;
+@property (nonatomic, strong)   UIImageView *thumbImage;
 @property (assign)              CGSize imageSize;
+@property (nonatomic, strong)   NSArray *cameraNames;
+
++ (NSString *)cameraNameFor:(Cameras)camera;
 
 @end
 

@@ -93,6 +93,7 @@ Pixel *imBufs[2];
 @synthesize executeList;
 @synthesize bytesPerRow;
 @synthesize lastTransform;
+@synthesize finalScale;
 
 - (id)init {
     self = [super init];
@@ -102,6 +103,7 @@ Pixel *imBufs[2];
         categoryList = [[NSMutableArray alloc] init];
         sequence = [[NSMutableArray alloc] init];
         sequenceChanged = NO;
+        finalScale = 1.0;
         imBufs[0] = imBufs[1] = NULL;
         executeList = [[NSMutableArray alloc] init];
         [self buildTransformList];
@@ -327,7 +329,7 @@ int sourceImageIndex, destImageIndex;
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
-                                               scale:(CGFloat)1.0
+                                               scale:finalScale
                                          orientation:incomingOrientation];
 
     //UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
@@ -400,6 +402,207 @@ int sourceImageIndex, destImageIndex;
     [categoryNames addObject:@"Area transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+
+#define    N    10  // was 2
+
+#define N_BUCKETS    (32)
+#define    BUCKET(x)    ((x)>>3)
+#define UNBUCKET(x)    ((x)<<3)
+
+    lastTransform = [Transform areaTransform: @"Oil paint"
+                                  description: @"oil paint"
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int v) {
+        int rmax, gmax, bmax;
+        u_int x,y;
+        int dx, dy, dz;
+        int rh[N_BUCKETS], gh[N_BUCKETS], bh[N_BUCKETS];
+        Pixel p = {0,0,0,Z};
+        
+        // N-pixel white border around the outside
+        for (y=0; y<configuredHeight; y++) {
+            for (x=0; x<N; x++)
+            dest[PI(x,y)] = dest[PI(configuredWidth-x-1,y)] = White;
+            if (y<N || y>configuredHeight-N)
+                for (x=0; x<configuredWidth; x++) {
+                    dest[PI(x,y)] = White;
+                }
+        }
+
+        for (dz=0; dz<N_BUCKETS; dz++)
+            rh[dz] = bh[dz] = gh[dz] = 0;
+
+        /*
+         * Initialize our histogram with the upper left NxN pixels
+         */
+        y=N;
+        x=N;
+        for (dy=y-N; dy<=y+N; dy++)
+            for (dx=x-N; dx<=x+N; dx++) {
+                p = src[PI(dx,dy)];
+                rh[BUCKET(p.r)]++;
+                gh[BUCKET(p.g)]++;
+                bh[BUCKET(p.b)]++;
+            }
+        rmax=0; gmax=0; bmax=0;
+        for (dz=0; dz<N_BUCKETS; dz++) {
+            if (rh[dz] > rmax) {
+                p.r = UNBUCKET(dz);
+                rmax = rh[dz];
+            }
+            if (gh[dz] > gmax) {
+                p.g = UNBUCKET(dz);
+                gmax = gh[dz];
+            }
+            if (bh[dz] > bmax) {
+                p.b = UNBUCKET(dz);
+                bmax = bh[dz];
+            }
+        }
+        dest[PI(x,y)] = p;
+
+        while (1) {
+            /*
+             * Creep across the row one pixel at a time updating our
+             * histogram by subtracting the contribution of the left-most
+             * edge and adding the new right edge.
+             */
+            for (x++; x<configuredWidth-N; x++) {
+                for (dy=y-N; dy<=y+N; dy++) {
+                    Pixel op = src[PI(x-N-1,dy)];
+                    Pixel ip = src[PI(x+N,dy)];
+                    rh[BUCKET(op.r)]--;
+                    rh[BUCKET(ip.r)]++;
+                    gh[BUCKET(op.g)]--;
+                    gh[BUCKET(ip.g)]++;
+                    bh[BUCKET(op.b)]--;
+                    bh[BUCKET(ip.b)]++;
+                }
+                rmax=0; gmax=0; bmax=0;
+                for (dz=0; dz<N_BUCKETS; dz++) {
+                    if (rh[dz] > rmax) {
+                        p.r = UNBUCKET(dz);
+                        rmax = rh[dz];
+                    }
+                    if (gh[dz] > gmax) {
+                        p.g = UNBUCKET(dz);
+                        gmax = gh[dz];
+                    }
+                    if (bh[dz] > bmax) {
+                        p.b = UNBUCKET(dz);
+                        bmax = bh[dz];
+                    }
+                }
+                dest[PI(x,y)] = p;
+            }
+
+            /*
+             * Now move our histogram down a pixel on the right hand side,
+             * and recompute our histograms.
+             */
+            y++;
+            if (y+N >= configuredHeight)
+                break;        /* unfortunate place to break out of the loop */
+            x = (int)configuredWidth - N - 1;
+            for (dx=x-N; dx<=x+N; dx++) {
+                Pixel op = src[PI(dx,y-N-1)];
+                Pixel ip = src[PI(dx,y+N)];
+                rh[BUCKET(op.r)]--;
+                rh[BUCKET(ip.r)]++;
+                gh[BUCKET(op.g)]--;
+                gh[BUCKET(ip.g)]++;
+                bh[BUCKET(op.b)]--;
+                bh[BUCKET(ip.b)]++;
+            }
+            rmax=0; gmax=0; bmax=0;
+            for (dz=0; dz<N_BUCKETS; dz++) {
+                if (rh[dz] > rmax) {
+                    p.r = UNBUCKET(dz);
+                    rmax = rh[dz];
+                }
+                if (gh[dz] > gmax) {
+                    p.g = UNBUCKET(dz);
+                    gmax = gh[dz];
+                }
+                if (bh[dz] > bmax) {
+                    p.b = UNBUCKET(dz);
+                    bmax = bh[dz];
+                }
+            }
+            dest[PI(x,y)] = p;
+
+            /*
+             * Now creep the histogram back to the left, one pixel at a time
+             */
+            for (x=x-1; x>=N; x--) {
+                for (dy=y-N; dy<=y+N; dy++) {
+                    Pixel op = src[PI(x+N+1,dy)];
+                    Pixel ip = src[PI(x-N,dy)];
+                    rh[BUCKET(op.r)]--;
+                    rh[BUCKET(ip.r)]++;
+                    gh[BUCKET(op.g)]--;
+                    gh[BUCKET(ip.g)]++;
+                    bh[BUCKET(op.b)]--;
+                    bh[BUCKET(ip.b)]++;
+                }
+                rmax=0; gmax=0; bmax=0;
+                for (dz=0; dz<N_BUCKETS; dz++) {
+                    if (rh[dz] > rmax) {
+                        p.r = UNBUCKET(dz);
+                        rmax = rh[dz];
+                    }
+                    if (gh[dz] > gmax) {
+                        p.g = UNBUCKET(dz);
+                        gmax = gh[dz];
+                    }
+                    if (bh[dz] > bmax) {
+                        p.b = UNBUCKET(dz);
+                        bmax = bh[dz];
+                    }
+                }
+            }
+            dest[PI(x,y)] = p;
+
+            /*
+             * Move our histogram down one pixel on the left side.
+             */
+            y++;
+            x = N;
+            if (y+N >= configuredHeight)
+                break;        /* unfortunate place to break out of the loop */
+            for (dx=x-N; dx<=x+N; dx++) {
+                Pixel op = src[PI(dx,y-N-1)];
+                Pixel ip = src[PI(dx,y+N)];
+                rh[BUCKET(op.r)]--;
+                rh[BUCKET(ip.r)]++;
+                gh[BUCKET(op.g)]--;
+                gh[BUCKET(ip.g)]++;
+                bh[BUCKET(op.b)]--;
+                bh[BUCKET(ip.b)]++;
+            }
+            rmax=0; gmax=0; bmax=0;
+            for (dz=0; dz<N_BUCKETS; dz++) {
+                if (rh[dz] > rmax) {
+                    p.r = UNBUCKET(dz);
+                    rmax = rh[dz];
+                }
+                if (gh[dz] > gmax) {
+                    p.g = UNBUCKET(dz);
+                    gmax = gh[dz];
+                }
+                if (bh[dz] > bmax) {
+                    p.b = UNBUCKET(dz);
+                    bmax = bh[dz];
+                }
+            }
+            dest[PI(x,y)] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+#ifdef OIL
+    int
+    do_new_oil(void *param, image in, image out) {
+#endif
 
 #ifdef NOTYET
 
@@ -490,13 +693,13 @@ int sourceImageIndex, destImageIndex;
     [transformList addObject:lastTransform];
     
 #ifdef notdef
-    for (y=0; y<MAX_Y; y++) {
+    for (y=0; y<configuredHeight; y++) {
         int ndots;
 
         if (y <= CENTER_Y)
-            ndots = (y*(MAX_X-1))/MAX_Y;
+            ndots = (y*(configuredHeight-1))/configuredWidth;
         else
-            ndots = ((MAX_Y-y-1)*(MAX_X))/MAX_Y;
+            ndots = ((configuredHeight-y-1)*(configuredWidth))/configuredWidth;
 
         (*rmp)[CENTER_X][y] = (Point){CENTER_X,y};
         (*rmp)[0][y] = (Point){Remap_White,0};
@@ -995,7 +1198,7 @@ extern  void init_polar(void);
 #define HALF_Z          (Z/2)
 
 
-typedef Point remap[MAX_X][MAX_Y];
+typedef Point remap[configuredWidth][configuredWidth];
 typedef void *init_proc(void);
 
 /* in trans.c */
