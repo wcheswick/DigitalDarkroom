@@ -12,13 +12,13 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-//#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
 
-#define CENTER_X        (frameSize.width/2)
-#define CENTER_Y        (frameSize.height/2)
+#define CENTER_X        (configuredWidth/2)
+#define CENTER_Y        (configuredHeight/2)
 
 #define Black           SETRGB(0,0,0)
 #define Grey            SETRGB(Z/2,Z/2,Z/2)
@@ -57,13 +57,14 @@ enum SpecialRemaps {
 size_t configuredWidth, configuredHeight;
 size_t configuredBytesPerRow, configuredPixelsInImage;
 
+Pixel *imBufs[2];
+
 
 #define RPI(x,y)    (PixelIndex_t)(((y)*configuredWidth) + (x))
 
 #ifdef DEBUG_TRANSFORMS
-
 // Some of our transforms might be a little buggy around the edges.  Make sure
-// all the points are in range.
+// all the indicies are in range.
 
 #define PI(x,y)   dPI((int)(x),(int)(y))   // pixel index in a buffer
 
@@ -78,12 +79,8 @@ PixelIndex_t dPI(int x, int y) {
 }
 
 #else
-
 #define PI(x,y)   RPI((x),(y))
-
 #endif
-
-Pixel *imBufs[2];
 
 @implementation Transforms
 
@@ -403,15 +400,33 @@ int sourceImageIndex, destImageIndex;
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
-#define    N    10  // was 2
+    /* timings on digitalis:
+     *
+     *            Z    param    f/s
+     * original oil        31    3    ~7.0
+     *
+     * original oil        255    3    1.2
+     *
+     * new oil        255    3    2.5
+     * new oil        255    2    2.7
+     * new oil        255    1    2.7    seurat-like
+     *
+     * new oil        31    3    5.8    notable loss of detail
+     * new oil        31    2    6.5    better detail than N==3
+     * new oil        31    1    7.2    looks more like seurat
+     *
+     * new oil        15    2    7.6    isophots visible
+     */
 
 #define N_BUCKETS    (32)
 #define    BUCKET(x)    ((x)>>3)
 #define UNBUCKET(x)    ((x)<<3)
 
+    // area transform
     lastTransform = [Transform areaTransform: @"Oil paint"
                                   description: @"oil paint"
-                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int v) {
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
+        int N = param;
         int rmax, gmax, bmax;
         u_int x,y;
         int dx, dy, dz;
@@ -427,22 +442,22 @@ int sourceImageIndex, destImageIndex;
                     dest[PI(x,y)] = White;
                 }
         }
-
+        
         for (dz=0; dz<N_BUCKETS; dz++)
             rh[dz] = bh[dz] = gh[dz] = 0;
-
+        
         /*
          * Initialize our histogram with the upper left NxN pixels
          */
         y=N;
         x=N;
-        for (dy=y-N; dy<=y+N; dy++)
+        for (dy=y-N; dy<=y+N; dy++) {
             for (dx=x-N; dx<=x+N; dx++) {
                 p = src[PI(dx,dy)];
                 rh[BUCKET(p.r)]++;
                 gh[BUCKET(p.g)]++;
                 bh[BUCKET(p.b)]++;
-            }
+            }}
         rmax=0; gmax=0; bmax=0;
         for (dz=0; dz<N_BUCKETS; dz++) {
             if (rh[dz] > rmax) {
@@ -459,7 +474,7 @@ int sourceImageIndex, destImageIndex;
             }
         }
         dest[PI(x,y)] = p;
-
+        
         while (1) {
             /*
              * Creep across the row one pixel at a time updating our
@@ -467,6 +482,7 @@ int sourceImageIndex, destImageIndex;
              * edge and adding the new right edge.
              */
             for (x++; x<configuredWidth-N; x++) {
+                //NSLog(@"x,y = %d, %d", x, y);
                 for (dy=y-N; dy<=y+N; dy++) {
                     Pixel op = src[PI(x-N-1,dy)];
                     Pixel ip = src[PI(x+N,dy)];
@@ -494,7 +510,7 @@ int sourceImageIndex, destImageIndex;
                 }
                 dest[PI(x,y)] = p;
             }
-
+            
             /*
              * Now move our histogram down a pixel on the right hand side,
              * and recompute our histograms.
@@ -559,8 +575,8 @@ int sourceImageIndex, destImageIndex;
                         bmax = bh[dz];
                     }
                 }
+                dest[PI(x,y)] = p;
             }
-            dest[PI(x,y)] = p;
 
             /*
              * Move our histogram down one pixel on the left side.
@@ -597,15 +613,12 @@ int sourceImageIndex, destImageIndex;
             dest[PI(x,y)] = p;
         }
     }];
+    lastTransform.initial = 10;
+    lastTransform.low = 2;
+    lastTransform.high = 20;
     [transformList addObject:lastTransform];
 
-#ifdef OIL
-    int
-    do_new_oil(void *param, image in, image out) {
-#endif
-
 #ifdef NOTYET
-
         lastTransform = [Transform areaTransform: @"remap test"
                                          description: @"testing"
                                           remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
@@ -617,109 +630,38 @@ int sourceImageIndex, destImageIndex;
                 }
             }];
         [transformList addObject:lastTransform];
-
-    
+#endif
+    // geom:
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
         size_t centerY = h/2;
+        size_t centerX = w/2;
         for (int y=0; y<h; y++) {
-            float display_frac;
-            if (y <= centerY)
-                display_frac = (float)y / (float)centerY;
-            else
-                display_frac = ((float)h - (float)y)/(float)centerY;
-            int kiteW = round(display_frac * (float)w);
-            if (kiteW == 0)
-                kiteW = 1;
-
-            int xw = display_frac * (float)w;
-            int xInset = (w - xw)/2.0;
-            int firstX = xInset;
-            int lastX = (int)w - xInset;
-            float xStride;
-            xStride = w * (1.0 - display_frac);
-            xStride = 1;
+            size_t ndots;
             
-            int srcX = 0;
-            for (int x=firstX; x<lastX; x++) {
-                table[TI(x,y,w)] = TI(w-x, y, w);
-                srcX += xStride;
-            }
-#ifdef NEW
-            int firstX = (w - kiteW - 1)/2;
-            int lastX = firstX + kiteW - 1;
-            int x;
+            if (y <= centerY)
+                ndots = (y*(w-1))/h;
+            else
+                ndots = ((h-y-1)*(w))/h;
 
-            for (x=0; x<firstX; x++) {
-                table[TI(x,y,w)] = Remap_White;
+            table[PI(centerX,y)] = PI(centerX,y);
+            table[PI(0,y)] = Remap_White;
+            
+            for (int x=1; x<=ndots; x++) {
+                size_t dist = (x*(CENTER_X-1))/ndots;
+
+                table[PI(centerX+x,y)] = PI(centerX + dist,y);
+                table[PI(centerX-x,y)] = PI(centerX - dist,y);
             }
-            int strideX = w / kiteW;
-            strideX = 1;
-            for (; x<=lastX; x++) {
-                int srcX = (x - firstX)*strideX;
-                //srcX = w/2 + x-firstX;
-                if (srcX >= w)
-                    table[TI(x,y,w)] = Remap_Red;
-                else {
-                    assert(srcX >= 0 && srcX <w);
-                    table[TI(x,y,w)] = TI(srcX, y, w);
-//                    [self remapPixel:(RemapPoint_t){x,y} from:(RemapPoint_t){srcX, y}];
-                }
+            for (size_t x=ndots; x<centerX; x++) {
+                table[PI(centerX+x,y)] = Remap_White;
+                table[PI(centerX-x,y)] = Remap_White;
             }
-            for (; x<w; x++) {
-                [self remapPixel:(RemapPoint_t){x,y} color:Remap_Blue];
-            }
-#endif
         }
     }];
-
-    lastTransform = [Transform areaTransform: @"Terry's kite"
-                                  description: @"Designed by an 8-year old"
-                                  remapPixel:^PixelIndex_t (Image_t *im, int x, int y, int pixsize) {
-        int centerY = im->h/2;
-        float display_frac = ((float)centerY - abs(y - centerY))/(float)centerY;
-        int kiteW = display_frac * im->w;
-        if (kiteW == 0)
-            kiteW = 1;
-        int firstX = (im->w - kiteW - 1)/2;
-        int lastX = firstX + kiteW - 1;
-        if (x < firstX || x >= lastX)
-            return Remap_White;
-        int srcX = (x - firstX) * im->w/kiteW;
-        srcX = (x - firstX);
-        return PI(im, srcX, y);
-    }];
     [transformList addObject:lastTransform];
-    
-#ifdef notdef
-    for (y=0; y<configuredHeight; y++) {
-        int ndots;
 
-        if (y <= CENTER_Y)
-            ndots = (y*(configuredHeight-1))/configuredWidth;
-        else
-            ndots = ((configuredHeight-y-1)*(configuredWidth))/configuredWidth;
-
-        (*rmp)[CENTER_X][y] = (Point){CENTER_X,y};
-        (*rmp)[0][y] = (Point){Remap_White,0};
-        
-        for (x=1; x<=ndots; x++) {
-            int dist = (x*(CENTER_X-1))/ndots;
-
-            (*rmp)[CENTER_X+x][y] = (Point){CENTER_X + dist,y};
-            (*rmp)[CENTER_X-x][y] = (Point){CENTER_X - dist,y};
-        }
-        for (x=ndots; x<CENTER_X; x++)
-            (*rmp)[CENTER_X+x][y] = (*rmp)[CENTER_X-x][y] =
-                (Point){Remap_White,0};
-    }
-
-    lastTransform.initial = 20; lastTransform.low = 4; lastTransform.high = 200;
-    [transformList addObject:lastTransform];
-#endif
-#endif
-    
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t y, int pixsize) {
@@ -962,8 +904,7 @@ int sourceImageIndex, destImageIndex;
 #endif
     
 #ifdef notyet
-    extern  init_proc init_kite;
-    extern  init_proc init_pixels4;
+     extern  init_proc init_pixels4;
     extern  init_proc init_pixels8;
     extern  init_proc init_rotate_right;
     extern  init_proc init_copy_right;
@@ -1217,7 +1158,6 @@ extern  transform_t monet;
 extern  transform_t do_seurat;
 extern  transform_t do_crazy_seurat;
 
-extern  transform_t do_new_oil;
 extern  transform_t do_cfs;
 extern  transform_t do_sobel;
 extern  transform_t do_neg_sobel;
@@ -1245,7 +1185,6 @@ lsc_button(BELOW, "blur", do_blur, 0);
 lsc_button(BELOW, "blurry", do_brownian, 0);
 lsc_button(BELOW, "focus", do_focus, 0);
 lsc_button(BELOW, "bleed", do_bleed, 0);
-lsc_button(BELOW, "oilpaint", do_new_oil, 0);
 lsc_button(BELOW, "crackle", do_shower, 0);
 lsc_button(BELOW, "zoom", do_remap, init_zoom);
 lsc_button(BELOW, "earthqke", do_shear, 0);
@@ -1270,7 +1209,6 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 #define AREACOL        2
 {"Blur",         0, do_blur, "blur", "", 1, AREA_COLOR},
 {"Bleed",        0, do_bleed, "bleed", "", 0, AREA_COLOR},
-{"Oil",            0, do_new_oil, "Oil", "paint", 0, AREA_COLOR},
 {"1 bit Floyd/Steinberg",    0, do_fs1, "Floyd/", "Steinberg", 0, AREA_COLOR},
 {"2 bit Floyd/Steinberg",    0, do_fs2, "2 bit", "F/S", 0, AREA_COLOR},
 {"color Floyd/Steinberg",    0, do_cfs, "color", "F/S", 0, AREA_COLOR},
@@ -1288,7 +1226,6 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 {"Cylinder projection",    init_cylinder, do_remap, "cylinder", "", 0, GEOM_COLOR},
 {"Shower stall 2",    init_shower2, do_remap, "shower", "stall 2", 0, GEOM_COLOR},
 {"Cone projection",    init_cone, do_remap, "Pinhead", "", 0, GEOM_COLOR},
-{"Terry's kite",    init_kite, do_remap, "Terry's", "kite", 0, GEOM_COLOR},
 
 {"Rotate right",    init_rotate_right, do_remap, "rotate", "right", 1, GEOM_COLOR},
 {"Shift right",        init_shift_right, do_remap, "shift", "right", 0, GEOM_COLOR},

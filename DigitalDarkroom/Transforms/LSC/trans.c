@@ -383,25 +383,6 @@ init_seurat(void) {
 	return seurat(0.2);	// was 0.1. crazy seurat is 0.5
 }
 
-
-/* timings on digitalis:
- *
- *			Z	N	f/s
- * original oil		31	3	~7.0
- *
- * original oil		255	3	1.2
- *
- * new oil		255	3	2.5
- * new oil		255	2	2.7
- * new oil		255	1	2.7	seurat-like
- *
- * new oil		31	3	5.8	notable loss of detail
- * new oil		31	2	6.5	better detail than N==3
- * new oil		31	1	7.2	looks more like seurat	
- *
- * new oil		15	2	7.6	isophots visible
- */
-
 #define	N	2
 
 #if 0
@@ -562,9 +543,9 @@ do_new_oil(void *param, image in, image out) {
 					bmax = bh[dz];
 				}
 			}
-			out[y][x] = p;
-		}
-	
+        }
+        out[y][x] = p;
+
 		/*
 		 * Move our histogram down one pixel on the left side.
 		 */
