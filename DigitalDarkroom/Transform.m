@@ -29,8 +29,9 @@
         areaF = nil;
         remapImageF = nil;
         remapPolarF = nil;
-        low = initial = high = 0;
-        p = initial;
+        low = high = 0;
+        initial = UNINITIALIZED_P;
+        p = UNINITIALIZED_P;
         pUpdated = NO;
         remapTable = NULL;
         elapsedProcessingTime = 0;

@@ -22,7 +22,6 @@ typedef enum {
 typedef Pixel (^ __nullable __unsafe_unretained pointFunction_t)(Pixel p);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Pixel *src, Pixel *dest,
                                                                int p);
-
 typedef PixelIndex_t (^ __unsafe_unretained remapPolarPixelFunction_t)(float r, float a,
                                                                        int p, size_t w, size_t h);
 typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable,

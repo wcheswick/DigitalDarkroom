@@ -15,7 +15,7 @@
 #define STATS_FONT_SIZE     20
 #define STATS_W             450
 
-#define CONTROL_H   30
+#define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
 #define MAX_TRANSFORM_W 1024
 #define TABLE_ENTRY_H   40
@@ -24,6 +24,8 @@
 #define SOURCE_THUMB_H  80
 #define SOURCE_CELL_W   200
 #define SOURCE_BUTTON_FONT_SIZE 24
+
+#define SLIDER_AREA_W   200
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -52,7 +54,12 @@ enum {
 @property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
 
 // in controlsView
-@property (nonatomic, strong)   UISlider *controlSlider;
+@property (nonatomic, strong)   UIView *sliderView;
+@property (nonatomic, strong)   UILabel *sliderLabel;
+@property (nonatomic, strong)   UILabel *minimumLabel, *maximumLabel;
+@property (nonatomic, strong)   UISlider *valueSlider;
+@property (assign)              int sliderExecuteIndex;     // -1 if inactive
+
 @property (nonatomic, strong)   UILabel *statsLabel;    // stats are in the execute view
 
 // in execute view
@@ -98,7 +105,12 @@ enum {
 @synthesize currentCameraButton;
 
 @synthesize statsLabel;
-@synthesize controlSlider;
+@synthesize sliderView;
+@synthesize sliderLabel;
+@synthesize minimumLabel, maximumLabel;
+@synthesize valueSlider;
+@synthesize sliderExecuteIndex;
+
 @synthesize inputSources, currentSource;
 @synthesize nextSource;
 
@@ -144,6 +156,7 @@ enum {
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
         currentCameraButton = nil;
+        
         
         Cameras sourceIndex;
         for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
@@ -212,12 +225,23 @@ enum {
     controlsView = [[UIView alloc] init];
     [containerView addSubview:controlsView];
     
-    controlSlider = [[UISlider alloc] init];
-    controlSlider.hidden = NO;
-    controlSlider.enabled = NO;
-    [controlSlider addTarget:self action:@selector(moveControlSlider:)
+    sliderView = [[UIView alloc] init];
+    [controlsView addSubview:sliderView];
+    
+    sliderLabel = [[UILabel alloc] init];
+    minimumLabel = [[UILabel alloc] init];
+    maximumLabel = [[UILabel alloc] init];
+    valueSlider = [[UISlider alloc] init];
+    valueSlider.hidden = NO;
+    valueSlider.enabled = NO;
+    [valueSlider addTarget:self action:@selector(moveValueSlider:)
             forControlEvents:UIControlEventValueChanged];
-    [controlsView addSubview:controlSlider];
+    sliderExecuteIndex = -1;
+
+    [sliderView addSubview:sliderLabel];
+    [sliderView addSubview:minimumLabel];
+    [sliderView addSubview:maximumLabel];
+    [sliderView addSubview:valueSlider];
     
     statsLabel = [[UILabel alloc] init];
     statsLabel.font = [UIFont
@@ -381,7 +405,7 @@ enum {
 
     transformView.backgroundColor = [UIColor orangeColor];
     
-    f = transformView.frame;  // control goes right under the transformed view
+    f = scaledTransformImageView.frame;  // control goes right under the transformed view
     f.origin.y = BELOW(f);
     f.size.height = CONTROL_H;  // kludge
     controlsView.frame = f;
@@ -421,7 +445,21 @@ enum {
     f.origin.x = RIGHT(f) + SEP;
     f.size.width = controlsView.frame.size.width - f.origin.x;
     f.origin.y = 0;
-    controlSlider.frame = f;
+    sliderView.frame = f;
+    
+    f.origin.x = 0;
+    f.size.width = 70;
+    sliderLabel.frame = f;
+    f.origin.x = RIGHT(f);
+    f.size.width = 70;
+    minimumLabel.frame = f;
+    
+    f.origin.x = sliderView.frame.size.width - f.size.width;
+    maximumLabel.frame = f;
+    
+    f.origin.x = RIGHT(minimumLabel.frame);
+    f.size.width = maximumLabel.frame.origin.x - f.origin.x;
+    valueSlider.frame = f;
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -478,14 +516,20 @@ enum {
 #endif
 
 - (void) updateStatsLabel: (float) fps
-               depthPerSec:(float) depthps
+              depthPerSec:(float) depthps
             droppedPerSec:(float)dps
                busyPerSec:(float)bps
              transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
+#ifdef OLD
         self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  d: %.1f  b: %.1f  ave: %.1fms",
                                  fps, depthps, dps, bps, tams];
-        [self->statsLabel setNeedsDisplay];
+#endif
+        if (fps) {
+            self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  ave: %.1fms",
+                                     fps, depthps, tams];
+            [self->statsLabel setNeedsDisplay];
+        }
     });
 }
 
@@ -957,18 +1001,22 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             [self.view setNeedsLayout];
             break;
         }
-        case ActiveTag: {   // select active step, and turn on slide if appropriate
+        case ActiveTag: {   // select active step and turn on slide if appropriate
             NSIndexPath *selectedPath = tableView.indexPathForSelectedRow;
             if (selectedPath) { // deselect previous cell, and disconnect possible slider connection
                 UITableViewCell *oldCell = [tableView cellForRowAtIndexPath:selectedPath];
                 oldCell.selected = NO;
                 [oldCell setNeedsDisplay];
+                [self disableSlider];
             }
-            cell.selected = YES;
-            // XXX setup slider if appropriate
-            // InputSource *source = [inputSources objectAtIndex:cell.tag];
-            [cell setNeedsDisplay];
-            [self transformCurrentImage];
+            
+            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
+            if (transform.p != UNINITIALIZED_P) {
+                cell.selected = YES;
+                [self setSliderTo:(int)indexPath.row];
+                [cell setNeedsDisplay];
+                //[self transformCurrentImage];
+            }
             break;
         }
         case TransformTag: {   // Append a transform to the active list
@@ -1088,16 +1136,52 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     [self presentViewController:sourcesTableVC animated:YES completion:nil];
 }
 
-- (IBAction) moveControlSlider:(UISlider *)slider {
-    if (slider.tag < SLIDER_TAG_OFFSET)
-        return;
-    int row = (int)slider.tag - SLIDER_TAG_OFFSET;
-    Transform *t = [transforms.sequence objectAtIndex:row];
+- (void) disableSlider {
+    valueSlider.enabled = NO;
+    valueSlider.hidden = YES;
+    sliderLabel.hidden = YES;
+    minimumLabel.hidden = YES;
+    maximumLabel.hidden = YES;
+    sliderExecuteIndex = -1;
+    [valueSlider setNeedsDisplay];
+}
+
+- (void) setSliderTo:(int)executeTableIndex {
+    valueSlider.enabled = YES;
+    sliderExecuteIndex = executeTableIndex;
+    Transform *transform;
     @synchronized (transforms.sequence) {
-        t.p = slider.value;
-        NSLog(@"value is %f", slider.value);
-        t.pUpdated = YES;
+        transform = [transforms.sequence objectAtIndex:executeTableIndex];
     }
+    valueSlider.minimumValue = transform.low;
+    valueSlider.maximumValue = transform.high;
+    valueSlider.value = transform.p;
+    valueSlider.hidden = NO;
+    [valueSlider setNeedsDisplay];
+    
+    sliderLabel.text = transform.name;
+    sliderLabel.hidden = NO;
+    [sliderLabel setNeedsDisplay];
+    
+    minimumLabel.text = [NSString stringWithFormat:@"%d", (int)valueSlider.minimumValue];
+    minimumLabel.hidden = NO;
+    [minimumLabel setNeedsDisplay];
+    
+    maximumLabel.text = [NSString stringWithFormat:@"%d", (int)valueSlider.maximumValue];
+    maximumLabel.hidden = NO;
+    [maximumLabel setNeedsDisplay];
+}
+
+- (IBAction) moveValueSlider:(UISlider *)slider {
+    @synchronized (transforms.sequence) {
+        Transform *transform = [transforms.sequence objectAtIndex:sliderExecuteIndex];
+        transform.p = slider.value;
+        transform.pUpdated = YES;
+    }
+    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }
 
 @end
+
+// delete, move, or remove active?  check slider
+

@@ -1176,7 +1176,7 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
 #define CY    ((int)configuredHeight*3/4)
 #define OPSHIFT    3 //(3 /*was 0*/)
 
-    lastTransform = [Transform areaTransform: @"Op art"
+    lastTransform = [Transform areaTransform: @"Op art (broken)"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         for (int y=0; y<configuredHeight; y++) {
