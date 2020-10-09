@@ -16,6 +16,7 @@
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
+#define HALF_Z          (Z/2)
 
 #define CENTER_X        (configuredWidth/2)
 #define CENTER_Y        (configuredHeight/2)
@@ -32,6 +33,7 @@
 
 #define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
+#define CRGB(r,g,b)     SETRGB(CLIP(r), CLIP(g), CLIP(b))
 
 #define R(x) (x).r
 #define G(x) (x).g
@@ -109,12 +111,12 @@ PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) buildTransformList {
+    [self addArtTransforms];
+    [self addPointTransforms];
     [self addGeometricTransforms];
     [self addMiscTransforms];
-    [self addArtTransforms];
     // tested:
     [self addAreaTransforms];
-    [self addColorTransforms];
 }
 
 #ifdef notyet
@@ -751,21 +753,6 @@ int sourceImageIndex, destImageIndex;
                 dstBuf[PI(x,y)] = p;
             }
         }
-#ifdef SLOW
-        //       memcpy(dstBuf, srcBuf, configuredPixelsInImage*sizeof(Pixel)/2);
-        for (int busy=0; busy<2; busy++) {
-            for (int y=1; y<configuredHeight-1-1; y++) {
-                for (int x=1; x<configuredWidth-1-1; x++) {
-                    Pixel p;
-                    if (y % 2 == 0)
-                        p = Green;
-                    else
-                        p = P(srcBuf,x,y);
-                    dstBuf[PI(x,y)] = p;
-                }
-            }
-        }
-#endif
     }];
     [transformList addObject:lastTransform];
 
@@ -834,6 +821,166 @@ int sourceImageIndex, destImageIndex;
     extern  transform_t do_median;
 #endif
 }
+
+
+// used by colorize
+
+channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
+channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
+channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
+
+- (void) addPointTransforms {
+    [categoryNames addObject:@"Point transforms"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+    
+    lastTransform = [Transform areaTransform: @"Negative"
+                                                  description: @"Negative"
+                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                dest[PI(x,y)] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
+                }
+            }
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Solarize"
+                                 description: @"Simulate extreme overexposure"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                PixelIndex_t pi = PI(x,y);
+                Pixel p = src[pi];
+                dest[pi] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
+                                       p.g < Z/2 ? p.g : Z-p.g,
+                                       p.b < Z/2 ? p.b : Z-p.r);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Luminance"
+                                 description: @"Convert to brightness"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        // 5.2ms
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            int v = LUM(p);
+            *dest++ = SETRGB(v,v,v);
+        }
+#ifdef notdef
+        // 5.4ms
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            int v = LUM(src[pi]);
+            dest[pi] = SETRGB(v,v,v);
+        }
+        // 6ms:
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                PixelIndex_t pi = PI(x,y);
+                Pixel p = src[pi];
+                int v = LUM(p);
+                dest[pi] = SETRGB(v,v,v);
+            }
+        }
+#endif
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Colorize"
+                                 description: @"Add color"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+                dest[PI(x,y)] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Truncate pixels"
+                                 description: @"Truncate pixel colors"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        channel mask = ((1<<param) - 1) << (8 - param);
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
+        }
+    }];
+    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Brighten"
+                                 description: @"brighten"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            *dest++ = SETRGB(p.r+(Z-p.r)/8,
+                             p.g+(Z-p.g)/8,
+                             p.b+(Z-p.b)/8);
+        }
+    }];
+    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"High contrast"
+                                 description: @"high contrast"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            *dest++ = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
+                             CLIP((p.g-HALF_Z)*2+HALF_Z),
+                             CLIP((p.b-HALF_Z)*2+HALF_Z));
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Swap colors"
+                                 description: @"r->, g->b, b->r"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = *src++;
+            *dest++ = SETRGB(p.g, p.b, p.r);
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Auto contrast"
+                                 description: @"auto contrast"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        u_long ps;
+        u_long hist[Z+1];
+        float map[Z+1];
+        
+        for (int i = 0; i < Z+1; i++)
+            hist[i] = 0;
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = src[pi];
+            hist[LUM(p)]++;
+        }
+        ps = 0;
+        for (int i = 0; i < Z+1; i++) {
+            map[i] = Z*((float)ps/((float)configuredPixelsInImage));
+            ps += hist[i];
+        }
+        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+            Pixel p = src[pi];
+            channel l = LUM(p);
+            float a = (map[l] - l)/Z;
+            int r = p.r + (a*(Z-p.r));
+            int g = p.g + (a*(Z-p.g));
+            int b = p.b + (a*(Z-p.b));
+            dest[pi] = CRGB(r,g,b);
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
+}
+
 
 #define CenterX (currentFormat.w/2)
 #define CenterY (currentFormat.h/2)
@@ -1020,92 +1167,31 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
 }
 
 
-// used by colorize
-
-channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
-channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,15,10,5,0,0,0,0,0,0};
-channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
-
-- (void) addColorTransforms {
-    [categoryNames addObject:@"Color transforms"];
-    NSMutableArray *transformList = [[NSMutableArray alloc] init];
-    [categoryList addObject:transformList];
-    
-    lastTransform = [Transform areaTransform: @"Solarize"
-                                 description: @"Simulate extreme overexposure"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
-                PixelIndex_t pi = PI(x,y);
-                Pixel p = src[pi];
-                dest[pi] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
-                                       p.g < Z/2 ? p.g : Z-p.g,
-                                       p.b < Z/2 ? p.b : Z-p.r);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Luminance"
-                                 description: @"Convert to brightness"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        // 5.2ms
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
-            Pixel p = *src++;
-            int v = LUM(p);
-            *dest++ = SETRGB(v,v,v);
-        }
-#ifdef notdef
-        // 5.4ms
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
-            int v = LUM(src[pi]);
-            dest[pi] = SETRGB(v,v,v);
-        }
-        // 6ms:
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
-                PixelIndex_t pi = PI(x,y);
-                Pixel p = src[pi];
-                int v = LUM(p);
-                dest[pi] = SETRGB(v,v,v);
-            }
-        }
-#endif
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Colorize"
-                                 description: @"Add color"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
-                Pixel p = src[PI(x,y)];
-                channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-                dest[PI(x,y)] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Truncate pixels"
-                                 description: @"Truncate pixel colors"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        channel mask = ((1<<param) - 1) << (8 - param);
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
-            Pixel p = *src++;
-            *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
-        }
-    }];
-    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
-    [transformList addObject:lastTransform];
-    
-    // auto contrast?  guess that's an area transform
-}
-
 - (void) addArtTransforms {
     [categoryNames addObject:@"Art-style transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+    
+#define CX    ((int)configuredWidth/4)
+#define CY    ((int)configuredHeight*3/4)
+#define OPSHIFT    3 //(3 /*was 0*/)
+
+    lastTransform = [Transform areaTransform: @"Op art"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                int factor = (CX-(x-CX)*(x-CX) - (y-CY)*(y-CY));
+                channel r = p.r^(p.r*factor >> OPSHIFT);
+                channel g = p.g^(p.g*factor >> OPSHIFT);
+                channel b = p.b^(p.b*factor >> OPSHIFT);
+                dest[PI(x,y)] = CRGB(r,g,b);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
 #ifdef notdef
 extern  init_proc init_seurat;
 extern  init_proc init_dali;
@@ -1135,7 +1221,6 @@ extern  void init_polar(void);
 
 #ifdef notdef
 
-#define CRGB(r,g,b)     SETRGB(CLIP(r), CLIP(g), CLIP(b))
 #define HALF_Z          (Z/2)
 
 

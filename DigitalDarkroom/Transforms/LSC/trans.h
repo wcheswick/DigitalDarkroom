@@ -68,12 +68,6 @@ extern	init_proc init_colorize;
 extern	init_proc init_swapcolors;
 extern	init_proc init_lum;
 extern	init_proc init_high;
-extern	init_proc init_lum;
-extern	init_proc init_solarize;
-extern	init_proc init_truncatepix;
-extern	init_proc init_brighten;
-extern	init_proc init_auto;
-extern	init_proc init_negative;
 
 extern	transform_t do_remap;
 extern	transform_t do_point;
