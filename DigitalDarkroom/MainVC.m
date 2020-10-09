@@ -25,6 +25,9 @@
 #define SOURCE_CELL_W   200
 #define SOURCE_BUTTON_FONT_SIZE 24
 
+#define SLIDER_LIMIT_W  20
+#define SLIDER_LABEL_W  130
+
 #define SLIDER_AREA_W   200
 
 char * _NonnullcategoryLabels[] = {
@@ -230,7 +233,11 @@ enum {
     
     sliderLabel = [[UILabel alloc] init];
     minimumLabel = [[UILabel alloc] init];
+    minimumLabel.textAlignment = NSTextAlignmentRight;
+    
     maximumLabel = [[UILabel alloc] init];
+    minimumLabel.textAlignment = NSTextAlignmentLeft;
+    
     valueSlider = [[UISlider alloc] init];
     valueSlider.hidden = NO;
     valueSlider.enabled = NO;
@@ -448,12 +455,12 @@ enum {
     sliderView.frame = f;
     
     f.origin.x = 0;
-    f.size.width = 70;
+    f.size.width = SLIDER_LABEL_W;
     sliderLabel.frame = f;
-    f.origin.x = RIGHT(f);
-    f.size.width = 70;
-    minimumLabel.frame = f;
     
+    f.origin.x = RIGHT(f);
+    f.size.width = SLIDER_LIMIT_W;
+    minimumLabel.frame = f;
     f.origin.x = sliderView.frame.size.width - f.size.width;
     maximumLabel.frame = f;
     
@@ -941,8 +948,13 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                                               reuseIdentifier:CellIdentifier];
             }
             Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
+            NSString *name;
+            if (transform.initial != UNINITIALIZED_P)
+               name = [transform.name stringByAppendingString:@" ~"];
+            else
+                name = transform.name;
             cell.textLabel.text = [NSString stringWithFormat:
-                                   @"%2ld: %@", indexPath.row+1, transform.name];
+                                   @"%2ld: %@", indexPath.row+1, name];
             cell.layer.borderWidth = 0;
 #ifdef brokenloop
             if (indexPath.row == transforms.list.count - 1)
@@ -961,7 +973,10 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             }
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
             Transform *transform = [transformList objectAtIndex:indexPath.row];
-            cell.textLabel.text = transform.name;
+            if (transform.initial != UNINITIALIZED_P)
+                cell.textLabel.text = [transform.name stringByAppendingString:@" ~"];
+            else
+                cell.textLabel.text = transform.name;
             cell.detailTextLabel.text = transform.description;
             cell.indentationLevel = 1;
             cell.indentationWidth = 10;
@@ -1184,4 +1199,5 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 @end
 
 // delete, move, or remove active?  check slider
+// need indicator for things that can vary
 
