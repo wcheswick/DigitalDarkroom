@@ -30,6 +30,8 @@
 
 #define SLIDER_AREA_W   200
 
+#define NO_SLIDER_ENABLED   (-1)
+
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
     "Area",
@@ -61,7 +63,7 @@ enum {
 @property (nonatomic, strong)   UILabel *sliderLabel;
 @property (nonatomic, strong)   UILabel *minimumLabel, *maximumLabel;
 @property (nonatomic, strong)   UISlider *valueSlider;
-@property (assign)              int sliderExecuteIndex;     // -1 if inactive
+@property (assign)              int sliderExecuteIndex;     // NO_SLIDER_ENABLED if inactive
 
 @property (nonatomic, strong)   UILabel *statsLabel;    // stats are in the execute view
 
@@ -243,7 +245,7 @@ enum {
     valueSlider.enabled = NO;
     [valueSlider addTarget:self action:@selector(moveValueSlider:)
             forControlEvents:UIControlEventValueChanged];
-    sliderExecuteIndex = -1;
+    sliderExecuteIndex = NO_SLIDER_ENABLED;
 
     [sliderView addSubview:sliderLabel];
     [sliderView addSubview:minimumLabel];
@@ -1052,6 +1054,8 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (IBAction) doRemoveLastTransform {
+    if (sliderExecuteIndex != NO_SLIDER_ENABLED && sliderExecuteIndex == transforms.sequence.count - 1)
+        [self disableSlider];
     @synchronized (transforms.sequence) {
         [transforms.sequence removeLastObject];
         transforms.sequenceChanged = YES;
@@ -1062,6 +1066,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
+    [self disableSlider];
     @synchronized (transforms.sequence) {
         [transforms.sequence removeAllObjects];
         transforms.sequenceChanged = YES;
@@ -1076,6 +1081,8 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
         case UITableViewCellEditingStyleDelete: {
+            if (sliderExecuteIndex != NO_SLIDER_ENABLED && sliderExecuteIndex == indexPath.row)
+                [self disableSlider];
             @synchronized (transforms.sequence) {
                 [transforms.sequence removeObjectAtIndex:indexPath.row];
                 transforms.sequenceChanged = YES;
@@ -1098,6 +1105,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView
 moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
+
     @synchronized (transforms.sequence) {
         Transform *t = [transforms.sequence objectAtIndex:fromIndexPath.row];
         [transforms.sequence removeObjectAtIndex:fromIndexPath.row];
@@ -1105,7 +1113,9 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         transforms.sequenceChanged = YES;
         [self transformCurrentImage];
     }
-    [tableView reloadData];
+    if (sliderExecuteIndex != NO_SLIDER_ENABLED && sliderExecuteIndex == fromIndexPath.row)
+        [self setSliderTo:toIndexPath.row];
+   [tableView reloadData];
 }
 
 - (void) doTick:(NSTimer *)sender {
@@ -1152,16 +1162,19 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 }
 
 - (void) disableSlider {
-    valueSlider.enabled = NO;
+    if (sliderExecuteIndex == NO_SLIDER_ENABLED)
+        return;
+    valueSlider.enabled = NO;   // XXX unselect active cell
     valueSlider.hidden = YES;
     sliderLabel.hidden = YES;
     minimumLabel.hidden = YES;
     maximumLabel.hidden = YES;
-    sliderExecuteIndex = -1;
+    sliderExecuteIndex = NO_SLIDER_ENABLED;
     [valueSlider setNeedsDisplay];
 }
 
 - (void) setSliderTo:(int)executeTableIndex {
+    [self disableSlider];   // now enable the new transform
     valueSlider.enabled = YES;
     sliderExecuteIndex = executeTableIndex;
     Transform *transform;
