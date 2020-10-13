@@ -476,6 +476,8 @@ enum {
     //cameraController.captureVideoPreviewLayer = previewLayer;
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController startCamera];
+    } else {
+        [self transformCurrentImage];
     }
 }
 
@@ -869,9 +871,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     return tableView.tag == ActiveTag &&
         (indexPath.row != transforms.sequence.count);
 }
-
-#define SLIDER_TAG_OFFSET   100
-
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {

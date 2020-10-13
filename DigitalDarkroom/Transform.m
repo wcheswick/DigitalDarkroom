@@ -60,7 +60,7 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapPolarPixel:(remapPolarPixelFunction_t) f {
+                remapPolar:(remapPolarFunction_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;

@@ -22,8 +22,7 @@ typedef enum {
 typedef Pixel (^ __nullable __unsafe_unretained pointFunction_t)(Pixel p);
 typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Pixel *src, Pixel *dest,
                                                                int p);
-typedef PixelIndex_t (^ __unsafe_unretained remapPolarPixelFunction_t)(float r, float a,
-                                                                       int p, size_t w, size_t h);
+typedef PixelIndex_t (^ __unsafe_unretained remapPolarFunction_t)(float r, float a, int p);
 typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable,
                                                                          size_t w, size_t h, int p);
 
@@ -37,7 +36,7 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
     transform_t type;
     pointFunction_t pointF;
     areaFunction_t areaF;
-    remapPolarPixelFunction_t remapPolarF;
+    remapPolarFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
     int low, initial, high;   // parameter setting and range for transform
     int p;              // parameter
@@ -49,7 +48,7 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
-@property (assign)              remapPolarPixelFunction_t remapPolarF;
+@property (assign)              remapPolarFunction_t remapPolarF;
 @property (copy)                remapImageFunction_t remapImageF;
 @property (assign)              transform_t type;
 @property (assign)              int low, initial, high;
@@ -68,7 +67,7 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                    remapImage:(remapImageFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-              remapPolarPixel:(remapPolarPixelFunction_t) f;
+              remapPolar:(remapPolarFunction_t) f;
 
 - (void) clearRemap;
 

@@ -111,9 +111,9 @@ PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) buildTransformList {
+    [self addGeometricTransforms];
     [self addArtTransforms];
     [self addPointTransforms];
-    [self addGeometricTransforms];
     [self addMiscTransforms];
     // tested:
     [self addAreaTransforms];
@@ -185,6 +185,26 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     if (transform.remapPolarF) {     // polar remap
         size_t centerX = configuredWidth/2;
         size_t centerY = configuredHeight/2;
+        for (int dx=0; dx<=centerX; dx++) {
+            for (int dy=0; dy<=centerY; dy++) {
+                double r = hypot(dx, dy);
+                double a;
+                if (dx == 0 && dy == 0)
+                    a = 0;
+                else
+                    a = atan2(dy, dx);
+                remapTable[PI(centerX-dx, centerY-dy)] = transform.remapPolarF(r, M_PI + a, transform.p);
+                if (centerY+dy < configuredHeight)
+                    remapTable[PI(centerX-dx, centerY+dy)] = transform.remapPolarF(r, M_PI - a, transform.p);
+                if (centerX+dx < configuredWidth) {
+                    if (centerY+dy < configuredHeight)
+                        remapTable[PI(centerX+dx, centerY+dy)] = transform.remapPolarF(r, a, transform.p);
+                    remapTable[PI(centerX+dx, centerY-dy)] = transform.remapPolarF(r, -a, transform.p);
+                }
+            }
+        }
+
+#ifdef OLDNEW
         for (int y=0; y<configuredHeight; y++) {
             for (int x=0; x<configuredWidth; x++) {
                 double rx = x - centerX;
@@ -197,6 +217,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                                                             configuredHeight);
             }
         }
+#endif
     } else {        // whole screen remap
         NSLog(@"transform: %@", transform);
         transform.remapImageF(remapTable,
@@ -245,6 +266,15 @@ int sourceImageIndex, destImageIndex;
                     t.pUpdated = NO;
                 }
                 [executeList addObject:t];
+            }
+        }
+    } else {
+        @synchronized (sequence) {
+            for (Transform *t in sequence) {
+                if (t.pUpdated) {
+                    [t clearRemap];
+                    t.pUpdated = NO;
+                }
             }
         }
     }
@@ -356,7 +386,6 @@ int sourceImageIndex, destImageIndex;
             return;
         }
         case GeometricTrans:
-            return;
         case RemapTrans:
             if (!transform.remapTable) {
                 transform.remapTable = [self computeMappingFor:transform];
@@ -986,57 +1015,36 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 }
 
 
-#define CenterX (currentFormat.w/2)
-#define CenterY (currentFormat.h/2)
+#define CenterX (configuredWidth/2)
+#define CenterY (configuredHeight/2)
 #define MAX_R   (MAX(CenterX, CenterY))
+
+#define INRANGE(x,y)    (x >= 0 && x < configuredWidth && y >= 0 && y < configuredHeight)
 
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric transforms"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-#ifdef notyet
     lastTransform = [Transform areaTransform: @"Cone projection"
                                   description: @""
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
-        for (int y=0; y<h; y++) {
-            for (int x=(int)w-100; x<(int)w; x++) {
-                table[TI(x,y,w)] = TI(x, y, w);
-                table[TI(x - (w-100),y,w)] = TI(x, y, w);
-            }
-        }
-    }];
+                             remapPolar:^PixelIndex_t (float r, float a, int p) {
         double r1 = sqrt(r*MAX_R);
         int y = (int)CenterY+(int)(r1*sin(a));
         if (y < 0)
             y = 0;
-        else if (y >= currentFormat.h)
-            y = (int)currentFormat.h - 1;
-        return (RemapPoint_t){CenterX + (int)(r1*cos(a)), y};
+        else if (y >= configuredHeight)
+            y = (int)configuredHeight - 1;
+        return PI(CenterX + (int)(r1*cos(a)), y);
     }];
     [transformList addObject:lastTransform];
-#endif
 
-#ifdef notyet
-    lastTransform = [Transform areaTransform: @"Cone projection"
-                                  description: @""
-                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
-        double r1 = sqrt(r*MAX_R);
-        int y = (int)CenterY+(int)(r1*sin(a));
-        if (y < 0)
-            y = 0;
-        else if (y >= currentFormat.h)
-            y = (int)currentFormat.h - 1;
-        return (RemapPoint_t){CenterX + (int)(r1*cos(a)), y};
-    }];
-    [transformList addObject:lastTransform];
-    
     lastTransform = [Transform areaTransform: @"Andrew's projection"
                                   description: @""
-                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
         int x = CenterX + 0.6*((r - sin(a)*100 + 50) * cos(a));
         int y = CenterY + 0.6*r*sin(a); // - (CENTER_Y/4);
-        return (RemapPoint_t){x, y};
+        return PI(x, y);
 #ifdef notdef
         if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
         else
@@ -1047,30 +1055,67 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform areaTransform: @"Fish eye"
                                   description: @""
-                             remapPolarPixel:^RemapPoint_t (float r, float a, int p) {
-        double r1 = r*r/(r/2);
-        return (RemapPoint_t){CenterX+(int)(r1*cos(a)), CenterY+(int)(r1*sin(a))};
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+        double R = hypot(configuredWidth, configuredHeight);
+        double r1 = r*r/(R/2.0);
+        int x = (int)CenterX + (int)(r1*cos(a));
+        int y = (int)CenterY + (int)(r1*sin(a));
+        return PI(x,y);
     }];
     [transformList addObject:lastTransform];
-#endif
     
+    lastTransform = [Transform areaTransform: @"Twist"
+                                  description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        double newa = a + (r/3.0)*(M_PI/180.0);
+        int x = CENTER_X + r*cos(newa);
+        int y = CENTER_Y + r*sin(newa);
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Dali"
+                                  description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        int x = CENTER_X + r*cos(a);
+        int y = CENTER_Y + r*sin(a);
+        x = CENTER_X + (r*cos(a + (y*x/(16*17000.0))));
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    lastTransform.low = 17000;
+    lastTransform.initial = 4*lastTransform.low;
+    lastTransform.high = 10*lastTransform.low;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Ken twist"
+                                  description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        int x = CENTER_X + r*cos(a);
+        int y = CENTER_Y + (r*sin(a+r/30.0));
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    [transformList addObject:lastTransform];
+
 #ifdef notyet
-     extern  init_proc init_pixels4;
-    extern  init_proc init_pixels8;
     extern  init_proc init_rotate_right;
     extern  init_proc init_copy_right;
-    extern  init_proc init_mirror;
     extern  init_proc init_droop_right;
     extern  init_proc init_raise_right;
     extern  init_proc init_shower2;
     extern  init_proc init_cylinder;
     extern  init_proc init_shift_left;
     extern  init_proc init_shift_right;
-    extern  init_proc init_cone;
     extern  init_proc init_bignose;
-    extern  init_proc init_fisheye;
     extern  init_proc init_dali;
-    extern  init_proc init_andrew;
     extern  init_proc init_twist;
     extern  init_proc init_kentwist;
     extern  init_proc init_escher;
