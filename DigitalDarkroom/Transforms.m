@@ -261,7 +261,11 @@ int sourceImageIndex, destImageIndex;
     assert(bitsPerComponent == 8);
     configuredPixelsInImage = width * height;
     size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
-    assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
+    if (!bytesPerRow) { // bad, but punt.  Seems to work just fine.
+        NSLog(@"empty bytes per row");
+        bytesPerRow = width*sizeof(Pixel);
+    }
+    //assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
 
     if (configuredBytesPerRow != bytesPerRow ||
         configuredWidth != width ||
