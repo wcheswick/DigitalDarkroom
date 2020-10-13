@@ -15,11 +15,15 @@
 
 @interface CameraController ()
 
-@property (nonatomic, strong)   AVCaptureSession *captureSession;
-@property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
+@property (assign)              Cameras selectedCamera;
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
-@property (assign)              Cameras selectedCamera;
+@property (nonatomic, strong)   AVCaptureSession *captureSession;
+@property (assign)              UIDeviceOrientation deviceOrientation;
+@property (strong, nonatomic)   AVCaptureConnection *videoConnection;
+
+@property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
+
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 
 @end
@@ -31,6 +35,8 @@
 @synthesize imageOrientation;
 
 @synthesize captureDevice, selectedCamera;
+@synthesize deviceOrientation;
+@synthesize videoConnection;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -107,62 +113,62 @@
     NSLog(@" -- camera selected: %d", selectedCamera);
 }
 
-// find and return the largest size that fits into the given size. Return
-// Zero size if none works.  This should never happen.
-- (CGSize) setupCameraForSize:(CGSize) availableSize {
-    assert(captureDevice);
-    CGSize captureSize = CGSizeZero;
-    
-    selectedFormat = nil;
-    NSArray *availableFormats = captureDevice.formats;
-#ifdef notdef
-    AVCaptureDeviceFormat *format = [availableFormats objectAtIndex:0];
-    if (format.supportedDepthDataFormats != nil && format.supportedDepthDataFormats.count) { // use the 3D format list
-        availableFormats = format.supportedDepthDataFormats;
+#ifdef OLD
++ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationUnknown:
+        case UIDeviceOrientationPortrait:
+        case UIDeviceOrientationFaceDown:
+            return AVCaptureVideoOrientationPortrait;
+        case UIDeviceOrientationPortraitUpsideDown:
+            return AVCaptureVideoOrientationPortraitUpsideDown;
+        case UIDeviceOrientationLandscapeLeft:
+            //imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
+            return AVCaptureVideoOrientationLandscapeRight;
+            break;
+        case UIDeviceOrientationFaceUp:
+        case UIDeviceOrientationLandscapeRight:
+            // imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
+            return AVCaptureVideoOrientationLandscapeLeft;
     }
+}
 #endif
-    
-    for (AVCaptureDeviceFormat *format in availableFormats) {
-        if (IS_3D_CAMERA(selectedCamera)) {
-            //NSLog(@"-- format selected: %@", format.description);
-            //NSLog(@"-- format selected: %@", format.supportedDepthDataFormats);
-            if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
-                continue;
-            
-       }
 
-        CMFormatDescriptionRef ref = format.formatDescription;
-        CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
-        if (mediaType != kCMMediaType_Video)
-            continue;
-        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
-//            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
-//            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
-        if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
-            continue;
-        if (selectedFormat) {   // this one fits.  Is it better?
-            if (dimensions.width <= captureSize.width || dimensions.height <= captureSize.height)
-                continue;
-        }
-        selectedFormat = format;
-        captureSize = (CGSize){dimensions.width, dimensions.height};
++ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
+    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+    switch (deviceOrientation) {
+        case UIDeviceOrientationPortrait:
+            return AVCaptureVideoOrientationPortrait;
+        case UIDeviceOrientationPortraitUpsideDown:
+            return AVCaptureVideoOrientationPortraitUpsideDown;
+        case UIDeviceOrientationLandscapeRight:
+            return AVCaptureVideoOrientationLandscapeRight;  // fine
+        case UIDeviceOrientationLandscapeLeft:
+            return AVCaptureVideoOrientationLandscapeLeft;    // fine
+        case UIDeviceOrientationUnknown:
+        case UIDeviceOrientationFaceUp:
+        case UIDeviceOrientationFaceDown:
+        default:
+            NSLog(@"************* Inconceivable video orientation: %ld",
+                  (long)deviceOrientation);
+            return AVCaptureVideoOrientationPortrait;
     }
-    if (!selectedFormat) {
-        NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
-              availableSize.width, availableSize.height);
-        return CGSizeZero;
-    }
-    
-    // selectedFormat doesn't work here.  Do it after the session starts.
-    //NSLog(@"-- format selected: %@", selectedFormat.description);
-    return captureSize;
 }
 
-- (void) startSession {
+- (void) setupSessionForCurrentDeviceOrientation {
     NSError *error;
-    assert(delegate);
+    assert(captureDevice);
     
-    // XXX if we already have a session, do we need to shut it down?
+    videoOrientation = [CameraController videoOrientationForDeviceOrientation];
+
+#ifdef notdef
+    NSLog(@" +++ device orientation: %ld, %@",
+          (long)[[UIDevice currentDevice] orientation],
+          [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]]);
+    NSLog(@"  + video orientation 2: %ld, %@", (long)videoOrientation,
+          [CameraController dumpAVCaptureVideoOrientation:videoOrientation]);
+#endif
     
     if (captureSession) {
         [captureSession stopRunning];
@@ -190,7 +196,6 @@
         NSLog(@"**** could not add camera input");
     }
 
-    AVCaptureConnection *videoConnection;
     if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!
         // useful source: https://www.raywenderlich.com/5999357-video-depth-maps-tutorial-for-ios-getting-started
         
@@ -223,67 +228,72 @@
         }
         videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
     }
+    videoConnection.videoOrientation = videoOrientation;
     
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
+}
 
-    //NSLog(@"capture orientation: %ld", (long)videoConnection.videoOrientation);
+// find and return the largest size that fits into the given size. Return
+// Zero size if none works.  This should never happen.
+- (CGSize) setupCameraForSize:(CGSize) availableSize {
+    NSError *error;
     
-//    videoConnection.videoOrientation = [CameraController videoOrientationForDeviceOrientation];
-    // for some reason, this orientation setting works for both landscape settings. Why? Beats me.
-    // why is the cast ok?  Again, dunno.
+    assert(captureDevice);
+    CGSize captureSize = CGSizeZero;
     
-    videoConnection.videoOrientation = (AVCaptureVideoOrientation)[MainVC imageOrientationForDeviceOrientation];
-    //videoConnection.videoMirrored = YES;
-    videoConnection.enabled = YES;
+    selectedFormat = nil;
+    NSArray *availableFormats = captureDevice.formats;
+#ifdef notdef
+    AVCaptureDeviceFormat *format = [availableFormats objectAtIndex:0];
+    if (format.supportedDepthDataFormats != nil && format.supportedDepthDataFormats.count) { // use the 3D format list
+        availableFormats = format.supportedDepthDataFormats;
+    }
+#endif
+    
+    for (AVCaptureDeviceFormat *format in availableFormats) {
+        if (IS_3D_CAMERA(selectedCamera)) {
+            //NSLog(@"-- format selected: %@", format.description);
+            //NSLog(@"-- format selected: %@", format.supportedDepthDataFormats);
+            if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
+                continue;
+       }
+
+        CMFormatDescriptionRef ref = format.formatDescription;
+        CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
+        if (mediaType != kCMMediaType_Video)
+            continue;
+        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
+//            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
+//            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
+        if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
+            continue;
+        if (selectedFormat) {   // this one fits.  Is it better?
+            if (dimensions.width <= captureSize.width || dimensions.height <= captureSize.height)
+                continue;
+        }
+        selectedFormat = format;
+        captureSize = (CGSize){dimensions.width, dimensions.height};
+    }
+    if (!selectedFormat) {
+        NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
+              availableSize.width, availableSize.height);
+        return CGSizeZero;
+    }
+    
+    NSLog(@" %%%% camera size set to %.0f x %.0f", captureSize.width, captureSize.height);
     
     [captureDevice lockForConfiguration:&error];
-    if (captureDevice.lowLightBoostSupported)
-        [captureDevice automaticallyEnablesLowLightBoostWhenAvailable];
-    if ([captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure])
-        [captureDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
-    if ([captureDevice isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus])
-        captureDevice.focusMode = AVCaptureFocusModeContinuousAutoFocus;
-    if (captureDevice.smoothAutoFocusSupported)
-        captureDevice.smoothAutoFocusEnabled = YES;
     captureDevice.activeFormat = selectedFormat;
- 
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    //NSLog(@"-- format selected: %@", selectedFormat.description);
     [captureDevice unlockForConfiguration];
-    
-#ifdef notdef
-    AVCaptureVideoPreviewLayer *previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:self.captureSession];
-    previewLayer.frame = self.view.layer.bounds;
-    [self.view.layer addSublayer:previewLayer];
-
-
-    - (void) setFrame: (CGRect) frame {
-    captureVideoPreviewLayer.frame = frame;
-    captureVideoPreviewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-
-    captureVideoPreviewLayer.connection.videoOrientation = [UIDevice currentDevice].orientation == UIDeviceOrientationPortrait ?
-        AVCaptureVideoOrientationPortrait : AVCaptureVideoOrientationLandscapeRight;
-}
-
-    connection = [videoOutput.connections objectAtIndex:0];
-    if (connection.supportsVideoMirroring)
-        connection.videoMirrored = YES;
-    connection.enabled = NO;
-    connection.videoOrientation = UIImageOrientationLeftMirrored;
-    
-    let videoConnection = videoOutput.connection(with: .video)
-    videoConnection?.videoOrientation = .portrait
-    
-    assert(captureVideoPreviewLayer);
-    assert(delegate);
-    NSLog(@"configure configureVideoCapture");
-    captureVideoPreviewLayer.session = captureSession;
-    return nil;
-#endif
+ 
+    return captureSize;
 }
 
 - (void) startCamera {
@@ -305,24 +315,40 @@
     return captureSession.isRunning;
 }
 
-+ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
-    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
-    switch (deviceOrientation) {
-        case UIDeviceOrientationUnknown:
-        case UIDeviceOrientationPortrait:
-        case UIDeviceOrientationFaceDown:
-            return AVCaptureVideoOrientationPortrait;
-        case UIDeviceOrientationPortraitUpsideDown:
-            return AVCaptureVideoOrientationPortraitUpsideDown;
-        case UIDeviceOrientationLandscapeLeft:
-            //imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            return AVCaptureVideoOrientationLandscapeRight;
-            break;
-        case UIDeviceOrientationFaceUp:
-        case UIDeviceOrientationLandscapeRight:
-            // imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            return AVCaptureVideoOrientationLandscapeLeft;
-    }
++ (NSString *) dumpAVCaptureVideoOrientation: (AVCaptureVideoOrientation) vo {
+    NSArray *names = @[@"(zero)",
+        @"Portrait",
+        @"PortraitUpsideDown",
+        @"LandscapeRight",
+        @"LandscapeLeft"];
+    return [names objectAtIndex:vo];
+}
+
++ (NSString *) dumpDeviceOrientation: (UIDeviceOrientation) devo {
+    NSArray *names = @[@"Unknown",
+                       @"Portrait",
+                       @"PortraitUpsideDown",
+                       @"LandscapeLeft",
+                       @"LandscapeRight",
+                       @"FaceUp",
+                       @"FaceDown"];
+    return [names objectAtIndex:devo];
+}
+
++ (NSString *) dumpCurrentDeviceOrientation {
+    return [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]];
+}
+
++ (NSString *) dumpImageOrientation: (UIImageOrientation) io {
+    NSArray *names = @[@"default",            // default orientation
+                       @"rotate 180",
+                       @"rotate 90 CCW",
+                       @"rotate 90 CW",
+                       @"Up Mirrored",
+                       @"Down Mirrored",
+                       @"Left Mirrored",
+                       @"Right Mirrored"];
+    return [names objectAtIndex:io];
 }
 
 @end

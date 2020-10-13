@@ -65,8 +65,6 @@ enum {
 @property (nonatomic, strong)   UISlider *valueSlider;
 @property (assign)              int sliderExecuteIndex;     // NO_SLIDER_ENABLED if inactive
 
-@property (nonatomic, strong)   UILabel *statsLabel;    // stats are in the execute view
-
 // in execute view
 @property (nonatomic, strong)   UITableViewController *executeTableVC;
 
@@ -83,6 +81,8 @@ enum {
 @property (nonatomic, strong)   Transforms *transforms;
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
+@property (nonatomic, strong)   UILabel *statsLabel;
+
 @property (nonatomic, strong)   NSDate *lastTime;
 @property (assign)              NSTimeInterval transformTotalElapsed;
 @property (assign)              int transformCount;
@@ -92,7 +92,7 @@ enum {
 
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
-
+@property (assign)              UIImageOrientation imageOrientation;
 @end
 
 @implementation MainVC
@@ -109,7 +109,6 @@ enum {
 
 @synthesize currentCameraButton;
 
-@synthesize statsLabel;
 @synthesize sliderView;
 @synthesize sliderLabel;
 @synthesize minimumLabel, maximumLabel;
@@ -124,10 +123,11 @@ enum {
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize busy;
-@synthesize statsTimer, lastTime;
+@synthesize statsTimer, statsLabel, lastTime;
 @synthesize transforms;
 @synthesize trashButton;
 @synthesize capturing;
+@synthesize imageOrientation;
 
 - (id) init {
     self = [super init];
@@ -136,6 +136,7 @@ enum {
         transformTotalElapsed = 0;
         transformCount = 0;
         busy = NO;
+        statsLabel = nil;
         
         inputSources = [[NSMutableArray alloc] init];
 
@@ -252,14 +253,6 @@ enum {
     [sliderView addSubview:maximumLabel];
     [sliderView addSubview:valueSlider];
     
-    statsLabel = [[UILabel alloc] init];
-    statsLabel.font = [UIFont
-                        monospacedSystemFontOfSize:STATS_FONT_SIZE
-                        weight:UIFontWeightLight];
-    statsLabel.backgroundColor = [UIColor whiteColor];
-    statsLabel.adjustsFontSizeToFitWidth = YES;
-    [controlsView addSubview:statsLabel];
-    
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
     availableTableVC = [[UITableViewController alloc]
@@ -269,7 +262,8 @@ enum {
     [containerView addSubview:executeNavVC.view];
     [containerView addSubview:availableNavVC.view];
     
-    // execute has a nav bar (with stats) and is a table
+    // execute has a nav bar and a table.  There is an extra entry in the table at
+    // the end, with performance stats.
     executeTableVC.tableView.tag = ActiveTag;
     executeTableVC.tableView.delegate = self;
     executeTableVC.tableView.dataSource = self;
@@ -363,6 +357,8 @@ enum {
 
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    
+    imageOrientation = [self imageOrientationForDeviceOrientation];
 
     BOOL isPortrait = UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]);
     NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
@@ -388,12 +384,23 @@ enum {
     f.size.height -= CONTROL_H;
     transformView.frame = f;
     
-    if (nextSource)
-        [self newCurrentSource];
-    
-    CGSize sourceSize;   // the image size we are processing gives the transformed size.  we need to scale that.
+    if (nextSource) {
+        if (currentSource && ISCAMERA(currentSource.sourceType)) {
+            [cameraController stopCamera];
+            capturing = NO;
+        }
+        currentSource = nextSource;
+        nextSource = nil;
+    }
+
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController selectCamera:currentSource.sourceType];
+        [cameraController setupSessionForCurrentDeviceOrientation];
+    }
+    
+    // the image size we are processing gives the transformed size.  we need to scale that.
+    CGSize sourceSize;
+    if (ISCAMERA(currentSource.sourceType)) {
         sourceSize = [cameraController setupCameraForSize:transformView.frame.size];
     } else {
         sourceSize = currentSource.imageSize;
@@ -448,12 +455,7 @@ enum {
     f = controlsView.frame;
     f.origin.x = 0;
     f.origin.y = 0;
-    f.size.width /= 2;
-    statsLabel.frame = f;
-    
-    f.origin.x = RIGHT(f) + SEP;
     f.size.width = controlsView.frame.size.width - f.origin.x;
-    f.origin.y = 0;
     sliderView.frame = f;
     
     f.origin.x = 0;
@@ -472,10 +474,8 @@ enum {
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
-
-    if (nextSource) {
-        [self initiateSource];
-        nextSource = nil;
+    if (ISCAMERA(currentSource.sourceType)) {
+        [cameraController startCamera];
     }
 }
 
@@ -524,21 +524,25 @@ enum {
 }
 #endif
 
-- (void) updateStatsLabel: (float) fps
+- (void) updateStats: (float) fps
               depthPerSec:(float) depthps
             droppedPerSec:(float)dps
                busyPerSec:(float)bps
              transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->statsLabel) {    // not in the middle of a cell change somewhere
+//            NSLog(@"update stats view %.0f x %.0f to %.1f FPS, %.0fms",
+//                  self->statsLabel.frame.size.width, self->statsLabel.frame.size.height, fps, tams);
+            if (fps) {
+                self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  ave: %.1fms",
+                                         fps, depthps, tams];
+                [self->statsLabel setNeedsDisplay];
+            }
+        }
 #ifdef OLD
         self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  d: %.1f  b: %.1f  ave: %.1fms",
                                  fps, depthps, dps, bps, tams];
 #endif
-        if (fps) {
-            self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  ave: %.1fms",
-                                     fps, depthps, tams];
-            [self->statsLabel setNeedsDisplay];
-        }
     });
 }
 
@@ -645,19 +649,19 @@ enum {
 #endif
 }
 
-+ (UIImageOrientation) imageOrientationForDeviceOrientation {
+- (UIImageOrientation) imageOrientationForDeviceOrientation {
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
     //NSLog(@"do %ld", (long)devo);
     UIImageOrientation orient;
     switch (devo) {
         case UIDeviceOrientationPortrait:
-            orient = UIImageOrientationUp;
+            orient = UIImageOrientationUpMirrored;
             break;
         case UIDeviceOrientationPortraitUpsideDown:
-            orient = UIImageOrientationDown;
+            orient = UIImageOrientationUpMirrored;
             break;
         case UIDeviceOrientationLandscapeRight:
-            orient = UIImageOrientationUpMirrored;  // fine
+            orient = UIImageOrientationDownMirrored;    // fine
             break;
         case UIDeviceOrientationLandscapeLeft:
             orient = UIImageOrientationDownMirrored;    // fine
@@ -671,15 +675,11 @@ enum {
         default:
             NSLog(@"Inconceivable video orientation: %ld",
                   (long)devo);
-            orient = UIImageOrientationUp;
+            orient = UIImageOrientationUpMirrored;
     }
-#ifdef notdef
-    NSLog(@"orient: %ld, %ld, %ld, %ld",
-          [[UIDevice currentDevice] orientation],
-          [CameraController videoOrientationForDeviceOrientation],
-          (long)connection.videoOrientation,
-          (long)orient);
-#endif
+    //NSLog(@">>> device orientation: %@", [CameraController dumpCurrentDeviceOrientation]);
+    //NSLog(@">>>  image orientation: %@", [CameraController dumpImageOrientation:orient]);
+
     return orient;
 }
 
@@ -694,9 +694,8 @@ enum {
     }
     busy = YES;
     
-    UIImageOrientation orient = [MainVC imageOrientationForDeviceOrientation];
     UIImage *capturedImage = [self imageFromDepthDataBuffer:depthData
-                                                orientation:orient];
+                                                orientation:imageOrientation];
     
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
@@ -743,9 +742,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         return;
     }
     busy = YES;
-    UIImageOrientation orient = [MainVC imageOrientationForDeviceOrientation];
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer
-                                             orientation:orient];
+                                             orientation:imageOrientation];
     
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
@@ -825,8 +823,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             NSArray *transformList = [transforms.categoryList objectAtIndex:section];
             return transformList.count;
         }
-        case ActiveTag:
-            return transforms.sequence.count;
+        case ActiveTag: // bottom entry has performance stats
+            return transforms.sequence.count + 1;
     }
     return 1;
 }
@@ -862,11 +860,14 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (BOOL)tableView:(UITableView *)tableView
 canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
-    return tableView.tag == ActiveTag;
+    // cannot move or edit the last line in the table
+    return tableView.tag == ActiveTag &&
+        (indexPath.row != transforms.sequence.count);
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    return tableView.tag == ActiveTag;
+    return tableView.tag == ActiveTag &&
+        (indexPath.row != transforms.sequence.count);
 }
 
 #define SLIDER_TAG_OFFSET   100
@@ -875,7 +876,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell;
-    
     switch (tableView.tag) {
         case SourceSelectTag: {
             NSString *CellIdentifier = @"SourceCell";
@@ -949,21 +949,23 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                               reuseIdentifier:CellIdentifier];
             }
-            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-            NSString *name;
-            if (transform.initial != UNINITIALIZED_P)
-               name = [transform.name stringByAppendingString:@" ~"];
-            else
-                name = transform.name;
-            cell.textLabel.text = [NSString stringWithFormat:
-                                   @"%2ld: %@", indexPath.row+1, name];
-            cell.layer.borderWidth = 0;
-#ifdef brokenloop
-            if (indexPath.row == transforms.list.count - 1)
-                [tableView scrollToRowAtIndexPath:indexPath
-                                 atScrollPosition:UITableViewScrollPositionBottom
-                                         animated:YES];
-#endif
+#define STATS_LABEL_FONT_SIZE   20
+            if (indexPath.row == transforms.sequence.count) {   // stats row
+                statsLabel = [[UILabel alloc] initWithFrame:cell.contentView.frame];
+                statsLabel.textAlignment = NSTextAlignmentRight;
+                statsLabel.font = [UIFont systemFontOfSize:STATS_LABEL_FONT_SIZE];
+                [cell.contentView addSubview:statsLabel];
+            } else {
+                Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
+                NSString *name;
+                if (transform.initial != UNINITIALIZED_P)
+                    name = [transform.name stringByAppendingString:@" ~"];
+                else
+                    name = transform.name;
+                cell.textLabel.text = [NSString stringWithFormat:
+                                       @"%2ld: %@", indexPath.row+1, name];
+                cell.layer.borderWidth = 0;
+            }
             break;
         }
         case TransformTag: {   // Selection table display table list
@@ -987,25 +989,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         }
     }
     return cell;
-}
-
-- (void) newCurrentSource {
-    if (currentSource && ISCAMERA(currentSource.sourceType)) {
-        [cameraController stopCamera];
-        capturing = NO;
-    }
-    currentSource = nextSource;
-}
-
-- (void) initiateSource {
-    if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController selectCamera:currentSource.sourceType];
-        [cameraController startSession];
-        [cameraController startCamera];
-        capturing = YES;
-    } else {
-        [self transformCurrentImage];
-    }
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -1061,6 +1044,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         transforms.sequenceChanged = YES;
     }
     [self adjustButtons];
+    statsLabel = nil;    // recreate stats entry
     [executeTableVC.tableView reloadData];
     [self transformCurrentImage];
 }
@@ -1072,9 +1056,12 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         transforms.sequenceChanged = YES;
     }
     [self adjustButtons];
+    statsLabel = nil;    // recreate stats entry
     [executeTableVC.tableView reloadData];
     [self transformCurrentImage];
 }
+
+// These operations is only for the execute table:
 
 - (void)tableView:(UITableView *)tableView
 commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
@@ -1088,6 +1075,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 transforms.sequenceChanged = YES;
             }
             [self adjustButtons];
+            statsLabel = nil;
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             [self transformCurrentImage];
@@ -1096,6 +1084,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         case UITableViewCellEditingStyleInsert:
             NSLog(@"insert?");
             [self transformCurrentImage];
+            statsLabel = nil;
             break;
         default:
             NSLog(@"commitEditingStyle: never mind: %ld", (long)editingStyle);
@@ -1105,7 +1094,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView
 moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
-
+    statsLabel = nil;
     @synchronized (transforms.sequence) {
         Transform *t = [transforms.sequence objectAtIndex:fromIndexPath.row];
         [transforms.sequence removeObjectAtIndex:fromIndexPath.row];
@@ -1114,7 +1103,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         [self transformCurrentImage];
     }
     if (sliderExecuteIndex != NO_SLIDER_ENABLED && sliderExecuteIndex == fromIndexPath.row)
-        [self setSliderTo:toIndexPath.row];
+        [self setSliderTo:(int)toIndexPath.row];
    [tableView reloadData];
 }
 
@@ -1128,7 +1117,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     else
         transformAveTime = NAN;
     
-    [self updateStatsLabel: frameCount/elapsed
+    [self updateStats: frameCount/elapsed
                 depthPerSec:depthCount/elapsed
              droppedPerSec:droppedCount/elapsed
                 busyPerSec:busyCount/elapsed
@@ -1210,7 +1199,3 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 }
 
 @end
-
-// delete, move, or remove active?  check slider
-// need indicator for things that can vary
-

@@ -101,7 +101,7 @@ PixelIndex_t dPI(int x, int y) {
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
         sequence = [[NSMutableArray alloc] init];
-        sequenceChanged = NO;
+        sequenceChanged = YES;
         finalScale = 1.0;
         imBufs[0] = imBufs[1] = NULL;
         executeList = [[NSMutableArray alloc] init];
@@ -255,14 +255,14 @@ int sourceImageIndex, destImageIndex;
     CGImageRetain(imageRef);
     size_t width = (int)CGImageGetWidth(imageRef);
     size_t height = (int)CGImageGetHeight(imageRef);
-    size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
-    assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
     size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
     assert(bitsPerPixel/8 == sizeof(Pixel));
     size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
     assert(bitsPerComponent == 8);
     configuredPixelsInImage = width * height;
-    
+    size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
+    assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
+
     if (configuredBytesPerRow != bytesPerRow ||
         configuredWidth != width ||
         configuredHeight != height) {
