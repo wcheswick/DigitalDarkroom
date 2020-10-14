@@ -254,7 +254,6 @@
         
         CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
 //            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
-            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
         CGFloat w, h;
         if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
             w = dimensions.height;
@@ -263,12 +262,10 @@
             w = dimensions.width;
             h = dimensions.height;
         }
+        NSLog(@"   adj   dimensions: %.0f x %.0f", w, h);
+
         if (w > availableSize.width || h > availableSize.height)
-            continue;
-        if (selectedFormat) {   // this one fits.  Is it better?
-            if (w <= captureSize.width || h <= captureSize.height)
-                continue;
-        }
+            break;
         selectedFormat = format;
         captureSize = (CGSize){w, h};
     }

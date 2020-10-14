@@ -185,8 +185,8 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     if (transform.remapPolarF) {     // polar remap
         size_t centerX = configuredWidth/2;
         size_t centerY = configuredHeight/2;
-        for (int dx=0; dx<=centerX; dx++) {
-            for (int dy=0; dy<=centerY; dy++) {
+        for (int dx=0; dx<centerX; dx++) {
+            for (int dy=0; dy<centerY; dy++) {
                 double r = hypot(dx, dy);
                 double a;
                 if (dx == 0 && dy == 0)
@@ -280,9 +280,9 @@ int sourceImageIndex, destImageIndex;
     }
     
     CGImageRef imageRef = [image CGImage];
+    CGImageRetain(imageRef);
     UIImageOrientation incomingOrientation = image.imageOrientation;
     
-    CGImageRetain(imageRef);
     size_t width = (int)CGImageGetWidth(imageRef);
     size_t height = (int)CGImageGetHeight(imageRef);
     size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
@@ -292,7 +292,7 @@ int sourceImageIndex, destImageIndex;
     configuredPixelsInImage = width * height;
     size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
     if (!bytesPerRow) { // bad, but punt.  Seems to work just fine.
-        NSLog(@"empty bytes per row");
+        NSLog(@"**** empty bytes per row");
         bytesPerRow = width*sizeof(Pixel);
     }
     //assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
@@ -1025,8 +1025,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [categoryList addObject:transformList];
     
     lastTransform = [Transform areaTransform: @"Cone projection"
-                                  description: @""
-                             remapPolar:^PixelIndex_t (float r, float a, int p) {
+                                 description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
         double r1 = sqrt(r*MAX_R);
         int y = (int)CenterY+(int)(r1*sin(a));
         if (y < 0)
@@ -1036,10 +1036,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         int x = CenterX + r1*cos(a);
         if (x < 0)
             x = 0;
-        else if (y >= configuredHeight)
-            y = (int)configuredHeight - 1;
+        else if (x >= configuredWidth)
+            x = (int)configuredWidth - 1;
         return PI(x, y);
-    }];
+   }];
     [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Andrew's projection"

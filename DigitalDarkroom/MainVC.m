@@ -12,8 +12,8 @@
 #import "Defines.h"
 
 #define BUTTON_FONT_SIZE    20
-#define STATS_FONT_SIZE     20
 #define STATS_W             450
+#define STATS_LABEL_FONT_SIZE   14
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -33,6 +33,8 @@
 #define SLIDER_AREA_W   200
 
 #define NO_SLIDER_ENABLED   (-1)
+
+#define STATS_HEADER_INDEX  1   // second section is just stats
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -138,7 +140,6 @@ enum {
         transformTotalElapsed = 0;
         transformCount = 0;
         busy = NO;
-        statsLabel = nil;
         
         inputSources = [[NSMutableArray alloc] init];
 
@@ -286,7 +287,13 @@ enum {
                                                       trashButton,
                                                       nil];
     
-
+    statsLabel = [[UILabel alloc] init];
+    statsLabel.textAlignment = NSTextAlignmentRight;
+    statsLabel.text = @"Dragons";
+    statsLabel.font = [UIFont
+                       monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
+                       weight:UIFontWeightRegular];
+    
     availableTableVC.tableView.tag = TransformTag;
     availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     availableTableVC.tableView.delegate = self;
@@ -374,18 +381,19 @@ enum {
     f.size.height = f.size.height - f.origin.y;
     containerView.frame = f;
 
+    // compute area available for transform.  Need room on the bottom or right.
+    f.origin.y = 0;
+    f.size.height -= CONTROL_H;     // bottom needs control
+    
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
-    if (isPortrait) {   // both tables are below
-        if (f.size.height < MIN_TRANSFORM_LIST_H)
-            f.size.height = MIN_TRANSFORM_LIST_H;
+    if (isPortrait) {   // both tables are below, probably
+        f.size.height -= MIN_TRANSFORM_LIST_H;
     } else {    // one table is on top of the other on the right
         f.size.width -= TRANSFORM_LIST_W;
         if (f.size.width > MAX_TRANSFORM_W)
             f.size.width = MAX_TRANSFORM_W;
     }
-    f.origin.y = 0; // in the containerView
-    f.size.height -= CONTROL_H;
     transformView.frame = f;
 
     if (nextSource) {
@@ -420,6 +428,7 @@ enum {
     CGFloat x = (transformView.frame.size.width - scaledRect.size.width)/2;
     scaledRect.origin = CGPointMake(x, 0);
 #else
+    scaledRect.origin = CGPointZero;
     scaledRect.size = sourceSize;
     transformView.frame = scaledRect;
 #endif
@@ -566,23 +575,17 @@ enum {
 #endif
 
 - (void) updateStats: (float) fps
-              depthPerSec:(float) depthps
-            droppedPerSec:(float)dps
-               busyPerSec:(float)bps
-             transformAve:(double) tams {
+         depthPerSec:(float) depthps
+       droppedPerSec:(float)dps
+          busyPerSec:(float)bps
+        transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self->statsLabel) {    // not in the middle of a cell change somewhere
-//            NSLog(@"update stats view %.0f x %.0f to %.1f FPS, %.0fms",
-//                  self->statsLabel.frame.size.width, self->statsLabel.frame.size.height, fps, tams);
-            if (fps) {
-#ifdef OLD
-                self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  ave: %.1fms",
-                                         fps, depthps, tams];
-#endif
-                self->statsLabel.text = [NSString stringWithFormat:@"%.1fms", tams];
-                [self->statsLabel setNeedsDisplay];
-            }
+        if (fps) {
+            self->statsLabel.text = [NSString stringWithFormat:@"%.1f ms", tams];
+        } else {
+            self->statsLabel.text = [NSString stringWithFormat:@"---"];
         }
+        [self->statsLabel setNeedsDisplay];
 #ifdef OLD
         self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  d: %.1f  b: %.1f  ave: %.1fms",
                                  fps, depthps, dps, bps, tams];
@@ -758,13 +761,20 @@ enum {
     [self->scaledTransformImageView setNeedsDisplay];
 }
 
+- (BOOL) dataSizeOK: (CGSize) s {
+    return (s.width != scaledTransformImageView.frame.size.width ||
+            s.height != scaledTransformImageView.frame.size.height);
+}
+
 - (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) depthData
                            orientation:(UIImageOrientation) orientation {
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+    assert([self dataSizeOK:CGSizeMake(width,height)]);
+    
     CGRect r = CGRectMake(0, 0, width, height);
-
+    
     CIContext *ctx = [CIContext contextWithOptions:nil];
     CIImage *ciimage = [CIImage imageWithCVPixelBuffer:pixelBufferRef];
     CGImageRef quartzImage = [ctx createCGImage:ciimage fromRect:r];
@@ -853,13 +863,15 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         case TransformTag:
             return transforms.categoryNames.count;
         case SourceSelectTag:
-        case ActiveTag:
             return 1;
+        case ActiveTag:
+            return 2;   // entries, plus a header for second section for stats
     }
     return 1;
 }
 
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+- (NSInteger)tableView:(UITableView *)tableView
+ numberOfRowsInSection:(NSInteger)section {
     switch (tableView.tag) {
         case SourceSelectTag:
             return inputSources.count;
@@ -867,20 +879,35 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             NSArray *transformList = [transforms.categoryList objectAtIndex:section];
             return transformList.count;
         }
-        case ActiveTag: // bottom entry has performance stats
-            return transforms.sequence.count + 1;
+        case ActiveTag:
+            if (section == STATS_HEADER_INDEX)
+                return 0;
+            else
+                return transforms.sequence.count;
     }
     return 1;
 }
 
+- (UIView *)tableView:(UITableView *)tableView
+viewForHeaderInSection:(NSInteger)section {
+    CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
+    UIView *headerView = [[UIView alloc] initWithFrame:f];
+    statsLabel.frame = f;
+    [headerView addSubview:statsLabel];
+    return headerView;
+}
+
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     switch (tableView.tag) {
+        case SourceSelectTag:
+            return @"Sources";
         case TransformTag:
             return [transforms.categoryNames objectAtIndex:section];
         case ActiveTag:
-            return @"";
-        case SourceSelectTag:
-            return @"Sources";
+            if (section == STATS_HEADER_INDEX)
+                return statsLabel.text;
+            else
+                return @"Active";
     }
     return @"bogus";
 }
@@ -899,19 +926,26 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 #endif
 
 -(CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    switch (tableView.tag) {
+        case SourceSelectTag:
+        case TransformTag:
+            return 50;
+        case ActiveTag:
+            switch (section) {
+                case 0: return 0;
+                default: return 30;
+            }
+    }
     return 50;
 }
 
 - (BOOL)tableView:(UITableView *)tableView
 canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
-    // cannot move or edit the last line in the table
-    return tableView.tag == ActiveTag &&
-        (indexPath.row != transforms.sequence.count);
+    return YES;
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    return tableView.tag == ActiveTag &&
-        (indexPath.row != transforms.sequence.count);
+    return YES;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
@@ -983,39 +1017,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             }
             break;
         }
-        case ActiveTag: {
-            NSString *CellIdentifier = @"ListingCell";
-            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-            if (cell == nil) {
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                              reuseIdentifier:CellIdentifier];
-            } else {
-                for (UIView* b in cell.contentView.subviews) {
-                    [b removeFromSuperview];
-                }
-            }
-#define STATS_LABEL_FONT_SIZE   14
-            if (indexPath.row == transforms.sequence.count) {   // stats row
-                statsLabel = nil;   // clear previous
-                statsLabel = [[UILabel alloc] initWithFrame:cell.contentView.frame];
-                statsLabel.textAlignment = NSTextAlignmentRight;
-                statsLabel.font = [UIFont
-                                   monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
-                                   weight:UIFontWeightRegular];
-                [cell.contentView addSubview:statsLabel];
-            } else {
-                Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-                NSString *name;
-                if (transform.initial != UNINITIALIZED_P)
-                    name = [transform.name stringByAppendingString:@" ~"];
-                else
-                    name = transform.name;
-                cell.textLabel.text = [NSString stringWithFormat:
-                                       @"%2ld: %@", indexPath.row+1, name];
-                cell.layer.borderWidth = 0;
-            }
-            break;
-        }
         case TransformTag: {   // Selection table display table list
             NSString *CellIdentifier = @"SelectionCell";
             cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
@@ -1034,6 +1035,25 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell.indentationWidth = 10;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
             cell.selected = NO;
+            break;
+        }
+        case ActiveTag: {
+            NSString *CellIdentifier = @"ListingCell";
+            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+            if (cell == nil) {
+                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                              reuseIdentifier:CellIdentifier];
+            }
+            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
+            NSString *name;
+            if (transform.initial != UNINITIALIZED_P)
+                name = [transform.name stringByAppendingString:@" ~"];
+            else
+                name = transform.name;
+            cell.textLabel.text = [NSString stringWithFormat:
+                                   @"%2ld: %@", indexPath.row+1, name];
+            cell.layer.borderWidth = 0;
+            break;
         }
     }
     return cell;
@@ -1047,6 +1067,21 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             InputSource *source = [inputSources objectAtIndex:cell.tag];
             nextSource = source;
             [self.view setNeedsLayout];
+            break;
+        }
+        case TransformTag: {   // Append a transform to the active list
+            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
+            Transform *transform = [transformList objectAtIndex:indexPath.row];
+            Transform *thisTransform = [transform copy];
+            assert(thisTransform.remapTable == NULL);
+            thisTransform.p = thisTransform.initial;
+            @synchronized (transforms.sequence) {
+                [transforms.sequence addObject:thisTransform];
+                transforms.sequenceChanged = YES;
+            }
+            [self.executeTableVC.tableView reloadData];
+            [self adjustButtons];
+            [self transformCurrentImage];
             break;
         }
         case ActiveTag: {   // select active step and turn on slide if appropriate
@@ -1067,20 +1102,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             }
             break;
         }
-        case TransformTag: {   // Append a transform to the active list
-            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-            Transform *transform = [transformList objectAtIndex:indexPath.row];
-            Transform *thisTransform = [transform copy];
-            assert(thisTransform.remapTable == NULL);
-            thisTransform.p = thisTransform.initial;
-            @synchronized (transforms.sequence) {
-                [transforms.sequence addObject:thisTransform];
-                transforms.sequenceChanged = YES;
-            }
-            [self.executeTableVC.tableView reloadData];
-            [self adjustButtons];
-            [self transformCurrentImage];
-        }
     }
 }
 
@@ -1092,7 +1113,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         transforms.sequenceChanged = YES;
     }
     [self adjustButtons];
-    statsLabel = nil;    // recreate stats entry
     [executeTableVC.tableView reloadData];
     [self transformCurrentImage];
 }
@@ -1104,7 +1124,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         transforms.sequenceChanged = YES;
     }
     [self adjustButtons];
-    statsLabel = nil;    // recreate stats entry
     [executeTableVC.tableView reloadData];
     [self transformCurrentImage];
 }
@@ -1123,7 +1142,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 transforms.sequenceChanged = YES;
             }
             [self adjustButtons];
-            statsLabel = nil;
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             [self transformCurrentImage];
@@ -1132,7 +1150,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         case UITableViewCellEditingStyleInsert:
             NSLog(@"insert?");
             [self transformCurrentImage];
-            statsLabel = nil;
             break;
         default:
             NSLog(@"commitEditingStyle: never mind: %ld", (long)editingStyle);
@@ -1142,7 +1159,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView
 moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
       toIndexPath:(NSIndexPath *)toIndexPath {
-    statsLabel = nil;
     @synchronized (transforms.sequence) {
         Transform *t = [transforms.sequence objectAtIndex:fromIndexPath.row];
         [transforms.sequence removeObjectAtIndex:fromIndexPath.row];
