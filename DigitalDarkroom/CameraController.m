@@ -32,7 +32,6 @@
 
 @synthesize captureSession;
 @synthesize delegate;
-@synthesize imageOrientation;
 
 @synthesize captureDevice, selectedCamera;
 @synthesize deviceOrientation;
@@ -113,28 +112,6 @@
     NSLog(@" -- camera selected: %d", selectedCamera);
 }
 
-#ifdef OLD
-+ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
-    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
-    switch (deviceOrientation) {
-        case UIDeviceOrientationUnknown:
-        case UIDeviceOrientationPortrait:
-        case UIDeviceOrientationFaceDown:
-            return AVCaptureVideoOrientationPortrait;
-        case UIDeviceOrientationPortraitUpsideDown:
-            return AVCaptureVideoOrientationPortraitUpsideDown;
-        case UIDeviceOrientationLandscapeLeft:
-            //imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            return AVCaptureVideoOrientationLandscapeRight;
-            break;
-        case UIDeviceOrientationFaceUp:
-        case UIDeviceOrientationLandscapeRight:
-            // imageOrientation = FRONT_FACING_CAMERA ? UIImageOrientationUp : UIImageOrientationUp;
-            return AVCaptureVideoOrientationLandscapeLeft;
-    }
-}
-#endif
-
 + (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
     UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
     switch (deviceOrientation) {
@@ -160,6 +137,7 @@
     NSError *error;
     assert(captureDevice);
     
+    deviceOrientation = [[UIDevice currentDevice] orientation];
     videoOrientation = [CameraController videoOrientationForDeviceOrientation];
 
 #ifdef notdef
@@ -201,18 +179,28 @@
         
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
-        dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
-        [depthOutput setDelegate:delegate callbackQueue:queue];
-        depthOutput.filteringEnabled = YES;
         if ([captureSession canAddOutput:depthOutput]) {
             [captureSession addOutput:depthOutput];
         } else {
             NSLog(@"**** could not add data output");
         }
         videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeVideo];
+        [videoConnection setVideoOrientation:videoOrientation];
+        
+        dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
+        [depthOutput setDelegate:delegate callbackQueue:queue];
+        depthOutput.filteringEnabled = YES;
     } else {
         AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
         assert(dataOutput);
+        if ([captureSession canAddOutput:dataOutput]) {
+            [captureSession addOutput:dataOutput];
+        } else {
+            NSLog(@"**** could not add data output");
+        }
+        videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
+        [videoConnection setVideoOrientation:videoOrientation];
+        
         dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
         dataOutput.videoSettings = @{
             (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
@@ -220,15 +208,7 @@
         dataOutput.alwaysDiscardsLateVideoFrames = YES;
         dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
         [dataOutput setSampleBufferDelegate:delegate queue:queue];
-
-        if ([captureSession canAddOutput:dataOutput]) {
-            [captureSession addOutput:dataOutput];
-        } else {
-            NSLog(@"**** could not add data output");
-        }
-        videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
     }
-    videoConnection.videoOrientation = videoOrientation;
     
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
@@ -252,6 +232,10 @@
     }
 #endif
     
+    NSLog(@" @@@@ fitting into %.0f x %.0f %@",
+          availableSize.width, availableSize.height,
+          UIDeviceOrientationIsPortrait(deviceOrientation) ? @"portrait" : @"");
+
     for (AVCaptureDeviceFormat *format in availableFormats) {
         if (IS_3D_CAMERA(selectedCamera)) {
             //NSLog(@"-- format selected: %@", format.description);
@@ -264,17 +248,29 @@
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
         if (mediaType != kCMMediaType_Video)
             continue;
+        
+        // I cannot seem to get the format data adjusted for device orientation.  So we
+        // swap them here, if portrait.
+        
         CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
 //            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
-//            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
-        if (dimensions.width > availableSize.width || dimensions.height > availableSize.height)
+            NSLog(@"      dimensions: %.0d x %.0d", dimensions.width, dimensions.height);
+        CGFloat w, h;
+        if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
+            w = dimensions.height;
+            h = dimensions.width;
+        } else {
+            w = dimensions.width;
+            h = dimensions.height;
+        }
+        if (w > availableSize.width || h > availableSize.height)
             continue;
         if (selectedFormat) {   // this one fits.  Is it better?
-            if (dimensions.width <= captureSize.width || dimensions.height <= captureSize.height)
+            if (w <= captureSize.width || h <= captureSize.height)
                 continue;
         }
         selectedFormat = format;
-        captureSize = (CGSize){dimensions.width, dimensions.height};
+        captureSize = (CGSize){w, h};
     }
     if (!selectedFormat) {
         NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
@@ -282,7 +278,7 @@
         return CGSizeZero;
     }
     
-    NSLog(@" %%%% camera size set to %.0f x %.0f", captureSize.width, captureSize.height);
+    NSLog(@" @@@@  size set to %.0f x %.0f", captureSize.width, captureSize.height);
     
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = selectedFormat;

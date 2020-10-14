@@ -391,17 +391,5 @@ skrunch(double r, double a) {
 		    [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
 }
 
-pixel
-pg(double r, double a) {
-	double x = r*cos(a);
-	double y = r*sin(a);
-	return frame[CENTER_Y+(short)(r*cos(a))]
-		    [CENTER_X+(short)(r*sin((y*x)/4+a))];
-}
-
-pixel
-can(double r, double a) {
-	return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
-}
 #endif
 #endif

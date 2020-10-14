@@ -17,13 +17,11 @@ NS_ASSUME_NONNULL_BEGIN
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
             AVCaptureDepthDataOutputDelegate>delegate;
-    UIImageOrientation imageOrientation;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
-@property (assign)  UIImageOrientation imageOrientation;
 
 
 - (BOOL) isCameraAvailable:(Cameras) camera;

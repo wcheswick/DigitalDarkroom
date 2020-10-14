@@ -300,18 +300,16 @@ int sourceImageIndex, destImageIndex;
     if (configuredBytesPerRow != bytesPerRow ||
         configuredWidth != width ||
         configuredHeight != height) {
+#ifdef OLD
         NSLog(@">>> format was %4zu %4zu %4zu   %4zu %4zu %4zu",
               configuredBytesPerRow,
               configuredWidth,
               configuredHeight,
               bytesPerRow, width, height);
+#endif
         configuredBytesPerRow = bytesPerRow;
         configuredHeight = height;
         configuredWidth = width;
-        NSLog(@">>> format is   %4zu %4zu %4zu",
-              configuredBytesPerRow,
-              configuredWidth,
-              configuredHeight);
         assert(configuredBytesPerRow % sizeof(Pixel) == 0); //no slop on the rows
         for (Transform *t in executeList) {
             [t clearRemap];
@@ -1035,7 +1033,12 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             y = 0;
         else if (y >= configuredHeight)
             y = (int)configuredHeight - 1;
-        return PI(CenterX + (int)(r1*cos(a)), y);
+        int x = CenterX + r1*cos(a);
+        if (x < 0)
+            x = 0;
+        else if (y >= configuredHeight)
+            y = (int)configuredHeight - 1;
+        return PI(x, y);
     }];
     [transformList addObject:lastTransform];
 
@@ -1104,6 +1107,22 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             return Remap_White;
     }];
     [transformList addObject:lastTransform];
+    
+
+#ifdef notdef
+pixel
+pg(double r, double a) {
+    double x = r*cos(a);
+    double y = r*sin(a);
+    return frame[CENTER_Y+(short)(r*cos(a))]
+            [CENTER_X+(short)(r*sin((y*x)/4+a))];
+}
+
+pixel
+can(double r, double a) {
+    return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
+}
+#endif
 
 #ifdef notyet
     extern  init_proc init_rotate_right;

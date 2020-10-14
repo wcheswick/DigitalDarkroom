@@ -17,6 +17,8 @@
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
+#define MIN_TRANSFORM_LIST_H    100
+#define MIN_ACTIVE_H    100
 #define MAX_TRANSFORM_W 1024
 #define TABLE_ENTRY_H   40
 
@@ -224,6 +226,7 @@ enum {
     
     transformView = [[UIImageView alloc] init];
     transformView.userInteractionEnabled = YES;
+    transformView.backgroundColor = [UIColor orangeColor];
     [containerView addSubview:transformView];
     scaledTransformImageView = [[UIImageView alloc] init];
     [transformView addSubview:scaledTransformImageView];
@@ -353,7 +356,7 @@ enum {
 
 #define SEP 10  // between views
 #define INSET 3 // from screen edges
-#define MIN_TABLE_W 300
+#define MIN_TRANS_TABLE_W 275
 
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
@@ -374,7 +377,8 @@ enum {
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
     if (isPortrait) {   // both tables are below
-        ;
+        if (f.size.height < MIN_TRANSFORM_LIST_H)
+            f.size.height = MIN_TRANSFORM_LIST_H;
     } else {    // one table is on top of the other on the right
         f.size.width -= TRANSFORM_LIST_W;
         if (f.size.width > MAX_TRANSFORM_W)
@@ -383,7 +387,7 @@ enum {
     f.origin.y = 0; // in the containerView
     f.size.height -= CONTROL_H;
     transformView.frame = f;
-    
+
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
             [cameraController stopCamera];
@@ -406,45 +410,80 @@ enum {
         sourceSize = currentSource.imageSize;
     }
     
-    transformView.backgroundColor = [UIColor systemPinkColor];
-    
-    transforms.finalScale = [self scaleToFitSize:sourceSize toSize:transformView.frame.size];
+    NSLog(@" source image size: %.0f x %.0f", sourceSize.width, sourceSize.height);
     CGRect scaledRect;
+    
+#ifdef SCALE_T_DISPLAY
+    transforms.finalScale = [self scaleToFitSize:sourceSize toSize:transformView.frame.size];
     scaledRect.size = [self fitSize:sourceSize toSize:transformView.frame.size];
     // put the scaled image at the top of the transform view area, centered.
     CGFloat x = (transformView.frame.size.width - scaledRect.size.width)/2;
     scaledRect.origin = CGPointMake(x, 0);
-    scaledTransformImageView.frame = scaledRect;
-    
-    NSLog(@" source image size: %.0f x %.0f", sourceSize.width, sourceSize.height);
+#else
+    scaledRect.size = sourceSize;
+    transformView.frame = scaledRect;
+#endif
     NSLog(@" transform target size: %.0f x %.0f", scaledRect.size.width, scaledRect.size.height);
+    scaledTransformImageView.frame = scaledRect;
 
-    transformView.backgroundColor = [UIColor orangeColor];
-    
     f = scaledTransformImageView.frame;  // control goes right under the transformed view
     f.origin.y = BELOW(f);
     f.size.height = CONTROL_H;  // kludge
     controlsView.frame = f;
     controlsView.backgroundColor = [UIColor whiteColor];
     
-    if (isPortrait) {   // both go under the transform view
-        f.origin = CGPointMake(0, BELOW(controlsView.frame));
-        f.size.height = containerView.frame.size.height - f.origin.y;
-        assert(f.size.height >= 100);
-        f.size.width = containerView.frame.size.width/2;
-        executeNavVC.view.frame = f;
+    if (isPortrait) {
+        // if room on the right for the transform list, put it there, else
+        // split the bottom between execute and transform
         
-        f.origin.x = RIGHT(f);
-        availableNavVC.view.frame = f;
-    } else {        // available and execute goes right of display
-        f.origin = CGPointMake(RIGHT(controlsView.frame), 0);
-        f.size.height = containerView.frame.size.height*0.3;
-        f.size.width = containerView.frame.size.width - f.origin.x;
-        executeNavVC.view.frame = f;
+        f.size.width = containerView.frame.size.width - f.size.width;
+        if (f.size.width - SEP >= MIN_TRANS_TABLE_W) {  // availableon the right, executing at bottom
+            f.size.height = containerView.frame.size.height;
+            f.size.width -= SEP;
+            f.origin.x = RIGHT(scaledTransformImageView.frame) + SEP;
+            f.origin.y = 0;
+            availableNavVC.view.frame = f;
+            
+            f.size.width = f.origin.x - SEP;
+            f.origin = CGPointMake(0, BELOW(controlsView.frame) + SEP);
+            f.size.height = containerView.frame.size.height - f.origin.y;
+            executeNavVC.view.frame = f;
+        } else {
+            f.size.width = containerView.frame.size.width/2 - SEP;
+            f.origin.y = BELOW(controlsView.frame) + SEP;
+            f.size.height = containerView.frame.size.height - f.origin.y;
+            f.origin.x = 0;
+            executeNavVC.view.frame = f;
+            
+            f.origin.x = RIGHT(f) + SEP;
+            availableNavVC.view.frame = f;
+        }
+    } else {
+        // if there is room underneath, put the active there, and available to the right,
+        // else stack both on the right
+        
+        f.size.height = containerView.frame.size.height - controlsView.frame.size.height;
+        if (f.size.height >= MIN_ACTIVE_H) {
+            f.origin.y = BELOW(controlsView.frame) + SEP;
+            f.origin.x = 0;
+            f.size.width = RIGHT(controlsView.frame);
+            executeNavVC.view.frame = f;
+            
+            f.origin = CGPointMake(RIGHT(controlsView.frame) + SEP, 0);
+            f.size.width = containerView.frame.size.width - f.origin.x;
+            f.size.height = containerView.frame.size.height;
+            availableNavVC.view.frame = f;
+        } else {
+            // available and execute goes right of display
+            f.origin = CGPointMake(RIGHT(controlsView.frame) + SEP, 0);
+            f.size.height = containerView.frame.size.height*0.3;
+            f.size.width = containerView.frame.size.width - f.origin.x;
+            executeNavVC.view.frame = f;
 
-        f.origin.y = BELOW(f);
-        f.size.height = containerView.frame.size.height - f.origin.y;
-        availableNavVC.view.frame = f;
+            f.origin.y = BELOW(f) + SEP;
+            f.size.height = containerView.frame.size.height - f.origin.y;
+            availableNavVC.view.frame = f;
+       }
     }
     f = executeNavVC.navigationBar.frame;
     f.origin.x = 0;
@@ -536,8 +575,11 @@ enum {
 //            NSLog(@"update stats view %.0f x %.0f to %.1f FPS, %.0fms",
 //                  self->statsLabel.frame.size.width, self->statsLabel.frame.size.height, fps, tams);
             if (fps) {
+#ifdef OLD
                 self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  ave: %.1fms",
                                          fps, depthps, tams];
+#endif
+                self->statsLabel.text = [NSString stringWithFormat:@"%.1fms", tams];
                 [self->statsLabel setNeedsDisplay];
             }
         }
@@ -947,12 +989,19 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             if (cell == nil) {
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                               reuseIdentifier:CellIdentifier];
+            } else {
+                for (UIView* b in cell.contentView.subviews) {
+                    [b removeFromSuperview];
+                }
             }
-#define STATS_LABEL_FONT_SIZE   20
+#define STATS_LABEL_FONT_SIZE   14
             if (indexPath.row == transforms.sequence.count) {   // stats row
+                statsLabel = nil;   // clear previous
                 statsLabel = [[UILabel alloc] initWithFrame:cell.contentView.frame];
                 statsLabel.textAlignment = NSTextAlignmentRight;
-                statsLabel.font = [UIFont systemFontOfSize:STATS_LABEL_FONT_SIZE];
+                statsLabel.font = [UIFont
+                                   monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
+                                   weight:UIFontWeightRegular];
                 [cell.contentView addSubview:statsLabel];
             } else {
                 Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
