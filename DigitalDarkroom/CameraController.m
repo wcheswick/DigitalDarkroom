@@ -217,7 +217,8 @@
 
 // find and return the largest size that fits into the given size. Return
 // Zero size if none works.  This should never happen.
-- (CGSize) setupCameraForSize:(CGSize) availableSize {
+- (CGSize) setupCameraForSize:(CGSize) availableSize
+                  displayMode:(DisplayMode_t)displayMode {
     NSError *error;
     
     assert(captureDevice);
@@ -252,9 +253,7 @@
         // I cannot seem to get the format data adjusted for device orientation.  So we
         // swap them here, if portrait.
         
-        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
-//            NSLog(@"----- depth data formats: %@",format.supportedDepthDataFormats);
-        CGFloat w, h;
+        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);        CGFloat w, h;
         if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
             w = dimensions.height;
             h = dimensions.width;
@@ -266,6 +265,9 @@
 
         if (w > availableSize.width || h > availableSize.height)
             break;
+        if (displayMode == small)
+            if (dimensions.height > availableSize.height/2.0)
+                break;
         selectedFormat = format;
         captureSize = (CGSize){w, h};
     }

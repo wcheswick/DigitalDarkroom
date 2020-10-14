@@ -97,6 +97,8 @@ enum {
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
 @property (assign)              UIImageOrientation imageOrientation;
+@property (assign)              DisplayMode_t displayMode;
+
 @end
 
 @implementation MainVC
@@ -132,6 +134,7 @@ enum {
 @synthesize trashButton;
 @synthesize capturing;
 @synthesize imageOrientation;
+@synthesize displayMode;
 
 - (id) init {
     self = [super init];
@@ -166,7 +169,6 @@ enum {
         cameraController.delegate = self;
         currentCameraButton = nil;
         
-        
         Cameras sourceIndex;
         for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
             if ([cameraController isCameraAvailable:sourceIndex])
@@ -174,8 +176,36 @@ enum {
         }
         currentSource = nil;
         nextSource = [inputSources objectAtIndex:sourceIndex];
+        [self newDisplayMode:medium];
     }
     return self;
+}
+
+- (void) newDisplayMode:(DisplayMode_t) newMode {
+    switch (newMode) {
+        case fullScreen:
+        case alternateScreen:
+        case small:
+            newMode = newMode;
+            return;
+        case medium:    // iPad size, but never for iPhone
+            switch ([UIDevice currentDevice].userInterfaceIdiom) {
+                case UIUserInterfaceIdiomMac:
+                case UIUserInterfaceIdiomPad:
+                    newMode = medium;
+                    break;
+                case UIUserInterfaceIdiomPhone:
+                    newMode = small;
+                    break;
+                case UIUserInterfaceIdiomUnspecified:
+                case UIUserInterfaceIdiomTV:
+                case UIUserInterfaceIdiomCarPlay:
+                    newMode = medium;
+           }
+            break;
+    }
+    displayMode = newMode;
+    NSLog(@"new display mode is %d", displayMode);
 }
 
 - (void) addCameraSource:(Cameras)c label:(NSString *)l {
@@ -221,13 +251,16 @@ enum {
     leftBarButton.enabled = YES;
     self.navigationItem.leftBarButtonItem = leftBarButton;
 
+    // UIColor *retloGreen = [UIColor colorWithRed:0 green:.4 blue:0 alpha:1];
+    UIColor *navyBlue = [UIColor colorWithRed:0 green:0 blue:0.5 alpha:1];
+    
     containerView = [[UIView alloc] init];
-    containerView.backgroundColor = [UIColor colorWithRed:0 green:.4 blue:0 alpha:1];
+    containerView.backgroundColor = navyBlue;
     [self.view addSubview:containerView];
     
     transformView = [[UIImageView alloc] init];
     transformView.userInteractionEnabled = YES;
-    transformView.backgroundColor = [UIColor orangeColor];
+    transformView.backgroundColor = navyBlue;
     [containerView addSubview:transformView];
     scaledTransformImageView = [[UIImageView alloc] init];
     [transformView addSubview:scaledTransformImageView];
@@ -413,7 +446,8 @@ enum {
     // the image size we are processing gives the transformed size.  we need to scale that.
     CGSize sourceSize;
     if (ISCAMERA(currentSource.sourceType)) {
-        sourceSize = [cameraController setupCameraForSize:transformView.frame.size];
+        sourceSize = [cameraController setupCameraForSize:transformView.frame.size
+                                              displayMode:displayMode];
     } else {
         sourceSize = currentSource.imageSize;
     }

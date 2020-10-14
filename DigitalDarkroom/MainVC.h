@@ -10,6 +10,13 @@
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
 
+typedef enum {
+    small,  // mostly for iPhones
+    medium,
+    fullScreen,
+    alternateScreen,
+} DisplayMode_t;
+
 @interface MainVC : UIViewController
     <UITableViewDelegate,
     UITableViewDataSource,

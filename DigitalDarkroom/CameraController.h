@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import "MainVC.h"
 #import "InputSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -27,7 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL) isCameraAvailable:(Cameras) camera;
 - (void) selectCamera:(Cameras) camera;
 - (void) setupSessionForCurrentDeviceOrientation;
-- (CGSize) setupCameraForSize:(CGSize) availableSize;
+- (CGSize) setupCameraForSize:(CGSize) availableSize
+                  displayMode:(DisplayMode_t)displayMode;
 
 - (void) startCamera;
 - (void) stopCamera;
