@@ -335,10 +335,17 @@ enum {
     availableTableVC.title = @"Transforms";
  
     // touching the transformView
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                   initWithTarget:self action:@selector(didTapVideo:)];
-    [transformView addGestureRecognizer:tap];
+    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
+                                   initWithTarget:self action:@selector(didTouchVideo:)];
+    [touch setNumberOfTouchesRequired:1];
+    [transformView addGestureRecognizer:touch];
     
+    // touching the transformView
+    UITapGestureRecognizer *twoTouch= [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didTwoTouchVideo:)];
+    [twoTouch setNumberOfTouchesRequired:2];
+    [transformView addGestureRecognizer:twoTouch];
+
     UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
                                            initWithTarget:self action:@selector(didPressVideo:)];
     press.minimumPressDuration = 1.0;
@@ -627,14 +634,37 @@ enum {
     });
 }
 
-- (IBAction) didTapVideo:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"video tapped");
+- (IBAction) didTouchVideo:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"video touched");
     if ([cameraController isCameraOn]) {
         [cameraController stopCamera];
     } else {
         [cameraController startCamera];
     }
     capturing = !capturing;
+}
+
+- (IBAction) didTwoTouchVideo:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"video two-touched");
+    UIImageWriteToSavedPhotosAlbum(scaledTransformImageView.image, nil, nil, nil);
+    
+    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
+    UIWindow* keyWindow = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
+            if (wScene.activationState == UISceneActivationStateForegroundActive) {
+                keyWindow = wScene.windows.firstObject;
+                break;
+            }
+        }
+    }
+    CGRect rect = [keyWindow bounds];
+    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    [keyWindow.layer renderInContext:context];
+    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
 - (IBAction) didSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
