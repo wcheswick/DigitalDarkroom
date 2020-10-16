@@ -111,8 +111,9 @@ PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) buildTransformList {
-    [self addGeometricTransforms];
     [self addArtTransforms];
+    [self addNewGerardTransforms];
+    [self addGeometricTransforms];
     [self addPointTransforms];
     [self addMiscTransforms];
     // tested:
@@ -429,7 +430,7 @@ int sourceImageIndex, destImageIndex;
 }
 
 - (void) addAreaTransforms {
-    [categoryNames addObject:@"Area transforms"];
+    [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
@@ -861,7 +862,7 @@ channel gl[31] = {0,5,10,15,20,25,Z,Z,Z,Z,    Z,Z,Z,Z,Z,Z,Z,Z,Z,Z,        25,20,
 channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15,20,25,Z,Z,Z,Z,Z,Z};
 
 - (void) addPointTransforms {
-    [categoryNames addObject:@"Point transforms"];
+    [categoryNames addObject:@"Point"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
@@ -1012,6 +1013,20 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
 }
 
+- (void) addNewGerardTransforms {
+    [categoryNames addObject:@"Geometric"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+    
+#ifdef notdef
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                 description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+    }];
+    [transformList addObject:lastTransform];
+#endif
+    
+}
 
 #define CenterX (configuredWidth/2)
 #define CenterY (configuredHeight/2)
@@ -1020,7 +1035,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 #define INRANGE(x,y)    (x >= 0 && x < configuredWidth && y >= 0 && y < configuredHeight)
 
 - (void) addGeometricTransforms {
-    [categoryNames addObject:@"Geometric transforms"];
+    [categoryNames addObject:@"Geometric"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
@@ -1180,7 +1195,7 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
 }
 
 - (void) addMiscTransforms {
-    [categoryNames addObject:@"Misc. transforms"];
+    [categoryNames addObject:@"Misc."];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
@@ -1236,7 +1251,7 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
 
 
 - (void) addArtTransforms {
-    [categoryNames addObject:@"Art-style transforms"];
+    [categoryNames addObject:@"Art-style"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
@@ -1255,6 +1270,33 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
                 channel g = p.g^(p.g*factor >> OPSHIFT);
                 channel b = p.b^(p.b*factor >> OPSHIFT);
                 dest[PI(x,y)] = CRGB(r,g,b);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Mondrian"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        int c=0;
+        int w = rand()%configuredWidth;
+        int h = rand()%configuredHeight;
+        static int oc = 0;
+        
+        while (c == 0 || c == oc) {
+            c   = (rand()%2)?1:0;
+            c  |= (rand()%2)?2:0;
+            c  |= (rand()%2)?4:0;
+        }
+        oc = c;
+        
+        for (int y=0+h; y<0+2*h && y < configuredHeight; y++) {
+            for (int x=0+w; x < 0+2*w && x < configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                if (c&1) p.r = Z;
+                if (c&2) p.g = Z;
+                if (c&4) p.b = Z;
+                dest[PI(x,y)] = p;
             }
         }
     }];
