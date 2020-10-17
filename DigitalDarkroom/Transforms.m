@@ -194,13 +194,13 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                     a = 0;
                 else
                     a = atan2(dy, dx);
-                remapTable[PI(centerX-dx, centerY-dy)] = transform.remapPolarF(r, M_PI + a, transform.p);
+                remapTable[PI(centerX-dx, centerY-dy)] = transform.remapPolarF(r, M_PI + a, transform.value);
                 if (centerY+dy < configuredHeight)
-                    remapTable[PI(centerX-dx, centerY+dy)] = transform.remapPolarF(r, M_PI - a, transform.p);
+                    remapTable[PI(centerX-dx, centerY+dy)] = transform.remapPolarF(r, M_PI - a, transform.value);
                 if (centerX+dx < configuredWidth) {
                     if (centerY+dy < configuredHeight)
-                        remapTable[PI(centerX+dx, centerY+dy)] = transform.remapPolarF(r, a, transform.p);
-                    remapTable[PI(centerX+dx, centerY-dy)] = transform.remapPolarF(r, -a, transform.p);
+                        remapTable[PI(centerX+dx, centerY+dy)] = transform.remapPolarF(r, a, transform.value);
+                    remapTable[PI(centerX+dx, centerY-dy)] = transform.remapPolarF(r, -a, transform.value);
                 }
             }
         }
@@ -223,7 +223,7 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         NSLog(@"transform: %@", transform);
         transform.remapImageF(remapTable,
                               configuredWidth, configuredHeight,
-                              transform.p);
+                              transform.value);
     }
     return remapTable;
 }
@@ -262,19 +262,20 @@ int sourceImageIndex, destImageIndex;
         
         @synchronized (sequence) {
             for (Transform *t in sequence) {
-                if (t.pUpdated) {
+                if (t.newValue) {
                     [t clearRemap];
-                    t.pUpdated = NO;
+                    t.newValue = NO;
                 }
                 [executeList addObject:t];
             }
         }
+        sequenceChanged = NO;
     } else {
         @synchronized (sequence) {
             for (Transform *t in sequence) {
-                if (t.pUpdated) {
+                if (t.newValue) {
                     [t clearRemap];
-                    t.pUpdated = NO;
+                    t.newValue = NO;
                 }
             }
         }
@@ -421,7 +422,7 @@ int sourceImageIndex, destImageIndex;
             }
             break;
         case AreaTrans:
-            transform.areaF(srcBuf, dstBuf, transform.p);
+            transform.areaF(srcBuf, dstBuf, transform.value);
             break;
         case EtcTrans:
             NSLog(@"stub - etctrans");
@@ -647,9 +648,10 @@ int sourceImageIndex, destImageIndex;
             dest[PI(x,y)] = p;
         }
     }];
-    lastTransform.initial = 10;
+    lastTransform.value = 10;
     lastTransform.low = 2;
     lastTransform.high = 20;
+    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
 #ifdef NOTYET
@@ -706,8 +708,9 @@ int sourceImageIndex, destImageIndex;
         }
     }];
     lastTransform.low = 4;
-    lastTransform.initial = 6;
+    lastTransform.value = 6;
     lastTransform.high = 200;
+    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Mirror"
@@ -943,7 +946,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
         }
     }];
-    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
+    lastTransform.low = 1; lastTransform.value = 3; lastTransform.high = 7;
+    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Brighten"
@@ -956,7 +960,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                              p.b+(Z-p.b)/8);
         }
     }];
-    lastTransform.low = 1; lastTransform.initial = 3; lastTransform.high = 7;
+#ifdef notdef
+    lastTransform.low = 1; lastTransform.value = 3; lastTransform.high = 7;
+    lastTransform.hasParameters = YES;
+#endif
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"High contrast"
@@ -1014,7 +1021,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 }
 
 - (void) addNewGerardTransforms {
-    [categoryNames addObject:@"Geometric"];
+    [categoryNames addObject:@"New Gerard"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
@@ -1107,8 +1114,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             return Remap_White;
     }];
     lastTransform.low = 17000;
-    lastTransform.initial = 4*lastTransform.low;
+    lastTransform.value = 4*lastTransform.low;
     lastTransform.high = 10*lastTransform.low;
+    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Ken twist"
@@ -1239,7 +1247,8 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
             }
         }
     }];
-    lastTransform.initial = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
     #ifdef notdef

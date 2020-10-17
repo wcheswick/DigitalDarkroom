@@ -17,23 +17,29 @@
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
-#define MIN_TRANSFORM_LIST_H    100
-#define MIN_ACTIVE_H    100
+#define MIN_TRANSFORM_TABLE_H    140
 #define MAX_TRANSFORM_W 1024
 #define TABLE_ENTRY_H   40
 #define SECTION_HEADER_FONT_SIZE    24
+
+#define MIN_ACTIVE_TABLE_H    140
+#define MIN_ACTIVE_NAME_W   150
+#define ACTIVE_TABLE_ENTRY_H   40
+#define ACTIVE_SLIDER_H     ACTIVE_TABLE_ENTRY_H
 
 #define SOURCE_THUMB_W  80
 #define SOURCE_THUMB_H  80
 #define SOURCE_CELL_W   200
 #define SOURCE_BUTTON_FONT_SIZE 24
 
+#define MIN_SLIDER_W    100
+#define MAX_SLIDER_W    200
+#define SLIDER_H        50
+
 #define SLIDER_LIMIT_W  20
 #define SLIDER_LABEL_W  130
 
 #define SLIDER_AREA_W   200
-
-#define CONTROLS_ENABLED   (controlsView.userInteractionEnabled)
 
 #define STATS_HEADER_INDEX  1   // second section is just stats
 #define TRANSFORM_USES_SLIDER(t) ((t).p != UNINITIALIZED_P)
@@ -64,16 +70,8 @@ enum {
 // screen views in containerView
 @property (nonatomic, strong)   UIView *transformView;           // area reserved for transform display
 @property (nonatomic, strong)   UIImageView *scaledTransformImageView;   // final image, places in transformView
-@property (nonatomic, strong)   UIView *controlsView;            // controls for current execute transform
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
 @property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
-
-// in controlsView
-@property (nonatomic, strong)   UIView *sliderView;
-@property (nonatomic, strong)   UILabel *sliderLabel;
-@property (nonatomic, strong)   UILabel *minimumLabel, *maximumLabel;
-@property (nonatomic, strong)   UISlider *valueSlider;
-@property (assign)              long sliderExecuteIndex;
 
 // in execute view
 @property (nonatomic, strong)   UITableViewController *executeTableVC;
@@ -112,7 +110,6 @@ enum {
 @synthesize containerView;
 @synthesize scaledTransformImageView;
 @synthesize transformView;
-@synthesize controlsView;
 @synthesize executeNavVC;
 @synthesize availableNavVC;
 
@@ -120,12 +117,6 @@ enum {
 @synthesize availableTableVC;
 
 @synthesize currentCameraButton;
-
-@synthesize sliderView;
-@synthesize sliderLabel;
-@synthesize minimumLabel, maximumLabel;
-@synthesize valueSlider;
-@synthesize sliderExecuteIndex;
 
 @synthesize inputSources, currentSource;
 @synthesize nextSource;
@@ -269,28 +260,6 @@ enum {
     [containerView addSubview:transformView];
     scaledTransformImageView = [[UIImageView alloc] init];
     [transformView addSubview:scaledTransformImageView];
-
-    controlsView = [[UIView alloc] init];
-    [containerView addSubview:controlsView];
-    
-    sliderView = [[UIView alloc] init];
-    [controlsView addSubview:sliderView];
-    
-    sliderLabel = [[UILabel alloc] init];
-    minimumLabel = [[UILabel alloc] init];
-    minimumLabel.textAlignment = NSTextAlignmentRight;
-    
-    maximumLabel = [[UILabel alloc] init];
-    minimumLabel.textAlignment = NSTextAlignmentLeft;
-    
-    valueSlider = [[UISlider alloc] init];
-    [valueSlider addTarget:self action:@selector(moveValueSlider:)
-            forControlEvents:UIControlEventValueChanged];
-
-    [sliderView addSubview:sliderLabel];
-    [sliderView addSubview:minimumLabel];
-    [sliderView addSubview:maximumLabel];
-    [sliderView addSubview:valueSlider];
     
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
@@ -309,7 +278,7 @@ enum {
     executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     executeTableVC.tableView.showsVerticalScrollIndicator = YES;
     executeTableVC.title = @"Active";
-    executeTableVC.tableView.rowHeight = TABLE_ENTRY_H;
+    executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
     UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
                                    target:self
@@ -325,7 +294,7 @@ enum {
     
     statsLabel = [[UILabel alloc] init];
     statsLabel.textAlignment = NSTextAlignmentRight;
-    statsLabel.text = @"Dragons";
+    statsLabel.text = @"---";
     statsLabel.font = [UIFont
                        monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
                        weight:UIFontWeightRegular];
@@ -373,8 +342,7 @@ enum {
                                             initWithTarget:self action:@selector(didSwipeVideoRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
     [transformView addGestureRecognizer:swipeRight];
-    
-    [containerView bringSubviewToFront:controlsView];
+
 
     [self adjustButtons];
     self.view.backgroundColor = [UIColor whiteColor];
@@ -434,7 +402,7 @@ enum {
     // if it is narrow, the transform image takes the entire width of the top screen.
     // if not, we have room to put the transform list on the right.
     if (isPortrait) {   // both tables are below, probably
-        f.size.height -= MIN_TRANSFORM_LIST_H;
+        f.size.height -= MIN_TRANSFORM_TABLE_H;
     } else {    // one table is on top of the other on the right
         f.size.width -= TRANSFORM_LIST_W;
         if (f.size.width > MAX_TRANSFORM_W)
@@ -481,15 +449,6 @@ enum {
 #endif
     NSLog(@" transform target size: %.0f x %.0f", scaledRect.size.width, scaledRect.size.height);
     scaledTransformImageView.frame = scaledRect;
-
-    // controlsview rises up from the bottom of the transformed view, when active.  We
-    // need to save screen real estate.
-    f.origin.y = BELOW(scaledTransformImageView.frame);
-    f.size.height = CONTROL_H;  // 0 while disabled, CONTROL_H when enabled
-    controlsView.userInteractionEnabled = NO;   // disabled
-    controlsView.frame = f;
-    controlsView.clipsToBounds = YES;
-    controlsView.backgroundColor = RETLO_GREEN;
     
     if (isPortrait) {
         // if room on the right for the transform list, put it there, else
@@ -522,7 +481,7 @@ enum {
         // else stack both on the right
         
         f.size.height = containerView.frame.size.height - scaledTransformImageView.frame.size.height;
-        if (f.size.height >= MIN_ACTIVE_H) {
+        if (f.size.height >= MIN_ACTIVE_TABLE_H) {
             f.origin.y = BELOW(scaledTransformImageView.frame) + SEP;
             f.origin.x = 0;
             f.size.width = RIGHT(scaledTransformImageView.frame);
@@ -549,26 +508,6 @@ enum {
     f.origin.y = f.size.height;
     f.size.height = executeNavVC.view.frame.size.height - f.origin.y;
     executeTableVC.view.frame = f;
-
-    f = controlsView.frame;
-    f.origin.x = 0;
-    f.origin.y = 0;
-    f.size.width = controlsView.frame.size.width - f.origin.x;
-    sliderView.frame = f;
-    
-    f.origin.x = 0;
-    f.size.width = SLIDER_LABEL_W;
-    sliderLabel.frame = f;
-    
-    f.origin.x = RIGHT(f);
-    f.size.width = SLIDER_LIMIT_W;
-    minimumLabel.frame = f;
-    f.origin.x = sliderView.frame.size.width - f.size.width;
-    maximumLabel.frame = f;
-    
-    f.origin.x = RIGHT(minimumLabel.frame);
-    f.size.width = maximumLabel.frame.origin.x - f.origin.x;
-    valueSlider.frame = f;
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -577,7 +516,6 @@ enum {
     } else {
         [self transformCurrentImage];
     }
-    [self disableControls];
 }
 
 #ifdef notdef
@@ -964,15 +902,16 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (UIView *)tableView:(UITableView *)tableView
 viewForHeaderInSection:(NSInteger)section {
-    CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
     switch (tableView.tag) {
         case ActiveTag: {
+            CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, ACTIVE_TABLE_ENTRY_H);
             UIView *headerView = [[UIView alloc] initWithFrame:f];
             statsLabel.frame = f;
             [headerView addSubview:statsLabel];
             return headerView;
         }
         default: {
+            CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
             UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
             sectionTitle.adjustsFontSizeToFitWidth = YES;
             sectionTitle.textAlignment = NSTextAlignmentLeft;
@@ -1008,8 +947,10 @@ viewForHeaderInSection:(NSInteger)section {
             return 50;
         case ActiveTag:
             switch (section) {
-                case 0: return 0;
-                default: return 30;
+                case 0:
+                    return 0;
+                default:    // second section header has our stats
+                    return 25;
             }
     }
     return 50;
@@ -1102,7 +1043,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             }
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
             Transform *transform = [transformList objectAtIndex:indexPath.row];
-            if (transform.initial != UNINITIALIZED_P)
+            if (transform.hasParameters)
                 cell.textLabel.text = [transform.name stringByAppendingString:@" ~"];
             else
                 cell.textLabel.text = transform.name;
@@ -1120,15 +1061,36 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                               reuseIdentifier:CellIdentifier];
             }
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+            
             Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-            NSString *name;
-            if (transform.initial != UNINITIALIZED_P)
-                name = [transform.name stringByAppendingString:@" ~"];
-            else
-                name = transform.name;
-            cell.textLabel.text = [NSString stringWithFormat:
-                                   @"%2ld: %@", indexPath.row+1, name];
-            cell.layer.borderWidth = 0;
+            CGRect f = cell.contentView.frame;
+            f.size.width = MIN_ACTIVE_NAME_W;
+            UILabel *label = [[UILabel alloc] initWithFrame:f];
+            label.numberOfLines = 0;
+            
+            if (transform.hasParameters) {
+                label.text = [transform.name stringByAppendingString:@" ~"];
+                f.origin.x = RIGHT(f) + SEP;
+                f.size.width = cell.contentView.frame.size.width - f.origin.x;
+                if (f.size.width > MAX_SLIDER_W)
+                    f.size.width = MAX_SLIDER_W;
+                
+                UISlider *slider = [[UISlider alloc] initWithFrame:f];
+                slider.minimumValue = transform.low;
+                slider.maximumValue = transform.high;
+                slider.value = transform.value;
+                slider.continuous = YES;
+                slider.tag = indexPath.row;
+                [slider addTarget:self
+                           action:@selector(moveSlider:)
+                 forControlEvents:UIControlEventValueChanged];
+                [cell.contentView addSubview:slider];
+            } else {
+                label.text = transform.name;
+            }
+            [cell.contentView addSubview:label];
             break;
         }
     }
@@ -1150,7 +1112,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             Transform *transform = [transformList objectAtIndex:indexPath.row];
             Transform *thisTransform = [transform copy];
             assert(thisTransform.remapTable == NULL);
-            thisTransform.p = thisTransform.initial;
             @synchronized (transforms.sequence) {
                 [transforms.sequence addObject:thisTransform];
                 transforms.sequenceChanged = YES;
@@ -1161,12 +1122,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             break;
         }
         case ActiveTag: {
-            // does this execute entry have controls?  Were controls running before?
-            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-            if (TRANSFORM_USES_SLIDER(transform)) {
-                [self activateControlsFor: indexPath.row];
-            } else if (CONTROLS_ENABLED)
-                [self disableControls];
             break;
         }
     }
@@ -1181,8 +1136,6 @@ didDeselectRowAtIndexPath:(NSIndexPath *)indexPath {
 #endif
 
 - (IBAction) doRemoveLastTransform {
-    if (CONTROLS_ENABLED && sliderExecuteIndex == transforms.sequence.count - 1)
-        [self disableControls];
     @synchronized (transforms.sequence) {
         [transforms.sequence removeLastObject];
         transforms.sequenceChanged = YES;
@@ -1193,7 +1146,6 @@ didDeselectRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
-    [self disableControls];
     @synchronized (transforms.sequence) {
         [transforms.sequence removeAllObjects];
         transforms.sequenceChanged = YES;
@@ -1210,8 +1162,6 @@ commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (editingStyle) {
         case UITableViewCellEditingStyleDelete: {
-            if (CONTROLS_ENABLED && sliderExecuteIndex == indexPath.row)
-                [self disableControls];
             @synchronized (transforms.sequence) {
                 [transforms.sequence removeObjectAtIndex:indexPath.row];
                 transforms.sequenceChanged = YES;
@@ -1241,8 +1191,6 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         transforms.sequenceChanged = YES;
         [self transformCurrentImage];
     }
-    if (CONTROLS_ENABLED && sliderExecuteIndex == fromIndexPath.row)
-        [self activateControlsFor:toIndexPath.row];
    [tableView reloadData];
 }
 
@@ -1293,6 +1241,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 
 }
 
+#ifdef notdef
 #define CONTROL_ANIMATION_TIME  0.4
 
 - (void) disableControls {
@@ -1351,12 +1300,15 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     maximumLabel.text = [NSString stringWithFormat:@"%d", (int)valueSlider.maximumValue];
     [maximumLabel setNeedsDisplay];
 }
+#endif
 
-- (IBAction) moveValueSlider:(UISlider *)slider {
+- (IBAction) moveSlider:(UISlider *)slider {
+    long executeIndex = slider.tag;
+    NSLog(@"  new value is %.0f", slider.value);
     @synchronized (transforms.sequence) {
-        Transform *transform = [transforms.sequence objectAtIndex:sliderExecuteIndex];
-        transform.p = slider.value;
-        transform.pUpdated = YES;
+        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
+        transform.value = slider.value;
+        transform.newValue = YES;
     }
     [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }

@@ -26,11 +26,6 @@ typedef PixelIndex_t (^ __unsafe_unretained remapPolarFunction_t)(float r, float
 typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable,
                                                                          size_t w, size_t h, int p);
 
-// typedef int transform_t(void *param, int low, int high);
-//typedef void *b_init_func();
-
-#define UNINITIALIZED_P  (-1)
-
 @interface Transform : NSObject {
     NSString *name, *description;
     transform_t type;
@@ -38,9 +33,9 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
     areaFunction_t areaF;
     remapPolarFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
-    int low, initial, high;   // parameter setting and range for transform
-    int p;              // parameter
-    BOOL pUpdated;      // if it has changed
+    int low, value, high;   // parameter setting and range for transform
+    BOOL hasParameters;
+    BOOL newValue;
     PixelIndex_t * _Nullable remapTable;
     NSTimeInterval elapsedProcessingTime;
 }
@@ -51,9 +46,9 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
 @property (assign)              remapPolarFunction_t remapPolarF;
 @property (copy)                remapImageFunction_t remapImageF;
 @property (assign)              transform_t type;
-@property (assign)              int low, initial, high;
-@property (assign)              int p;
-@property (assign)              BOOL pUpdated;
+@property (assign)              int low, value, high;
+@property (assign)              BOOL hasParameters;
+@property (assign)              BOOL newValue;
 @property (assign)              PixelIndex_t * _Nullable remapTable;
 @property (assign)              NSTimeInterval elapsedProcessingTime;
 

@@ -16,8 +16,9 @@
 @synthesize remapImageF;
 @synthesize remapPolarF;
 @synthesize type;
-@synthesize low, initial, high;
-@synthesize p, pUpdated;
+@synthesize low, value, high;
+@synthesize newValue;
+@synthesize hasParameters;
 @synthesize remapTable;
 @synthesize elapsedProcessingTime;
 
@@ -30,9 +31,8 @@
         remapImageF = nil;
         remapPolarF = nil;
         low = high = 0;
-        initial = UNINITIALIZED_P;
-        p = UNINITIALIZED_P;
-        pUpdated = NO;
+        newValue = NO;
+        hasParameters = NO;
         remapTable = NULL;
         elapsedProcessingTime = 0;
     }
@@ -101,9 +101,9 @@
     copy.remapPolarF = remapPolarF;
     copy.low = low;
     copy.high = high;
-    copy.initial = initial;
-    copy.p = p;
-    copy.pUpdated = NO;
+    copy.value = value;
+    copy.newValue = newValue;
+    copy.hasParameters = hasParameters;
     copy.remapTable = NULL;
     return copy;
 }
