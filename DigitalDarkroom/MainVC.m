@@ -271,7 +271,7 @@ enum {
     [transformView addSubview:scaledTransformImageView];
 
     controlsView = [[UIView alloc] init];
-    [scaledTransformImageView addSubview:controlsView];
+    [containerView addSubview:controlsView];
     
     sliderView = [[UIView alloc] init];
     [controlsView addSubview:sliderView];
@@ -373,6 +373,8 @@ enum {
                                             initWithTarget:self action:@selector(didSwipeVideoRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
     [transformView addGestureRecognizer:swipeRight];
+    
+    [containerView bringSubviewToFront:controlsView];
 
     [self adjustButtons];
     self.view.backgroundColor = [UIColor whiteColor];
@@ -482,11 +484,11 @@ enum {
 
     // controlsview rises up from the bottom of the transformed view, when active.  We
     // need to save screen real estate.
-    f = scaledTransformImageView.frame;  // control goes right under the transformed view
-    f.origin.y = f.size.height; // off the bottom of the superview
-    f.size.height = CONTROL_H;  // while disabled, CONTROL_H when enabled
+    f.origin.y = BELOW(scaledTransformImageView.frame);
+    f.size.height = CONTROL_H;  // 0 while disabled, CONTROL_H when enabled
     controlsView.userInteractionEnabled = NO;   // disabled
     controlsView.frame = f;
+    controlsView.clipsToBounds = YES;
     controlsView.backgroundColor = RETLO_GREEN;
     
     if (isPortrait) {
@@ -575,6 +577,7 @@ enum {
     } else {
         [self transformCurrentImage];
     }
+    [self disableControls];
 }
 
 #ifdef notdef
@@ -1300,26 +1303,23 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
                         options:UIViewAnimationOptionCurveLinear
                      animations:^{
         CGRect f = self->controlsView.frame;
-        f.origin.y = self->scaledTransformImageView.frame.size.height;    // off the bottom of the frame
+        f.size.height = 0;    // off the bottom of the frame
         self->controlsView.frame = f;
     }
                      completion:^(BOOL finished) {
         self->controlsView.userInteractionEnabled = NO;
-        self->controlsView.tag = -1;
-        [self->controlsView removeFromSuperview];
     }
      ];
 }
 
 - (void) activateControlsFor:(long)executeTableIndex {
     if (!CONTROLS_ENABLED) {
-        [scaledTransformImageView addSubview:controlsView];
         [UIView animateWithDuration:CONTROL_ANIMATION_TIME
                               delay:0.0
                             options:UIViewAnimationOptionCurveLinear
                          animations:^  {
             CGRect f = self->controlsView.frame;
-            f.origin.y = self->scaledTransformImageView.frame.size.height - f.size.height;
+            f.size.height = CONTROL_H;
             self->controlsView.frame = f;
         } completion:^(BOOL finished) {
             self->controlsView.userInteractionEnabled = YES;
