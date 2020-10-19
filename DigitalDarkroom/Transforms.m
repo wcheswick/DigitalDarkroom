@@ -31,7 +31,7 @@
 #define Yellow          SETRGB(Z,Z,0)
 #define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
 
-#define LUM(p)  ((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
+#define LUM(p)  (channel)((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
 #define CRGB(r,g,b)     SETRGB(CLIP(r), CLIP(g), CLIP(b))
 
@@ -430,12 +430,130 @@ int sourceImageIndex, destImageIndex;
     }
 }
 
+/* Monochrome floyd-steinberg */
+
+static void
+fs(int depth, channel buf[configuredWidth][configuredHeight]) {
+    int x, y, i;
+    int maxp = depth - 1;
+
+    for(y=0; y<configuredHeight; y++) {
+        for(x=0; x<configuredWidth; x++) {
+            int temp;
+            int c = 0;
+            channel e = buf[x][y];
+
+            switch (depth) {
+            case 1:
+                    if (e > Z/2) {
+                    i=0;
+                    c = Z;
+                    e -= Z;
+                } else {
+                    i = 1;
+                    c = 0;
+                }
+                break;
+            case 4:    i = (depth*e)/Z;
+                if (i<0)
+                    i=0;
+                else if (i>maxp)
+                    i=maxp;
+                e -= (i*Z)/3;
+                i = maxp-i;
+                c = Z - i*Z/(depth-1);
+                break;
+            }
+            buf[x][y] = c;
+            temp = 3*e/8;
+            if (y < configuredHeight-1) {
+                buf[x][y+1] += temp;
+                if (x < configuredWidth-1)
+                    buf[x+1][y+1] += e-2*temp;
+            }
+            if (x < configuredWidth-1)
+                buf[x+1][y] += temp;
+        }
+    }
+}
+
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+    
+    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
+                                 description: @"oil paint"
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
+        channel b[configuredWidth][configuredHeight];
+        
+        int depth = (param == 1) ? 1 : 4;
+        
+        for (int y=0; y<configuredHeight; y++)
+           for (int x=0; x<configuredWidth; x++)
+                b[x][y] = LUM(src[PI(x,y)]);
+        
+        fs(depth, b);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = p.g = p.b = b[x][y];
+                dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    lastTransform.value = 1;
+    lastTransform.low = 1;
+    lastTransform.high = 2;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"color Floyd Steinberg"
+                                 description: @"oil paint"
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
+        for (int y=1; y<configuredHeight-1; y++) {
+            for (int x=1; x<configuredWidth-1; x++) {
+                channel aa, bb, s;
+                Pixel p = {0,0,0,Z};
+                aa = src[PI(x-1,y-1)].r + 2*src[PI(x,y-1)].r + src[PI(x+1,y-1)].r -
+                     src[PI(x-1,y+1)].r - 2*src[PI(x,y+1)].r - src[PI(x+1,y+1)].r;
+                bb = src[PI(x-1,y-1)].r + 2*src[PI(x-1,y)].r + src[PI(x-1,y+1)].r -
+                     src[PI(x+1,y-1)].r - 2*src[PI(x+1,y)].r - src[PI(x+1,y+1)].r;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.r = Z;
+                else
+                    p.r = s;
 
-    /* timings on digitalis:
+                aa = src[PI(x-1,y-1)].g + 2*src[PI(x,y-1)].g + src[PI(x+1,y-1)].g -
+                     src[PI(x-1,y+1)].g - 2*src[PI(x,y+1)].g - src[PI(x+1,y+1)].g;
+                bb = src[PI(x-1,y-1)].g + 2*src[PI(x-1,y)].g + src[PI(x-1,y+1)].g -
+                     src[PI(x+1,y-1)].g - 2*src[PI(x+1,y)].g - src[PI(x+1,y+1)].g;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.g = Z;
+                else
+                    p.g = s;
+
+                aa = src[PI(x-1,y-1)].b + 2*src[PI(x,y-1)].b + src[PI(x+1,y-1)].b -
+                     src[PI(x-1,y+1)].b - 2*src[PI(x,y+1)].b - src[PI(x+1,y+1)].b;
+                bb = src[PI(x-1,y-1)].b + 2*src[PI(x-1,y)].b + src[PI(x-1,y+1)].b -
+                     src[PI(x+1,y-1)].b - 2*src[PI(x+1,y)].b - src[PI(x+1,y+1)].b;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.b = Z;
+                else
+                    p.b = s;
+                p.r = Z - p.r;
+                p.g = Z - p.g;
+                p.b = Z - p.b;
+                dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    /* timings for oil on digitalis:
      *
      *            Z    param    f/s
      * original oil        31    3    ~7.0
@@ -457,7 +575,6 @@ int sourceImageIndex, destImageIndex;
 #define    BUCKET(x)    ((x)>>3)
 #define UNBUCKET(x)    ((x)<<3)
 
-    // area transform
     lastTransform = [Transform areaTransform: @"Oil paint"
                                   description: @"oil paint"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
@@ -1231,6 +1348,34 @@ irand(int i) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform areaTransform: @"Edges"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        Pixel p = {0,0,0,Z};
+
+        for (int y=0; y<configuredHeight; y++) {
+            int x;
+            for (x=0; x<configuredWidth-2; x++) {
+                Pixel pin;
+                int r, g, b;
+                long xin = (x+2) >= configuredWidth ? configuredWidth - 1 : x+2;
+                long yin = (y+2) >= configuredHeight ? configuredHeight - 1 : y+2;
+                pin = src[PI(xin,yin)];
+                r = src[PI(x,y)].r + Z/2 - pin.r;
+                g = src[PI(x,y)].g + Z/2 - pin.g;
+                b = src[PI(x,y)].b + Z/2 - pin.b;
+                p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
+                dest[PI(x,y)] = p;
+            }
+            dest[PI(x-3,y)] = Grey;
+            dest[PI(x-2,y)] = Grey;
+            dest[PI(x-1,y)] = Grey;
+            dest[PI(x  ,y)] = Grey;
+            dest[PI(x+1,y)] = Grey;
+        }
+    }];
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Cone projection"
                                  description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
@@ -1444,6 +1589,16 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
 }
 
 
+static Pixel
+ave(Pixel p1, Pixel p2) {
+    Pixel p;
+    p.r = (p1.r + p2.r + 1)/2;
+    p.g = (p1.g + p2.g + 1)/2;
+    p.b = (p1.b + p2.b + 1)/2;
+    p.a = Z;
+    return p;
+}
+
 - (void) addArtTransforms {
     [categoryNames addObject:@"Art-style"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
@@ -1493,6 +1648,67 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
                 dest[PI(x,y)] = p;
             }
         }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Monet (broken)"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        channel dlut[Z+1], olut[Z+1];
+        int x, y;
+        int i, j=0, len=5, k;
+        int prob = Z/4;
+
+        for (i=0; i<=Z; i++) {
+            dlut[i] = irand(Z+1) <= prob;
+            olut[i] = irand(Z+1);
+        }
+
+        i = 0;
+        memset(dest, 0, configuredPixelsInImage*sizeof(Pixel));
+        for (y=1; y<configuredHeight-1; y++) {
+            for (x=0; x<configuredWidth-len; x++) {
+                if (dlut[i] && LUM(src[PI(x,y-1)]) < prob) {
+                    for (k=0; k<len; k++) {
+                        dest[PI(x+k,y-1)] = src[PI(x+k,y-1)] = ave(src[PI(x+k,y-1)], src[PI(x,y-1)]);
+                        dest[PI(x+k,y  )] = src[PI(x+k,y  )] = ave(src[PI(x+k,y  )], src[PI(x,y  )]);
+                        dest[PI(x+k,y+1)] = src[PI(x+k,y+1)] = ave(src[PI(x+k,y+1)], src[PI(x,y+1)]);
+                    }
+                }
+                if (++i > Z) {
+                    i = olut[j];
+                    j = (j+1)%(Z+1);
+                }
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Cartoon"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        int ave_r=0, ave_g=0, ave_b=0;
+
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                ave_r += p.r;
+                ave_g += p.g;
+                ave_b += p.b;
+            }
+
+        ave_r /= configuredWidth*configuredHeight;
+        ave_g /= configuredWidth*configuredHeight;
+        ave_b /= configuredWidth*configuredHeight;
+
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (src[PI(x,y)].r >= ave_r) ? Z : 0;
+                p.g = (src[PI(x,y)].g >= ave_g) ? Z : 0;
+                p.b = (src[PI(x,y)].b >= ave_b) ? Z : 0;
+                dest[PI(x,y)] = p;
+            }
     }];
     [transformList addObject:lastTransform];
 

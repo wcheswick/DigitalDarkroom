@@ -679,46 +679,6 @@ fs(int depth, int buf[MAX_Y][MAX_X]) {
 }
 
 int
-do_fs1(void *param, image in, image out) {
-	int x, y;
-	int b[MAX_Y][MAX_X];
-
-	for (y=0; y<MAX_Y; y++)
-		for (x=0; x<MAX_X; x++)
-			b[y][x] = LUM(in[y][x]);
-
-	fs(1, b);
-	for (y=0; y<MAX_Y; y++) {
-		for (x=0; x<MAX_X; x++) {
-			Pixel p = {0,0,0,Z};
-			p.r = p.g = p.b = b[y][x];
-			out[y][x] = p;
-		}
-	}
-	return 1;
-}
-
-int
-do_fs2(void *param, image in, image out) {
-	int x, y;
-	int b[MAX_Y][MAX_X];
-
-	for (y=0; y<MAX_Y; y++)
-		for (x=0; x<MAX_X; x++)
-			b[y][x] = LUM(in[y][x]);
-
-	fs(4, b);
-	for (y=0; y<MAX_Y; y++) {
-		for (x=0; x<MAX_X; x++) {
-			Pixel p = {0,0,0,Z};
-			p.r = p.g = p.b = b[y][x];
-			out[y][x] = p;
-		}
-	}
-	return 1;
-}
-
-int
 do_cfs(void *param, image in, image out) {
 	int x, y;
 	int r[MAX_Y][MAX_X], g[MAX_Y][MAX_X], b[MAX_Y][MAX_X];
@@ -739,65 +699,6 @@ do_cfs(void *param, image in, image out) {
 			p.r = r[y][x];
 			p.g = g[y][x];
 			p.b = b[y][x];
-			out[y][x] = p;
-		}
-	}
-	return 1;
-}
-
-#define R(x) x.r
-#define G(x) x.g
-#define B(x) x.b
-
-int
-do_sobel(void *param, image in, image out) {
-	int x, y;
-	
-	for (y=1; y<MAX_Y-1; y++) {
-		for (x=1; x<MAX_X-1; x++) {
-			int aa, bb, s;
-			Pixel p = {0,0,0,Z};
-			aa = R(in[y-1][x-1])+R(in[y-1][x])*2+
-				R(in[y-1][x+1])-
-			    R(in[y+1][x-1])-R(in[y+1][x])*2-
-				R(in[y+1][x+1]);
-			bb = R(in[y-1][x-1])+R(in[y][x-1])*2+
-				R(in[y+1][x-1])-
-			    R(in[y-1][x+1])-R(in[y][x+1])*2-
-				R(in[y+1][x+1]);
-			s = sqrt(aa*aa + bb*bb);
-			if (s > Z)
-				p.r = Z;
-			else
-				p.r = s;
-
-			aa = G(in[y-1][x-1])+G(in[y-1][x])*2+
-				G(in[y-1][x+1])-
-			    G(in[y+1][x-1])-G(in[y+1][x])*2-
-				G(in[y+1][x+1]);
-			bb = G(in[y-1][x-1])+G(in[y][x-1])*2+
-				G(in[y+1][x-1])-
-			    G(in[y-1][x+1])-G(in[y][x+1])*2-
-				G(in[y+1][x+1]);
-			s = sqrt(aa*aa + bb*bb);
-			if (s > Z)
-				p.g = Z;
-			else
-				p.g = s;
-
-			aa = B(in[y-1][x-1])+B(in[y-1][x])*2+
-				B(in[y-1][x+1])-
-			    B(in[y+1][x-1])-B(in[y+1][x])*2-
-				B(in[y+1][x+1]);
-			bb = B(in[y-1][x-1])+B(in[y][x-1])*2+
-				R(in[y+1][x-1])-
-			    B(in[y-1][x+1])-B(in[y][x+1])*2-
-				B(in[y+1][x+1]);
-			s = sqrt(aa*aa + bb*bb);
-			if (s > Z)
-				p.b = Z;
-			else
-				p.b = s;
 			out[y][x] = p;
 		}
 	}
@@ -858,60 +759,6 @@ do_neg_sobel(void *param, image in, image out) {
 			p.b = Z - p.b;
 			out[y][x] = p;
 		}
-	}
-	return 1;
-}
-
-int
-cartoon(void *param, image in, image out) {
-	int x, y;
-	int ave_r=0, ave_g=0, ave_b=0;
-
-	for (y=0; y<MAX_Y; y++)
-		for (x=0; x<MAX_X; x++) {
-			ave_r += in[y][x].r;
-			ave_g += in[y][x].g;
-			ave_b += in[y][x].b;
-		}
-
-	ave_r /= MAX_X*MAX_Y;
-	ave_g /= MAX_X*MAX_Y;
-	ave_b /= MAX_X*MAX_Y;
-
-	for (y=0; y<MAX_Y; y++)
-		for (x=0; x<MAX_X; x++) {
-			Pixel p = {0,0,0,Z};
-			p.r = (in[y][x].r >= ave_r) ? Z : 0;
-			p.g = (in[y][x].g >= ave_g) ? Z : 0;
-			p.b = (in[y][x].b >= ave_b) ? Z : 0;
-			out[y][x] = p;
-		}
-	return 1;
-}
-
-int
-do_edge(void *param, image in, image out) {
-	int x,y;
-	Pixel p = {0,0,0,Z};
-	
-	for (y=0; y<MAX_Y; y++) {
-		for (x=0; x<MAX_X-2; x++) {
-			Pixel pin;
-			int r, g, b;
-			int xin = (x+2) >= MAX_X ? MAX_X - 1 : x+2;
-			int yin = (y+2) >= MAX_Y ? MAX_Y - 1 : y+2;
-			pin = in[yin][xin];
-			r = in[y][x].r + Z/2 - pin.r;
-			g = in[y][x].g + Z/2 - pin.g;
-			b = in[y][x].b + Z/2 - pin.b;
-			p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
-			out[y][x] = p;
-		}
-		out[y][x-3] = Grey;
-		out[y][x-2] = Grey;
-		out[y][x-1] = Grey;
-		out[y][x] = Grey;
-		out[y][x+1] = Grey;
 	}
 	return 1;
 }
