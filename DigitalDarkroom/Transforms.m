@@ -433,7 +433,7 @@ int sourceImageIndex, destImageIndex;
 /* Monochrome floyd-steinberg */
 
 static void
-fs(int depth, channel buf[configuredWidth][configuredHeight]) {
+fs(int depth, int buf[configuredWidth][configuredHeight]) {
     int x, y, i;
     int maxp = depth - 1;
 
@@ -482,10 +482,11 @@ fs(int depth, channel buf[configuredWidth][configuredHeight]) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+#ifdef OLD
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        channel b[configuredWidth][configuredHeight];
+        int b[configuredWidth][configuredHeight];
         
         int depth = (param == 1) ? 1 : 4;
         
@@ -507,7 +508,36 @@ fs(int depth, channel buf[configuredWidth][configuredHeight]) {
     lastTransform.high = 2;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+#endif
     
+    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
+                                 description: @"oil paint"
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
+        channel lum[configuredWidth][configuredHeight];
+        for (int y=1; y<configuredHeight-1; y++)
+            for (int x=1; x<configuredWidth-1; x++)
+                lum[x][y] = LUM(src[PI(x,y)]);
+
+        for (int y=1; y<configuredHeight-1; y++) {
+            for (int x=1; x<configuredWidth-1; x++) {
+                channel aa, bb, s;
+                aa = lum[x-1][y-1] + 2*lum[x][y-1] + lum[x+1][y-1] -
+                     lum[x-1][y+1] - 2*lum[x][y+1] - lum[x+1][y+1];
+                bb = lum[x-1][y-1] + 2*lum[x-1][y] + lum[x-1][y+1] -
+                     lum[x+1][y-1] - 2*lum[x+1][y] - lum[x+1][y+1];
+
+                channel c;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    c = Z;
+                else
+                    c = s;
+                dest[PI(x,y)] = SETRGB(c,c,c);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform areaTransform: @"color Floyd Steinberg"
                                  description: @"oil paint"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
