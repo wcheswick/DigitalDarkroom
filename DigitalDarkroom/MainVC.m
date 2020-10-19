@@ -55,11 +55,11 @@ char * _NonnullcategoryLabels[] = {
     "Other",
 };
 
-enum {
-    SourceSelectTag,
-    TransformTag,
-    ActiveTag,
-} tableTags;
+typedef enum {
+    SourceSelectTable,
+    TransformTable,
+    ActiveTable,
+} TableTags;
 
 
 @interface MainVC ()
@@ -97,11 +97,14 @@ enum {
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 
 @property (nonatomic, strong)   UIBarButtonItem *trashButton;
+@property (nonatomic, strong)   UIBarButtonItem *saveButton;
 
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
 @property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              DisplayMode_t displayMode;
+
+@property (nonatomic, strong)   NSMutableDictionary *rowCollapsed;
 
 @end
 
@@ -128,15 +131,22 @@ enum {
 @synthesize busy;
 @synthesize statsTimer, statsLabel, lastTime;
 @synthesize transforms;
-@synthesize trashButton;
+@synthesize trashButton, saveButton;
 @synthesize capturing;
 @synthesize imageOrientation;
 @synthesize displayMode;
+
+@synthesize rowCollapsed;
 
 - (id) init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
+        rowCollapsed = [[NSMutableDictionary alloc]
+                        initWithCapacity:transforms.categoryNames.count];
+        for (NSString *key in transforms.categoryNames) {
+            [rowCollapsed setObject:@YES forKey:key];
+        }
         transformTotalElapsed = 0;
         transformCount = 0;
         busy = NO;
@@ -247,6 +257,12 @@ enum {
                                       target:self action:@selector(doSelectSource:)];
     leftBarButton.enabled = YES;
     self.navigationItem.leftBarButtonItem = leftBarButton;
+    
+    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
+                                       initWithBarButtonSystemItem:UIBarButtonSystemItemSave
+                                       target:self
+                                       action:@selector(doSave:)];
+    self.navigationItem.rightBarButtonItem = rightBarButton;
 
     UIColor *navyBlue = NAVY_BLUE;
     
@@ -272,7 +288,7 @@ enum {
     
     // execute has a nav bar and a table.  There is an extra entry in the table at
     // the end, with performance stats.
-    executeTableVC.tableView.tag = ActiveTag;
+    executeTableVC.tableView.tag = ActiveTable;
     executeTableVC.tableView.delegate = self;
     executeTableVC.tableView.dataSource = self;
     executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -299,7 +315,7 @@ enum {
                        monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
                        weight:UIFontWeightRegular];
     
-    availableTableVC.tableView.tag = TransformTag;
+    availableTableVC.tableView.tag = TransformTable;
     availableTableVC.tableView.rowHeight = TABLE_ENTRY_H;
     availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     availableTableVC.tableView.delegate = self;
@@ -312,12 +328,6 @@ enum {
                                    initWithTarget:self action:@selector(didTouchVideo:)];
     [touch setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:touch];
-    
-    // touching the transformView
-    UITapGestureRecognizer *twoTouch= [[UITapGestureRecognizer alloc]
-                                     initWithTarget:self action:@selector(didTwoTouchVideo:)];
-    [twoTouch setNumberOfTouchesRequired:2];
-    [transformView addGestureRecognizer:twoTouch];
 
     UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
                                            initWithTarget:self action:@selector(didPressVideo:)];
@@ -592,8 +602,8 @@ enum {
     capturing = !capturing;
 }
 
-- (IBAction) didTwoTouchVideo:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"video two-touched");
+- (IBAction) doSave:(UIBarButtonItem *)barButton {
+    NSLog(@"saving");
     UIImageWriteToSavedPhotosAlbum(scaledTransformImageView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
@@ -872,11 +882,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     switch (tableView.tag) {
-        case TransformTag:
+        case TransformTable:
             return transforms.categoryNames.count;
-        case SourceSelectTag:
+        case SourceSelectTable:
             return 1;
-        case ActiveTag:
+        case ActiveTable:
             return 2;   // entries, plus a header for second section for stats
     }
     return 1;
@@ -885,55 +895,104 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 - (NSInteger)tableView:(UITableView *)tableView
  numberOfRowsInSection:(NSInteger)section {
     switch (tableView.tag) {
-        case SourceSelectTag:
+        case SourceSelectTable:
             return inputSources.count;
-        case TransformTag: {
-            NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-            return transformList.count;
-        }
-        case ActiveTag:
+        case TransformTable: {
+            NSString *name = [transforms.categoryNames objectAtIndex:section];
+            if ([[rowCollapsed objectForKey:name] boolValue]) {
+                return 0;
+            } else {
+                    NSArray *transformList = [transforms.categoryList objectAtIndex:section];
+                    return transformList.count;
+                }
+            }
+        case ActiveTable:
             if (section == STATS_HEADER_INDEX)
                 return 0;
             else
                 return transforms.sequence.count;
+        }
+            return 1;
     }
-    return 1;
-}
 
 - (UIView *)tableView:(UITableView *)tableView
 viewForHeaderInSection:(NSInteger)section {
-    switch (tableView.tag) {
-        case ActiveTag: {
-            CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, ACTIVE_TABLE_ENTRY_H);
-            UIView *headerView = [[UIView alloc] initWithFrame:f];
-            statsLabel.frame = f;
-            [headerView addSubview:statsLabel];
-            return headerView;
-        }
-        default: {
-            CGRect f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
+    CGRect f;
+    TableTags tableType = (TableTags) tableView.tag;
+    switch (tableType) {
+        case SourceSelectTable: {
+            f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
             UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
             sectionTitle.adjustsFontSizeToFitWidth = YES;
             sectionTitle.textAlignment = NSTextAlignmentLeft;
             sectionTitle.font = [UIFont
                                  systemFontOfSize:SECTION_HEADER_FONT_SIZE
                                  weight:UIFontWeightMedium];
-            if (tableView.tag == SourceSelectTag)
-                sectionTitle.text = @" Sources";
-            else
-                sectionTitle.text = [@" " stringByAppendingString:[transforms.categoryNames objectAtIndex:section]];
+            sectionTitle.text = [@" " stringByAppendingString:[transforms.categoryNames objectAtIndex:section]];
             return sectionTitle;
         }
+        case TransformTable: {
+            f = CGRectMake(SEP, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
+            UIView *sectionHeaderView = [[UIView alloc] initWithFrame:f];
+            f.origin = CGPointMake(0, 0);
+            f.size.width -= 50;
+            UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
+            sectionTitle.adjustsFontSizeToFitWidth = YES;
+            sectionTitle.textAlignment = NSTextAlignmentLeft;
+            sectionTitle.font = [UIFont
+                                 systemFontOfSize:SECTION_HEADER_FONT_SIZE
+                                 weight:UIFontWeightMedium];
+            NSString *name = [transforms.categoryNames objectAtIndex:section];
+            sectionTitle.text = [@" " stringByAppendingString:name];
+            [sectionHeaderView addSubview:sectionTitle];
+            
+            f.origin.x = RIGHT(f);
+            f.size.width = sectionHeaderView.frame.size.width - f.origin.x;
+            UILabel *rowStatus = [[UILabel alloc] initWithFrame:f];
+            rowStatus.textAlignment = NSTextAlignmentRight;
+            if ([[rowCollapsed objectForKey:name] boolValue]) {
+                NSArray *transformList = [transforms.categoryList objectAtIndex:section];
+                rowStatus.text = [NSString stringWithFormat:@"(%lu)  ▶", (unsigned long)transformList.count];
+            } else
+                rowStatus.text = [NSString stringWithFormat:@"▼"];
+            sectionHeaderView.tag = section;    // for the tap processing
+            [sectionHeaderView addSubview:rowStatus];
+            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+                                           initWithTarget:self
+                                           action:@selector(tapSectionHeader:)];
+            [sectionHeaderView addGestureRecognizer:tap];
+            return sectionHeaderView;
+        }
+        case ActiveTable: {
+            f = CGRectMake(0, 0, tableView.frame.size.width - SEP, ACTIVE_TABLE_ENTRY_H);
+            UIView *headerView = [[UIView alloc] initWithFrame:f];
+            statsLabel.frame = f;
+            [headerView addSubview:statsLabel];
+            return headerView;
+        }
     }
+}
+
+- (IBAction) tapSectionHeader:(UITapGestureRecognizer *)tapGesture {
+    size_t section = tapGesture.view.tag;
+    NSString *name = [transforms.categoryNames objectAtIndex:section];
+    BOOL newSectionHidden = ![[rowCollapsed objectForKey:name] boolValue];
+    [rowCollapsed setObject:newSectionHidden ? @YES : @NO forKey:name];
+    
+    NSIndexSet *indexSet = [NSIndexSet indexSetWithIndex:section];
+    [availableTableVC.tableView beginUpdates];
+    [availableTableVC.tableView reloadSections:indexSet
+                              withRowAnimation:UITableViewRowAnimationTop];
+    [availableTableVC.tableView endUpdates];
 }
 
 #ifdef notdef
 -(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(nonnull NSIndexPath *)indexPath {
     switch (tableView.tag) {
-        case ActiveTag:
-        case TransformTag:
+        case ActiveTable:
+        case TransformTable:
             return TABLE_ENTRY_H;
-        case SourceSelectTag:
+        case SourceSelectTable:
             return SOURCE_THUMB_H;
     }
     return 30;
@@ -942,10 +1001,10 @@ viewForHeaderInSection:(NSInteger)section {
 
 -(CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
     switch (tableView.tag) {
-        case SourceSelectTag:
-        case TransformTag:
+        case SourceSelectTable:
+        case TransformTable:
             return 50;
-        case ActiveTag:
+        case ActiveTable:
             switch (section) {
                 case 0:
                     return 0;
@@ -969,7 +1028,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell;
     switch (tableView.tag) {
-        case SourceSelectTag: {
+        case SourceSelectTable: {
             NSString *CellIdentifier = @"SourceCell";
             cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
             if (cell == nil) {
@@ -1034,7 +1093,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             }
             break;
         }
-        case TransformTag: {   // Selection table display table list
+        case TransformTable: {   // Selection table display table list
             NSString *CellIdentifier = @"SelectionCell";
             cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
             if (cell == nil) {
@@ -1054,7 +1113,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell.selected = NO;
             break;
         }
-        case ActiveTag: {
+        case ActiveTable: {
             NSString *CellIdentifier = @"ListingCell";
             cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
             if (cell == nil) {
@@ -1100,14 +1159,14 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     switch (tableView.tag) {
-        case SourceSelectTag: { // select input
+        case SourceSelectTable: { // select input
             NSLog(@"input button tapped: %ld", (long)cell.tag);
             InputSource *source = [inputSources objectAtIndex:cell.tag];
             nextSource = source;
             [self.view setNeedsLayout];
             break;
         }
-        case TransformTag: {   // Append a transform to the active list
+        case TransformTable: {   // Append a transform to the active list
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
             Transform *transform = [transformList objectAtIndex:indexPath.row];
             Transform *thisTransform = [transform copy];
@@ -1121,7 +1180,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             [self transformCurrentImage];
             break;
         }
-        case ActiveTag: {
+        case ActiveTable: {
             break;
         }
     }
@@ -1221,7 +1280,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     f.size.width = SOURCE_CELL_W;
     sourcesTableVC.tableView.frame = f;
     sourcesTableVC.preferredContentSize = CGSizeMake(400, 400); // f.size;
-    sourcesTableVC.tableView.tag = SourceSelectTag;
+    sourcesTableVC.tableView.tag = SourceSelectTable;
     sourcesTableVC.tableView.delegate = self;
     sourcesTableVC.tableView.dataSource = self;
     sourcesTableVC.tableView.rowHeight = SOURCE_THUMB_H + 4;

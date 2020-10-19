@@ -715,9 +715,9 @@ int sourceImageIndex, destImageIndex;
 
     lastTransform = [Transform areaTransform: @"Mirror"
                                   description: @"Reflect the image"
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t y, int pixsize) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pixsize) {
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
                 table[PI(x,y)] = PI(w - x - 1,y);
             }
         }
@@ -726,10 +726,10 @@ int sourceImageIndex, destImageIndex;
     
     lastTransform = [Transform areaTransform: @"Mirror right"
                                  description: @"Reflect the right half of the screen on the left"
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t y, int pixsize) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
-                if (x < configuredWidth/2)
+                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pixsize) {
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                if (x < w/2)
                     table[PI(x,y)] = PI(w - x - 1,y);
                 else
                     table[PI(x,y)] = PI(x,y);
@@ -1020,18 +1020,203 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
 }
 
+channel
+max3(Pixel p) {
+    int ab = (p.r > p.g);
+    int ac = (p.r > p.b);
+    int bc = (p.g > p.b);
+    
+    if ( ab &&  ac) return p.r;
+    if (!ab &&  bc) return p.g;
+    if (!bc && !ac) return p.b;
+    
+    NSLog(@"max3 cannot happen %d %d %d\n", p.r, p.g, p.b);
+    return Z/2;
+}
+
+channel
+min3(Pixel p) {
+    int ab = (p.r < p.g);
+    int ac = (p.r < p.b);
+    int bc = (p.g < p.b);
+    
+    if ( ab &&  ac) return p.r;
+    if (!ab &&  bc) return p.g;
+    if (!bc && !ac) return p.b;
+    
+    NSLog(@"max3 cannot happen %d %d %d\n", p.r, p.g, p.b);
+    return Z/2;
+}
+
+int
+irand(int i) {
+    return random() % i;
+}
+
 - (void) addNewGerardTransforms {
     [categoryNames addObject:@"New Gerard"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-#ifdef notdef
-    lastTransform = [Transform areaTransform: @"Cone projection"
-                                 description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+    lastTransform = [Transform areaTransform: @"Shear"
+                                                  description: @"Shear"
+                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+        int x, y, dx, dy, r, yshift[configuredWidth];
+        memset(yshift, 0, sizeof(yshift));
+
+        for (x = r = 0; x < configuredWidth; x++) {
+            if (irand(256) < 128)
+                r--;
+            else
+                r++;
+            yshift[x] = r;
+        }
+        for (y = 0; y < configuredHeight; y++) {
+            if (irand(256) < 128)
+                r--;
+            else
+                r++;
+            for (x = 0; x < configuredWidth; x++) {
+                dx = x+r; dy = y+yshift[x];
+                if (dx >= configuredWidth || dy >= configuredHeight ||
+                    dx < 0 || dy < 0)
+                    dest[PI(x,y)] = White;
+                else
+                    dest[PI(x,y)] = src[PI(dx,dy)];
+            }
+        }
     }];
     [transformList addObject:lastTransform];
-#endif
+
+    lastTransform = [Transform areaTransform: @"Slicer"
+                                  description: @"Slicer"
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int value) {
+        long x, y, r = 0;
+        long dx, dy, xshift[configuredHeight], yshift[configuredWidth];
+
+        for (y=0; y<h; y++)
+            for (x=0; x<w; x++)
+        table[PI(x,y)] = PI(x,y);
+
+        for (x = dx = 0; x < w; x++) {
+            if (dx == 0) {
+                r = (random()&63) - 32;
+                dx = 8+(random()&31);
+            } else
+                dx--;
+            yshift[x] = r;
+        }
+
+        for (y = dy = 0; y < h; y++) {
+            if (dy == 0) {
+                r = (random()&63) - 32;
+                dy = 8+(random()&31);
+            } else
+                dy--;
+            xshift[y] = r;
+        }
+
+        for (y=0; y<h; y++)
+            for (x=0; x<w; x++) {
+                dx = x + xshift[y];
+                dy = y + yshift[x];
+                if (dx < configuredWidth && dy < configuredHeight && dx>=0 && dy>=0)
+                    table[PI(x,y)] = PI(dx,dy);
+            }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Motion blur"
+                                  description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
+        int x, y, dx, nr, ng, nb;
+
+        assert(streak > 0);
+
+        for (y = 0; y < configuredHeight; y++)
+            for (x = 0; x < configuredWidth; x++) {
+                Pixel p;
+                p.r = p.b = p.g = 0;
+                p.a = src[PI(x,y)].a;
+                dest[PI(x,y)] = p;
+         }
+        // int     Tsz       = 32;         // tile size, e.g., MAX_X/16
+        long Tsz = configuredWidth/16;
+        
+         for (y = 0; y < configuredHeight-Tsz; y++) {
+                 for (x = 0; x < configuredWidth-Tsz; x++) {
+                     Pixel *a = &dest[PI(x,y)];
+                         nr = ng = nb = 0;
+                         for (dx = x-1; dx >= 0 && dx > x-streak; dx--) {
+                     Pixel *b = &src[PI(x,y)];     // target
+                                 nr += b->r;
+                                 ng += b->g;
+                                 nb += b->b;
+                         }
+                         nr /= streak;
+                         ng /= streak;
+                         nb /= streak;
+                         a->r = nr;
+                         a->g = ng;
+                         a->b = nb;
+         }       }
+    }];
+    lastTransform.low = 2;
+    lastTransform.value = 16;
+    lastTransform.high = 40;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
+    [categoryNames addObject:@"Monochromes"];
+    transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+
+    lastTransform = [Transform colorTransform:@"Desaturate" description:@"desaturate" pointTransform:^Pixel(Pixel p) {
+        channel c = (max3(p) + min3(p))/2;
+        return SETRGB(c,c,c);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Max decomposition" description:@"" pointTransform:^Pixel(Pixel p) {
+        channel c = max3(p);
+        return SETRGB(c,c,c);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Min decomposition" description:@"" pointTransform:^Pixel(Pixel p) {
+        channel c = min3(p);
+        return SETRGB(c,c,c);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Ave" description:@"" pointTransform:^Pixel(Pixel p) {
+        channel c = (p.r + p.g + p.b)/3;
+        return SETRGB(c,c,c);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"NTSC monochrome" description:@"" pointTransform:^Pixel(Pixel p) {
+        channel c = (299*p.r + 587*p.g + 114*p.b)/1000;
+        return SETRGB(c,c,c);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Red channel" description:@"" pointTransform:^Pixel(Pixel p) {
+        return SETRGB(p.r,p.r,p.r);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Green channel" description:@"" pointTransform:^Pixel(Pixel p) {
+        return SETRGB(p.g,p.g,p.g);
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform colorTransform:@"Blue channel" description:@"" pointTransform:^Pixel(Pixel p) {
+        return SETRGB(p.b,p.b,p.b);
+    }];
+    [transformList addObject:lastTransform];
+    
+    // move image
     
 }
 
