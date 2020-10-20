@@ -430,6 +430,7 @@ int sourceImageIndex, destImageIndex;
     }
 }
 
+#ifdef OLD
 /* Monochrome floyd-steinberg */
 
 static void
@@ -476,6 +477,7 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
         }
     }
 }
+#endif
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area"];

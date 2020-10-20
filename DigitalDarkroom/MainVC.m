@@ -47,6 +47,7 @@
 #define RETLO_GREEN [UIColor colorWithRed:0 green:.4 blue:0 alpha:1]
 #define NAVY_BLUE   [UIColor colorWithRed:0 green:0 blue:0.5 alpha:1]
 
+#define TRANS_SEC_VIS_ARCHIVE  @"trans_sec_vis.archive"
 
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
@@ -104,7 +105,7 @@ typedef enum {
 @property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              DisplayMode_t displayMode;
 
-@property (nonatomic, strong)   NSMutableDictionary *rowCollapsed;
+@property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
 
 @end
 
@@ -136,17 +137,14 @@ typedef enum {
 @synthesize imageOrientation;
 @synthesize displayMode;
 
-@synthesize rowCollapsed;
+@synthesize rowIsCollapsed;
 
 - (id) init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
-        rowCollapsed = [[NSMutableDictionary alloc]
-                        initWithCapacity:transforms.categoryNames.count];
-        for (NSString *key in transforms.categoryNames) {
-            [rowCollapsed setObject:@YES forKey:key];
-        }
+        [self loadTransformSectionVisInfo];
+
         transformTotalElapsed = 0;
         transformCount = 0;
         busy = NO;
@@ -186,6 +184,41 @@ typedef enum {
         [self newDisplayMode:medium];
     }
     return self;
+}
+
+// The section headings might change.  Only propagate or initialize the ones we have now.
+
+- (void) loadTransformSectionVisInfo {
+    NSError *error;
+    NSData *savedSettingsData = [NSData dataWithContentsOfFile:TRANS_SEC_VIS_ARCHIVE];
+    NSMutableDictionary *savedSettings = nil;
+    if (savedSettingsData)
+        savedSettings = [NSKeyedUnarchiver
+                         unarchivedObjectOfClass: NSMutableDictionary.class
+                         fromData: savedSettingsData
+                         error:&error];
+    rowIsCollapsed = [[NSMutableDictionary alloc]
+                    initWithCapacity:transforms.categoryList.count];
+    for (NSString *key in transforms.categoryNames) {
+        BOOL collapsed = NO;;
+        if (savedSettings) {
+            NSNumber *value = [savedSettings objectForKey:key];
+            if (value)
+                collapsed = [value boolValue];
+        }
+        [rowIsCollapsed setValue:[NSNumber numberWithBool:collapsed] forKey:key];
+    }
+}
+
+- (void) saveTransformSectionVisInfo {
+    NSError *error;
+    NSData *settingsData = [NSKeyedArchiver archivedDataWithRootObject:rowIsCollapsed
+                                                 requiringSecureCoding:NO
+                                                                 error:&error];
+    if (error)
+        NSLog(@"inconceivable, archive error %@", [error localizedDescription]);
+    else
+        [settingsData writeToFile:TRANS_SEC_VIS_ARCHIVE atomically:NO];
 }
 
 - (void) newDisplayMode:(DisplayMode_t) newMode {
@@ -892,6 +925,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     return 1;
 }
 
+- (BOOL) isCollapsed: (NSString *) key {
+    NSNumber *v = [rowIsCollapsed objectForKey:key];
+    return v.boolValue;
+}
+
 - (NSInteger)tableView:(UITableView *)tableView
  numberOfRowsInSection:(NSInteger)section {
     switch (tableView.tag) {
@@ -899,7 +937,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             return inputSources.count;
         case TransformTable: {
             NSString *name = [transforms.categoryNames objectAtIndex:section];
-            if ([[rowCollapsed objectForKey:name] boolValue]) {
+            if ([self isCollapsed:name]) {
                 return 0;
             } else {
                     NSArray *transformList = [transforms.categoryList objectAtIndex:section];
@@ -950,11 +988,11 @@ viewForHeaderInSection:(NSInteger)section {
             f.size.width = sectionHeaderView.frame.size.width - f.origin.x;
             UILabel *rowStatus = [[UILabel alloc] initWithFrame:f];
             rowStatus.textAlignment = NSTextAlignmentRight;
-            if ([[rowCollapsed objectForKey:name] boolValue]) {
+            if ([self isCollapsed:name]) {
                 NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                rowStatus.text = [NSString stringWithFormat:@"(%lu)  ▶", (unsigned long)transformList.count];
+                rowStatus.text = [NSString stringWithFormat:@"(%lu)  ▼", (unsigned long)transformList.count];
             } else
-                rowStatus.text = [NSString stringWithFormat:@"▼"];
+                rowStatus.text = [NSString stringWithFormat:@"▲"];
             sectionHeaderView.tag = section;    // for the tap processing
             [sectionHeaderView addSubview:rowStatus];
             UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
@@ -976,8 +1014,9 @@ viewForHeaderInSection:(NSInteger)section {
 - (IBAction) tapSectionHeader:(UITapGestureRecognizer *)tapGesture {
     size_t section = tapGesture.view.tag;
     NSString *name = [transforms.categoryNames objectAtIndex:section];
-    BOOL newSectionHidden = ![[rowCollapsed objectForKey:name] boolValue];
-    [rowCollapsed setObject:newSectionHidden ? @YES : @NO forKey:name];
+    BOOL newSectionHidden = ![self isCollapsed:name];
+    [rowIsCollapsed setObject:[NSNumber numberWithBool:newSectionHidden] forKey:name];
+    [self saveTransformSectionVisInfo];
     
     NSIndexSet *indexSet = [NSIndexSet indexSetWithIndex:section];
     [availableTableVC.tableView beginUpdates];
