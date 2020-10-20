@@ -1429,6 +1429,19 @@ irand(int i) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
+    lastTransform = [Transform areaTransform: @"Through a cylinder"
+                                  description: @""
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<=CENTER_X; x++) {
+                int fromx = CENTER_X*sin((M_PI/2)*x/CENTER_X);
+                assert(fromx >= 0 && fromx < configuredWidth);
+                table[PI(x,y)] = PI(fromx, y);
+                table[PI(configuredWidth-1-x,y)] = PI(configuredWidth-1-fromx, y);
+            }
+    }];
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Edges"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
