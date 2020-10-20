@@ -1631,11 +1631,67 @@ ave(Pixel p1, Pixel p2) {
     return p;
 }
 
+#define        RAN_MASK    0x1fff
+#define     LUT_RES        (Z+1)
+
+float
+Frand(void) {
+    return((double)(rand() & RAN_MASK) / (double)(RAN_MASK));
+}
+
+
+
 - (void) addArtTransforms {
     [categoryNames addObject:@"Art-style"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    
+    lastTransform = [Transform areaTransform: @"Seurat"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        double distortion = (float)param / 10.0;    // range 0.1 to 0.5, original had only those values
+        long    x_strt, x_stop, x_incr;
+        long    dlut[LUT_RES];            /* distort lut         */
+        long    olut[LUT_RES];            /* ran offset lut     */
+        
+        int    i, j;            /* worst loop counters    */
+        long    dmkr, omkr;        /* lut index markers    */
+        
+        for(i = 0; i < LUT_RES; i++) {
+            dlut[i] = (Frand() <= distortion);
+            olut[i] = LUT_RES * Frand();
+        }
+        
+        dmkr = omkr = 0;
+        
+        for (int y = 1; y < configuredHeight - 1; y++) {
+            if ((y % 2)) {
+                x_strt = 1; x_stop = configuredWidth - 1; x_incr = 1;
+            } else {
+                x_strt = configuredWidth - 2; x_stop = 0; x_incr = -1;
+            }
+            for(long x = x_strt; x != x_stop; x += x_incr){
+                Pixel val = src[PI(x,y)];
+                for(j = -2; ++j < 2;)
+                for(i = -2; ++i < 2;) {
+                    if (dlut[dmkr])
+                        dest[PI(x+i,y+j)] = src[PI(x+i,y+j)] = val;
+                    if (++dmkr >= LUT_RES) {
+                        dmkr = olut[omkr];
+                        if (++omkr >= LUT_RES)
+                            omkr = 0;
+                    }
+                }
+            }
+        }
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 1;
+    lastTransform.high = 5;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
 #define CX    ((int)configuredWidth/4)
 #define CY    ((int)configuredHeight*3/4)
 #define OPSHIFT    3 //(3 /*was 0*/)
