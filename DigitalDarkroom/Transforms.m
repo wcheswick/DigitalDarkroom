@@ -1380,6 +1380,55 @@ irand(int i) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform areaTransform: @"Shower stall"
+                                  description: @"Through the wet glass"
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int showerSize) {
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++)
+                table[PI(x,y)] = Remap_White;
+
+        // keep gerard's original density
+        int nShower = ((float)(configuredWidth*configuredHeight)/(640.0*480.0))*2500;
+        for(int i=0; i<nShower; i++) {
+            int x = irand((int)configuredWidth-1);
+            int y = irand((int)configuredHeight-1);
+            PixelIndex_t pi = PI(x,y);
+            
+            for (long y1=y-showerSize; y1<=y+showerSize; y1++) {
+                if (y1 < 0 || y1 >= configuredHeight)
+                    continue;
+                for (long x1=x-showerSize; x1<=x+showerSize; x1++) {
+                    if (x1 < 0 || x1 >= configuredWidth)
+                        continue;
+                    table[PI(x1,y1)] = pi;
+                }
+            }
+        }
+    }];
+    lastTransform.low = 10;
+    lastTransform.value = 10;
+    lastTransform.high = 20;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    
+#define CPP    20    /*cycles/picture*/
+
+    lastTransform = [Transform areaTransform: @"Wavy shower"
+                                  description: @"Through wavy glass"
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++)
+                table[PI(x,y)] = PI(x,y);
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0+D; x<configuredWidth-D; x++)
+                table[PI(x,y)]  = PI(x+(int)(D*sin(CPP*x*2*M_PI/configuredWidth)), y);
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 23;
+    lastTransform.high = 30;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Edges"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1638,8 +1687,6 @@ float
 Frand(void) {
     return((double)(rand() & RAN_MASK) / (double)(RAN_MASK));
 }
-
-
 
 - (void) addArtTransforms {
     [categoryNames addObject:@"Art-style"];

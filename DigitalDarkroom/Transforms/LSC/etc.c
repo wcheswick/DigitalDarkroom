@@ -243,69 +243,6 @@ monet(void) {
 }
 #endif
 
-#ifdef notdef
-#define		RAN_MASK	0x1fff
-#define 	LUT_RES		(Z+1)		
-
-float
-Frand(void) {
-	return((double)(rand() & RAN_MASK) / (double)(RAN_MASK));
-}
-
-void
-seurat(double distortion) {
-	int	y, x_strt, x_stop, x_incr;
-	int	dlut[LUT_RES];			/* distort lut 		*/
-	int	olut[LUT_RES];			/* ran offset lut 	*/
-
-	int	i, j;			/* worst loop counters	*/
-	int	dmkr, omkr;		/* lut index markers	*/
-	int	x;
-
-	load_in();
-
-	for(i = 0; i < LUT_RES; i++) {
-		dlut[i] = (Frand() <= distortion);
-		olut[i] = LUT_RES * Frand();
-	}
-
-	dmkr = omkr = 0;
-
-	for (y = 1; y < MAX_Y - 1; y++) {
-		if ((y % 2)) {
-			x_strt = 1; x_stop = MAX_X - 1; x_incr = 1;
-		} else {
-			x_strt = MAX_X - 2; x_stop = 0; x_incr = -1;
-		}
-		for(x = x_strt; x != x_stop; x += x_incr){
-			pixel val = in[y][x];
-			for(j = -2; ++j < 2;)
-				for(i = -2; ++i < 2;) {
-					if (dlut[dmkr]) 
-						T(x+i,y+j) = in[y+j][x+i] =
-							val;
-					if (++dmkr >= LUT_RES) {
-						dmkr = olut[omkr];
-						if (++omkr >= LUT_RES)
-							omkr = 0;
-					}
-				}
-		}
-	}
-}
-
-int
-do_seurat(void) {
-	seurat(0.1);
-	return 1;
-}
-
-int
-do_crazy_seurat(void) {
-	seurat(0.5);
-	return 1;
-}
-#endif
 
 #ifdef notdef
 void
