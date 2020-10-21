@@ -50,6 +50,8 @@
 
 #define TRANS_SEC_VIS_ARCHIVE  @"trans_sec_vis.archive"
 
+#define EXECUTE_STATS_TAG   1
+
 char * _NonnullcategoryLabels[] = {
     "Pixel colors",
     "Area",
@@ -91,7 +93,7 @@ typedef enum {
 @property (nonatomic, strong)   Transforms *transforms;
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
-@property (nonatomic, strong)   UILabel *statsLabel;
+@property (nonatomic, strong)   UILabel *allStatsLabel;
 
 @property (nonatomic, strong)   NSDate *lastTime;
 @property (assign)              NSTimeInterval transformTotalElapsed;
@@ -131,7 +133,7 @@ typedef enum {
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize busy;
-@synthesize statsTimer, statsLabel, lastTime;
+@synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
 @synthesize trashButton, saveButton;
 @synthesize capturing;
@@ -325,7 +327,7 @@ typedef enum {
     executeTableVC.tableView.tag = ActiveTable;
     executeTableVC.tableView.delegate = self;
     executeTableVC.tableView.dataSource = self;
-    executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    //executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     executeTableVC.tableView.showsVerticalScrollIndicator = YES;
     executeTableVC.title = @"Active";
     executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
@@ -342,10 +344,10 @@ typedef enum {
                                                       trashButton,
                                                       nil];
     
-    statsLabel = [[UILabel alloc] init];
-    statsLabel.textAlignment = NSTextAlignmentRight;
-    statsLabel.text = @"---";
-    statsLabel.font = [UIFont
+    allStatsLabel = [[UILabel alloc] init];
+    allStatsLabel.textAlignment = NSTextAlignmentRight;
+    allStatsLabel.text = @"---";
+    allStatsLabel.font = [UIFont
                        monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
                        weight:UIFontWeightRegular];
     
@@ -499,7 +501,7 @@ typedef enum {
         // split the bottom between execute and transform
         
         f.size.width = containerView.frame.size.width - f.size.width;
-        if (f.size.width - SEP >= MIN_TRANS_TABLE_W) {  // availableon the right, executing at bottom
+        if (f.size.width - SEP >= MIN_TRANS_TABLE_W) {  // available on the right, executing at bottom
             f.size.height = containerView.frame.size.height;
             f.size.width -= SEP;
             f.origin.x = RIGHT(scaledTransformImageView.frame) + SEP;
@@ -614,15 +616,11 @@ typedef enum {
         transformAve:(double) tams {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (fps) {
-            self->statsLabel.text = [NSString stringWithFormat:@"%.1f ms", tams];
+            self->allStatsLabel.text = [NSString stringWithFormat:@"%.1f ms", tams];
         } else {
-            self->statsLabel.text = [NSString stringWithFormat:@"---"];
+            self->allStatsLabel.text = [NSString stringWithFormat:@"---"];
         }
-        [self->statsLabel setNeedsDisplay];
-#ifdef OLD
-        self->statsLabel.text = [NSString stringWithFormat:@"FPS: %.1f|%.1f  d: %.1f  b: %.1f  ave: %.1fms",
-                                 fps, depthps, dps, bps, tams];
-#endif
+        [self->allStatsLabel setNeedsDisplay];
     });
 }
 
@@ -1005,8 +1003,8 @@ viewForHeaderInSection:(NSInteger)section {
         case ActiveTable: {
             f = CGRectMake(0, 0, tableView.frame.size.width - SEP, ACTIVE_TABLE_ENTRY_H);
             UIView *headerView = [[UIView alloc] initWithFrame:f];
-            statsLabel.frame = f;
-            [headerView addSubview:statsLabel];
+            allStatsLabel.frame = f;
+            [headerView addSubview:allStatsLabel];
             return headerView;
         }
     }
@@ -1163,30 +1161,47 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
             [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
             
-            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
             CGRect f = cell.contentView.frame;
+            f.size.width = tableView.frame.size.width;
+            f.size.height = cell.frame.size.height;
+            cell.contentView.frame = f;
+            
+            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
             f.size.width = MIN_ACTIVE_NAME_W;
             UILabel *label = [[UILabel alloc] initWithFrame:f];
             label.numberOfLines = 0;
+            label.font = [UIFont systemFontOfSize:20];
             
             if (transform.hasParameters) {
                 label.text = [transform.name
                               stringByAppendingString:[NSString
                                                        stringWithFormat:@"  %d  ", transform.value]];
                 
-                f.origin.x = RIGHT(label.frame) + 2*SEP;
+                f.origin.x = RIGHT(label.frame);
                 f.size.width = SLIDER_VALUE_W;
                 UILabel *minValue = [[UILabel alloc] initWithFrame:f];
                 minValue.text = [NSString stringWithFormat:@"%d", transform.low];
                 minValue.textAlignment = NSTextAlignmentRight;
                 minValue.adjustsFontSizeToFitWidth = YES;
+                minValue.font = [UIFont systemFontOfSize:24];
                 [cell.contentView addSubview:minValue];
                 
                 f.origin.x = cell.contentView.frame.size.width - SLIDER_VALUE_W;
+                f.size.width = 1.5*SLIDER_VALUE_W;
+                UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
+                stepStatsLabel.font = [UIFont systemFontOfSize:18];
+                stepStatsLabel.adjustsFontSizeToFitWidth = YES;
+                stepStatsLabel.tag = EXECUTE_STATS_TAG;
+                stepStatsLabel.textAlignment = NSTextAlignmentRight;
+                [cell.contentView addSubview:stepStatsLabel];
+                
+                f.origin.x -= SLIDER_VALUE_W + SEP;
+                f.size.width = SLIDER_VALUE_W;
                 UILabel *maxValue = [[UILabel alloc] initWithFrame:f];
                 maxValue.text = [NSString stringWithFormat:@"%d", transform.high];
                 maxValue.textAlignment = NSTextAlignmentLeft;
                 maxValue.adjustsFontSizeToFitWidth = YES;
+                maxValue.font = [UIFont systemFontOfSize:24];
                 [cell.contentView addSubview:maxValue];
 
                 f.origin.x = RIGHT(minValue.frame) + SEP;
