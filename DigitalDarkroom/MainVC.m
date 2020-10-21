@@ -38,6 +38,7 @@
 
 #define SLIDER_LIMIT_W  20
 #define SLIDER_LABEL_W  130
+#define SLIDER_VALUE_W  50
 
 #define SLIDER_AREA_W   200
 
@@ -1169,12 +1170,27 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             label.numberOfLines = 0;
             
             if (transform.hasParameters) {
-                label.text = [transform.name stringByAppendingString:@" ~"];
-                f.origin.x = RIGHT(f) + SEP;
-                f.size.width = cell.contentView.frame.size.width - f.origin.x;
-                if (f.size.width > MAX_SLIDER_W)
-                    f.size.width = MAX_SLIDER_W;
+                label.text = [transform.name
+                              stringByAppendingString:[NSString
+                                                       stringWithFormat:@"  %d  ", transform.value]];
                 
+                f.origin.x = RIGHT(label.frame) + 2*SEP;
+                f.size.width = SLIDER_VALUE_W;
+                UILabel *minValue = [[UILabel alloc] initWithFrame:f];
+                minValue.text = [NSString stringWithFormat:@"%d", transform.low];
+                minValue.textAlignment = NSTextAlignmentRight;
+                minValue.adjustsFontSizeToFitWidth = YES;
+                [cell.contentView addSubview:minValue];
+                
+                f.origin.x = cell.contentView.frame.size.width - SLIDER_VALUE_W;
+                UILabel *maxValue = [[UILabel alloc] initWithFrame:f];
+                maxValue.text = [NSString stringWithFormat:@"%d", transform.high];
+                maxValue.textAlignment = NSTextAlignmentLeft;
+                maxValue.adjustsFontSizeToFitWidth = YES;
+                [cell.contentView addSubview:maxValue];
+
+                f.origin.x = RIGHT(minValue.frame) + SEP;
+                f.size.width = maxValue.frame.origin.x - f.origin.x - SEP;
                 UISlider *slider = [[UISlider alloc] initWithFrame:f];
                 slider.minimumValue = transform.low;
                 slider.maximumValue = transform.high;
@@ -1338,67 +1354,6 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     //         [[self presentingViewController] dismissViewControllerAnimated:YES completion: NULL];
 
 }
-
-#ifdef notdef
-#define CONTROL_ANIMATION_TIME  0.4
-
-- (void) disableControls {
-    if (!CONTROLS_ENABLED)
-        return;
-    [UIView animateWithDuration:CONTROL_ANIMATION_TIME
-                          delay:0.0
-                        options:UIViewAnimationOptionCurveLinear
-                     animations:^{
-        CGRect f = self->controlsView.frame;
-        f.size.height = 0;    // off the bottom of the frame
-        self->controlsView.frame = f;
-    }
-                     completion:^(BOOL finished) {
-        self->controlsView.userInteractionEnabled = NO;
-    }
-     ];
-}
-
-- (void) activateControlsFor:(long)executeTableIndex {
-    if (!CONTROLS_ENABLED) {
-        [UIView animateWithDuration:CONTROL_ANIMATION_TIME
-                              delay:0.0
-                            options:UIViewAnimationOptionCurveLinear
-                         animations:^  {
-            CGRect f = self->controlsView.frame;
-            f.size.height = CONTROL_H;
-            self->controlsView.frame = f;
-        } completion:^(BOOL finished) {
-            self->controlsView.userInteractionEnabled = YES;
-            [self setupControls:executeTableIndex];
-        }];
-    } else
-        [self setupControls:executeTableIndex];
-}
-
-- (void) setupControls: (long)executeTableIndex {
-    sliderExecuteIndex = executeTableIndex;
-    controlsView.userInteractionEnabled = YES;
-    
-    Transform *transform;
-    @synchronized (transforms.sequence) {
-        transform = [transforms.sequence objectAtIndex:executeTableIndex];
-    }
-    valueSlider.minimumValue = transform.low;
-    valueSlider.maximumValue = transform.high;
-    valueSlider.value = transform.p;
-    [valueSlider setNeedsDisplay];
-    
-    sliderLabel.text = transform.name;
-    [sliderLabel setNeedsDisplay];
-    
-    minimumLabel.text = [NSString stringWithFormat:@"%d", (int)valueSlider.minimumValue];
-    [minimumLabel setNeedsDisplay];
-    
-    maximumLabel.text = [NSString stringWithFormat:@"%d", (int)valueSlider.maximumValue];
-    [maximumLabel setNeedsDisplay];
-}
-#endif
 
 - (IBAction) moveSlider:(UISlider *)slider {
     long executeIndex = slider.tag;

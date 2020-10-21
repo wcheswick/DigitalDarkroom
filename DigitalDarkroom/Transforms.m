@@ -111,6 +111,7 @@ PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) buildTransformList {
+    [self addColorVisionDeficits];
     [self addArtTransforms];
     [self addNewGerardTransforms];
     [self addGeometricTransforms];
@@ -119,28 +120,6 @@ PixelIndex_t dPI(int x, int y) {
     // tested:
     [self addAreaTransforms];
 }
-
-#ifdef notyet
-- (void) setRemapForTransform:(Transform *)transform
-                            x:(int)x y:(int)y
-                         from:(RemapPoint_t) point {
-    if (point.x < 0)
-        point.x = 0;
-    else if (point.x >= configuredWidth)
-        point.x = configuredWidth - 1;
-    if (point.y < 0)
-        point.y = 0;
-    else if (point.y >= configuredHeight)
-        point.y = configuredHeight - 1;
-    transform.remapTable[PI(x,y)] = PI(point.x, point.y);
-}
-
-- (void) setRemapForTransform:(Transform *)transform
-                            x:(int)x y:(int)y
-                         color: (enum SpecialRemaps) remapColor {
-    transform.remapTable[PI(x,y)] = remapColor;
-}
-#endif
 
 #ifdef NOTDEF
 // remap table source for pixel x,y
@@ -513,7 +492,7 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
 #endif
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
-                                 description: @"oil paint"
+                                 description: @""
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
         channel lum[configuredWidth][configuredHeight];
         for (int y=1; y<configuredHeight-1; y++)
@@ -540,8 +519,8 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"color Floyd Steinberg"
-                                 description: @"oil paint"
+    lastTransform = [Transform areaTransform: @"Matisse"
+                                 description: @"colored Floyd/Steinberg"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
         for (int y=1; y<configuredHeight-1; y++) {
             for (int x=1; x<configuredWidth-1; x++) {
@@ -888,7 +867,60 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Sobel"
-                                          description: @"Sobel filter"
+                                          description: @"Edge detection"
+                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
+#define P(b,x,y)    (b)[PI(x,y)]
+        for (int y=1; y<configuredHeight-1-1; y++) {
+            for (int x=1; x<configuredWidth-1-1; x++) {
+                int aa, bb, s;
+                Pixel p = {0,0,0,Z};
+                aa = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x-1, y))*2 + R(P(srcBuf,x-1, y+1)) -
+                    R(P(srcBuf,x+1, y-1)) - R(P(srcBuf,x+1, y))*2 - R(P(srcBuf,x+1, y+1));
+                bb = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x, y-1))*2+
+                    R(P(srcBuf,x+1, y-1)) -
+                    R(P(srcBuf,x-1, y+1)) - R(P(srcBuf,x, y+1))*2-
+                    R(P(srcBuf,x+1, y+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.r = Z;
+                else
+                    p.r = s;
+                
+                aa = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x-1, y))*2+
+                    G(P(srcBuf,x-1, y+1))-
+                    G(P(srcBuf,x+1, y-1))-G(P(srcBuf,x+1, y))*2-
+                    G(P(srcBuf,x+1, y+1));
+                bb = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x, y-1))*2+
+                    G(P(srcBuf,x+1, y-1))-
+                    G(P(srcBuf,x-1, y+1))-G(P(srcBuf,x, y+1))*2-
+                    G(P(srcBuf,x+1, y+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.g = Z;
+                else
+                    p.g = s;
+                
+                aa = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x-1, y))*2+
+                    B(P(srcBuf,x-1, y+1))-
+                    B(P(srcBuf,x+1, y-1))-B(P(srcBuf,x+1, y))*2-
+                    B(P(srcBuf,x+1, y+1));
+                bb = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x, y-1))*2+
+                    R(P(srcBuf,x+1, y-1))-
+                    B(P(srcBuf,x-1, y+1))-B(P(srcBuf,x, y+1))*2-
+                    B(P(srcBuf,x+1, y+1));
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    p.b = Z;
+                else
+                    p.b = s;
+                dstBuf[PI(x,y)] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Surreal"
+                                          description: @"Negative of Sobel filter"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
 #define P(b,x,y)    (b)[PI(x,y)]
         for (int y=1; y<configuredHeight-1-1; y++) {
@@ -982,7 +1014,7 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
                 s = sqrt(aa*aa + bb*bb);
                 p.b = CLIP(s);
 
-                p.r = Z - p.r;
+                p.r = Z - p.r;  // stupid that I repeat the entire routine
                 p.g = Z - p.g;
                 p.b = Z - p.b;
                 dest[PI(x,y)] = p
@@ -1237,8 +1269,8 @@ irand(int i) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Slicer"
-                                  description: @"Slicer"
+    lastTransform = [Transform areaTransform: @"Picasso"
+                                  description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int value) {
         long x, y, r = 0;
         long dx, dy, xshift[configuredHeight], yshift[configuredWidth];
@@ -1442,8 +1474,8 @@ irand(int i) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Edges"
-                                 description: @""
+    lastTransform = [Transform areaTransform: @"Tin Type"
+                                 description: @"Edge detection"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         Pixel p = {0,0,0,Z};
 
@@ -1510,48 +1542,6 @@ irand(int i) {
         int x = (int)CenterX + (int)(r1*cos(a));
         int y = (int)CenterY + (int)(r1*sin(a));
         return PI(x,y);
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Twist"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        double newa = a + (r/3.0)*(M_PI/180.0);
-        int x = CENTER_X + r*cos(newa);
-        int y = CENTER_Y + r*sin(newa);
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Dali"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        int x = CENTER_X + r*cos(a);
-        int y = CENTER_Y + r*sin(a);
-        x = CENTER_X + (r*cos(a + (y*x/(16*17000.0))));
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    lastTransform.low = 17000;
-    lastTransform.value = 4*lastTransform.low;
-    lastTransform.high = 10*lastTransform.low;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Ken twist"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        int x = CENTER_X + r*cos(a);
-        int y = CENTER_Y + (r*sin(a+r/30.0));
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
     }];
     [transformList addObject:lastTransform];
     
@@ -1682,6 +1672,10 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
     #endif
 }
 
+- (void) addColorVisionDeficits {
+    
+}
+
 
 static Pixel
 ave(Pixel p1, Pixel p2) {
@@ -1701,12 +1695,209 @@ Frand(void) {
     return((double)(rand() & RAN_MASK) / (double)(RAN_MASK));
 }
 
+#ifdef CHAT
+#ifdef notdef
+        {"Cone projection", init_cone, do_remap, "Pinhead", "", 0, FRAME_COLOR},
+        {"Fish eye",    init_fisheye, do_remap, "Fish", "eye", 0 ,AREA_COLOR},
+        {"Munch",       init_twist, do_remap, "Edward", "Munch", 0, AREA_COLOR},
+        {"Munch 2",     init_kentwist, do_remap, "Edward", "Munch 2", 0, AREA_COLOR}
+#endif
+
+#ifdef notdef
+        add_button(right(last_top->r), "escher", "Escher", Green, do_remap);
+        last_button->init = (void *)init_escher;
+        last_top = last_button;
+        add_button(below(last_button->r), "pinhead", "Pinhead", OLD, do_remap);
+        last_button->init = (void *)init_cone;
+
+        add_button(right(last_top->r), "neon", "Neon", Green, do_sobel);
+        last_top = last_button;
+        add_button(below(last_button->r), "fisheye", "Fish eye", OLD, do_remap);
+        last_button->init = (void *)init_fisheye;
+
+        add_button(right(last_top->r), "kite", "Kite", Green, do_remap);
+        last_top = last_button;
+        last_button->init = (void *)init_kite;
+        add_button(below(last_button->r), "logo", "logo", Green, do_logo);
+
+        add_button(right(last_top->r), "pixels", "Pixels", Green, do_remap);
+        last_button->init = (void *)init_pixels4;
+
+        add_button(exit_r, "exit", "(Exit)", Red, bparam(do_exit,0));
+#endif
+
+#endif
+
+typedef struct Pt {
+    int x,y;
+} Pt;
+
+/*
+ * corner zero of each block is the unshared corner.  Corners are labeled
+ * clockwise, and so are the block faces.
+ */
+
+struct block {
+    Pt    f[3][4];    // three faces, four corners
+} block;
+
+int pixPerSide;
+int dxToBlockCenter;
+
+void
+make_block(Pt origin, struct block *b) {
+    b->f[0][0] = origin;
+    b->f[0][1] = b->f[1][3] = (Pt){origin.x,origin.y+pixPerSide};
+    b->f[0][2] = b->f[1][2] = b->f[2][2] =
+        (Pt){origin.x+dxToBlockCenter,origin.y+(pixPerSide/2)};
+    b->f[0][3] = b->f[2][1] = (Pt){origin.x+dxToBlockCenter,origin.y-(pixPerSide/2)};
+
+    b->f[1][0] = (Pt){origin.x+dxToBlockCenter, origin.y + 3*pixPerSide/2};
+    b->f[1][1] = b->f[2][3] = (Pt){origin.x+2*dxToBlockCenter, origin.y+pixPerSide};
+
+    b->f[2][0] = (Pt){origin.x+2*dxToBlockCenter, origin.y};
+}
+
 - (void) addArtTransforms {
     [categoryNames addObject:@"Art-style"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
     
+    lastTransform = [Transform areaTransform: @"Escher"
+                                 description: @""
+                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pps) {
+        pixPerSide = pps;
+        dxToBlockCenter = ((int)(pixPerSide*sqrt(0.75)));
+        
+        for (int x=0; x<configuredWidth; x++) {
+            for (int y=0; y<configuredHeight; y++)
+            table[PI(x,y)] = Remap_White;
+        }
+
+        int nxBlocks = (((int)configuredWidth/(2*dxToBlockCenter)) + 2);
+        int nyBlocks = (int)((configuredHeight/(3*pixPerSide/2)) + 2);
+        
+        struct block_list {
+            int    x,y;    // the location of the lower left corner
+            struct block b;
+        } block_list[nxBlocks][nyBlocks];
+        
+        // layout blocks
+        int row, col;
+        Pt start = {-irand(dxToBlockCenter/2), -irand(pixPerSide/2)};
+        
+        for (row=0; row<nyBlocks; ) {
+            Pt origin = start;
+            for (col=0; col<nxBlocks; col++) {
+                make_block(origin, &block_list[col][row].b);
+                origin.x = origin.x + 2*dxToBlockCenter;
+            }
+            if (++row & 1) { /* if odd rows are staggered to the left */
+                start.x -= dxToBlockCenter;
+                start.y += (3*pixPerSide/2);
+            } else {
+                start.x += dxToBlockCenter;
+                start.y += (3*pixPerSide/2);
+            }
+        }
+        
+        for (int row=0; row<nyBlocks; row++) {
+            for (int col=0; col<nxBlocks; col++)
+            for (int i=0; i<3; i++)    // for each face
+            for (int j=0; j<4; j++) {    // each corner
+                Pt p = block_list[col][row].b.f[i][j];
+                int x = p.x;
+                int y = p.y;
+                if (INRANGE(x,y))
+                    table[PI(x,y)] = Remap_Black;
+            }
+        }
+        
+        for (int row=0; row<nyBlocks; row++) {
+            for (int col=0; col<nxBlocks; col++) {
+                for (int i=0; i<3; i++) {
+                    float dxx, dxy, dyx, dyy;
+#define CORNERS (block_list[col][row].b.f[i])
+                    
+#ifdef notdef
+                    int xstart;
+                    int ll = 2;
+                    int lr = 1;
+                    int ul = 3;
+#else
+                    int ll = irand(4);
+                    int dir = irand(1)*2;
+                    int lr = (ll + 3 + dir) % 4;
+                    int ul = (ll + 1 + dir) % 4;
+#endif
+                    
+                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)configuredWidth;
+                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)configuredWidth;
+                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)configuredHeight;
+                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)configuredHeight;
+                    
+                    for (int y=0; y<configuredHeight; y++) {    // we could actually skip some of these
+                        for (int x=0; x<configuredWidth; x++)    {
+                            int nx = CORNERS[ll].x + y*dyx + x*dxx;
+                            int ny = CORNERS[ll].y + y*dyy + x*dxy;
+                            if (INRANGE(nx,ny))
+                                table[PI(nx,ny)] = PI(x,y);
+                        }
+                    }
+                }
+            }
+        }
+    }];
+    lastTransform.low = 100;
+    lastTransform.value = 170;
+    lastTransform.high = 250;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Edward Much #1"
+                                  description: @"twist"
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        double newa = a + (r/3.0)*(M_PI/180.0);
+        int x = CENTER_X + r*cos(newa);
+        int y = CENTER_Y + r*sin(newa);
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Dali"
+                                  description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        int x = CENTER_X + r*cos(a);
+        int y = CENTER_Y + r*sin(a);
+        x = CENTER_X + (r*cos(a + (y*x/(16*17000.0))));
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    lastTransform.low = 17000;
+    lastTransform.value = 4*lastTransform.low;
+    lastTransform.high = 10*lastTransform.low;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Edward Munch #2"
+                                  description: @"Ken's twist"
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        int x = CENTER_X + r*cos(a);
+        int y = CENTER_Y + (r*sin(a+r/30.0));
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    [transformList addObject:lastTransform];
+
+
     lastTransform = [Transform areaTransform: @"Seurat"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1832,8 +2023,8 @@ Frand(void) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Cartoon"
-                                 description: @""
+    lastTransform = [Transform areaTransform: @"Warhol"
+                                 description: @"cartoon colors"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         int ave_r=0, ave_g=0, ave_b=0;
 
