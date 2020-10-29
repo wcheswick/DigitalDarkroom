@@ -103,7 +103,6 @@ extern	transform_t do_shift_right;
 /* in area.c */
 extern	init_proc init_zoom;
 
-extern	transform_t do_brownian;
 extern	transform_t do_blur;
 extern	transform_t do_fs1;
 extern	transform_t do_fs2;

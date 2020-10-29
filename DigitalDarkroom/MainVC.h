@@ -26,4 +26,6 @@ typedef enum {
     AVCaptureDepthDataOutputDelegate> {
 }
 
+- (void) loadImageWithURL: (NSURL *)URL;
+
 @end

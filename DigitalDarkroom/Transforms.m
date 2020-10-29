@@ -112,13 +112,14 @@ PixelIndex_t dPI(int x, int y) {
 
 - (void) buildTransformList {
     [self addColorVisionDeficits];
-    [self addArtTransforms];
-    [self addNewGerardTransforms];
     [self addGeometricTransforms];
     [self addPointTransforms];
     [self addMiscTransforms];
     // tested:
     [self addAreaTransforms];
+    [self addArtTransforms];
+    [self addMonochromes];
+    [self addOldies];
 }
 
 #ifdef NOTDEF
@@ -463,6 +464,65 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform areaTransform: @"Shear"
+                                                  description: @"Shear"
+                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+        int x, y, dx, dy, r, yshift[configuredWidth];
+        memset(yshift, 0, sizeof(yshift));
+
+        for (x = r = 0; x < configuredWidth; x++) {
+            if (irand(256) < 128)
+                r--;
+            else
+                r++;
+            yshift[x] = r;
+        }
+        for (y = 0; y < configuredHeight; y++) {
+            if (irand(256) < 128)
+                r--;
+            else
+                r++;
+            for (x = 0; x < configuredWidth; x++) {
+                dx = x+r; dy = y+yshift[x];
+                if (dx >= configuredWidth || dy >= configuredHeight ||
+                    dx < 0 || dy < 0)
+                    dest[PI(x,y)] = White;
+                else
+                    dest[PI(x,y)] = src[PI(dx,dy)];
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Brownian"
+                                  description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int wpp) {
+        for (int y=1; y<configuredHeight-1; y++) {
+            for (int x=1; x<configuredWidth-1; x++) {
+                long nx = x;
+                long ny = y;
+                for (int i=0; i<wpp; i++) {
+                    nx += irand(3) - 1;
+                    ny += irand(3) - 1;
+                }
+                if (nx < 0)
+                    nx = 0;
+                else if (nx >= configuredWidth)
+                    nx = configuredWidth-1;
+                if (ny < 0)
+                    ny = 0;
+                else if (ny >= configuredHeight)
+                    ny = configuredHeight-1;
+                dest[PI(x,y)] = src[PI(nx,ny)];
+            }
+        }
+    }];
+    lastTransform.low = 3;
+    lastTransform.value = 5;
+    lastTransform.high = 10;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
 #ifdef OLD
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"
@@ -782,20 +842,6 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
-#ifdef NOTYET
-        lastTransform = [Transform areaTransform: @"remap test"
-                                         description: @"testing"
-                                          remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
-                for (int y=0; y<h; y++) {
-                    for (int x=(int)w-100; x<(int)w; x++) {
-                        table[TI(x,y,w)] = TI(x, y, w);
-                        table[TI(x - (w-100),y,w)] = TI(x, y, w);
-                    }
-                }
-            }];
-        [transformList addObject:lastTransform];
-#endif
-    // geom:
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
@@ -972,66 +1018,9 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     }];
     [transformList addObject:lastTransform];
 
-#ifdef notdef
-    [transformList addObject:[Transform areaTransform: @"Negative Sobel"
-                                          description: @"Negative Sobel filter"
-                                        areaFunction: ^(Pixel *src, Pixel *dest, int p, size_t maxX, size_t maxY) {
-        int x, y;
-        for (y=1; y<maxY-1; y++) {
-            for (x=1; x<maxX-1; x++) {
-                int aa, bb, s;
-                Pixel p = {0,0,0,Z};
-                aa = P(src, x-1,y-1).r + P(src, x-1,y).r * 2 +
-                    P(src, (x-1),(y+1)).r -
-                    P(src, (x+1),(y-1)).r - P(src, (x+1),(y)).r * 2 -
-                    P(src, (x+1),(y+1)).r;
-                bb = P(src, (x-1),(y-1)).r + P(src, (x),(y-1)).r * 2 +
-                    P(src, (x+1),(y-1)).r -
-                    P(src, (x-1),(y+1)).r - P(src, (x),(y+1)).r * 2 -
-                    P(src, (x+1),(y+1)).r;
-                s = sqrt(aa*aa + bb*bb);
-                p.r = CLIP(s);
-
-                aa = P(src, x-1,y-1).g + P(src, x-1,y).g * 2 +
-                    P(src, (x-1),(y+1)).g -
-                    P(src, (x+1),(y-1)).g - P(src, (x+1),(y)).g * 2 -
-                    P(src, (x+1),(y+1)).g;
-                bb = P(src, (x-1),(y-1)).g + P(src, (x),(y-1)).g * 2 +
-                    P(src, (x+1),(y-1)).g -
-                    P(src, (x-1),(y+1)).g - P(src, (x),(y+1)).g * 2 -
-                    P(src, (x+1),(y+1)).g;
-                s = sqrt(aa*aa + bb*bb);
-                p.g = CLIP(s);
-
-                aa = P(src, x-1,y-1).b + P(src, x-1,y).b * 2 +
-                     P(src, (x-1),(y+1)).b -
-                     P(src, (x+1),(y-1)).b - P(src, (x+1),(y)).b * 2 -
-                     P(src, (x+1),(y+1)).b;
-                 bb = P(src, (x-1),(y-1)).b + P(src, (x),(y-1)).b * 2 +
-                     P(src, (x+1),(y-1)).b -
-                     P(src, (x-1),(y+1)).b - P(src, (x),(y+1)).b * 2 -
-                     P(src, (x+1),(y+1)).b;
-                s = sqrt(aa*aa + bb*bb);
-                p.b = CLIP(s);
-
-                p.r = Z - p.r;  // stupid that I repeat the entire routine
-                p.g = Z - p.g;
-                p.b = Z - p.b;
-                dest[PI(x,y)] = p
-            }
-        }
-        
-    }]];
-#endif
-
 #ifdef notyet
-    extern  init_proc init_zoom;
-    
-    extern  transform_t do_brownian;
-    extern  transform_t do_blur;
     extern  transform_t do_fs1;
     extern  transform_t do_fs2;
-    extern  transform_t do_focus;
     extern  transform_t do_sampled_zoom;
     extern  transform_t do_mean;
     extern  transform_t do_median;
@@ -1160,7 +1149,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Swap colors"
-                                 description: @"r->, g->b, b->r"
+                                 description: @"r→g, g→b, b→r"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
             Pixel p = *src++;
@@ -1234,78 +1223,10 @@ irand(int i) {
     return random() % i;
 }
 
-- (void) addNewGerardTransforms {
-    [categoryNames addObject:@"New Gerard"];
+- (void) addOldies {
+    [categoryNames addObject:@"Old routines"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
-    lastTransform = [Transform areaTransform: @"Shear"
-                                                  description: @"Shear"
-                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        int x, y, dx, dy, r, yshift[configuredWidth];
-        memset(yshift, 0, sizeof(yshift));
-
-        for (x = r = 0; x < configuredWidth; x++) {
-            if (irand(256) < 128)
-                r--;
-            else
-                r++;
-            yshift[x] = r;
-        }
-        for (y = 0; y < configuredHeight; y++) {
-            if (irand(256) < 128)
-                r--;
-            else
-                r++;
-            for (x = 0; x < configuredWidth; x++) {
-                dx = x+r; dy = y+yshift[x];
-                if (dx >= configuredWidth || dy >= configuredHeight ||
-                    dx < 0 || dy < 0)
-                    dest[PI(x,y)] = White;
-                else
-                    dest[PI(x,y)] = src[PI(dx,dy)];
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Picasso"
-                                  description: @""
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int value) {
-        long x, y, r = 0;
-        long dx, dy, xshift[configuredHeight], yshift[configuredWidth];
-
-        for (y=0; y<h; y++)
-            for (x=0; x<w; x++)
-        table[PI(x,y)] = PI(x,y);
-
-        for (x = dx = 0; x < w; x++) {
-            if (dx == 0) {
-                r = (random()&63) - 32;
-                dx = 8+(random()&31);
-            } else
-                dx--;
-            yshift[x] = r;
-        }
-
-        for (y = dy = 0; y < h; y++) {
-            if (dy == 0) {
-                r = (random()&63) - 32;
-                dy = 8+(random()&31);
-            } else
-                dy--;
-            xshift[y] = r;
-        }
-
-        for (y=0; y<h; y++)
-            for (x=0; x<w; x++) {
-                dx = x + xshift[y];
-                dy = y + yshift[x];
-                if (dx < configuredWidth && dy < configuredHeight && dx>=0 && dy>=0)
-                    table[PI(x,y)] = PI(dx,dy);
-            }
-    }];
-    [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Motion blur"
                                   description: @""
@@ -1347,9 +1268,96 @@ irand(int i) {
     lastTransform.high = 40;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Old blur"
+                                  description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
+        for (int y=1; y<configuredHeight-1; y++) {
+            for (int x=1; x<configuredWidth-1; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (src[PI(x,y)].r + src[PI(x+1,y)].r +
+                       src[PI(x-1,y)].r +
+                       src[PI(x,y-1)].r +
+                       src[PI(x,y+1)].r)/5;
+                p.g = (src[PI(x,y)].g +
+                       src[PI(x+1,y)].g +
+                       src[PI(x-1,y)].g +
+                       src[PI(x,y-1)].g +
+                       src[PI(x,y+1)].g)/5;
+                p.b = (src[PI(x,y)].b +
+                       src[PI(x+1,y)].b +
+                       src[PI(x-1,y)].b +
+                       src[PI(x,y-1)].b +
+                       src[PI(x,y+1)].b)/5;
+                dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
 
+    lastTransform = [Transform areaTransform: @"Focus"
+                                  description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
+        for (int y=1; y<configuredHeight-1; y++) {
+            for (int x=1; x<configuredWidth-1; x++) {
+                int r, g, b;;
+                r = 5*src[PI(x,y)].r -
+                    src[PI(x+1,y)].r -
+                    src[PI(x-1,y)].r -
+                    src[PI(x,y-1)].r -
+                    src[PI(x,y+1)].r;
+                g = 5*src[PI(x,y)].g -
+                    src[PI(x+1,y)].g -
+                    src[PI(x-1,y)].g -
+                    src[PI(x,y-1)].g -
+                    src[PI(x,y+1)].g;
+                b = 5*src[PI(x,y)].b -
+                    src[PI(x+1,y)].b -
+                    src[PI(x-1,y)].b -
+                    src[PI(x,y-1)].b -
+                    src[PI(x,y+1)].b;
+               dest[PI(x,y)] = CRGB(r,g,b);
+            }
+        }
+    }];
+   [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Mean (slow and invisible)"   // area
+                                  description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int N) {
+#define NPIX    ((2*N+1)*(2*N+1))
+        for (int y=0; y<configuredHeight; y++) {    /*border*/
+            for (int x=0; x<N; x++)
+                dest[PI(x,y)] = dest[PI(configuredWidth-x-1,y)] = White;
+            if (y<N || y>configuredHeight-N)
+                for (int x=0; x<configuredWidth; x++)
+                    dest[PI(x,y)] = White;
+        }
+        for (int y=N; y<configuredHeight-N; y++) {
+            for (int x=N; x<configuredWidth-N; x++) {
+                int redsum=0, greensum=0, bluesum=0;
+
+                for (int dy=y-N; dy <= y+N; dy++)
+                    for (int dx=x-N; dx <=x+N; dx++) {
+                        redsum += src[PI(x,y)].r;
+                        greensum += src[PI(x,y)].g;
+                        bluesum += src[PI(x,y)].b;
+                    }
+                dest[PI(x,y)] = SETRGB(redsum/NPIX, greensum/NPIX, bluesum/NPIX);
+            }
+        }
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 3;
+    lastTransform.high = 10;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+}
+
+-(void) addMonochromes {
     [categoryNames addObject:@"Monochromes"];
-    transformList = [[NSMutableArray alloc] init];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
     lastTransform = [Transform colorTransform:@"Desaturate" description:@"desaturate" pointTransform:^Pixel(Pixel p) {
@@ -1383,17 +1391,17 @@ irand(int i) {
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Red channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(p.r,p.r,p.r);
+        return SETRGB(p.r,0,0);
     }];
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Green channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(p.g,p.g,p.g);
+        return SETRGB(0,p.g,0);
     }];
     [transformList addObject:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Blue channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(p.b,p.b,p.b);
+        return SETRGB(0,0,p.b);
     }];
     [transformList addObject:lastTransform];
     
@@ -1461,6 +1469,64 @@ irand(int i) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
+    lastTransform = [Transform areaTransform: @"Horizontalshift"
+                                  description: @""
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int n) {
+        n = -n;
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                int nx = x + n;
+                if (nx < 0 || nx >= configuredWidth)
+                    table[PI(x,y)] = Remap_White;
+                else
+                    table[PI(x,y)] = PI(nx,y);
+            }
+        }
+    }];
+    lastTransform.low = -200;
+    lastTransform.value = 0;
+    lastTransform.high = +200;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Vertical shift"
+                                  description: @""
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int n) {
+        n = -n;
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                int ny = y + n;
+                if (ny < 0 || ny >= configuredHeight)
+                    table[PI(x,y)] = Remap_White;
+                else
+                    table[PI(x,y)] = PI(x,ny);
+            }
+        }
+    }];
+    lastTransform.low = -200;
+    lastTransform.value = 0;
+    lastTransform.high = +200;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Zoom"
+                                  description: @""
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int z) {
+        float zoom = z/10.0;
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                long sx = CENTER_X + (x-CENTER_X)/zoom;
+                long sy = CENTER_Y + (y-CENTER_Y)/zoom;
+                table[PI(x,y)] = PI(sx,sy);
+            }
+    }
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 2;
+    lastTransform.high = 10;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Through a cylinder"
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
@@ -1517,7 +1583,7 @@ irand(int i) {
         else if (x >= configuredWidth)
             x = (int)configuredWidth - 1;
         return PI(x, y);
-   }];
+    }];
     [transformList addObject:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Andrew's projection"
@@ -1699,26 +1765,14 @@ Frand(void) {
 #ifdef notdef
         {"Cone projection", init_cone, do_remap, "Pinhead", "", 0, FRAME_COLOR},
         {"Fish eye",    init_fisheye, do_remap, "Fish", "eye", 0 ,AREA_COLOR},
-        {"Munch",       init_twist, do_remap, "Edward", "Munch", 0, AREA_COLOR},
-        {"Munch 2",     init_kentwist, do_remap, "Edward", "Munch 2", 0, AREA_COLOR}
 #endif
 
 #ifdef notdef
-        add_button(right(last_top->r), "escher", "Escher", Green, do_remap);
-        last_button->init = (void *)init_escher;
-        last_top = last_button;
-        add_button(below(last_button->r), "pinhead", "Pinhead", OLD, do_remap);
-        last_button->init = (void *)init_cone;
 
         add_button(right(last_top->r), "neon", "Neon", Green, do_sobel);
         last_top = last_button;
         add_button(below(last_button->r), "fisheye", "Fish eye", OLD, do_remap);
         last_button->init = (void *)init_fisheye;
-
-        add_button(right(last_top->r), "kite", "Kite", Green, do_remap);
-        last_top = last_button;
-        last_button->init = (void *)init_kite;
-        add_button(below(last_button->r), "logo", "logo", Green, do_logo);
 
         add_button(right(last_top->r), "pixels", "Pixels", Green, do_remap);
         last_button->init = (void *)init_pixels4;
@@ -1759,10 +1813,9 @@ make_block(Pt origin, struct block *b) {
 }
 
 - (void) addArtTransforms {
-    [categoryNames addObject:@"Art-style"];
+    [categoryNames addObject:@"Art simulations"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
     
     lastTransform = [Transform areaTransform: @"Escher"
                                  description: @""
@@ -1868,6 +1921,18 @@ make_block(Pt origin, struct block *b) {
     }];
     [transformList addObject:lastTransform];
     
+    lastTransform = [Transform areaTransform: @"Edward Munch #2"
+                                  description: @"Ken's twist"
+                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
+        int x = CENTER_X + r*cos(a);
+        int y = CENTER_Y + (r*sin(a+r/30.0));
+        if (INRANGE(x,y))
+            return PI(x,y);
+        else
+            return Remap_White;
+    }];
+    [transformList addObject:lastTransform];
+    
     lastTransform = [Transform areaTransform: @"Dali"
                                   description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {
@@ -1884,19 +1949,6 @@ make_block(Pt origin, struct block *b) {
     lastTransform.high = 10*lastTransform.low;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Edward Munch #2"
-                                  description: @"Ken's twist"
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        int x = CENTER_X + r*cos(a);
-        int y = CENTER_Y + (r*sin(a+r/30.0));
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    [transformList addObject:lastTransform];
-
 
     lastTransform = [Transform areaTransform: @"Seurat"
                                  description: @""
@@ -1943,26 +1995,6 @@ make_block(Pt origin, struct block *b) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
-#define CX    ((int)configuredWidth/4)
-#define CY    ((int)configuredHeight*3/4)
-#define OPSHIFT    3 //(3 /*was 0*/)
-
-    lastTransform = [Transform areaTransform: @"Op art (broken)"
-                                 description: @""
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
-                Pixel p = src[PI(x,y)];
-                int factor = (CX-(x-CX)*(x-CX) - (y-CY)*(y-CY));
-                channel r = p.r^(p.r*factor >> OPSHIFT);
-                channel g = p.g^(p.g*factor >> OPSHIFT);
-                channel b = p.b^(p.b*factor >> OPSHIFT);
-                dest[PI(x,y)] = CRGB(r,g,b);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-
     lastTransform = [Transform areaTransform: @"Mondrian"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1987,6 +2019,72 @@ make_block(Pt origin, struct block *b) {
                 dest[PI(x,y)] = p;
             }
         }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Warhol"
+                                 description: @"cartoon colors"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        int ave_r=0, ave_g=0, ave_b=0;
+
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                ave_r += p.r;
+                ave_g += p.g;
+                ave_b += p.b;
+            }
+
+        ave_r /= configuredWidth*configuredHeight;
+        ave_g /= configuredWidth*configuredHeight;
+        ave_b /= configuredWidth*configuredHeight;
+
+        for (int y=0; y<configuredHeight; y++)
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (src[PI(x,y)].r >= ave_r) ? Z : 0;
+                p.g = (src[PI(x,y)].g >= ave_g) ? Z : 0;
+                p.b = (src[PI(x,y)].b >= ave_b) ? Z : 0;
+                dest[PI(x,y)] = p;
+            }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Picasso"
+                                  description: @""
+                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int value) {
+        long x, y, r = 0;
+        long dx, dy, xshift[configuredHeight], yshift[configuredWidth];
+
+        for (y=0; y<h; y++)
+            for (x=0; x<w; x++)
+        table[PI(x,y)] = PI(x,y);
+
+        for (x = dx = 0; x < w; x++) {
+            if (dx == 0) {
+                r = (random()&63) - 32;
+                dx = 8+(random()&31);
+            } else
+                dx--;
+            yshift[x] = r;
+        }
+
+        for (y = dy = 0; y < h; y++) {
+            if (dy == 0) {
+                r = (random()&63) - 32;
+                dy = 8+(random()&31);
+            } else
+                dy--;
+            xshift[y] = r;
+        }
+
+        for (y=0; y<h; y++)
+            for (x=0; x<w; x++) {
+                dx = x + xshift[y];
+                dy = y + yshift[x];
+                if (dx < configuredWidth && dy < configuredHeight && dx>=0 && dy>=0)
+                    table[PI(x,y)] = PI(dx,dy);
+            }
     }];
     [transformList addObject:lastTransform];
 
@@ -2023,39 +2121,25 @@ make_block(Pt origin, struct block *b) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Warhol"
-                                 description: @"cartoon colors"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        int ave_r=0, ave_g=0, ave_b=0;
+#define CX    ((int)configuredWidth/4)
+#define CY    ((int)configuredHeight*3/4)
+#define OPSHIFT    3 //(3 /*was 0*/)
 
-        for (int y=0; y<configuredHeight; y++)
+    lastTransform = [Transform areaTransform: @"Op art (broken)"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+        for (int y=0; y<configuredHeight; y++) {
             for (int x=0; x<configuredWidth; x++) {
                 Pixel p = src[PI(x,y)];
-                ave_r += p.r;
-                ave_g += p.g;
-                ave_b += p.b;
+                int factor = (CX-(x-CX)*(x-CX) - (y-CY)*(y-CY));
+                channel r = p.r^(p.r*factor >> OPSHIFT);
+                channel g = p.g^(p.g*factor >> OPSHIFT);
+                channel b = p.b^(p.b*factor >> OPSHIFT);
+                dest[PI(x,y)] = CRGB(r,g,b);
             }
-
-        ave_r /= configuredWidth*configuredHeight;
-        ave_g /= configuredWidth*configuredHeight;
-        ave_b /= configuredWidth*configuredHeight;
-
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0; x<configuredWidth; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = (src[PI(x,y)].r >= ave_r) ? Z : 0;
-                p.g = (src[PI(x,y)].g >= ave_g) ? Z : 0;
-                p.b = (src[PI(x,y)].b >= ave_b) ? Z : 0;
-                dest[PI(x,y)] = p;
-            }
+        }
     }];
     [transformList addObject:lastTransform];
-
-#ifdef notdef
-extern  init_proc init_seurat;
-extern  init_proc init_dali;
-extern  init_proc init_escher;
-#endif
 }
 
 #ifdef notdef

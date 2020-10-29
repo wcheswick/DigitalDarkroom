@@ -189,6 +189,29 @@ typedef enum {
     return self;
 }
 
+#ifdef notdef
+- (void) loadImageWithURL: (NSURL *)URL {
+    NSString *path = [URL absoluteString];
+    NSLog(@"startNewDocumentWithURL: LibVC starting document %@", path);
+    if (![URL isFileURL]) {
+        DownloadVC *dVC = [[DownloadVC alloc]
+                           initWithURL: URL
+                           from: self];
+        dVC.modalPresentationStyle = UIModalPresentationFormSheet;
+        dVC.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+        [self presentViewController:dVC animated:YES completion:NULL];
+        // download will call back to processIncomingFile when
+        // the download is complete
+        return;
+    }
+    
+    NSString *newPath = [URL path];
+    [self processIncomingFile:newPath
+                suggestedName:[newPath lastPathComponent]
+                      fromURL:nil];
+}
+#endif
+
 // The section headings might change.  Only propagate or initialize the ones we have now.
 
 - (void) loadTransformSectionVisInfo {
@@ -1372,11 +1395,13 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 
 - (IBAction) moveSlider:(UISlider *)slider {
     long executeIndex = slider.tag;
-    NSLog(@"  new value is %.0f", slider.value);
     @synchronized (transforms.sequence) {
         Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
-        transform.value = slider.value;
-        transform.newValue = YES;
+        if (slider.value != transform.value) {
+            NSLog(@"  new value is %.0f", slider.value);
+            transform.value = slider.value;
+            transform.newValue = YES;
+        }
     }
     [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }

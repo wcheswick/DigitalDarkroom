@@ -120,28 +120,6 @@ do_sampled_zoom(void *param, image in, image out) {
 	return 1;
 }
 
-int
-do_blur(void *param, image in, image out) {
-	int x,y;
-	
-	for (y=1; y<MAX_Y-1; y++) {
-		for (x=1; x<MAX_X-1; x++) {
-			Pixel p = {0,0,0,Z};
-			p.r = (in[y][x].r + in[y][x+1].r +
-				     in[y][x-1].r +	in[y-1][x].r +
-				     in[y+1][x].r)/5;
-			p.g = (in[y][x].g + in[y][x+1].g +
-				     in[y][x-1].g +	in[y-1][x].g +
-				     in[y+1][x].g)/5;
-			p.b = (in[y][x].b + in[y][x+1].b +
-				     in[y][x-1].b +	in[y-1][x].b +
-				     in[y+1][x].b)/5;
-			out[y][x] = p;
-		}
-	}
-	return 1;
-}
-
 #define N	3
 #define NPIX	((2*N+1)*(2*N+1))
 
@@ -216,29 +194,6 @@ do_median(void *param, image in, image out) {
 					break;
 			}
 			out[y][x] = SETRGB(r, g, b);
-		}
-	}
-	return 1;
-}
-
-
-int
-do_focus(void *param, image in, image out) {
-	int x,y;
-	
-	for (y=1; y<MAX_Y-1; y++) {
-		for (x=1; x<MAX_X-1; x++) {
-			int r, g, b;
-			r = 5*in[y][x].r - in[y][x+1].r -
-				in[y][x-1].r - in[y-1][x].r -
-				in[y+1][x].r;
-			g = 5*in[y][x].g - in[y][x+1].g -
-				in[y][x-1].g - in[y-1][x].g -
-				in[y+1][x].g;
-			b = 5*in[y][x].b - in[y][x+1].b -
-				in[y][x-1].b - in[y-1][x].b -
-				in[y+1][x].b;
-			out[y][x] = CRGB(r,g,b);
 		}
 	}
 	return 1;
