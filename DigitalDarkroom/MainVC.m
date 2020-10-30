@@ -12,8 +12,8 @@
 #import "Defines.h"
 
 #define BUTTON_FONT_SIZE    20
-#define STATS_W             450
-#define STATS_LABEL_FONT_SIZE   14
+#define STATS_W             75
+#define STATS_FONT_SIZE     18
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -27,9 +27,9 @@
 #define ACTIVE_TABLE_ENTRY_H   40
 #define ACTIVE_SLIDER_H     ACTIVE_TABLE_ENTRY_H
 
-#define SOURCE_THUMB_W  80
-#define SOURCE_THUMB_H  80
-#define SOURCE_CELL_W   200
+#define SOURCE_THUMB_W  120
+#define SOURCE_THUMB_H  SOURCE_THUMB_W
+#define SOURCE_CELL_W   320
 #define SOURCE_BUTTON_FONT_SIZE 24
 
 #define MIN_SLIDER_W    100
@@ -367,13 +367,14 @@ typedef enum {
                                                       trashButton,
                                                       nil];
     
-    allStatsLabel = [[UILabel alloc] init];
+    allStatsLabel = [[UILabel alloc] initWithFrame:CGRectMake(LATER, 0, STATS_W, TABLE_ENTRY_H)];
     allStatsLabel.textAlignment = NSTextAlignmentRight;
-    allStatsLabel.text = @"---";
-    allStatsLabel.font = [UIFont
-                       monospacedSystemFontOfSize:STATS_LABEL_FONT_SIZE
-                       weight:UIFontWeightRegular];
-    
+    allStatsLabel.text = nil;
+    allStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+    allStatsLabel.adjustsFontSizeToFitWidth = YES;
+
+    executeTableVC.tableView.tableFooterView = allStatsLabel;
+
     availableTableVC.tableView.tag = TransformTable;
     availableTableVC.tableView.rowHeight = TABLE_ENTRY_H;
     availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -572,11 +573,14 @@ typedef enum {
             availableNavVC.view.frame = f;
        }
     }
-    f = executeNavVC.navigationBar.frame;
+    f = executeNavVC.view.frame;
     f.origin.x = 0;
-    f.origin.y = f.size.height;
-    f.size.height = executeNavVC.view.frame.size.height - f.origin.y;
+    f.origin.y = executeNavVC.navigationBar.frame.size.height;
+    f.size.height -= f.origin.y;
     executeTableVC.view.frame = f;
+    
+    executeTableVC.tableView.tableFooterView = allStatsLabel;
+    SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -637,11 +641,12 @@ typedef enum {
        droppedPerSec:(float)dps
           busyPerSec:(float)bps
         transformAve:(double) tams {
+    NSString *debug = transforms.debugTransforms ? @"(debug)  " : @"";
     dispatch_async(dispatch_get_main_queue(), ^{
         if (fps) {
-            self->allStatsLabel.text = [NSString stringWithFormat:@"%.1f ms", tams];
+            self->allStatsLabel.text = [NSString stringWithFormat:@"%@  %.0f ms   ", debug, tams];
         } else {
-            self->allStatsLabel.text = [NSString stringWithFormat:@"---"];
+            self->allStatsLabel.text = [NSString stringWithFormat:@"%@  ---   x", debug];
         }
         [self->allStatsLabel setNeedsDisplay];
     });
@@ -940,9 +945,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
         case TransformTable:
             return transforms.categoryNames.count;
         case SourceSelectTable:
-            return 1;
         case ActiveTable:
-            return 2;   // entries, plus a header for second section for stats
+            return 1;
     }
     return 1;
 }
@@ -962,18 +966,15 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
             if ([self isCollapsed:name]) {
                 return 0;
             } else {
-                    NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                    return transformList.count;
-                }
+                NSArray *transformList = [transforms.categoryList objectAtIndex:section];
+                return transformList.count;
             }
-        case ActiveTable:
-            if (section == STATS_HEADER_INDEX)
-                return 0;
-            else
-                return transforms.sequence.count;
         }
-            return 1;
+        case ActiveTable:
+            return transforms.sequence.count;
     }
+    return 1;
+}
 
 - (UIView *)tableView:(UITableView *)tableView
 viewForHeaderInSection:(NSInteger)section {
@@ -981,15 +982,7 @@ viewForHeaderInSection:(NSInteger)section {
     TableTags tableType = (TableTags) tableView.tag;
     switch (tableType) {
         case SourceSelectTable: {
-            f = CGRectMake(0, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
-            UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
-            sectionTitle.adjustsFontSizeToFitWidth = YES;
-            sectionTitle.textAlignment = NSTextAlignmentLeft;
-            sectionTitle.font = [UIFont
-                                 systemFontOfSize:SECTION_HEADER_FONT_SIZE
-                                 weight:UIFontWeightMedium];
-            sectionTitle.text = [@" " stringByAppendingString:[transforms.categoryNames objectAtIndex:section]];
-            return sectionTitle;
+            return nil;
         }
         case TransformTable: {
             f = CGRectMake(SEP, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
@@ -1023,13 +1016,8 @@ viewForHeaderInSection:(NSInteger)section {
             [sectionHeaderView addGestureRecognizer:tap];
             return sectionHeaderView;
         }
-        case ActiveTable: {
-            f = CGRectMake(0, 0, tableView.frame.size.width - SEP, ACTIVE_TABLE_ENTRY_H);
-            UIView *headerView = [[UIView alloc] initWithFrame:f];
-            allStatsLabel.frame = f;
-            [headerView addSubview:allStatsLabel];
-            return headerView;
-        }
+        case ActiveTable:
+            return nil;
     }
 }
 
@@ -1047,33 +1035,24 @@ viewForHeaderInSection:(NSInteger)section {
     [availableTableVC.tableView endUpdates];
 }
 
-#ifdef notdef
--(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(nonnull NSIndexPath *)indexPath {
-    switch (tableView.tag) {
-        case ActiveTable:
-        case TransformTable:
-            return TABLE_ENTRY_H;
-        case SourceSelectTable:
-            return SOURCE_THUMB_H;
-    }
-    return 30;
-}
-#endif
-
 -(CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
     switch (tableView.tag) {
         case SourceSelectTable:
-        case TransformTable:
-            return 50;
         case ActiveTable:
-            switch (section) {
-                case 0:
-                    return 0;
-                default:    // second section header has our stats
-                    return 25;
-            }
+            return 0;
+        default:
+            return TABLE_ENTRY_H;
     }
-    return 50;
+}
+
+
+-(CGFloat) tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
+    switch (tableView.tag) {
+        case ActiveTable:
+            return TABLE_ENTRY_H;
+        default:
+            return 0;
+    }
 }
 
 - (BOOL)tableView:(UITableView *)tableView
@@ -1195,11 +1174,19 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             label.numberOfLines = 0;
             label.font = [UIFont systemFontOfSize:20];
             
+            f.size.width = STATS_W;
+            f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
+            UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
+            stepStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+            stepStatsLabel.adjustsFontSizeToFitWidth = YES;
+            stepStatsLabel.tag = EXECUTE_STATS_TAG;
+            stepStatsLabel.textAlignment = NSTextAlignmentRight;
+            [cell.contentView addSubview:stepStatsLabel];
+
             if (transform.hasParameters) {
                 label.text = [transform.name
                               stringByAppendingString:[NSString
                                                        stringWithFormat:@"  %d  ", transform.value]];
-                
                 f.origin.x = RIGHT(label.frame);
                 f.size.width = SLIDER_VALUE_W;
                 UILabel *minValue = [[UILabel alloc] initWithFrame:f];
@@ -1208,15 +1195,6 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 minValue.adjustsFontSizeToFitWidth = YES;
                 minValue.font = [UIFont systemFontOfSize:24];
                 [cell.contentView addSubview:minValue];
-                
-                f.origin.x = cell.contentView.frame.size.width - SLIDER_VALUE_W;
-                f.size.width = 1.5*SLIDER_VALUE_W;
-                UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
-                stepStatsLabel.font = [UIFont systemFontOfSize:18];
-                stepStatsLabel.adjustsFontSizeToFitWidth = YES;
-                stepStatsLabel.tag = EXECUTE_STATS_TAG;
-                stepStatsLabel.textAlignment = NSTextAlignmentRight;
-                [cell.contentView addSubview:stepStatsLabel];
                 
                 f.origin.x -= SLIDER_VALUE_W + SEP;
                 f.size.width = SLIDER_VALUE_W;
@@ -1355,7 +1333,21 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         transformAveTime = 1000.0 *(transformTotalElapsed/transformCount);
     else
         transformAveTime = NAN;
-    
+    for (size_t i=0; i<transforms.sequence.count; i++) {
+        Transform *t = [transforms.sequence objectAtIndex:i];
+        NSString *ave;
+        if (transformAveTime)
+            ave = [NSString stringWithFormat:@"%.0f ms   ", 1000.0 * t.elapsedProcessingTime/transformCount];
+        else
+            ave = @"---   ";
+        t.elapsedProcessingTime = 0.0;
+        UITableViewCell *cell = [executeTableVC.tableView
+                                 cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:0]];
+        UILabel *stepStatsLabel = (UILabel *)[cell viewWithTag:EXECUTE_STATS_TAG];
+        stepStatsLabel.text = ave;
+        [stepStatsLabel setNeedsDisplay];
+    }
+ 
     [self updateStats: frameCount/elapsed
                 depthPerSec:depthCount/elapsed
              droppedPerSec:droppedCount/elapsed
@@ -1372,7 +1364,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     f.size.height *= 0.75;
     f.size.width = SOURCE_CELL_W;
     sourcesTableVC.tableView.frame = f;
-    sourcesTableVC.preferredContentSize = CGSizeMake(400, 400); // f.size;
+    sourcesTableVC.title = nil;
     sourcesTableVC.tableView.tag = SourceSelectTable;
     sourcesTableVC.tableView.delegate = self;
     sourcesTableVC.tableView.dataSource = self;

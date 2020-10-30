@@ -12,7 +12,7 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+// #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
@@ -60,7 +60,8 @@ size_t configuredWidth, configuredHeight;
 size_t configuredBytesPerRow, configuredPixelsInImage;
 
 Pixel *imBufs[2];
-
+channel **sChan = 0;
+channel **dChan = 0;
 
 #define RPI(x,y)    (PixelIndex_t)(((y)*configuredWidth) + (x))
 
@@ -93,10 +94,16 @@ PixelIndex_t dPI(int x, int y) {
 @synthesize bytesPerRow;
 @synthesize lastTransform;
 @synthesize finalScale;
+@synthesize debugTransforms;
 
 - (id)init {
     self = [super init];
     if (self) {
+#ifdef DEBUG_TRANSFORMS
+        debugTransforms = YES;
+#else
+        debugTransforms = NO;
+#endif
         configuredBytesPerRow = 0;    // no current configuration
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
@@ -289,6 +296,12 @@ int sourceImageIndex, destImageIndex;
               configuredHeight,
               bytesPerRow, width, height);
 #endif
+        if (sChan) {    // release previous memory
+            for (int x=0; x<configuredWidth; x++) {
+                free((void *)sChan[x]);
+                free((void *)dChan[x]);
+            }
+        }
         configuredBytesPerRow = bytesPerRow;
         configuredHeight = height;
         configuredWidth = width;
@@ -304,6 +317,14 @@ int sourceImageIndex, destImageIndex;
                 free(imBufs[i]);
             imBufs[i] = (Pixel *)calloc(configuredPixelsInImage, sizeof(Pixel));
         }
+        // also allocate a channel-sized buffer, for single channel ops
+
+        sChan = (channel **)malloc(configuredWidth*sizeof(channel *));
+        dChan = (channel **)malloc(configuredWidth*sizeof(channel *));
+        for (int x=0; x<configuredWidth; x++) {
+            sChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
+            dChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
+        }
     }
     
     int sourceImageIndex = 0;
@@ -318,10 +339,10 @@ int sourceImageIndex, destImageIndex;
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     CGImageRelease(imageRef);
     
+    NSDate *transformStart = [NSDate now];
     for (int i=0; i<executeList.count; i++) {
         Transform *transform = [executeList objectAtIndex:i];
         
-        NSDate *transformStart = [NSDate now];
         [self performTransform:transform
                           from:imBufs[sourceImageIndex]
                             to:imBufs[destImageIndex]
@@ -330,8 +351,9 @@ int sourceImageIndex, destImageIndex;
         int t = sourceImageIndex;     // swap
         sourceImageIndex = destImageIndex;
         destImageIndex = t;
-        NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
-        transform.elapsedProcessingTime += elapsed;
+        NSDate *transformEnd = [NSDate now];
+        transform.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:transformStart];
+        transformStart = transformEnd;
     }
     
     // copy our bytes into the context.  This is a kludge.
@@ -458,6 +480,42 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     }
 }
 #endif
+
+
+void
+focus(channel *s[configuredHeight], channel *d[configuredHeight]) {
+    for (int y=1; y<configuredHeight-1; y++) {
+        for (int x=1; x<configuredWidth-1; x++) {
+            int c =
+                5*s[x][y] -
+                s[x+1][y] -
+                s[x-1][y] -
+                s[x][y-1] -
+                s[x][y+1];
+            d[x][y] = CLIP(c);
+        }
+    }
+}
+
+void
+sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
+    for (int y=1; y<configuredHeight-1-1; y++) {
+        for (int x=1; x<configuredWidth-1-1; x++) {
+            int aa, bb;
+            aa = s[x-1][y-1] + s[x-1][y]*2 + s[x-1][y+1] -
+                s[x+1][y-1] - s[x+1][y]*2 - s[x+1][y+1];
+            bb = s[x-1][y-1] + s[x][y-1]*2 +
+                s[x+1][y-1] -
+                s[x-1][y+1] - s[x][y+1]*2 -
+                s[x+1][y+1];
+            int diff = sqrt(aa*aa + bb*bb);
+            if (diff > Z)
+                d[x][y] = Z;
+            else
+                d[x][y] = diff;
+        }
+    }
+}
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area"];
@@ -912,54 +970,50 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Sobel"
+    lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-#define P(b,x,y)    (b)[PI(x,y)]
-        for (int y=1; y<configuredHeight-1-1; y++) {
-            for (int x=1; x<configuredWidth-1-1; x++) {
-                int aa, bb, s;
-                Pixel p = {0,0,0,Z};
-                aa = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x-1, y))*2 + R(P(srcBuf,x-1, y+1)) -
-                    R(P(srcBuf,x+1, y-1)) - R(P(srcBuf,x+1, y))*2 - R(P(srcBuf,x+1, y+1));
-                bb = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x, y-1))*2+
-                    R(P(srcBuf,x+1, y-1)) -
-                    R(P(srcBuf,x-1, y+1)) - R(P(srcBuf,x, y+1))*2-
-                    R(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.r = Z;
-                else
-                    p.r = s;
-                
-                aa = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x-1, y))*2+
-                    G(P(srcBuf,x-1, y+1))-
-                    G(P(srcBuf,x+1, y-1))-G(P(srcBuf,x+1, y))*2-
-                    G(P(srcBuf,x+1, y+1));
-                bb = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x, y-1))*2+
-                    G(P(srcBuf,x+1, y-1))-
-                    G(P(srcBuf,x-1, y+1))-G(P(srcBuf,x, y+1))*2-
-                    G(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.g = Z;
-                else
-                    p.g = s;
-                
-                aa = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x-1, y))*2+
-                    B(P(srcBuf,x-1, y+1))-
-                    B(P(srcBuf,x+1, y-1))-B(P(srcBuf,x+1, y))*2-
-                    B(P(srcBuf,x+1, y+1));
-                bb = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x, y-1))*2+
-                    R(P(srcBuf,x+1, y-1))-
-                    B(P(srcBuf,x-1, y+1))-B(P(srcBuf,x, y+1))*2-
-                    B(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.b = Z;
-                else
-                    p.b = s;
-                dstBuf[PI(x,y)] = p;
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                sChan[x][y] = LUM(srcBuf[PI(x,y)]);
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                channel d = dChan[x][y];
+                dstBuf[PI(x,y)] = SETRGB(d,d,d);    // install blue
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Color Sobel"
+                                          description: @"Edge detection"
+                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
+        for (int y=0; y<configuredHeight; y++) {    // red
+            for (int x=0; x<configuredWidth; x++) {
+                sChan[x][y] = srcBuf[PI(x,y)].r;
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].r = dChan[x][y];    // install red
+                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].g = dChan[x][y];    // install green
+                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
             }
         }
     }];
@@ -968,51 +1022,29 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Surreal"
                                           description: @"Negative of Sobel filter"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-#define P(b,x,y)    (b)[PI(x,y)]
-        for (int y=1; y<configuredHeight-1-1; y++) {
-            for (int x=1; x<configuredWidth-1-1; x++) {
-                int aa, bb, s;
-                Pixel p = {0,0,0,Z};
-                aa = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x-1, y))*2 + R(P(srcBuf,x-1, y+1)) -
-                    R(P(srcBuf,x+1, y-1)) - R(P(srcBuf,x+1, y))*2 - R(P(srcBuf,x+1, y+1));
-                bb = R(P(srcBuf,x-1, y-1)) + R(P(srcBuf,x, y-1))*2+
-                    R(P(srcBuf,x+1, y-1)) -
-                    R(P(srcBuf,x-1, y+1)) - R(P(srcBuf,x, y+1))*2-
-                    R(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.r = Z;
-                else
-                    p.r = s;
-                
-                aa = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x-1, y))*2+
-                    G(P(srcBuf,x-1, y+1))-
-                    G(P(srcBuf,x+1, y-1))-G(P(srcBuf,x+1, y))*2-
-                    G(P(srcBuf,x+1, y+1));
-                bb = G(P(srcBuf,x-1, y-1))+G(P(srcBuf,x, y-1))*2+
-                    G(P(srcBuf,x+1, y-1))-
-                    G(P(srcBuf,x-1, y+1))-G(P(srcBuf,x, y+1))*2-
-                    G(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.g = Z;
-                else
-                    p.g = s;
-                
-                aa = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x-1, y))*2+
-                    B(P(srcBuf,x-1, y+1))-
-                    B(P(srcBuf,x+1, y-1))-B(P(srcBuf,x+1, y))*2-
-                    B(P(srcBuf,x+1, y+1));
-                bb = B(P(srcBuf,x-1, y-1))+B(P(srcBuf,x, y-1))*2+
-                    R(P(srcBuf,x+1, y-1))-
-                    B(P(srcBuf,x-1, y+1))-B(P(srcBuf,x, y+1))*2-
-                    B(P(srcBuf,x+1, y+1));
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    p.b = Z;
-                else
-                    p.b = s;
-                dstBuf[PI(x,y)] = p;
+        for (int y=0; y<configuredHeight; y++) {    // red
+            for (int x=0; x<configuredWidth; x++) {
+                sChan[x][y] = srcBuf[PI(x,y)].r;
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].r = Z - dChan[x][y];    // install red
+                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].g = Z - dChan[x][y];    // install green
+                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].b = Z - dChan[x][y];    // install blue
             }
         }
     }];
@@ -1165,8 +1197,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         u_long hist[Z+1];
         float map[Z+1];
         
-        for (int i = 0; i < Z+1; i++)
-            hist[i] = 0;
         for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
             Pixel p = src[pi];
             hist[LUM(p)]++;
@@ -1295,33 +1325,36 @@ irand(int i) {
     }];
     [transformList addObject:lastTransform];
     
-
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
-                                areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
-        for (int y=1; y<configuredHeight-1; y++) {
-            for (int x=1; x<configuredWidth-1; x++) {
-                int r, g, b;;
-                r = 5*src[PI(x,y)].r -
-                    src[PI(x+1,y)].r -
-                    src[PI(x-1,y)].r -
-                    src[PI(x,y-1)].r -
-                    src[PI(x,y+1)].r;
-                g = 5*src[PI(x,y)].g -
-                    src[PI(x+1,y)].g -
-                    src[PI(x-1,y)].g -
-                    src[PI(x,y-1)].g -
-                    src[PI(x,y+1)].g;
-                b = 5*src[PI(x,y)].b -
-                    src[PI(x+1,y)].b -
-                    src[PI(x-1,y)].b -
-                    src[PI(x,y-1)].b -
-                    src[PI(x,y+1)].b;
-               dest[PI(x,y)] = CRGB(r,g,b);
+                                areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int streak) {
+        for (int y=0; y<configuredHeight; y++) {    // red
+            for (int x=0; x<configuredWidth; x++) {
+                sChan[x][y] = srcBuf[PI(x,y)].r;
+            }
+        }
+        focus(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].r = dChan[x][y];    // install red
+                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
+            }
+        }
+        focus(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].g = dChan[x][y];    // install green
+                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
+            }
+        }
+        focus(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
             }
         }
     }];
-   [transformList addObject:lastTransform];
+    [transformList addObject:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Mean (slow and invisible)"   // area
                                   description: @""
@@ -2017,6 +2050,59 @@ make_block(Pt origin, struct block *b) {
                 if (c&2) p.g = Z;
                 if (c&4) p.b = Z;
                 dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Charcoal sketch"
+                                 description: @""
+                                areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
+        // monochrome sobel...
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                sChan[x][y] = LUM(srcBuf[PI(x,y)]);
+            }
+        }
+        sobel(sChan, dChan);
+        
+        // ... + negative + high contrast...
+        u_long ps;
+        u_long hist[Z+1];
+        float map[Z+1];
+        for (int i = 0; i < Z+1; i++)
+            hist[i] = 0;
+
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                channel c = Z - dChan[x][y];
+                dChan[x][y] = c;
+                hist[c]++;
+            }
+        }
+        
+        ps = 0;
+        for (int i = 0; i < Z+1; i++) {
+            map[i] = Z*((float)ps/((float)configuredPixelsInImage));
+            ps += hist[i];
+        }
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                channel lu = dChan[x][y];
+                float a = (map[lu] - lu)/Z;
+                int nc = lu + (a*(Z-lu));
+                //sChan[x][y] = CLIP(nc);
+                sChan[x][y] = dChan[x][y];
+            }
+        }
+        
+        focus(sChan, dChan);
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                channel c = dChan[x][y];
+                // high contrast....
+                c = CLIP((c-HALF_Z)*2+HALF_Z);
+                dstBuf[PI(x,y)] = SETRGB(c,c,c);
             }
         }
     }];

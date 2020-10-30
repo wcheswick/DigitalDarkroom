@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSMutableArray *categoryList;
     NSMutableArray *sequence;       // what we are supposed to execute (must be synchronized when changed)
     BOOL volatile sequenceChanged;  // if we need to update our local copy
+    BOOL debugTransforms;
     
     size_t bytesPerRow;
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
@@ -35,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSArray *updatedTransformList;
 @property (assign)              volatile BOOL paramsChanged;
 @property (assign)              CGFloat finalScale;
+@property (assign)              BOOL debugTransforms;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 
