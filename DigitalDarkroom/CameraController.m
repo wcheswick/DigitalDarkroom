@@ -145,7 +145,7 @@
           (long)[[UIDevice currentDevice] orientation],
           [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]]);
     NSLog(@"  + video orientation 2: %ld, %@", (long)videoOrientation,
-          [CameraController dumpAVCaptureVideoOrientation:videoOrientation]);
+          captureOrientationNames[videoOrientation]);
 #endif
     
     if (captureSession) {
@@ -310,40 +310,41 @@
     return captureSession.isRunning;
 }
 
-+ (NSString *) dumpAVCaptureVideoOrientation: (AVCaptureVideoOrientation) vo {
-    NSArray *names = @[@"(zero)",
-        @"Portrait",
-        @"PortraitUpsideDown",
-        @"LandscapeRight",
-        @"LandscapeLeft"];
-    return [names objectAtIndex:vo];
-}
+#ifdef XXX
+static NSString * const sectionTitles[] = {
+        [0] = @"    Cameras",
+        [1] = @"    Samples",
+        [2] = @"    From library",
+    };
+#endif
 
-+ (NSString *) dumpDeviceOrientation: (UIDeviceOrientation) devo {
-    NSArray *names = @[@"Unknown",
-                       @"Portrait",
-                       @"PortraitUpsideDown",
-                       @"LandscapeLeft",
-                       @"LandscapeRight",
-                       @"FaceUp",
-                       @"FaceDown"];
-    return [names objectAtIndex:devo];
-}
+static NSString * const captureOrientationNames[] = {
+    @"(zero)",
+    @"Portrait",
+    @"PortraitUpsideDown",
+    @"LandscapeRight",
+    @"LandscapeLeft",
+};
 
-+ (NSString *) dumpCurrentDeviceOrientation {
-    return [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]];
-}
+static NSString * const deviceOrientationNames[] = {
+    @"Unknown",
+    @"Portrait",
+    @"PortraitUpsideDown",
+    @"LandscapeLeft",
+    @"LandscapeRight",
+    @"FaceUp",
+    @"FaceDown"
+};
 
-+ (NSString *) dumpImageOrientation: (UIImageOrientation) io {
-    NSArray *names = @[@"default",            // default orientation
-                       @"rotate 180",
-                       @"rotate 90 CCW",
-                       @"rotate 90 CW",
-                       @"Up Mirrored",
-                       @"Down Mirrored",
-                       @"Left Mirrored",
-                       @"Right Mirrored"];
-    return [names objectAtIndex:io];
-}
+static NSString * const imageOrientation[] = {
+    @"default",            // default orientation
+    @"rotate 180",
+    @"rotate 90 CCW",
+    @"rotate 90 CW",
+    @"Up Mirrored",
+    @"Down Mirrored",
+    @"Left Mirrored",
+    @"Right Mirrored"
+};
 
 @end

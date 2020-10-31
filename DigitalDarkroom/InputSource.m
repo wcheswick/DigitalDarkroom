@@ -27,13 +27,17 @@
     return self;
 }
 
+
+static NSString * const cameraNames[] = {
+    @"Front camera",
+    @"Rear camera",
+    @"Front 3D camera",
+    @"Rear 3D camera"
+};
+
 + (NSString *)cameraNameFor:(Cameras)camera {
     assert(ISCAMERA(camera));
-    NSArray *cameraNames = @[@"Front camera",
-                             @"Rear camera",
-                             @"Front 3D camera",
-                             @"Rear 3D camera"];
-    return [cameraNames objectAtIndex:camera];
+    return cameraNames[camera];
 }
 
 @end

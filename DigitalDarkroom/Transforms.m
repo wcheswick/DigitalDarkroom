@@ -2088,9 +2088,9 @@ make_block(Pt origin, struct block *b) {
         }
         for (int y=0; y<configuredHeight; y++) {
             for (int x=0; x<configuredWidth; x++) {
-                channel lu = dChan[x][y];
-                float a = (map[lu] - lu)/Z;
-                int nc = lu + (a*(Z-lu));
+                //channel lu = dChan[x][y];
+                //float a = (map[lu] - lu)/Z;
+                //int nc = lu + (a*(Z-lu));
                 //sChan[x][y] = CLIP(nc);
                 sChan[x][y] = dChan[x][y];
             }

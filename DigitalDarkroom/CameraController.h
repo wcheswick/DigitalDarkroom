@@ -37,11 +37,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation;
 
-+ (NSString *) dumpAVCaptureVideoOrientation: (AVCaptureVideoOrientation) vo;
-+ (NSString *) dumpDeviceOrientation: (UIDeviceOrientation) devo;
-+ (NSString *) dumpCurrentDeviceOrientation;
-+ (NSString *) dumpImageOrientation: (UIImageOrientation) io;
-
 @end
 
 NS_ASSUME_NONNULL_END

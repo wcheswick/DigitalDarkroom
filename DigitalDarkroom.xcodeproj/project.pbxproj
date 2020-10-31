@@ -35,6 +35,7 @@
 		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
 		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
 		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
+		FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +81,8 @@
 		FBF5B3B8232E974000DDFC4E /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		FBF5B3C2232E99CE00DDFC4E /* CameraController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CameraController.h; sourceTree = "<group>"; };
 		FBF5B3C3232E99CE00DDFC4E /* CameraController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraController.m; sourceTree = "<group>"; };
+		FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CollectionHeaderView.h; sourceTree = "<group>"; };
+		FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CollectionHeaderView.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -180,6 +183,8 @@
 				FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */,
+				FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */,
 				FB3012BD250BA85C0062A1FA /* InputSource.h */,
 				FB3012BE250BA85C0062A1FA /* InputSource.m */,
 				FBB1D9FC2330FD0900845DF1 /* Transform.h */,
@@ -276,6 +281,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
+				FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */,
 				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
 				FBB1D9D5232FB24800845DF1 /* Transforms.m in Sources */,

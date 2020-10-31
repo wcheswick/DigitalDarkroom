@@ -21,6 +21,9 @@ typedef enum {
     <UITableViewDelegate,
     UITableViewDataSource,
     UIScrollViewDelegate,
+    UICollectionViewDelegate,
+    UICollectionViewDataSource,
+    UICollectionViewDelegateFlowLayout,
     UIPopoverPresentationControllerDelegate,
     AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureDepthDataOutputDelegate> {
