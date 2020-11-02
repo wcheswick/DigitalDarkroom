@@ -139,7 +139,7 @@
     
     deviceOrientation = [[UIDevice currentDevice] orientation];
     videoOrientation = [CameraController videoOrientationForDeviceOrientation];
-
+    
 #ifdef notdef
     NSLog(@" +++ device orientation: %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
@@ -152,7 +152,7 @@
         [captureSession stopRunning];
         captureSession = nil;
     }
-
+    
     captureSession = [[AVCaptureSession alloc] init];
     if (error) {
         NSLog(@"startSession: could not lock camera: %@",
@@ -161,8 +161,8 @@
     }
     
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
-                                   deviceInputWithDevice:captureDevice
-                                   error:&error];
+                                        deviceInputWithDevice:captureDevice
+                                        error:&error];
     if (error) {
         NSLog(@"*** startSession, AVCaptureDeviceInput: error %@",
               [error localizedDescription]);
@@ -174,9 +174,7 @@
         NSLog(@"**** could not add camera input");
     }
 
-    if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!
-        // useful source: https://www.raywenderlich.com/5999357-video-depth-maps-tutorial-for-ios-getting-started
-        
+    if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!        
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
@@ -186,7 +184,7 @@
         }
         videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        
+
         dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
         [depthOutput setDelegate:delegate callbackQueue:queue];
         depthOutput.filteringEnabled = YES;
@@ -209,10 +207,17 @@
         dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
         [dataOutput setSampleBufferDelegate:delegate queue:queue];
     }
-    
+    NSLog(@"111 activeDepthDataFormat: %@",
+          [self dumpFormatType:
+           CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
+
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
+    
+    NSLog(@"222  activeDepthDataFormat: %@",
+          [self dumpFormatType:
+           CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
 }
 
 // find and return the largest size that fits into the given size. Return
@@ -226,30 +231,23 @@
     
     selectedFormat = nil;
     NSArray *availableFormats = captureDevice.formats;
-#ifdef notdef
-    AVCaptureDeviceFormat *format = [availableFormats objectAtIndex:0];
-    if (format.supportedDepthDataFormats != nil && format.supportedDepthDataFormats.count) { // use the 3D format list
-        availableFormats = format.supportedDepthDataFormats;
-    }
-#endif
     
     NSLog(@" @@@@ fitting into %.0f x %.0f %@",
           availableSize.width, availableSize.height,
           UIDeviceOrientationIsPortrait(deviceOrientation) ? @"portrait" : @"");
-
+    
     for (AVCaptureDeviceFormat *format in availableFormats) {
-        if (IS_3D_CAMERA(selectedCamera)) {
-            //NSLog(@"-- format selected: %@", format.description);
-            //NSLog(@"-- format selected: %@", format.supportedDepthDataFormats);
-            if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
-                continue;
-       }
-
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
         if (mediaType != kCMMediaType_Video)
             continue;
         
+        if (IS_3D_CAMERA(selectedCamera)) { // if we need depth-capable formats only
+            if (!format.supportedDepthDataFormats)
+                continue;
+            if (!format.supportedDepthDataFormats.count)
+                continue;
+        }
         // I cannot seem to get the format data adjusted for device orientation.  So we
         // swap them here, if portrait.
         
@@ -276,9 +274,7 @@
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }
-    
-    NSLog(@" @@@@  size set to %.0f x %.0f", captureSize.width, captureSize.height);
-    
+
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = selectedFormat;
     // these must be after the activeFormat is set.  there are other conditions, see
@@ -287,7 +283,29 @@
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     //NSLog(@"-- format selected: %@", selectedFormat.description);
     [captureDevice unlockForConfiguration];
- 
+    
+    if (IS_3D_CAMERA(selectedCamera)) {
+        AVCaptureDeviceFormat *depthCaptureFormat = nil;
+        // useful source: https://www.raywenderlich.com/5999357-video-depth-maps-tutorial-for-ios-getting-started
+        
+        for (AVCaptureDeviceFormat *format in captureDevice.activeFormat.supportedDepthDataFormats) {
+            FourCharCode pixelFormatType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+            if (pixelFormatType == kCVPixelFormatType_DepthFloat32) {
+                depthCaptureFormat = format;
+            } else if (pixelFormatType == kCVPixelFormatType_DepthFloat16) {
+                if (!depthCaptureFormat)
+                    depthCaptureFormat = format;
+            }
+        }
+        if (!depthCaptureFormat) {
+            NSLog(@"inconceivable, no capture format found");
+            return CGSizeZero;
+        }
+        
+        [captureDevice lockForConfiguration:&error];
+        captureDevice.activeDepthDataFormat = depthCaptureFormat;
+        [captureDevice unlockForConfiguration];
+    }
     return captureSize;
 }
 
@@ -346,5 +364,19 @@ static NSString * const imageOrientation[] = {
     @"Left Mirrored",
     @"Right Mirrored"
 };
+
+- (NSString *) dumpFormatType:(OSType) t {
+    switch (t) {
+        case 1751411059:
+            return @"kCVPixelFormatType_DisparityFloat16";
+       case 1717856627:
+            return @"kCVPixelFormatType_DisparityFloat32";
+        case 1751410032:
+            return @"kCVPixelFormatType_DepthFloat16";
+        case 1717855600:
+            return @"kCVPixelFormatType_DepthFloat32";
+    }
+    return [NSString stringWithFormat:@"%d", t];
+}
 
 @end

@@ -12,7 +12,7 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-// #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
 #define Z               ((1<<sizeof(channel)*8) - 1)
@@ -95,6 +95,7 @@ PixelIndex_t dPI(int x, int y) {
 @synthesize lastTransform;
 @synthesize finalScale;
 @synthesize debugTransforms;
+@synthesize minDepth, maxDepth;
 
 - (id)init {
     self = [super init];
@@ -117,7 +118,40 @@ PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+// encode floating distance from 0 - 10.0 meters into an RGB pixel
+#define MIN_DIST    0
+#define MAX_DIST    10.0    // meters
+
++ (void) encodeDistanceData:(size_t) pixelCount
+               fromDepthBuf:(float *) depthBuf
+                   toPixels:(Pixel *) pixels {
+    UInt32 rgbSpace = (1<<24) - 1;
+    
+    for (size_t i=0; i<pixelCount; i++) {
+        Pixel p;
+        if (depthBuf[i] < MIN_DIST)
+            p = Red;
+        else if (depthBuf[i] >= MAX_DIST)
+            p = Black;
+        else {
+            p = Red;
+            float v = depthBuf[i] - MIN_DIST;
+            float frac = v/(MAX_DIST - MIN_DIST);
+            UInt32 cv = trunc((float)rgbSpace * frac);
+            p.b = cv % 256;
+            cv /= 256;
+            p.g = cv % 256;
+            cv /= 256;
+            assert(cv <= 255);
+            p.r = cv;
+            p.a = Z;    // alpha on, not used at the moment
+        }
+        pixels[i] = p;
+    }
+}
+
 - (void) buildTransformList {
+    [self add3DTransforms];
     [self addColorVisionDeficits];
     [self addGeometricTransforms];
     [self addPointTransforms];
@@ -325,6 +359,9 @@ int sourceImageIndex, destImageIndex;
             sChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
             dChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
         }
+        
+        // reset depth information
+        minDepth = maxDepth = -1.0;
     }
     
     int sourceImageIndex = 0;
@@ -1060,6 +1097,44 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
 }
 
 
+- (void) add3DTransforms {
+    [categoryNames addObject:@"3D visualizations"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+
+    lastTransform = [Transform areaTransform: @"3D level visualization"
+                                 description: @""
+                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+        for (int y=0; y<configuredHeight; y++) {
+            for (int x=0; x<configuredWidth; x++) {
+                Pixel p = src[PI(x,y)];
+                unsigned long *pp = (unsigned long *)&p;
+                NSLog(@" pixel %.8lx   %.02x %.02x %.02x", *pp, p.r, p.g, p.b);
+                long c, v = src[PI(x,y)].a;
+                // closest to farthest, even v is dark blue to light blue,
+                // odd v is yellow to dark yellow
+                if (v == 255)
+                    p = Black;
+                else if (v == 0)
+                    p = Green;
+                else {
+                    if (v & 0x1) {  // odd luminance
+                        c = Z - (v/2);
+                        p = SETRGB(0,0,v);
+                    } else {
+                        c = Z/2 + v/2;
+                        p = SETRGB(c,c,0);
+                    }
+                }
+                dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+}
+
 // used by colorize
 
 channel rl[31] = {0,0,0,0,0,0,0,0,0,0,        5,10,15,20,25,Z,Z,Z,Z,Z,    0,0,0,0,0,5,10,15,20,25,Z};
@@ -1070,16 +1145,17 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [categoryNames addObject:@"Point"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
+
+
     lastTransform = [Transform areaTransform: @"Negative"
-                                                  description: @"Negative"
-                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+                                 description: @"Negative"
+                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
         for (int y=0; y<configuredHeight; y++) {
             for (int x=0; x<configuredWidth; x++) {
                 Pixel p = src[PI(x,y)];
                 dest[PI(x,y)] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
-                }
             }
+        }
     }];
     [transformList addObject:lastTransform];
     
@@ -1217,7 +1293,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
-    
 }
 
 channel

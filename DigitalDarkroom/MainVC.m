@@ -825,7 +825,6 @@ typedef enum {
     
     UIImage *capturedImage = [self imageFromDepthDataBuffer:depthData
                                                 orientation:imageOrientation];
-    
     dispatch_async(dispatch_get_main_queue(), ^{
         [self updateThumb:capturedImage];
         [self doTransformsOn:capturedImage];
@@ -843,28 +842,49 @@ typedef enum {
     [self->scaledTransformImageView setNeedsDisplay];
 }
 
-- (BOOL) dataSizeOK: (CGSize) s {
-    return (s.width != scaledTransformImageView.frame.size.width ||
-            s.height != scaledTransformImageView.frame.size.height);
-}
+static Pixel *depthEncodedRGBImage = 0;    // alloc on the heap, maybe too big for the stack
+size_t encodedSize = 0;
 
-- (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) depthData
+- (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) rawDepthData
                            orientation:(UIImageOrientation) orientation {
+    //NSLog(@"         type: %@", [cameraController dumpFormatType:rawDepthData.depthDataType]);
+    assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32);
+    
+    AVDepthData *depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-    assert([self dataSizeOK:CGSizeMake(width,height)]);
     
-    CGRect r = CGRectMake(0, 0, width, height);
+    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+    float *depthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
+    if (encodedSize != width * height) {    // put it on the heap.  This doesn't seem to help
+        if (encodedSize) {
+            free(depthEncodedRGBImage);
+        }
+        encodedSize = width * height;
+        depthEncodedRGBImage = (Pixel *)malloc(encodedSize * sizeof(Pixel));
+    }
+    [Transforms encodeDistanceData:encodedSize
+            fromDepthBuf:depthBuffer
+                          toPixels:&depthEncodedRGBImage[0]];
+    CVPixelBufferUnlockBaseAddress(pixelBufferRef, kCVPixelBufferLock_ReadOnly);
     
-    CIContext *ctx = [CIContext contextWithOptions:nil];
-    CIImage *ciimage = [CIImage imageWithCVPixelBuffer:pixelBufferRef];
-    CGImageRef quartzImage = [ctx createCGImage:ciimage fromRect:r];
-
+    size_t bytesPerRow = width*sizeof(Pixel);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(depthEncodedRGBImage,
+                                                 width, height,
+                                                 8,
+                                                 bytesPerRow,
+                                                 colorSpace,
+                                                 kCGBitmapByteOrder32Little |
+                                                    kCGImageAlphaPremultipliedFirst);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
                                    orientation:orientation];
     CGImageRelease(quartzImage);
+    CGColorSpaceRelease(colorSpace);
+
     return image;
 }
 
@@ -1413,7 +1433,6 @@ static NSString * const sectionTitles[] = {
         default: {
             thumbLabel.text = source.label;
             UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
-            NSLog(@"xxx %@, %.0f x %.0f", source.imagePath, sourceImage.size.width, sourceImage.size.height);
             thumbImageView.image = [self fitImage:sourceImage
                                            toSize:thumbImageView.frame.size
                                          centered:YES];

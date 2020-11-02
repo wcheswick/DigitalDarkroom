@@ -36,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL) isCameraOn;
 
 + (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation;
+- (NSString *) dumpFormatType:(OSType) t;
 
 @end
 
