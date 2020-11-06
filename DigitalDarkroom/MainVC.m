@@ -9,7 +9,7 @@
 #import "MainVC.h"
 #import "CollectionHeaderView.h"
 #import "CameraController.h"
-#import "Transforms.h"
+#import "Transforms.h"  // includes DepthImage.h
 #import "Defines.h"
 
 #define BUTTON_FONT_SIZE    20
@@ -106,6 +106,8 @@ typedef enum {
 @property (assign)              DisplayMode_t displayMode;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
+@property (nonatomic, strong)   DepthImage *depthImage;
+
 
 @end
 
@@ -139,6 +141,7 @@ typedef enum {
 @synthesize displayMode;
 
 @synthesize rowIsCollapsed;
+@synthesize depthImage;
 
 - (id) init {
     self = [super init];
@@ -148,6 +151,7 @@ typedef enum {
 
         transformTotalElapsed = 0;
         transformCount = 0;
+        depthImage = nil;
         busy = NO;
         
         inputSources = [[NSMutableArray alloc] init];
@@ -823,11 +827,11 @@ typedef enum {
     }
     busy = YES;
     
-    UIImage *capturedImage = [self imageFromDepthDataBuffer:depthData
+    UIImage *processedDepthImage = [self imageFromDepthDataBuffer:depthData
                                                 orientation:imageOrientation];
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateThumb:capturedImage];
-        [self doTransformsOn:capturedImage];
+        [self updateThumb:processedDepthImage];
+        [self doTransformsOn:processedDepthImage];
         self->busy = NO;
      });
 }
@@ -842,36 +846,65 @@ typedef enum {
     [self->scaledTransformImageView setNeedsDisplay];
 }
 
-static Pixel *depthEncodedRGBImage = 0;    // alloc on the heap, maybe too big for the stack
-size_t encodedSize = 0;
+static Pixel *depthPixelVisImage = 0;    // alloc on the heap, maybe too big for the stack
+size_t bufferSize = 0;
 
 - (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) rawDepthData
                            orientation:(UIImageOrientation) orientation {
     //NSLog(@"         type: %@", [cameraController dumpFormatType:rawDepthData.depthDataType]);
-    assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32);
-    
-    AVDepthData *depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
+    assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32); // what we are expecting, for now
+    AVDepthData *depthData;
+    if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
+        depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
+    else
+        depthData = rawDepthData;
+
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-    
-    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
-    float *depthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
-    if (encodedSize != width * height) {    // put it on the heap.  This doesn't seem to help
-        if (encodedSize) {
-            free(depthEncodedRGBImage);
+    if (bufferSize != width * height) {    // put it on the heap.  This doesn't seem to help
+        if (bufferSize) {
+            free(depthPixelVisImage);
         }
-        encodedSize = width * height;
-        depthEncodedRGBImage = (Pixel *)malloc(encodedSize * sizeof(Pixel));
+        bufferSize = width * height;
+        depthPixelVisImage = (Pixel *)malloc(bufferSize * sizeof(Pixel));
     }
-    [Transforms encodeDistanceData:encodedSize
-            fromDepthBuf:depthBuffer
-                          toPixels:&depthEncodedRGBImage[0]];
-    CVPixelBufferUnlockBaseAddress(pixelBufferRef, kCVPixelBufferLock_ReadOnly);
+    if (depthImage) {
+        if (width * height != bufferSize) {
+            @synchronized(depthImage) {
+                // reallocate.  ARC should release the old buffer
+                depthImage = [[DepthImage alloc]
+                                         initWithSize: CGSizeMake(width, height)];
+            }
+        }
+    } else
+        depthImage = [[DepthImage alloc]
+                                 initWithSize: CGSizeMake(width, height)];
+
+    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+    float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
+    memcpy(depthImage.buf, capturedDepthBuffer, bufferSize*sizeof(float));
+    CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
+  
+#ifdef NOTDEF
+    float min = MAX_DEPTH;
+    float max = MIN_DEPTH;
+    for (int i=0; i<bufferSize; i++) {
+        float f = depthImage.buf[i];
+        if (f < min)
+            min = f;
+        if (f > max)
+            max = f;
+    }
+    for (int i=0; i<100; i++)
+        NSLog(@"%2d   %.02f", i, depthImage.buf[i]);
+    NSLog(@" src min, max = %.2f %.2f", min, max);
+#endif
     
-    size_t bytesPerRow = width*sizeof(Pixel);
+    [transforms depthToPixels: depthImage pixels:(Pixel *)depthPixelVisImage];
+    size_t bytesPerRow = depthImage.size.width*sizeof(Pixel);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(depthEncodedRGBImage,
+    CGContextRef context = CGBitmapContextCreate(depthPixelVisImage,
                                                  width, height,
                                                  8,
                                                  bytesPerRow,
@@ -884,7 +917,6 @@ size_t encodedSize = 0;
                                    orientation:orientation];
     CGImageRelease(quartzImage);
     CGColorSpaceRelease(colorSpace);
-
     return image;
 }
 

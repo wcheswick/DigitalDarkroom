@@ -95,7 +95,7 @@ PixelIndex_t dPI(int x, int y) {
 @synthesize lastTransform;
 @synthesize finalScale;
 @synthesize debugTransforms;
-@synthesize minDepth, maxDepth;
+@synthesize depthTransform;
 
 - (id)init {
     self = [super init];
@@ -105,6 +105,7 @@ PixelIndex_t dPI(int x, int y) {
 #else
         debugTransforms = NO;
 #endif
+        depthTransform = nil;
         configuredBytesPerRow = 0;    // no current configuration
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
@@ -118,37 +119,27 @@ PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-// encode floating distance from 0 - 10.0 meters into an RGB pixel
-#define MIN_DIST    0
-#define MAX_DIST    10.0    // meters
-
-+ (void) encodeDistanceData:(size_t) pixelCount
-               fromDepthBuf:(float *) depthBuf
-                   toPixels:(Pixel *) pixels {
-    UInt32 rgbSpace = (1<<24) - 1;
-    
-    for (size_t i=0; i<pixelCount; i++) {
-        Pixel p;
-        if (depthBuf[i] < MIN_DIST)
-            p = Red;
-        else if (depthBuf[i] >= MAX_DIST)
-            p = Black;
-        else {
-            p = Red;
-            float v = depthBuf[i] - MIN_DIST;
-            float frac = v/(MAX_DIST - MIN_DIST);
-            UInt32 cv = trunc((float)rgbSpace * frac);
-            p.b = cv % 256;
-            cv /= 256;
-            p.g = cv % 256;
-            cv /= 256;
-            assert(cv <= 255);
-            p.r = cv;
-            p.a = Z;    // alpha on, not used at the moment
-        }
-        pixels[i] = p;
-    }
+- (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
+    assert(depthTransform);
+    configuredWidth = depthImage.size.width;    // XXX hack: this should be computed earlier
+    configuredHeight = depthImage.size.height;
+    depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
 }
+
+#ifdef OLD
+#define PIXEL_EQ(p1,p2)   ((p1).r == (p2).r && (p1).g == (p2).g && (p1).b == (p2).b)
+
+float RGBtoDistance(Pixel p) {
+    if (PIXEL_EQ(p, Black))
+        return MAX_DIST;
+    else if (PIXEL_EQ(p, Red))
+        return MIN_DIST;
+    UInt32 cv = ((p.r * 256) + p.g)*256 + p.b;
+    float frac = (float)cv / RGB_SPACE;
+    float v = frac*(MAX_DIST - MIN_DIST) + MIN_DIST;
+    return v;
+}
+#endif
 
 - (void) buildTransformList {
     [self add3DTransforms];
@@ -361,7 +352,6 @@ int sourceImageIndex, destImageIndex;
         }
         
         // reset depth information
-        minDepth = maxDepth = -1.0;
     }
     
     int sourceImageIndex = 0;
@@ -462,6 +452,9 @@ int sourceImageIndex, destImageIndex;
             break;
         case AreaTrans:
             transform.areaF(srcBuf, dstBuf, transform.value);
+            break;
+        case DepthVis:
+            /// should not be reached
             break;
         case EtcTrans:
             NSLog(@"stub - etctrans");
@@ -1096,26 +1089,77 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
 #endif
 }
 
-
 - (void) add3DTransforms {
     [categoryNames addObject:@"3D visualizations"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+    
+#define DI(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
+#define RGB_SPACE   ((float)((1<<24) - 1))
+    
+    lastTransform = [Transform depthVis: @"Encode depth"
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        size_t bufSize = configuredHeight*configuredWidth;
+        assert(depthImage.size.height * depthImage.size.width == bufSize);
+        float min = MAX_DEPTH;
+        float max = MIN_DEPTH;
+        for (int i=0; i<bufSize; i++) {
+            float v = depthImage.buf[i];
+            if (v < min)
+                min = v;
+            if (v > max)
+                max = v;
+            //NSLog(@" v, min, max: %.2f %.2f %.2f", v, min, max);
+            Pixel p;
+#ifdef HSV
+            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+            float hue = frac;
+            float sat = 1.0;
+            float bri = 1.0 - frac;
+            UIColor *color = [UIColor colorWithHue: hue saturation: sat
+                                        brightness: bri alpha: 1];
+            CGFloat r, g, b,a;
+            [color getRed:&r green:&g blue:&b alpha:&a];
+            p = CRGB(Z*r, Z*g, Z*b);
+#else
+            if (v < MIN_DEPTH)
+                p = Red;
+            else if (v >= MAX_DEPTH)
+                p = Black;
+            else {
+                float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+                UInt32 cv = trunc(RGB_SPACE * frac);
+                p.b = cv % 256;
+                cv /= 256;
+                p.g = cv % 256;
+                cv /= 256;
+                assert(cv <= 255);
+                p.r = cv;
+                p.a = Z;    // alpha on, not used at the moment
+            }
+#endif
+            dest[i] = p;
+        }
+    }];
+    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    depthTransform = lastTransform;     // for now, no choice, no params
 
-    lastTransform = [Transform areaTransform: @"3D level visualization"
+#ifdef notyet
+    lastTransform = [Transform depthVis: @"3D level visualization"
                                  description: @""
-                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
         for (int y=0; y<configuredHeight; y++) {
             for (int x=0; x<configuredWidth; x++) {
-                Pixel p = src[PI(x,y)];
-                unsigned long *pp = (unsigned long *)&p;
-                NSLog(@" pixel %.8lx   %.02x %.02x %.02x", *pp, p.r, p.g, p.b);
-                long c, v = src[PI(x,y)].a;
+                Pixel p;
+                float z = DI(x,y);
                 // closest to farthest, even v is dark blue to light blue,
                 // odd v is yellow to dark yellow
-                if (v == 255)
+                if (z >= MAX_DEPTH)
                     p = Black;
-                else if (v == 0)
+                else if (v <= MIN_DEPTH)
                     p = Green;
                 else {
                     if (v & 0x1) {  // odd luminance
@@ -1133,6 +1177,95 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+#endif
+    
+#define mu (1/3.0)
+#define E round(2.5*dpi)
+#define separation(Z) round((1-mu*Z)*E/(2-mu*Z))
+#define far separation(0)
+    
+    lastTransform = [Transform depthVis: @"SIRDS"
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        float scale = 1;
+        if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
+            scale = [[UIScreen mainScreen] scale];
+        }
+        float dpi = 160 * scale;
+        
+        for (int y=0; y<configuredHeight; y++) {    // convert scan lines independently
+            channel pix[configuredWidth];
+            int same[configuredWidth];
+            int s;  // stereo sep at this point
+            int left, right;    // x values for left and right eyes
+            
+            for (int x=0; x < configuredWidth; x++ ) {  // link initial pixels with themselves
+                same[x] = x;
+            }
+            for (int x=1; x < configuredWidth-1; x++ ) {
+                float z = DI(x,y);
+                s = separation(z);
+                left = x - s/2;
+                right = left + s;
+                if (left >= 0 && right < configuredWidth) {
+                    int visible;    // first, perform hidden surface removal
+                    int t = 1;      // We will check the points (x-t,y) and (x+t,y)
+                    float zt;       //  Z-coord of ray at these two points
+                    
+                    do {
+                        zt = DI(x,y) + 2*(2 - mu*DI(x,y))*t/(mu*E);
+                        visible = DI(x-t, y)<zt && DI(x+t,y)<zt;  // false if obscured
+                        t++;
+                    } while (visible && zt < 1);    // end of hidden surface removal
+                    if (visible) {  // pixels at l and r are the same
+                        int l = same[left];
+                        while (l != left && l != right) {
+                            if (l < right) {    // first, jiggle the pointers...
+                                left = l;       // until either same[left] == left
+                                l = same[left]; // .. or same[left == right
+                            } else {
+                                same[left] = right;
+                                left = right;
+                                l = same[left];
+                                right = l;
+                            }
+                            same[left] = right; // actually recorded here
+                        }
+                    }
+                }
+            }
+            for (long x=configuredWidth-1; x>-0; x--)    { // set the pixels in the scan line
+                if (same[x] == x)
+                    pix[x] = random()&1;  // free choice, do it randomly
+                else
+                    pix[x] = pix[same[x]];  // constrained choice, obey constraint
+                dest[PI(x,y)] = SETRGB(pix[x], pix[x], pix[x]);
+            }
+        }
+        dest[PI(configuredWidth/2 - far/2, configuredHeight*19/20)] = Red;
+        dest[PI(configuredWidth/2 + far/2, configuredHeight*19/20)] = Red;
+    }];
+    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    //lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    
+#ifdef SPECTRUMTEST
+    
+    for (int di=0; di < 100; di++) {
+        float d;
+        if (di % 10 == 0)
+            d = -1.0;
+        else
+            d = (float)di/10.0;
+        for (int i=0; i<5; i++) {
+            int x = di*5 + i;
+            for (int y=0; y<height; y++) {
+                DI(x,y) = d;
+            }
+        }
+    }
+#endif
+
 }
 
 // used by colorize
@@ -2496,6 +2629,4 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
             }
         }
     #endif
-
 #endif
-    

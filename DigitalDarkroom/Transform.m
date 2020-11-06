@@ -13,6 +13,7 @@
 @synthesize name, description;
 @synthesize pointF;
 @synthesize areaF;
+@synthesize depthVisF;
 @synthesize remapImageF;
 @synthesize remapPolarF;
 @synthesize type;
@@ -30,6 +31,7 @@
         areaF = nil;
         remapImageF = nil;
         remapPolarF = nil;
+        depthVisF = nil;
         low = high = 0;
         newValue = NO;
         hasParameters = NO;
@@ -37,6 +39,16 @@
         elapsedProcessingTime = 0;
     }
     return self;
+}
+
++ (Transform *) depthVis:(NSString *) n description:(NSString *) d
+                depthVis:(depthVis_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = DepthVis;
+    t.depthVisF = f;
+    return t;
 }
 
 + (Transform *) colorTransform:(NSString *) n description:(NSString *) d
@@ -97,6 +109,7 @@
     copy.description = description;
     copy.pointF = pointF;
     copy.areaF = areaF;
+    copy.depthVisF = depthVisF;
     copy.remapImageF = remapImageF;
     copy.remapPolarF = remapPolarF;
     copy.low = low;

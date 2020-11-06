@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bytesPerRow;
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
     CGFloat finalScale;   // to reach the desired display dimensions
-    float minDepth, maxDepth;
+    Transform *depthTransform;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -38,13 +38,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              volatile BOOL paramsChanged;
 @property (assign)              CGFloat finalScale;
 @property (assign)              BOOL debugTransforms;
-@property (assign)              float minDepth, maxDepth;
+@property (nonatomic, strong)   Transform *depthTransform;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
+- (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
+#ifdef OLD
 + (void) encodeDistanceData:(size_t) pixelCount
                fromDepthBuf:(float *) dist
                    toPixels:(Pixel *) pixels;
+#endif
 
 @end
 

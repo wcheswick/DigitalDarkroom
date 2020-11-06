@@ -36,6 +36,7 @@
 		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
 		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
 		FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */; };
+		FBF849BE25536A1D005571AF /* DepthImage.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF849BD25536A1D005571AF /* DepthImage.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -83,6 +84,8 @@
 		FBF5B3C3232E99CE00DDFC4E /* CameraController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraController.m; sourceTree = "<group>"; };
 		FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CollectionHeaderView.h; sourceTree = "<group>"; };
 		FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CollectionHeaderView.m; sourceTree = "<group>"; };
+		FBF849BC25536A1D005571AF /* DepthImage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DepthImage.h; sourceTree = "<group>"; };
+		FBF849BD25536A1D005571AF /* DepthImage.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DepthImage.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -189,10 +192,12 @@
 				FB3012BE250BA85C0062A1FA /* InputSource.m */,
 				FBB1D9FC2330FD0900845DF1 /* Transform.h */,
 				FBB1D9FD2330FD0900845DF1 /* Transform.m */,
-				FB389A49254055F500E29530 /* ColorTable.h */,
-				FB389A4A254055F500E29530 /* ColorTable.m */,
 				FBB1D9D3232FB24800845DF1 /* Transforms.h */,
 				FBB1D9D4232FB24800845DF1 /* Transforms.m */,
+				FBF849BC25536A1D005571AF /* DepthImage.h */,
+				FBF849BD25536A1D005571AF /* DepthImage.m */,
+				FB389A49254055F500E29530 /* ColorTable.h */,
+				FB389A4A254055F500E29530 /* ColorTable.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
 				FBB4E3D2251E5998000D99B7 /* ThimblebySRDS.h */,
@@ -292,6 +297,7 @@
 				FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */,
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
+				FBF849BE25536A1D005571AF /* DepthImage.m in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
 				FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */,

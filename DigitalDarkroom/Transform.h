@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "DepthImage.h"
 #import "Defines.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -16,6 +17,7 @@ typedef enum {
     GeometricTrans,
     RemapTrans,
     AreaTrans,
+    DepthVis,
     EtcTrans,
 } transform_t;
 
@@ -26,12 +28,16 @@ typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Pixel *src,
 typedef PixelIndex_t (^ __unsafe_unretained remapPolarFunction_t)(float r, float a,    int p);
 typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable,
                                                                          size_t w, size_t h, int p);
+typedef void (^ __nullable __unsafe_unretained depthVis_t)(DepthImage *depthBuf,
+                                                               Pixel *dest,
+                                                               int p);
 
 @interface Transform : NSObject {
     NSString *name, *description;
     transform_t type;
     pointFunction_t pointF;
     areaFunction_t areaF;
+    depthVis_t depthVisF;
     remapPolarFunction_t remapPolarF;
     remapImageFunction_t remapImageF;
     int low, value, high;   // parameter setting and range for transform
@@ -44,6 +50,7 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
+@property (assign)              depthVis_t depthVisF;
 @property (assign)              remapPolarFunction_t remapPolarF;
 @property (copy)                remapImageFunction_t remapImageF;
 @property (assign)              transform_t type;
@@ -64,7 +71,8 @@ typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIn
                    remapImage:(remapImageFunction_t) f;
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
               remapPolar:(remapPolarFunction_t) f;
-
++ (Transform *) depthVis:(NSString *) n description:(NSString *) d
+                depthVis:(depthVis_t) f;
 - (void) clearRemap;
 
 @end
