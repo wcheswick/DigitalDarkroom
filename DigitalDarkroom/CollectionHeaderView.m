@@ -7,6 +7,7 @@
 //
 
 #import "CollectionHeaderView.h"
+#import "Defines.h"
 
 @implementation CollectionHeaderView
 

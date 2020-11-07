@@ -11,7 +11,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define SECTION_HEADER_FONT_SIZE    24
 #define SECTION_TITLE_TAG           666
 
 @interface CollectionHeaderView : UICollectionReusableView {

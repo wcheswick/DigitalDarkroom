@@ -18,8 +18,8 @@
 #define Z               ((1<<sizeof(channel)*8) - 1)
 #define HALF_Z          (Z/2)
 
-#define CENTER_X        (configuredWidth/2)
-#define CENTER_Y        (configuredHeight/2)
+#define CENTER_X        (W/2)
+#define CENTER_Y        (H/2)
 
 #define Black           SETRGB(0,0,0)
 #define Grey            SETRGB(Z/2,Z/2,Z/2)
@@ -49,6 +49,8 @@ enum SpecialRemaps {
     Remap_Unset = -7,
 };
 
+int W, H;
+
 @interface Transforms ()
 
 @property (strong, nonatomic)   NSMutableArray *executeList;
@@ -56,14 +58,13 @@ enum SpecialRemaps {
 
 @end
 
-size_t configuredWidth, configuredHeight;
 size_t configuredBytesPerRow, configuredPixelsInImage;
 
 Pixel *imBufs[2];
 channel **sChan = 0;
 channel **dChan = 0;
 
-#define RPI(x,y)    (PixelIndex_t)(((y)*configuredWidth) + (x))
+#define RPI(x,y)    (PixelIndex_t)(((y)*W) + (x))
 
 #ifdef DEBUG_TRANSFORMS
 // Some of our transforms might be a little buggy around the edges.  Make sure
@@ -73,9 +74,9 @@ channel **dChan = 0;
 
 PixelIndex_t dPI(int x, int y) {
     assert(x >= 0);
-    assert(x < configuredWidth);
+    assert(x < W);
     assert(y >= 0);
-    assert(y < configuredHeight);
+    assert(y < H);
     PixelIndex_t index = RPI(x,y);
     assert(index >= 0 && index < configuredPixelsInImage);
     return index;
@@ -121,8 +122,8 @@ PixelIndex_t dPI(int x, int y) {
 
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
     assert(depthTransform);
-    configuredWidth = depthImage.size.width;    // XXX hack: this should be computed earlier
-    configuredHeight = depthImage.size.height;
+    W = depthImage.size.width;    // XXX hack: this should be computed earlier
+    H = depthImage.size.height;
     depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
 }
 
@@ -196,8 +197,8 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
     transform.remapTable = remapTable;
 
     if (transform.remapPolarF) {     // polar remap
-        size_t centerX = configuredWidth/2;
-        size_t centerY = configuredHeight/2;
+        size_t centerX = W/2;
+        size_t centerY = H/2;
         for (int dx=0; dx<centerX; dx++) {
             for (int dy=0; dy<centerY; dy++) {
                 double r = hypot(dx, dy);
@@ -207,10 +208,10 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
                 else
                     a = atan2(dy, dx);
                 remapTable[PI(centerX-dx, centerY-dy)] = transform.remapPolarF(r, M_PI + a, transform.value);
-                if (centerY+dy < configuredHeight)
+                if (centerY+dy < H)
                     remapTable[PI(centerX-dx, centerY+dy)] = transform.remapPolarF(r, M_PI - a, transform.value);
-                if (centerX+dx < configuredWidth) {
-                    if (centerY+dy < configuredHeight)
+                if (centerX+dx < W) {
+                    if (centerY+dy < H)
                         remapTable[PI(centerX+dx, centerY+dy)] = transform.remapPolarF(r, a, transform.value);
                     remapTable[PI(centerX+dx, centerY-dy)] = transform.remapPolarF(r, -a, transform.value);
                 }
@@ -218,23 +219,23 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
         }
 
 #ifdef OLDNEW
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 double rx = x - centerX;
                 double ry = y - centerY;
                 double r = hypot(rx, ry);
                 double a = atan2(ry, rx);
                 remapTable[PI(x,y)] = transform.remapPolarF(r, /* M_PI+ */ a,
                                                             transform.p,
-                                                            configuredWidth,
-                                                            configuredHeight);
+                                                            W,
+                                                            H);
             }
         }
 #endif
     } else {        // whole screen remap
         NSLog(@"transform: %@", transform);
         transform.remapImageF(remapTable,
-                              configuredWidth, configuredHeight,
+                              W, H,
                               transform.value);
     }
     return remapTable;
@@ -312,24 +313,24 @@ int sourceImageIndex, destImageIndex;
     //assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
 
     if (configuredBytesPerRow != bytesPerRow ||
-        configuredWidth != width ||
-        configuredHeight != height) {
+        W != width ||
+        H != height) {
 #ifdef OLD
         NSLog(@">>> format was %4zu %4zu %4zu   %4zu %4zu %4zu",
               configuredBytesPerRow,
-              configuredWidth,
-              configuredHeight,
+              W,
+              H,
               bytesPerRow, width, height);
 #endif
         if (sChan) {    // release previous memory
-            for (int x=0; x<configuredWidth; x++) {
+            for (int x=0; x<W; x++) {
                 free((void *)sChan[x]);
                 free((void *)dChan[x]);
             }
         }
         configuredBytesPerRow = bytesPerRow;
-        configuredHeight = height;
-        configuredWidth = width;
+        H = (int)height;
+        W = (int)width;
         assert(configuredBytesPerRow % sizeof(Pixel) == 0); //no slop on the rows
         for (Transform *t in executeList) {
             [t clearRemap];
@@ -344,11 +345,11 @@ int sourceImageIndex, destImageIndex;
         }
         // also allocate a channel-sized buffer, for single channel ops
 
-        sChan = (channel **)malloc(configuredWidth*sizeof(channel *));
-        dChan = (channel **)malloc(configuredWidth*sizeof(channel *));
-        for (int x=0; x<configuredWidth; x++) {
-            sChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
-            dChan[x] = (channel *)malloc(configuredHeight*sizeof(channel));
+        sChan = (channel **)malloc(W*sizeof(channel *));
+        dChan = (channel **)malloc(W*sizeof(channel *));
+        for (int x=0; x<W; x++) {
+            sChan[x] = (channel *)malloc(H*sizeof(channel));
+            dChan[x] = (channel *)malloc(H*sizeof(channel));
         }
         
         // reset depth information
@@ -466,12 +467,12 @@ int sourceImageIndex, destImageIndex;
 /* Monochrome floyd-steinberg */
 
 static void
-fs(int depth, int buf[configuredWidth][configuredHeight]) {
+fs(int depth, int buf[W][H]) {
     int x, y, i;
     int maxp = depth - 1;
 
-    for(y=0; y<configuredHeight; y++) {
-        for(x=0; x<configuredWidth; x++) {
+    for(y=0; y<H; y++) {
+        for(x=0; x<W; x++) {
             int temp;
             int c = 0;
             channel e = buf[x][y];
@@ -499,12 +500,12 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
             }
             buf[x][y] = c;
             temp = 3*e/8;
-            if (y < configuredHeight-1) {
+            if (y < H-1) {
                 buf[x][y+1] += temp;
-                if (x < configuredWidth-1)
+                if (x < W-1)
                     buf[x+1][y+1] += e-2*temp;
             }
-            if (x < configuredWidth-1)
+            if (x < W-1)
                 buf[x+1][y] += temp;
         }
     }
@@ -513,9 +514,9 @@ fs(int depth, int buf[configuredWidth][configuredHeight]) {
 
 
 void
-focus(channel *s[configuredHeight], channel *d[configuredHeight]) {
-    for (int y=1; y<configuredHeight-1; y++) {
-        for (int x=1; x<configuredWidth-1; x++) {
+focus(channel *s[(int)H], channel *d[(int)H]) {
+    for (int y=1; y<H-1; y++) {
+        for (int x=1; x<W-1; x++) {
             int c =
                 5*s[x][y] -
                 s[x+1][y] -
@@ -528,9 +529,9 @@ focus(channel *s[configuredHeight], channel *d[configuredHeight]) {
 }
 
 void
-sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
-    for (int y=1; y<configuredHeight-1-1; y++) {
-        for (int x=1; x<configuredWidth-1-1; x++) {
+sobel(channel *s[(int)H], channel *d[(int)H]) {
+    for (int y=1; y<H-1-1; y++) {
+        for (int x=1; x<W-1-1; x++) {
             int aa, bb;
             aa = s[x-1][y-1] + s[x-1][y]*2 + s[x-1][y+1] -
                 s[x+1][y-1] - s[x+1][y]*2 - s[x+1][y+1];
@@ -555,24 +556,24 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Shear"
                                                   description: @"Shear"
                                                 areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        int x, y, dx, dy, r, yshift[configuredWidth];
+        int x, y, dx, dy, r, yshift[W];
         memset(yshift, 0, sizeof(yshift));
 
-        for (x = r = 0; x < configuredWidth; x++) {
+        for (x = r = 0; x < W; x++) {
             if (irand(256) < 128)
                 r--;
             else
                 r++;
             yshift[x] = r;
         }
-        for (y = 0; y < configuredHeight; y++) {
+        for (y = 0; y < H; y++) {
             if (irand(256) < 128)
                 r--;
             else
                 r++;
-            for (x = 0; x < configuredWidth; x++) {
+            for (x = 0; x < W; x++) {
                 dx = x+r; dy = y+yshift[x];
-                if (dx >= configuredWidth || dy >= configuredHeight ||
+                if (dx >= W || dy >= H ||
                     dx < 0 || dy < 0)
                     dest[PI(x,y)] = White;
                 else
@@ -585,8 +586,8 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Brownian"
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int wpp) {
-        for (int y=1; y<configuredHeight-1; y++) {
-            for (int x=1; x<configuredWidth-1; x++) {
+        for (int y=1; y<H-1; y++) {
+            for (int x=1; x<W-1; x++) {
                 long nx = x;
                 long ny = y;
                 for (int i=0; i<wpp; i++) {
@@ -595,12 +596,12 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
                 }
                 if (nx < 0)
                     nx = 0;
-                else if (nx >= configuredWidth)
-                    nx = configuredWidth-1;
+                else if (nx >= W)
+                    nx = W-1;
                 if (ny < 0)
                     ny = 0;
-                else if (ny >= configuredHeight)
-                    ny = configuredHeight-1;
+                else if (ny >= H)
+                    ny = H-1;
                 dest[PI(x,y)] = src[PI(nx,ny)];
             }
         }
@@ -615,17 +616,17 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        int b[configuredWidth][configuredHeight];
+        int b[W][H];
         
         int depth = (param == 1) ? 1 : 4;
         
-        for (int y=0; y<configuredHeight; y++)
-           for (int x=0; x<configuredWidth; x++)
+        for (int y=0; y<H; y++)
+           for (int x=0; x<W; x++)
                 b[x][y] = LUM(src[PI(x,y)]);
         
         fs(depth, b);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 Pixel p = {0,0,0,Z};
                 p.r = p.g = p.b = b[x][y];
                 dest[PI(x,y)] = p;
@@ -642,13 +643,13 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        channel lum[configuredWidth][configuredHeight];
-        for (int y=1; y<configuredHeight-1; y++)
-            for (int x=1; x<configuredWidth-1; x++)
+        channel lum[W][H];
+        for (int y=1; y<H-1; y++)
+            for (int x=1; x<W-1; x++)
                 lum[x][y] = LUM(src[PI(x,y)]);
 
-        for (int y=1; y<configuredHeight-1; y++) {
-            for (int x=1; x<configuredWidth-1; x++) {
+        for (int y=1; y<H-1; y++) {
+            for (int x=1; x<W-1; x++) {
                 channel aa, bb, s;
                 aa = lum[x-1][y-1] + 2*lum[x][y-1] + lum[x+1][y-1] -
                      lum[x-1][y+1] - 2*lum[x][y+1] - lum[x+1][y+1];
@@ -670,8 +671,8 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Matisse"
                                  description: @"colored Floyd/Steinberg"
                                 areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        for (int y=1; y<configuredHeight-1; y++) {
-            for (int x=1; x<configuredWidth-1; x++) {
+        for (int y=1; y<H-1; y++) {
+            for (int x=1; x<W-1; x++) {
                 channel aa, bb, s;
                 Pixel p = {0,0,0,Z};
                 aa = src[PI(x-1,y-1)].r + 2*src[PI(x,y-1)].r + src[PI(x+1,y-1)].r -
@@ -745,11 +746,11 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
         Pixel p = {0,0,0,Z};
         
         // N-pixel white border around the outside
-        for (y=0; y<configuredHeight; y++) {
+        for (y=0; y<H; y++) {
             for (x=0; x<N; x++)
-            dest[PI(x,y)] = dest[PI(configuredWidth-x-1,y)] = White;
-            if (y<N || y>configuredHeight-N)
-                for (x=0; x<configuredWidth; x++) {
+            dest[PI(x,y)] = dest[PI(W-x-1,y)] = White;
+            if (y<N || y>H-N)
+                for (x=0; x<W; x++) {
                     dest[PI(x,y)] = White;
                 }
         }
@@ -792,7 +793,7 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
              * histogram by subtracting the contribution of the left-most
              * edge and adding the new right edge.
              */
-            for (x++; x<configuredWidth-N; x++) {
+            for (x++; x<W-N; x++) {
                 //NSLog(@"x,y = %d, %d", x, y);
                 for (dy=y-N; dy<=y+N; dy++) {
                     Pixel op = src[PI(x-N-1,dy)];
@@ -827,9 +828,9 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
              * and recompute our histograms.
              */
             y++;
-            if (y+N >= configuredHeight)
+            if (y+N >= H)
                 break;        /* unfortunate place to break out of the loop */
-            x = (int)configuredWidth - N - 1;
+            x = (int)W - N - 1;
             for (dx=x-N; dx<=x+N; dx++) {
                 Pixel op = src[PI(dx,y-N-1)];
                 Pixel ip = src[PI(dx,y+N)];
@@ -894,7 +895,7 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
              */
             y++;
             x = N;
-            if (y+N >= configuredHeight)
+            if (y+N >= H)
                 break;        /* unfortunate place to break out of the loop */
             for (dx=x-N; dx<=x+N; dx++) {
                 Pixel op = src[PI(dx,y-N-1)];
@@ -963,8 +964,8 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t y, int pixsize) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 table[PI(x,y)] = PI((x/pixsize)*pixsize, (y/pixsize)*pixsize);
             }
         }
@@ -1003,14 +1004,14 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 sChan[x][y] = LUM(srcBuf[PI(x,y)]);
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 channel d = dChan[x][y];
                 dstBuf[PI(x,y)] = SETRGB(d,d,d);    // install blue
             }
@@ -1021,28 +1022,28 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Color Sobel"
                                           description: @"Edge detection"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-        for (int y=0; y<configuredHeight; y++) {    // red
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {    // red
+            for (int x=0; x<W; x++) {
                 sChan[x][y] = srcBuf[PI(x,y)].r;
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].r = dChan[x][y];    // install red
                 sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].g = dChan[x][y];    // install green
                 sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
             }
         }
@@ -1052,28 +1053,28 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform = [Transform areaTransform: @"Surreal"
                                           description: @"Negative of Sobel filter"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-        for (int y=0; y<configuredHeight; y++) {    // red
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {    // red
+            for (int x=0; x<W; x++) {
                 sChan[x][y] = srcBuf[PI(x,y)].r;
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].r = Z - dChan[x][y];    // install red
                 sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].g = Z - dChan[x][y];    // install green
                 sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
             }
         }
         sobel(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].b = Z - dChan[x][y];    // install blue
             }
         }
@@ -1089,18 +1090,68 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
 #endif
 }
 
+- (void) selectDepthTransform:(int)index {
+    if (index == NO_DEPTH_TRANSFORM) {
+        depthTransform = nil;
+        return;
+    }
+    NSArray *depthTransformList = [categoryList objectAtIndex:DEPTH_TRANSFORM_SECTION];
+    depthTransform = [depthTransformList objectAtIndex:index];
+}
+
 - (void) add3DTransforms {
     [categoryNames addObject:@"3D visualizations"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
-#define DI(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
-#define RGB_SPACE   ((float)((1<<24) - 1))
+    assert(categoryList.count - 1 == DEPTH_TRANSFORM_SECTION);
     
+#define DI(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
+    
+    lastTransform = [Transform depthVis: @"Monochrome log distance"
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        size_t bufSize = H*W;
+        assert(depthImage.size.height * depthImage.size.width == bufSize);
+        assert(MIN_DEPTH >= 0.1);
+        float logMin = log(MIN_DEPTH);
+        float logMax = log(MAX_DEPTH);
+        for (int i=0; i<bufSize; i++) {
+            float d = depthImage.buf[i];
+            if (d < MIN_DEPTH)
+                d = MIN_DEPTH;
+            else if (d > MAX_DEPTH)
+                d = MAX_DEPTH;
+            float v = log(d);
+            float frac = (v - logMin)/(logMax - logMin);
+            channel c = trunc(Z - frac*Z);
+            Pixel p = SETRGB(0,0,c);
+            dest[i] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform depthVis: @"Monochrome distance"
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        size_t bufSize = H*W;
+        assert(depthImage.size.height * depthImage.size.width == bufSize);
+        for (int i=0; i<bufSize; i++) {
+            float v = depthImage.buf[i];
+            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+            channel c = trunc(Z - frac*Z);
+            Pixel p = SETRGB(0,0,c);
+            dest[i] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+
+#define RGB_SPACE   ((float)((1<<24) - 1))
+
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
-        size_t bufSize = configuredHeight*configuredWidth;
+        size_t bufSize = H*W;
         assert(depthImage.size.height * depthImage.size.width == bufSize);
         float min = MAX_DEPTH;
         float max = MIN_DEPTH;
@@ -1145,14 +1196,13 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    depthTransform = lastTransform;     // for now, no choice, no params
 
 #ifdef notyet
     lastTransform = [Transform depthVis: @"3D level visualization"
                                  description: @""
                                 depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 Pixel p;
                 float z = DI(x,y);
                 // closest to farthest, even v is dark blue to light blue,
@@ -1193,21 +1243,21 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
         }
         float dpi = 160 * scale;
         
-        for (int y=0; y<configuredHeight; y++) {    // convert scan lines independently
-            channel pix[configuredWidth];
-            int same[configuredWidth];
+        for (int y=0; y<H; y++) {    // convert scan lines independently
+            channel pix[W];
+            int same[W];
             int s;  // stereo sep at this point
             int left, right;    // x values for left and right eyes
             
-            for (int x=0; x < configuredWidth; x++ ) {  // link initial pixels with themselves
+            for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
                 same[x] = x;
             }
-            for (int x=1; x < configuredWidth-1; x++ ) {
+            for (int x=1; x < W-1; x++ ) {
                 float z = DI(x,y);
                 s = separation(z);
                 left = x - s/2;
                 right = left + s;
-                if (left >= 0 && right < configuredWidth) {
+                if (left >= 0 && right < W) {
                     int visible;    // first, perform hidden surface removal
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
                     float zt;       //  Z-coord of ray at these two points
@@ -1234,7 +1284,7 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
                     }
                 }
             }
-            for (long x=configuredWidth-1; x>-0; x--)    { // set the pixels in the scan line
+            for (long x=W-1; x>-0; x--)    { // set the pixels in the scan line
                 if (same[x] == x)
                     pix[x] = random()&1;  // free choice, do it randomly
                 else
@@ -1242,8 +1292,8 @@ sobel(channel *s[configuredHeight], channel *d[configuredHeight]) {
                 dest[PI(x,y)] = SETRGB(pix[x], pix[x], pix[x]);
             }
         }
-        dest[PI(configuredWidth/2 - far/2, configuredHeight*19/20)] = Red;
-        dest[PI(configuredWidth/2 + far/2, configuredHeight*19/20)] = Red;
+        dest[PI(W/2 - far/2, H*19/20)] = Red;
+        dest[PI(W/2 + far/2, H*19/20)] = Red;
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
@@ -1283,8 +1333,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Negative"
                                  description: @"Negative"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 Pixel p = src[PI(x,y)];
                 dest[PI(x,y)] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
             }
@@ -1295,8 +1345,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 PixelIndex_t pi = PI(x,y);
                 Pixel p = src[pi];
                 dest[pi] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
@@ -1323,8 +1373,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             dest[pi] = SETRGB(v,v,v);
         }
         // 6ms:
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 PixelIndex_t pi = PI(x,y);
                 Pixel p = src[pi];
                 int v = LUM(p);
@@ -1338,8 +1388,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Colorize"
                                  description: @"Add color"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 Pixel p = src[PI(x,y)];
                 channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
                 dest[PI(x,y)] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
@@ -1473,18 +1523,18 @@ irand(int i) {
 
         assert(streak > 0);
 
-        for (y = 0; y < configuredHeight; y++)
-            for (x = 0; x < configuredWidth; x++) {
+        for (y = 0; y < H; y++)
+            for (x = 0; x < W; x++) {
                 Pixel p;
                 p.r = p.b = p.g = 0;
                 p.a = src[PI(x,y)].a;
                 dest[PI(x,y)] = p;
          }
         // int     Tsz       = 32;         // tile size, e.g., MAX_X/16
-        long Tsz = configuredWidth/16;
+        long Tsz = W/16;
         
-         for (y = 0; y < configuredHeight-Tsz; y++) {
-                 for (x = 0; x < configuredWidth-Tsz; x++) {
+         for (y = 0; y < H-Tsz; y++) {
+                 for (x = 0; x < W-Tsz; x++) {
                      Pixel *a = &dest[PI(x,y)];
                          nr = ng = nb = 0;
                          for (dx = x-1; dx >= 0 && dx > x-streak; dx--) {
@@ -1510,8 +1560,8 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Old blur"
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
-        for (int y=1; y<configuredHeight-1; y++) {
-            for (int x=1; x<configuredWidth-1; x++) {
+        for (int y=1; y<H-1; y++) {
+            for (int x=1; x<W-1; x++) {
                 Pixel p = {0,0,0,Z};
                 p.r = (src[PI(x,y)].r + src[PI(x+1,y)].r +
                        src[PI(x-1,y)].r +
@@ -1536,28 +1586,28 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int streak) {
-        for (int y=0; y<configuredHeight; y++) {    // red
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {    // red
+            for (int x=0; x<W; x++) {
                 sChan[x][y] = srcBuf[PI(x,y)].r;
             }
         }
         focus(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].r = dChan[x][y];    // install red
                 sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
             }
         }
         focus(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].g = dChan[x][y];    // install green
                 sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
             }
         }
         focus(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
             }
         }
@@ -1568,15 +1618,15 @@ irand(int i) {
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int N) {
 #define NPIX    ((2*N+1)*(2*N+1))
-        for (int y=0; y<configuredHeight; y++) {    /*border*/
+        for (int y=0; y<H; y++) {    /*border*/
             for (int x=0; x<N; x++)
-                dest[PI(x,y)] = dest[PI(configuredWidth-x-1,y)] = White;
-            if (y<N || y>configuredHeight-N)
-                for (int x=0; x<configuredWidth; x++)
+                dest[PI(x,y)] = dest[PI(W-x-1,y)] = White;
+            if (y<N || y>H-N)
+                for (int x=0; x<W; x++)
                     dest[PI(x,y)] = White;
         }
-        for (int y=N; y<configuredHeight-N; y++) {
-            for (int x=N; x<configuredWidth-N; x++) {
+        for (int y=N; y<H-N; y++) {
+            for (int x=N; x<W-N; x++) {
                 int redsum=0, greensum=0, bluesum=0;
 
                 for (int dy=y-N; dy <= y+N; dy++)
@@ -1650,11 +1700,11 @@ irand(int i) {
     
 }
 
-#define CenterX (configuredWidth/2)
-#define CenterY (configuredHeight/2)
+#define CenterX (W/2)
+#define CenterY (H/2)
 #define MAX_R   (MAX(CenterX, CenterY))
 
-#define INRANGE(x,y)    (x >= 0 && x < configuredWidth && y >= 0 && y < configuredHeight)
+#define INRANGE(x,y)    (x >= 0 && x < W && y >= 0 && y < H)
 
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric"];
@@ -1664,22 +1714,22 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Shower stall"
                                   description: @"Through the wet glass"
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int showerSize) {
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0; x<configuredWidth; x++)
+        for (int y=0; y<H; y++)
+            for (int x=0; x<W; x++)
                 table[PI(x,y)] = Remap_White;
 
         // keep gerard's original density
-        int nShower = ((float)(configuredWidth*configuredHeight)/(640.0*480.0))*2500;
+        int nShower = ((float)(W*H)/(640.0*480.0))*2500;
         for(int i=0; i<nShower; i++) {
-            int x = irand((int)configuredWidth-1);
-            int y = irand((int)configuredHeight-1);
+            int x = irand((int)W-1);
+            int y = irand((int)H-1);
             PixelIndex_t pi = PI(x,y);
             
             for (long y1=y-showerSize; y1<=y+showerSize; y1++) {
-                if (y1 < 0 || y1 >= configuredHeight)
+                if (y1 < 0 || y1 >= H)
                     continue;
                 for (long x1=x-showerSize; x1<=x+showerSize; x1++) {
-                    if (x1 < 0 || x1 >= configuredWidth)
+                    if (x1 < 0 || x1 >= W)
                         continue;
                     table[PI(x1,y1)] = pi;
                 }
@@ -1697,12 +1747,12 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Wavy shower"
                                   description: @"Through wavy glass"
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0; x<configuredWidth; x++)
+        for (int y=0; y<H; y++)
+            for (int x=0; x<W; x++)
                 table[PI(x,y)] = PI(x,y);
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0+D; x<configuredWidth-D; x++)
-                table[PI(x,y)]  = PI(x+(int)(D*sin(CPP*x*2*M_PI/configuredWidth)), y);
+        for (int y=0; y<H; y++)
+            for (int x=0+D; x<W-D; x++)
+                table[PI(x,y)]  = PI(x+(int)(D*sin(CPP*x*2*M_PI/W)), y);
     }];
     lastTransform.low = 4;
     lastTransform.value = 23;
@@ -1714,10 +1764,10 @@ irand(int i) {
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int n) {
         n = -n;
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 int nx = x + n;
-                if (nx < 0 || nx >= configuredWidth)
+                if (nx < 0 || nx >= W)
                     table[PI(x,y)] = Remap_White;
                 else
                     table[PI(x,y)] = PI(nx,y);
@@ -1734,10 +1784,10 @@ irand(int i) {
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int n) {
         n = -n;
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 int ny = y + n;
-                if (ny < 0 || ny >= configuredHeight)
+                if (ny < 0 || ny >= H)
                     table[PI(x,y)] = Remap_White;
                 else
                     table[PI(x,y)] = PI(x,ny);
@@ -1754,8 +1804,8 @@ irand(int i) {
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int z) {
         float zoom = z/10.0;
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 long sx = CENTER_X + (x-CENTER_X)/zoom;
                 long sy = CENTER_Y + (y-CENTER_Y)/zoom;
                 table[PI(x,y)] = PI(sx,sy);
@@ -1771,12 +1821,12 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Through a cylinder"
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
-        for (int y=0; y<configuredHeight; y++)
+        for (int y=0; y<H; y++)
             for (int x=0; x<=CENTER_X; x++) {
                 int fromx = CENTER_X*sin((M_PI/2)*x/CENTER_X);
-                assert(fromx >= 0 && fromx < configuredWidth);
+                assert(fromx >= 0 && fromx < W);
                 table[PI(x,y)] = PI(fromx, y);
-                table[PI(configuredWidth-1-x,y)] = PI(configuredWidth-1-fromx, y);
+                table[PI(W-1-x,y)] = PI(W-1-fromx, y);
             }
     }];
     [transformList addObject:lastTransform];
@@ -1786,13 +1836,13 @@ irand(int i) {
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         Pixel p = {0,0,0,Z};
 
-        for (int y=0; y<configuredHeight; y++) {
+        for (int y=0; y<H; y++) {
             int x;
-            for (x=0; x<configuredWidth-2; x++) {
+            for (x=0; x<W-2; x++) {
                 Pixel pin;
                 int r, g, b;
-                long xin = (x+2) >= configuredWidth ? configuredWidth - 1 : x+2;
-                long yin = (y+2) >= configuredHeight ? configuredHeight - 1 : y+2;
+                long xin = (x+2) >= W ? W - 1 : x+2;
+                long yin = (y+2) >= H ? H - 1 : y+2;
                 pin = src[PI(xin,yin)];
                 r = src[PI(x,y)].r + Z/2 - pin.r;
                 g = src[PI(x,y)].g + Z/2 - pin.g;
@@ -1816,13 +1866,13 @@ irand(int i) {
         int y = (int)CenterY+(int)(r1*sin(a));
         if (y < 0)
             y = 0;
-        else if (y >= configuredHeight)
-            y = (int)configuredHeight - 1;
+        else if (y >= H)
+            y = (int)H - 1;
         int x = CenterX + r1*cos(a);
         if (x < 0)
             x = 0;
-        else if (x >= configuredWidth)
-            x = (int)configuredWidth - 1;
+        else if (x >= W)
+            x = (int)W - 1;
         return PI(x, y);
     }];
     [transformList addObject:lastTransform];
@@ -1844,7 +1894,7 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Fish eye"
                                   description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
-        double R = hypot(configuredWidth, configuredHeight);
+        double R = hypot(W, H);
         double r1 = r*r/(R/2.0);
         int x = (int)CenterX + (int)(r1*cos(a));
         int y = (int)CenterY + (int)(r1*sin(a));
@@ -1931,8 +1981,8 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                                   description: @"Tom Duff's logo transform"
                                                 areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        size_t maxY = configuredHeight;
-        size_t maxX = configuredWidth;
+        size_t maxY = H;
+        size_t maxX = W;
         int x, y;
             
         for (y=0; y<maxY; y++) {
@@ -2064,13 +2114,13 @@ make_block(Pt origin, struct block *b) {
         pixPerSide = pps;
         dxToBlockCenter = ((int)(pixPerSide*sqrt(0.75)));
         
-        for (int x=0; x<configuredWidth; x++) {
-            for (int y=0; y<configuredHeight; y++)
+        for (int x=0; x<W; x++) {
+            for (int y=0; y<H; y++)
             table[PI(x,y)] = Remap_White;
         }
 
-        int nxBlocks = (((int)configuredWidth/(2*dxToBlockCenter)) + 2);
-        int nyBlocks = (int)((configuredHeight/(3*pixPerSide/2)) + 2);
+        int nxBlocks = (((int)W/(2*dxToBlockCenter)) + 2);
+        int nyBlocks = (int)((H/(3*pixPerSide/2)) + 2);
         
         struct block_list {
             int    x,y;    // the location of the lower left corner
@@ -2126,13 +2176,13 @@ make_block(Pt origin, struct block *b) {
                     int ul = (ll + 1 + dir) % 4;
 #endif
                     
-                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)configuredWidth;
-                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)configuredWidth;
-                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)configuredHeight;
-                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)configuredHeight;
+                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)W;
+                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)W;
+                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)H;
+                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)H;
                     
-                    for (int y=0; y<configuredHeight; y++) {    // we could actually skip some of these
-                        for (int x=0; x<configuredWidth; x++)    {
+                    for (int y=0; y<H; y++) {    // we could actually skip some of these
+                        for (int x=0; x<W; x++)    {
                             int nx = CORNERS[ll].x + y*dyx + x*dxx;
                             int ny = CORNERS[ll].y + y*dyy + x*dxy;
                             if (INRANGE(nx,ny))
@@ -2209,11 +2259,11 @@ make_block(Pt origin, struct block *b) {
         
         dmkr = omkr = 0;
         
-        for (int y = 1; y < configuredHeight - 1; y++) {
+        for (int y = 1; y < H - 1; y++) {
             if ((y % 2)) {
-                x_strt = 1; x_stop = configuredWidth - 1; x_incr = 1;
+                x_strt = 1; x_stop = W - 1; x_incr = 1;
             } else {
-                x_strt = configuredWidth - 2; x_stop = 0; x_incr = -1;
+                x_strt = W - 2; x_stop = 0; x_incr = -1;
             }
             for(long x = x_strt; x != x_stop; x += x_incr){
                 Pixel val = src[PI(x,y)];
@@ -2240,8 +2290,8 @@ make_block(Pt origin, struct block *b) {
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         int c=0;
-        int w = rand()%configuredWidth;
-        int h = rand()%configuredHeight;
+        int w = rand()%W;
+        int h = rand()%H;
         static int oc = 0;
         
         while (c == 0 || c == oc) {
@@ -2251,8 +2301,8 @@ make_block(Pt origin, struct block *b) {
         }
         oc = c;
         
-        for (int y=0+h; y<0+2*h && y < configuredHeight; y++) {
-            for (int x=0+w; x < 0+2*w && x < configuredWidth; x++) {
+        for (int y=0+h; y<0+2*h && y < H; y++) {
+            for (int x=0+w; x < 0+2*w && x < W; x++) {
                 Pixel p = src[PI(x,y)];
                 if (c&1) p.r = Z;
                 if (c&2) p.g = Z;
@@ -2267,8 +2317,8 @@ make_block(Pt origin, struct block *b) {
                                  description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
         // monochrome sobel...
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 sChan[x][y] = LUM(srcBuf[PI(x,y)]);
             }
         }
@@ -2281,8 +2331,8 @@ make_block(Pt origin, struct block *b) {
         for (int i = 0; i < Z+1; i++)
             hist[i] = 0;
 
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 channel c = Z - dChan[x][y];
                 dChan[x][y] = c;
                 hist[c]++;
@@ -2294,8 +2344,8 @@ make_block(Pt origin, struct block *b) {
             map[i] = Z*((float)ps/((float)configuredPixelsInImage));
             ps += hist[i];
         }
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 //channel lu = dChan[x][y];
                 //float a = (map[lu] - lu)/Z;
                 //int nc = lu + (a*(Z-lu));
@@ -2305,8 +2355,8 @@ make_block(Pt origin, struct block *b) {
         }
         
         focus(sChan, dChan);
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 channel c = dChan[x][y];
                 // high contrast....
                 c = CLIP((c-HALF_Z)*2+HALF_Z);
@@ -2321,20 +2371,20 @@ make_block(Pt origin, struct block *b) {
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         int ave_r=0, ave_g=0, ave_b=0;
 
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++)
+            for (int x=0; x<W; x++) {
                 Pixel p = src[PI(x,y)];
                 ave_r += p.r;
                 ave_g += p.g;
                 ave_b += p.b;
             }
 
-        ave_r /= configuredWidth*configuredHeight;
-        ave_g /= configuredWidth*configuredHeight;
-        ave_b /= configuredWidth*configuredHeight;
+        ave_r /= W*H;
+        ave_g /= W*H;
+        ave_b /= W*H;
 
-        for (int y=0; y<configuredHeight; y++)
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++)
+            for (int x=0; x<W; x++) {
                 Pixel p = {0,0,0,Z};
                 p.r = (src[PI(x,y)].r >= ave_r) ? Z : 0;
                 p.g = (src[PI(x,y)].g >= ave_g) ? Z : 0;
@@ -2348,7 +2398,7 @@ make_block(Pt origin, struct block *b) {
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int value) {
         long x, y, r = 0;
-        long dx, dy, xshift[configuredHeight], yshift[configuredWidth];
+        long dx, dy, xshift[H], yshift[W];
 
         for (y=0; y<h; y++)
             for (x=0; x<w; x++)
@@ -2376,7 +2426,7 @@ make_block(Pt origin, struct block *b) {
             for (x=0; x<w; x++) {
                 dx = x + xshift[y];
                 dy = y + yshift[x];
-                if (dx < configuredWidth && dy < configuredHeight && dx>=0 && dy>=0)
+                if (dx < W && dy < H && dx>=0 && dy>=0)
                     table[PI(x,y)] = PI(dx,dy);
             }
     }];
@@ -2397,8 +2447,8 @@ make_block(Pt origin, struct block *b) {
 
         i = 0;
         memset(dest, 0, configuredPixelsInImage*sizeof(Pixel));
-        for (y=1; y<configuredHeight-1; y++) {
-            for (x=0; x<configuredWidth-len; x++) {
+        for (y=1; y<H-1; y++) {
+            for (x=0; x<W-len; x++) {
                 if (dlut[i] && LUM(src[PI(x,y-1)]) < prob) {
                     for (k=0; k<len; k++) {
                         dest[PI(x+k,y-1)] = src[PI(x+k,y-1)] = ave(src[PI(x+k,y-1)], src[PI(x,y-1)]);
@@ -2415,15 +2465,15 @@ make_block(Pt origin, struct block *b) {
     }];
     [transformList addObject:lastTransform];
 
-#define CX    ((int)configuredWidth/4)
-#define CY    ((int)configuredHeight*3/4)
+#define CX    ((int)W/4)
+#define CY    ((int)H*3/4)
 #define OPSHIFT    3 //(3 /*was 0*/)
 
     lastTransform = [Transform areaTransform: @"Op art (broken)"
                                  description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<configuredHeight; y++) {
-            for (int x=0; x<configuredWidth; x++) {
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
                 Pixel p = src[PI(x,y)];
                 int factor = (CX-(x-CX)*(x-CX) - (y-CY)*(y-CY));
                 channel r = p.r^(p.r*factor >> OPSHIFT);
@@ -2461,7 +2511,7 @@ extern  void init_polar(void);
 #define HALF_Z          (Z/2)
 
 
-typedef Point remap[configuredWidth][configuredWidth];
+typedef Point remap[W][W];
 typedef void *init_proc(void);
 
 /* in trans.c */

@@ -36,6 +36,8 @@
 #define SOURCE_CELL_W   SOURCE_THUMB_W
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
 
+#define SECTION_HEADER_ARROW_W  100
+
 #define MIN_SLIDER_W    100
 #define MAX_SLIDER_W    200
 #define SLIDER_H        50
@@ -107,6 +109,9 @@ typedef enum {
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
 @property (nonatomic, strong)   DepthImage *depthImage;
+@property (assign)              CGSize transformDisplaySize;
+
+@property (assign)              int depthTransformIndex;
 
 
 @end
@@ -142,6 +147,9 @@ typedef enum {
 
 @synthesize rowIsCollapsed;
 @synthesize depthImage;
+@synthesize depthTransformIndex;
+
+@synthesize transformDisplaySize;
 
 - (id) init {
     self = [super init];
@@ -152,6 +160,7 @@ typedef enum {
         transformTotalElapsed = 0;
         transformCount = 0;
         depthImage = nil;
+        depthTransformIndex = 0;
         busy = NO;
         
         inputSources = [[NSMutableArray alloc] init];
@@ -494,32 +503,43 @@ typedef enum {
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController selectCamera:currentSource.sourceType];
         [cameraController setupSessionForCurrentDeviceOrientation];
-    }
-    
+        if (IS_3D_CAMERA(currentSource.sourceType)) {
+            [transforms selectDepthTransform:depthTransformIndex];
+        } else {
+            [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
+        }
+    } else
+        [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
+    [availableTableVC.tableView reloadData];
+
+    CGSize s;
     // the image size we are processing gives the transformed size.  we need to scale that.
-    CGSize sourceSize;
     if (ISCAMERA(currentSource.sourceType)) {
-        sourceSize = [cameraController setupCameraForSize:transformView.frame.size
+        s = [cameraController setupCameraForSize:transformView.frame.size
                                               displayMode:displayMode];
     } else {
-        sourceSize = currentSource.imageSize;
+        s = currentSource.imageSize;
     }
     
-    NSLog(@" source image size: %.0f x %.0f", sourceSize.width, sourceSize.height);
+    W = s.width;
+    H = s.height;
+    
+    NSLog(@" source image size: %d x %d", W, H);
     CGRect scaledRect;
     
 #ifdef SCALE_T_DISPLAY
     transforms.finalScale = [self scaleToFitSize:sourceSize toSize:transformView.frame.size];
-    scaledRect.size = [self fitSize:sourceSize toSize:transformView.frame.size];
+    transformDisplaySize = [self fitSize:sourceSize toSize:transformView.frame.size];
     // put the scaled image at the top of the transform view area, centered.
     CGFloat x = (transformView.frame.size.width - scaledRect.size.width)/2;
     scaledRect.origin = CGPointMake(x, 0);
 #else
     scaledRect.origin = CGPointZero;
-    scaledRect.size = sourceSize;
+    transformDisplaySize = s;
     transformView.frame = scaledRect;
 #endif
-    NSLog(@" transform target size: %.0f x %.0f", scaledRect.size.width, scaledRect.size.height);
+    scaledRect.size = transformDisplaySize;
+    NSLog(@" transformDisplaySize: %.0f x %.0f", transformDisplaySize.width, transformDisplaySize.height);
     scaledTransformImageView.frame = scaledRect;
     
     if (isPortrait) {
@@ -1034,7 +1054,7 @@ viewForHeaderInSection:(NSInteger)section {
             f = CGRectMake(SEP, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
             UIView *sectionHeaderView = [[UIView alloc] initWithFrame:f];
             f.origin = CGPointMake(0, 0);
-            f.size.width -= 50;
+            f.size.width -= SECTION_HEADER_ARROW_W;
             UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
             sectionTitle.adjustsFontSizeToFitWidth = YES;
             sectionTitle.textAlignment = NSTextAlignmentLeft;
@@ -1129,8 +1149,14 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             cell.detailTextLabel.text = transform.description;
             cell.indentationLevel = 1;
             cell.indentationWidth = 10;
-            cell.selectionStyle = UITableViewCellSelectionStyleNone;
-            cell.selected = NO;
+            if (indexPath.section == DEPTH_TRANSFORM_SECTION) {   // depth transforms
+                cell.userInteractionEnabled = transforms.depthTransform != nil;
+                cell.selected = transforms.depthTransform && depthTransformIndex == indexPath.row;
+                if (cell.selected)
+                    cell.accessoryType = UITableViewCellAccessoryCheckmark;
+            } else {
+                cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            }
             break;
         }
         case ActiveTable: {
@@ -1207,9 +1233,19 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     return cell;
 }
 
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+- (void)tableView:(UITableView *)tableView
+didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (tableView.tag) {
-        case TransformTable: {   // Append a transform to the active list
+        case TransformTable: {
+            // for depth selections, just set the depthindex
+            if (indexPath.section == DEPTH_TRANSFORM_SECTION) {
+                if (!transforms.depthTransform)
+                    return; // no depth, no selection
+                depthTransformIndex = (int)indexPath.row;
+                [transforms selectDepthTransform:depthTransformIndex];
+                return;
+            }
+            // Append a transform to the active list
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
             Transform *transform = [transformList objectAtIndex:indexPath.row];
             Transform *thisTransform = [transform copy];

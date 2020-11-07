@@ -11,7 +11,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define MIN_DEPTH   0.0     // meters/ a constant, for now
+// this might be better auto-generated some day
+#define MIN_DEPTH   0.1     // meters, must be > 0 since we take the log of it
 #define MAX_DEPTH   10.0    // meters
 
 @interface DepthImage : NSObject {

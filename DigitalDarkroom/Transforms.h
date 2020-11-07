@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define BITMAP_OPTS kCGBitmapByteOrder32Host | kCGImageAlphaPremultipliedFirst
 
+#define DEPTH_TRANSFORM_SECTION 0
+
 @interface Transforms : NSObject {
     NSMutableArray *categoryNames;
     NSMutableArray *categoryList;
@@ -26,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bytesPerRow;
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
     CGFloat finalScale;   // to reach the desired display dimensions
-    Transform *depthTransform;
+    Transform * __nullable depthTransform;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -38,16 +40,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              volatile BOOL paramsChanged;
 @property (assign)              CGFloat finalScale;
 @property (assign)              BOOL debugTransforms;
-@property (nonatomic, strong)   Transform *depthTransform;
+@property (nonatomic, strong)   Transform * __nullable depthTransform;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
-#ifdef OLD
-+ (void) encodeDistanceData:(size_t) pixelCount
-               fromDepthBuf:(float *) dist
-                   toPixels:(Pixel *) pixels;
-#endif
+#define NO_DEPTH_TRANSFORM  (-1)
+- (void) selectDepthTransform:(int)index;
+
+extern int W, H;
 
 @end
 
