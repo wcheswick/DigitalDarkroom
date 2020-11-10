@@ -144,9 +144,9 @@
     NSLog(@" +++ device orientation: %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
           [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]]);
-    NSLog(@"  + video orientation 2: %ld, %@", (long)videoOrientation,
-          captureOrientationNames[videoOrientation]);
 #endif
+    NSLog(@" +++ device orientation: %ld",
+          (long)[[UIDevice currentDevice] orientation]);
     
     if (captureSession) {
         [captureSession stopRunning];
@@ -184,6 +184,8 @@
         }
         videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
+        NSLog(@"  + depth video orientation 2: %ld, %@", (long)videoOrientation,
+              captureOrientationNames[videoOrientation]);
 
         dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
         [depthOutput setDelegate:delegate callbackQueue:queue];
@@ -198,7 +200,9 @@
         }
         videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        
+        NSLog(@"  + video orientation 2: %ld, %@", (long)videoOrientation,
+              captureOrientationNames[videoOrientation]);
+
         dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
         dataOutput.videoSettings = @{
             (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
@@ -222,20 +226,23 @@
 
 // find and return the largest size that fits into the given size. Return
 // Zero size if none works.  This should never happen.
+
+// Determine the capture image size. If availableSize is zero, return the largest
+// size we have. If the height is zero, fit the largest to the width.  If both height and
+// width are non-zero, make it fit there.
+
 - (CGSize) setupCameraForSize:(CGSize) availableSize
                   displayMode:(DisplayMode_t)displayMode {
     NSError *error;
-    
-    assert(captureDevice);
-    CGSize captureSize = CGSizeZero;
-    
-    selectedFormat = nil;
-    NSArray *availableFormats = captureDevice.formats;
-    
-    NSLog(@" @@@@ fitting into %.0f x %.0f %@",
+    NSLog(@" FFFFF   fitting into %.0f x %.0f %@",
           availableSize.width, availableSize.height,
           UIDeviceOrientationIsPortrait(deviceOrientation) ? @"portrait" : @"");
-    
+
+    assert(captureDevice);
+    NSArray *availableFormats = captureDevice.formats;
+    CGSize captureSize = CGSizeZero;
+    selectedFormat = nil;
+
     for (AVCaptureDeviceFormat *format in availableFormats) {
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
@@ -251,26 +258,33 @@
         // I cannot seem to get the format data adjusted for device orientation.  So we
         // swap them here, if portrait.
         
-        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);        CGFloat w, h;
+        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
+        CGFloat w, h;
+        
         if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
             w = dimensions.height;
             h = dimensions.width;
+            NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
         } else {
             w = dimensions.width;
             h = dimensions.height;
+            NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
         }
-        NSLog(@"   adj   dimensions: %.0f x %.0f", w, h);
-
-        if (w > availableSize.width || h > availableSize.height)
-            break;
-        if (displayMode == small)
-            if (dimensions.height > availableSize.height/2.0)
-                break;
+        
+        if (availableSize.width == 0) { // just find the largest size we have
+            if (w < captureSize.width && h < captureSize.height)
+                continue;
+        } else {    // must fit in the size given
+            if (w > availableSize.width || h > availableSize.height)
+                continue;
+            if (w < captureSize.width || h < captureSize.height)    // we have better already
+                continue;
+        }
+        captureSize = CGSizeMake(w, h);
         selectedFormat = format;
-        captureSize = (CGSize){w, h};
     }
     if (!selectedFormat) {
-        NSLog(@"inconceivable: no suitable video found for %.0f x %.0f",
+        NSLog(@"******* inconceivable: no suitable video found for %.0f x %.0f",
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }

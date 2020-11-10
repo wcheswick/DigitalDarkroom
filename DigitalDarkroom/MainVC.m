@@ -24,7 +24,7 @@
 
 #define COLLECTION_HEADER_H 50
 
-#define MIN_ACTIVE_TABLE_H    140
+#define MIN_ACTIVE_TABLE_H    200
 #define MIN_ACTIVE_NAME_W   150
 #define ACTIVE_TABLE_ENTRY_H   40
 #define ACTIVE_SLIDER_H     ACTIVE_TABLE_ENTRY_H
@@ -70,8 +70,7 @@ typedef enum {
 @property (nonatomic, strong)   UIView *containerView;
 
 // screen views in containerView
-@property (nonatomic, strong)   UIView *transformView;           // area reserved for transform display
-@property (nonatomic, strong)   UIImageView *scaledTransformImageView;   // final image, places in transformView
+@property (nonatomic, strong)   UIImageView *transformView;           // area reserved for transform display
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
 @property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
@@ -112,6 +111,7 @@ typedef enum {
 @property (assign)              CGSize transformDisplaySize;
 
 @property (assign)              int depthTransformIndex;
+@property (assign)              BOOL fullImage;     // transform a full capture (slower)
 
 
 @end
@@ -119,7 +119,6 @@ typedef enum {
 @implementation MainVC
 
 @synthesize containerView;
-@synthesize scaledTransformImageView;
 @synthesize transformView;
 @synthesize sourcesNavVC;
 @synthesize executeNavVC;
@@ -150,6 +149,7 @@ typedef enum {
 @synthesize depthTransformIndex;
 
 @synthesize transformDisplaySize;
+@synthesize fullImage;
 
 - (id) init {
     self = [super init];
@@ -195,6 +195,7 @@ typedef enum {
         }
         currentSource = nil;
         nextSource = [inputSources objectAtIndex:sourceIndex];
+        fullImage = NO;
         [self newDisplayMode:medium];
     }
     return self;
@@ -344,8 +345,6 @@ typedef enum {
     transformView.userInteractionEnabled = YES;
     transformView.backgroundColor = navyBlue;
     [containerView addSubview:transformView];
-    scaledTransformImageView = [[UIImageView alloc] init];
-    [transformView addSubview:scaledTransformImageView];
     
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
@@ -463,34 +462,7 @@ typedef enum {
 - (void) viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     
-    imageOrientation = [self imageOrientationForDeviceOrientation];
-
-    BOOL isPortrait = UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]);
-    NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
-    NSLog(@"    orientation: (%d)  %@",
-          UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]),
-          isPortrait ? @"Portrait" : @"Landscape");
-
-    CGRect f = self.view.frame;
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame);
-    f.size.height = f.size.height - f.origin.y;
-    containerView.frame = f;
-
-    // compute area available for transform.  Need room on the bottom or right.
-    f.origin.y = 0;
-    f.size.height -= CONTROL_H;     // bottom needs control
-    
-    // if it is narrow, the transform image takes the entire width of the top screen.
-    // if not, we have room to put the transform list on the right.
-    if (isPortrait) {   // both tables are below, probably
-        f.size.height -= MIN_TRANSFORM_TABLE_H;
-    } else {    // one table is on top of the other on the right
-        f.size.width -= TRANSFORM_LIST_W;
-        if (f.size.width > MAX_TRANSFORM_W)
-            f.size.width = MAX_TRANSFORM_W;
-    }
-    transformView.frame = f;
-
+    // set up new source, if needed
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
             [cameraController stopCamera];
@@ -499,7 +471,7 @@ typedef enum {
         currentSource = nextSource;
         nextSource = nil;
     }
-
+    
     if (ISCAMERA(currentSource.sourceType)) {
         [cameraController selectCamera:currentSource.sourceType];
         [cameraController setupSessionForCurrentDeviceOrientation];
@@ -510,91 +482,138 @@ typedef enum {
         }
     } else
         [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
-    [availableTableVC.tableView reloadData];
 
-    CGSize s;
-    // the image size we are processing gives the transformed size.  we need to scale that.
+    CGRect f = self.view.frame;
+    f.origin.y = BELOW(self.navigationController.navigationBar.frame);
+    f.size.height = f.size.height - f.origin.y;
+    containerView.frame = f;
+
+    imageOrientation = [self imageOrientationForDeviceOrientation];
+    UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
+    BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);
+    NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
+    NSLog(@"    orientation: (%d)  %@",
+          UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]),
+          isPortrait ? @"Portrait" : @"Landscape");
+
+    // the image display starts on the upper left of the screen.  Its width
+    // depends on device and orientation, and its height depends on the aspect
+    // ratio of the source.
+    // how we set these sizes depends on the "fullImage" flag, which insists that
+    // we gather and process the largest image we can.
+    
+    CGSize sourceSize;
+    CGSize processingSize;
+    CGSize displaySize;
+    
+    displaySize.width = containerView.frame.size.width;
+    if (isPortrait) {
+        displaySize.width = containerView.frame.size.width;
+        displaySize.height = containerView.frame.size.height -
+            MIN_ACTIVE_TABLE_H - MIN_TRANSFORM_TABLE_H - 2*SEP;
+    } else {
+        displaySize.width -= TRANSFORM_LIST_W;
+        displaySize.height = containerView.frame.size.height;   // maximum display window height
+    }
+  
+    // the image size we are processing gives the display size.
     if (ISCAMERA(currentSource.sourceType)) {
-        s = [cameraController setupCameraForSize:transformView.frame.size
+        if (fullImage)
+            sourceSize = CGSizeZero;    // obtain maximum available camera size
+        else
+            sourceSize = displaySize;   // we will learn what fits in the given width
+        NSLog(@"sourceSize is %.0f x %.0f", sourceSize.width, sourceSize.height);
+        processingSize = [cameraController setupCameraForSize:sourceSize
                                               displayMode:displayMode];
     } else {
-        s = currentSource.imageSize;
+        processingSize = currentSource.imageSize;
+        NSLog(@"sourceSize is %.0f x %.0f", processingSize.width, processingSize.height);
     }
     
-    W = s.width;
-    H = s.height;
+    // The transforms operate on processingSize images.  What size the height of the display,
+    // and how does the processed image fit in?  Scaling is ok.
     
-    NSLog(@" source image size: %d x %d", W, H);
-    CGRect scaledRect;
-    
-#ifdef SCALE_T_DISPLAY
-    transforms.finalScale = [self scaleToFitSize:sourceSize toSize:transformView.frame.size];
-    transformDisplaySize = [self fitSize:sourceSize toSize:transformView.frame.size];
-    // put the scaled image at the top of the transform view area, centered.
-    CGFloat x = (transformView.frame.size.width - scaledRect.size.width)/2;
-    scaledRect.origin = CGPointMake(x, 0);
-#else
-    scaledRect.origin = CGPointZero;
-    transformDisplaySize = s;
-    transformView.frame = scaledRect;
-#endif
-    scaledRect.size = transformDisplaySize;
-    NSLog(@" transformDisplaySize: %.0f x %.0f", transformDisplaySize.width, transformDisplaySize.height);
-    scaledTransformImageView.frame = scaledRect;
-    
-    if (isPortrait) {
-        // if room on the right for the transform list, put it there, else
-        // split the bottom between execute and transform
-        
-        f.size.width = containerView.frame.size.width - f.size.width;
-        if (f.size.width - SEP >= MIN_TRANS_TABLE_W) {  // available on the right, executing at bottom
-            f.size.height = containerView.frame.size.height;
-            f.size.width -= SEP;
-            f.origin.x = RIGHT(scaledTransformImageView.frame) + SEP;
-            f.origin.y = 0;
-            availableNavVC.view.frame = f;
-            
-            f.size.width = f.origin.x - SEP;
-            f.origin = CGPointMake(0, BELOW(scaledTransformImageView.frame) + SEP);
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            executeNavVC.view.frame = f;
-        } else {
-            f.size.width = containerView.frame.size.width/2 - SEP;
-            f.origin.y = BELOW(scaledTransformImageView.frame) + SEP;
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            f.origin.x = 0;
-            executeNavVC.view.frame = f;
-            
-            f.origin.x = RIGHT(f) + SEP;
-            availableNavVC.view.frame = f;
-        }
-    } else {
-        // if there is room underneath, put the active there, and available to the right,
-        // else stack both on the right
-        
-        f.size.height = containerView.frame.size.height - scaledTransformImageView.frame.size.height;
-        if (f.size.height >= MIN_ACTIVE_TABLE_H) {
-            f.origin.y = BELOW(scaledTransformImageView.frame) + SEP;
-            f.origin.x = 0;
-            f.size.width = RIGHT(scaledTransformImageView.frame);
-            executeNavVC.view.frame = f;
-            
-            f.origin = CGPointMake(RIGHT(scaledTransformImageView.frame) + SEP, 0);
-            f.size.width = containerView.frame.size.width - f.origin.x;
-            f.size.height = containerView.frame.size.height;
-            availableNavVC.view.frame = f;
-        } else {
-            // available and execute goes right of display
-            f.origin = CGPointMake(RIGHT(scaledTransformImageView.frame) + SEP, 0);
-            f.size.height = containerView.frame.size.height*0.3;
-            f.size.width = containerView.frame.size.width - f.origin.x;
-            executeNavVC.view.frame = f;
+    NSLog(@"processingSize is %.0f x %.0f", processingSize.width, processingSize.height);
+    [transforms setTransformSize:processingSize];
 
-            f.origin.y = BELOW(f) + SEP;
-            f.size.height = containerView.frame.size.height - f.origin.y;
-            availableNavVC.view.frame = f;
-       }
+    CGSize transformSize = f.size;
+    // the image size we are processing gives the transformed size.  we need to scale that.
+    if (ISCAMERA(currentSource.sourceType)) {
+        CGSize targetSize;
+        if (fullImage)
+            targetSize = CGSizeZero;
+        else
+            targetSize = transformView.frame.size;
+        transformSize = [cameraController setupCameraForSize:transformView.frame.size
+                                              displayMode:displayMode];
+    } else {
+        transformSize = currentSource.imageSize;
     }
+    
+    // We now know the size at the end of transforming.  This needs to fit into displaySize,
+    // with appropriate positioning.  The display area may have its height reduced.
+    // XXX this code can be simpler.
+    
+    float xScale = displaySize.width / transformSize.width;;
+    float yScale = displaySize.height / transformSize.height;
+    transforms.finalScale = MIN(xScale, yScale);
+    f.size = CGSizeMake(transformSize.width * transforms.finalScale, transformSize.height * transforms.finalScale);
+    if (xScale > yScale) // center the image
+        f.origin = CGPointMake((displaySize.width - f.size.width)/2.0, 0);
+    else
+        f.origin = CGPointZero;
+    transformView.frame = f;
+
+    // now position the two tables.
+    
+#define EXEC_FRAC   (0.3)
+    switch (UIDevice.currentDevice.userInterfaceIdiom) {
+        case UIUserInterfaceIdiomPhone:
+            if (isPortrait) {       // image on top, execute and available stacked below
+                f.origin = CGPointMake(0, BELOW(f) + SEP);
+                f.size.width = containerView.frame.size.width;
+                f.size.height = EXEC_FRAC*(containerView.frame.size.height - f.origin.y);
+                executeNavVC.view.frame = f;
+
+                f.origin.y = BELOW(f) + SEP;
+                f.size.height = containerView.frame.size.height - f.origin.y;
+                availableNavVC.view.frame = f;
+            } else {    // image on the left, execute and available stacked on the right
+                f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
+                f.size.width = containerView.frame.size.width - f.origin.x - SEP;
+                f.size.height = EXEC_FRAC*containerView.frame.size.height;
+                executeNavVC.view.frame = f;
+                
+                f.origin.y += f.size.height + SEP;
+                f.size.height = containerView.frame.size.height - f.origin.y;
+                availableNavVC.view.frame = f;
+            }
+            break;
+        case UIUserInterfaceIdiomPad:
+            if (isPortrait) {       // image on the top, execute and avail side-by-side on the bottom
+                f.origin = CGPointMake(0, BELOW(f) + SEP);
+                f.size.width = containerView.frame.size.width/2;
+                f.size.height = containerView.frame.size.height - f.origin.y;
+                executeNavVC.view.frame = f;
+
+                f.origin.y += f.size.width;
+                availableNavVC.view.frame = f;
+            } else {    // image in upper left, avail on the whole right side, execute underneath
+                f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
+                f.size.width = containerView.frame.size.width - f.origin.y - SEP;
+                f.size.height = containerView.frame.size.height;
+                availableNavVC.view.frame = f;
+
+                f.origin = CGPointMake(0, BELOW(transformView.frame));
+                f.size.width = availableNavVC.view.frame.origin.y - SEP;
+                f.size.height = containerView.frame.size.height - f.origin.y;
+            }
+            break;
+       default:    // one of the other Apple devices
+            NSLog(@"***** Unplanned device: %ld", (long)UIDevice.currentDevice.userInterfaceIdiom);
+            return;
+    }
+
     f = executeNavVC.view.frame;
     f.origin.x = 0;
     f.origin.y = executeNavVC.navigationBar.frame.size.height;
@@ -611,6 +630,9 @@ typedef enum {
     } else {
         [self transformCurrentImage];
     }
+    
+    [availableTableVC.tableView reloadData];
+
 }
 
 #ifdef notdef
@@ -685,8 +707,8 @@ typedef enum {
 }
 
 - (IBAction) doSave:(UIBarButtonItem *)barButton {
-    NSLog(@"saving");
-    UIImageWriteToSavedPhotosAlbum(scaledTransformImageView.image, nil, nil, nil);
+    NSLog(@"saving");   // XXX need full image for a save
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
     UIWindow* keyWindow = nil;
@@ -782,8 +804,8 @@ typedef enum {
     
     UIImage *transformed = [transforms executeTransformsWithImage:image];
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->scaledTransformImageView.image = transformed;
-        [self->scaledTransformImageView setNeedsDisplay];
+        self->transformView.image = transformed;
+        [self->transformView setNeedsDisplay];
     });
 }
 
@@ -862,8 +884,8 @@ typedef enum {
     NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
     self->transformTotalElapsed += elapsed;
     self->transformCount++;
-    self->scaledTransformImageView.image = transformed;
-    [self->scaledTransformImageView setNeedsDisplay];
+    self->transformView.image = transformed;
+    [self->transformView setNeedsDisplay];
 }
 
 static Pixel *depthPixelVisImage = 0;    // alloc on the heap, maybe too big for the stack
@@ -872,7 +894,8 @@ size_t bufferSize = 0;
 - (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) rawDepthData
                            orientation:(UIImageOrientation) orientation {
     //NSLog(@"         type: %@", [cameraController dumpFormatType:rawDepthData.depthDataType]);
-    assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32); // what we are expecting, for now
+    // this is hdis, displarity16, on iphone X
+    //assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32); // what we are expecting, for now
     AVDepthData *depthData;
     if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
         depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
@@ -882,6 +905,7 @@ size_t bufferSize = 0;
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+    NSLog(@"depth data orientation %@", width > height ? @"panoramic" : @"portrait");
     if (bufferSize != width * height) {    // put it on the heap.  This doesn't seem to help
         if (bufferSize) {
             free(depthPixelVisImage);
@@ -985,6 +1009,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
     size_t width = CVPixelBufferGetWidth(imageBuffer);
     size_t height = CVPixelBufferGetHeight(imageBuffer);
+    //NSLog(@"image  orientation %@", width > height ? @"panoramic" : @"portrait");
 
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,

@@ -48,7 +48,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define NO_DEPTH_TRANSFORM  (-1)
 - (void) selectDepthTransform:(int)index;
 
-extern int W, H;
+- (void) setTransformSize: (CGSize) s;
 
 @end
 

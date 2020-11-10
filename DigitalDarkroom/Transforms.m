@@ -63,6 +63,7 @@ size_t configuredBytesPerRow, configuredPixelsInImage;
 Pixel *imBufs[2];
 channel **sChan = 0;
 channel **dChan = 0;
+int chanColumns = 0;
 
 #define RPI(x,y)    (PixelIndex_t)(((y)*W) + (x))
 
@@ -118,6 +119,11 @@ PixelIndex_t dPI(int x, int y) {
         [self buildTransformList];
     }
     return self;
+}
+
+- (void) setTransformSize:(CGSize) s {
+    W = s.width;
+    H = s.height;
 }
 
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
@@ -323,10 +329,11 @@ int sourceImageIndex, destImageIndex;
               bytesPerRow, width, height);
 #endif
         if (sChan) {    // release previous memory
-            for (int x=0; x<W; x++) {
+            for (int x=0; x<chanColumns; x++) {
                 free((void *)sChan[x]);
                 free((void *)dChan[x]);
             }
+            chanColumns = 0;
         }
         configuredBytesPerRow = bytesPerRow;
         H = (int)height;
@@ -345,8 +352,9 @@ int sourceImageIndex, destImageIndex;
         }
         // also allocate a channel-sized buffer, for single channel ops
 
-        sChan = (channel **)malloc(W*sizeof(channel *));
-        dChan = (channel **)malloc(W*sizeof(channel *));
+        chanColumns = W;
+        sChan = (channel **)malloc(chanColumns*sizeof(channel *));
+        dChan = (channel **)malloc(chanColumns*sizeof(channel *));
         for (int x=0; x<W; x++) {
             sChan[x] = (channel *)malloc(H*sizeof(channel));
             dChan[x] = (channel *)malloc(H*sizeof(channel));
@@ -1196,6 +1204,22 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    
+    // plywood?
+    
+    // apple's encoding?
+    
+    //" random dot anaglyph github"
+    // in python: https://github.com/sashaperigo/random-dot-stereogram/blob/master/README.md
+    
+    //[1] Zhaoping L, Ackermann J. Reversed Depth in Anticorrelated Random-Dot Stereograms and the Central-Peripheral Difference in Visual Inference[J]. Perception, 2018, 47(5): 531-539.
+    
+    // simple:  https://github.com/arkjedrz/stereogram.git
+    
+    // another: https://github.com/CoolProgrammingUser/stereograms.git
+    
+    // promising anaglyph: https://github.com/JanosRado/StereoMonitorCalibration.git
+    
 
 #ifdef notyet
     lastTransform = [Transform depthVis: @"3D level visualization"
