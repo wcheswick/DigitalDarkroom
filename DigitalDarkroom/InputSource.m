@@ -23,10 +23,18 @@
     if (self) {
         sourceType = NotACamera;
         imageSize = CGSizeZero;
+        imagePath = nil;
+        thumbImage = nil;
     }
     return self;
 }
 
++ (InputSource *) sourceForCamera:(Cameras) cam {
+    InputSource *newSource = [[InputSource alloc] init];
+    newSource.sourceType = cam;
+    newSource.label = cameraNames[cam];
+    return newSource;
+}
 
 static NSString * const cameraNames[] = {
     @"Front camera",

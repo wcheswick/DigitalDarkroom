@@ -40,6 +40,8 @@ typedef enum {
 @property (nonatomic, strong)   NSArray *cameraNames;
 
 + (NSString *)cameraNameFor:(Cameras)camera;
++ (InputSource *) sourceForCamera:(Cameras) cam;
+
 
 @end
 

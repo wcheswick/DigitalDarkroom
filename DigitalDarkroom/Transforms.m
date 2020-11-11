@@ -1114,7 +1114,11 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     
     assert(categoryList.count - 1 == DEPTH_TRANSFORM_SECTION);
     
-#define DI(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
+#ifdef DEBUG_TRANSFORMS
+#define DIST(x,y)  [depthImage distAtX:(x) Y:(y)]
+#else
+#define DIST(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
+#endif
     
     lastTransform = [Transform depthVis: @"Monochrome log distance"
                             description: @""
@@ -1125,7 +1129,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         float logMin = log(MIN_DEPTH);
         float logMax = log(MAX_DEPTH);
         for (int i=0; i<bufSize; i++) {
-            float d = depthImage.buf[i];
+            Distance d = depthImage.buf[i];
             if (d < MIN_DEPTH)
                 d = MIN_DEPTH;
             else if (d > MAX_DEPTH)
@@ -1145,7 +1149,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         size_t bufSize = H*W;
         assert(depthImage.size.height * depthImage.size.width == bufSize);
         for (int i=0; i<bufSize; i++) {
-            float v = depthImage.buf[i];
+            Distance v = depthImage.buf[i];
             float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
@@ -1164,7 +1168,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         float min = MAX_DEPTH;
         float max = MIN_DEPTH;
         for (int i=0; i<bufSize; i++) {
-            float v = depthImage.buf[i];
+            Distance v = depthImage.buf[i];
             if (v < min)
                 min = v;
             if (v > max)
@@ -1228,7 +1232,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
                 Pixel p;
-                float z = DI(x,y);
+                Distance z = DIST(x,y);
                 // closest to farthest, even v is dark blue to light blue,
                 // odd v is yellow to dark yellow
                 if (z >= MAX_DEPTH)
@@ -1253,11 +1257,14 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [transformList addObject:lastTransform];
 #endif
     
+    
 #define mu (1/3.0)
 #define E round(2.5*dpi)
-#define separation(Z) round((1-mu*Z)*E/(2-mu*Z))
-#define far separation(0)
+#define separation(Z) round((1-mu*(Z))*E/(2-mu*(Z)))
+#define FARAWAY separation(0)
     
+    // SIDRS computation taken from
+    // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
     lastTransform = [Transform depthVis: @"SIRDS"
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
@@ -1269,6 +1276,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         
         for (int y=0; y<H; y++) {    // convert scan lines independently
             channel pix[W];
+            //  Points to a pixel to the right ... */ /* ... that is constrained to be this color:
             int same[W];
             int s;  // stereo sep at this point
             int left, right;    // x values for left and right eyes
@@ -1276,48 +1284,54 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
                 same[x] = x;
             }
-            for (int x=1; x < W-1; x++ ) {
-                float z = DI(x,y);
-                s = separation(z);
+            for (int x=0; x < W; x++ ) {
+                s = separation(DIST(x,y));
                 left = x - s/2;
-                right = left + s;
+                right = left + s;   // pixels at left and right must be the same
                 if (left >= 0 && right < W) {
                     int visible;    // first, perform hidden surface removal
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
-                    float zt;       //  Z-coord of ray at these two points
+                    Distance zt;       //  Z-coord of ray at these two points
                     
                     do {
-                        zt = DI(x,y) + 2*(2 - mu*DI(x,y))*t/(mu*E);
-                        visible = DI(x-t, y)<zt && DI(x+t,y)<zt;  // false if obscured
+                        zt = DIST(x,y) + 2*(2 - mu*DIST(x,y))*t/(mu*E);
+                        BOOL inRange = (x-t >= 0) && (x+t < W);
+                        visible = inRange && DIST(x-t,y) < zt && DIST(x+t,y) < zt;  // false if obscured
                         t++;
                     } while (visible && zt < 1);    // end of hidden surface removal
-                    if (visible) {  // pixels at l and r are the same
+                    if (visible) {  // record that pixels at l and r are the same
+                        assert(left >= 0 && left < W);
                         int l = same[left];
+                        assert(l >= 0 && l < W);
                         while (l != left && l != right) {
                             if (l < right) {    // first, jiggle the pointers...
                                 left = l;       // until either same[left] == left
+                                assert(left >= 0 && left < W);
                                 l = same[left]; // .. or same[left == right
+                                assert(l >= 0 && l < W);
                             } else {
+                                assert(left >= 0 && left < W);
                                 same[left] = right;
                                 left = right;
                                 l = same[left];
+                                assert(l >= 0 && l < W);
                                 right = l;
                             }
-                            same[left] = right; // actually recorded here
                         }
+                        same[left] = right; // actually recorded here
                     }
                 }
             }
-            for (long x=W-1; x>-0; x--)    { // set the pixels in the scan line
+            for (long x=W-1; x>=0; x--)    { // set the pixels in the scan line
                 if (same[x] == x)
                     pix[x] = random()&1;  // free choice, do it randomly
                 else
                     pix[x] = pix[same[x]];  // constrained choice, obey constraint
-                dest[PI(x,y)] = SETRGB(pix[x], pix[x], pix[x]);
+                dest[PI(x,y)] = pix[x] ? Black : White;
             }
         }
-        dest[PI(W/2 - far/2, H*19/20)] = Red;
-        dest[PI(W/2 + far/2, H*19/20)] = Red;
+        dest[PI(W/2 - FARAWAY/2, H*19/20)] = Red;
+        dest[PI(W/2 + FARAWAY/2, H*19/20)] = Red;
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
@@ -1326,7 +1340,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 #ifdef SPECTRUMTEST
     
     for (int di=0; di < 100; di++) {
-        float d;
+        Distance d;
         if (di % 10 == 0)
             d = -1.0;
         else

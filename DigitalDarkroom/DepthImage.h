@@ -15,15 +15,18 @@ NS_ASSUME_NONNULL_BEGIN
 #define MIN_DEPTH   0.1     // meters, must be > 0 since we take the log of it
 #define MAX_DEPTH   10.0    // meters
 
+typedef float Distance;     // in meters
+
 @interface DepthImage : NSObject {
-    float *buf;    // 0, or a size.w x size.h buffer of depths, in meters
-    CGSize size;        // in floats
+    Distance *buf;  // 0, or a size.w x size.h buffer of distances
+    CGSize size;    // in floats
 }
 
 @property (assign)  float *buf;
 @property (assign)  CGSize size;
 
 - (id)initWithSize:(CGSize) s;
+- (Distance) distAtX:(int)x Y:(int)y;
 
 @end
 

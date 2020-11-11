@@ -113,6 +113,7 @@ typedef enum {
 @property (assign)              int depthTransformIndex;
 @property (assign)              BOOL fullImage;     // transform a full capture (slower)
 
+@property (nonatomic, strong)   UISegmentedControl *sourceSelection;
 
 @end
 
@@ -150,6 +151,7 @@ typedef enum {
 
 @synthesize transformDisplaySize;
 @synthesize fullImage;
+@synthesize sourceSelection;
 
 - (id) init {
     self = [super init];
@@ -320,15 +322,27 @@ typedef enum {
     
     self.title = @"Digital Darkroom";
     self.navigationController.navigationBarHidden = NO;
-    self.navigationController.navigationBar.opaque = YES;
+    self.navigationController.navigationBar.opaque = NO;
+    self.navigationController.toolbarHidden = YES;
+    self.navigationController.toolbar.opaque = NO;
     
-    UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc]
-                                      initWithTitle:@"Sources"
-                                      style:UIBarButtonItemStylePlain
-                                      target:self action:@selector(doSelectSource:)];
-    leftBarButton.enabled = YES;
-    self.navigationItem.leftBarButtonItem = leftBarButton;
-    
+    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
+    sourceSelection = [[UISegmentedControl alloc]
+                       initWithItems: [NSArray arrayWithObjects:
+                                       @"Front\ncamera",
+                                       @"Rear\ncamera",
+                                       @"Front\n3D",
+                                       @"Rear\n3D",
+                                       @"File", nil]];
+    sourceSelection.frame = CGRectMake(0, 0, 100, 44);
+    [sourceSelection addTarget:self action:@selector(selectSource:)
+               forControlEvents: UIControlEventValueChanged];
+    sourceSelection.selectedSegmentIndex = 0;
+    sourceSelection.momentary = NO;
+    UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc]
+                                    initWithCustomView:sourceSelection];
+    self.navigationItem.leftBarButtonItem = leftBarItem;
+
     UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
                                        initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                        target:self
@@ -346,6 +360,12 @@ typedef enum {
     transformView.backgroundColor = navyBlue;
     [containerView addSubview:transformView];
     
+    // touching the transformView toggles nav and tool bars
+    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didTapSceen:)];
+    [touch setNumberOfTouchesRequired:1];
+    [transformView addGestureRecognizer:touch];
+
     executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
     executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
     availableTableVC = [[UITableViewController alloc]
@@ -392,12 +412,6 @@ typedef enum {
     availableTableVC.tableView.dataSource = self;
     availableTableVC.tableView.showsVerticalScrollIndicator = YES;
     availableTableVC.title = @"Transforms";
- 
-    // touching the transformView
-    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
-                                   initWithTarget:self action:@selector(didTouchVideo:)];
-    [touch setNumberOfTouchesRequired:1];
-    [transformView addGestureRecognizer:touch];
 
     UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
                                            initWithTarget:self action:@selector(didPressVideo:)];
@@ -484,8 +498,6 @@ typedef enum {
         [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
 
     CGRect f = self.view.frame;
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame);
-    f.size.height = f.size.height - f.origin.y;
     containerView.frame = f;
 
     imageOrientation = [self imageOrientationForDeviceOrientation];
@@ -516,6 +528,10 @@ typedef enum {
         displaySize.height = containerView.frame.size.height;   // maximum display window height
     }
   
+    f.origin = CGPointZero;
+    f.size = displaySize;
+    transformView.frame = f;
+    
     // the image size we are processing gives the display size.
     if (ISCAMERA(currentSource.sourceType)) {
         if (fullImage)
@@ -535,29 +551,15 @@ typedef enum {
     
     NSLog(@"processingSize is %.0f x %.0f", processingSize.width, processingSize.height);
     [transforms setTransformSize:processingSize];
-
-    CGSize transformSize = f.size;
-    // the image size we are processing gives the transformed size.  we need to scale that.
-    if (ISCAMERA(currentSource.sourceType)) {
-        CGSize targetSize;
-        if (fullImage)
-            targetSize = CGSizeZero;
-        else
-            targetSize = transformView.frame.size;
-        transformSize = [cameraController setupCameraForSize:transformView.frame.size
-                                              displayMode:displayMode];
-    } else {
-        transformSize = currentSource.imageSize;
-    }
     
     // We now know the size at the end of transforming.  This needs to fit into displaySize,
     // with appropriate positioning.  The display area may have its height reduced.
     // XXX this code can be simpler.
     
-    float xScale = displaySize.width / transformSize.width;;
-    float yScale = displaySize.height / transformSize.height;
+    float xScale = displaySize.width / processingSize.width;;
+    float yScale = displaySize.height / processingSize.height;
     transforms.finalScale = MIN(xScale, yScale);
-    f.size = CGSizeMake(transformSize.width * transforms.finalScale, transformSize.height * transforms.finalScale);
+    f.size = CGSizeMake(processingSize.width * transforms.finalScale, processingSize.height * transforms.finalScale);
     if (xScale > yScale) // center the image
         f.origin = CGPointMake((displaySize.width - f.size.width)/2.0, 0);
     else
@@ -592,21 +594,22 @@ typedef enum {
         case UIUserInterfaceIdiomPad:
             if (isPortrait) {       // image on the top, execute and avail side-by-side on the bottom
                 f.origin = CGPointMake(0, BELOW(f) + SEP);
-                f.size.width = containerView.frame.size.width/2;
+                f.size.width = containerView.frame.size.width/2 - SEP/2;
                 f.size.height = containerView.frame.size.height - f.origin.y;
                 executeNavVC.view.frame = f;
 
-                f.origin.y += f.size.width;
+                f.origin.x += f.size.width + SEP;
                 availableNavVC.view.frame = f;
             } else {    // image in upper left, avail on the whole right side, execute underneath
                 f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
-                f.size.width = containerView.frame.size.width - f.origin.y - SEP;
+                f.size.width = containerView.frame.size.width - f.origin.x - SEP;
                 f.size.height = containerView.frame.size.height;
                 availableNavVC.view.frame = f;
 
                 f.origin = CGPointMake(0, BELOW(transformView.frame));
-                f.size.width = availableNavVC.view.frame.origin.y - SEP;
+                f.size.width = availableNavVC.view.frame.origin.x - SEP;
                 f.size.height = containerView.frame.size.height - f.origin.y;
+                executeNavVC.view.frame = f;
             }
             break;
        default:    // one of the other Apple devices
@@ -617,11 +620,17 @@ typedef enum {
     f = executeNavVC.view.frame;
     f.origin.x = 0;
     f.origin.y = executeNavVC.navigationBar.frame.size.height;
-    f.size.height -= f.origin.y;
+    f.size.height = executeNavVC.navigationBar.frame.size.height - f.origin.y;
     executeTableVC.view.frame = f;
     
     executeTableVC.tableView.tableFooterView = allStatsLabel;
     SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
+
+    f = availableNavVC.view.frame;
+    f.origin.x = 0;
+    f.origin.y = availableNavVC.navigationBar.frame.size.height;
+    f.size.height = availableNavVC.navigationBar.frame.size.height - f.origin.y;
+    availableTableVC.view.frame = f;
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -696,7 +705,15 @@ typedef enum {
     });
 }
 
-- (IBAction) didTouchVideo:(UITapGestureRecognizer *)recognizer {
+- (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
+    BOOL isHidden = self.navigationController.navigationBarHidden;
+    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
+    // not yet  [self.navigationController setToolbarHidden:!isHidden animated:YES];
+}
+
+// XXXXX stub
+
+- (IBAction) didFreezeVideo:(UIBarButtonItem *)recognizer {
     NSLog(@"video touched");
     if ([cameraController isCameraOn]) {
         [cameraController stopCamera];
@@ -905,7 +922,7 @@ size_t bufferSize = 0;
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-    NSLog(@"depth data orientation %@", width > height ? @"panoramic" : @"portrait");
+    //NSLog(@"depth data orientation %@", width > height ? @"panoramic" : @"portrait");
     if (bufferSize != width * height) {    // put it on the heap.  This doesn't seem to help
         if (bufferSize) {
             free(depthPixelVisImage);
@@ -1131,7 +1148,7 @@ viewForHeaderInSection:(NSInteger)section {
         case ActiveTable:
             return 0;
         default:
-            return TABLE_ENTRY_H;
+            return UITableViewAutomaticDimension;
     }
 }
 
@@ -1203,7 +1220,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             f.size.width = MIN_ACTIVE_NAME_W;
             UILabel *label = [[UILabel alloc] initWithFrame:f];
             label.numberOfLines = 0;
-            label.font = [UIFont systemFontOfSize:20];
+            label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE];
             
             f.size.width = STATS_W;
             f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
@@ -1390,10 +1407,20 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     transformCount = transformTotalElapsed = 0;
 }
 
+- (IBAction) selectSource:(UISegmentedControl *)sender {
+    Cameras newCam = (Cameras)sender.selectedSegmentIndex;
+    if (ISCAMERA(newCam)) {
+        nextSource = [InputSource sourceForCamera:newCam];
+        [self.view setNeedsLayout];
+        return;
+    }
+    [self doSelecFileSource];
+}
+
 #define CELLECTION_CELL_ID  @"collectionCell"
 #define CELLECTION_HEADER_CELL_ID  @"collectionHeaderCell"
 
-- (IBAction) doSelectSource:(UIBarButtonItem *)sender {
+- (void) doSelecFileSource {
     UIViewController *collectionVC = [[UIViewController alloc] init];
     
     UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];

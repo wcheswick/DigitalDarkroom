@@ -254,6 +254,17 @@
                 continue;
             if (!format.supportedDepthDataFormats.count)
                 continue;
+        } else {
+            FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+            switch (mediaSubType) {
+                case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+                    continue;
+                case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
+                    break;
+                default:
+                    NSLog(@"Unknown media subtype encountered in format: %@", format);
+                    continue;
+            }
         }
         // I cannot seem to get the format data adjusted for device orientation.  So we
         // swap them here, if portrait.
@@ -264,23 +275,26 @@
         if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
             w = dimensions.height;
             h = dimensions.width;
-            NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
+            //NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
         } else {
             w = dimensions.width;
             h = dimensions.height;
-            NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
+            //NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
         }
         
         if (availableSize.width == 0) { // just find the largest size we have
             if (w < captureSize.width && h < captureSize.height)
                 continue;
         } else {    // must fit in the size given
+            // HRSI = high res still image dimensions.
+            //NSLog(@"  format: %@", format);
             if (w > availableSize.width || h > availableSize.height)
                 continue;
-            if (w < captureSize.width || h < captureSize.height)    // we have better already
+            if (w <= captureSize.width && h <= captureSize.height)    // we have better already
                 continue;
         }
         captureSize = CGSizeMake(w, h);
+        //NSLog(@" ^^^^^ good");
         selectedFormat = format;
     }
     if (!selectedFormat) {
