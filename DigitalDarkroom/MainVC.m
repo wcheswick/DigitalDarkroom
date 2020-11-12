@@ -75,6 +75,7 @@ typedef enum {
 @property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
 @property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
 
+@property (nonatomic, strong)   UISlider *valueSlider;
 // in execute view
 @property (nonatomic, strong)   UITableViewController *executeTableVC;
 
@@ -100,6 +101,9 @@ typedef enum {
 
 @property (nonatomic, strong)   UIBarButtonItem *trashButton;
 @property (nonatomic, strong)   UIBarButtonItem *saveButton;
+@property (nonatomic, strong)   UIBarButtonItem *undoButton;
+@property (nonatomic, strong)   UIBarButtonItem *snapButton;
+@property (nonatomic, strong)   UIBarButtonItem *stopVideoButton;
 
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
@@ -124,6 +128,7 @@ typedef enum {
 @synthesize sourcesNavVC;
 @synthesize executeNavVC;
 @synthesize availableNavVC;
+@synthesize valueSlider;
 
 @synthesize executeTableVC;
 @synthesize availableTableVC;
@@ -141,6 +146,8 @@ typedef enum {
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
 @synthesize trashButton, saveButton;
+@synthesize undoButton, snapButton;
+@synthesize stopVideoButton;
 @synthesize capturing;
 @synthesize imageOrientation;
 @synthesize displayMode;
@@ -323,10 +330,16 @@ typedef enum {
     self.title = @"Digital Darkroom";
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = NO;
-    self.navigationController.toolbarHidden = YES;
+    self.navigationController.toolbarHidden = NO;
     self.navigationController.toolbar.opaque = NO;
     
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
+    NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
+    for (Cameras c=0; c<NCAMERA; c++) {
+        NSString *name = [InputSource cameraNameFor:c];
+        [cameraNames addObject:name];
+    }
+
     sourceSelection = [[UISegmentedControl alloc]
                        initWithItems: [NSArray arrayWithObjects:
                                        @"Front\ncamera",
@@ -339,15 +352,67 @@ typedef enum {
                forControlEvents: UIControlEventValueChanged];
     sourceSelection.selectedSegmentIndex = 0;
     sourceSelection.momentary = NO;
+    for (Cameras c=0; c<NCAMERA; c++) {
+        [sourceSelection setEnabled:[cameraController isCameraAvailable:c]
+                  forSegmentAtIndex:c];
+    }
+    
     UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc]
                                     initWithCustomView:sourceSelection];
     self.navigationItem.leftBarButtonItem = leftBarItem;
 
-    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
-                                       initWithBarButtonSystemItem:UIBarButtonSystemItemSave
-                                       target:self
-                                       action:@selector(doSave:)];
-    self.navigationItem.rightBarButtonItem = rightBarButton;
+    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                      target:nil action:nil];
+
+    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                      target:nil action:nil];
+    fixedSpace.width = 30;
+
+    valueSlider = [[UISlider alloc] init];
+#ifdef notdef
+    valueSlider.minimumValue = transform.low;
+    valueSlider.maximumValue = transform.high;
+    valueSlider.value = transform.value;
+#endif
+    valueSlider.continuous = YES;
+    [valueSlider addTarget:self
+                    action:@selector(moveValueSlider:)
+          forControlEvents:UIControlEventValueChanged];
+
+#define SLIDER_OFF  (-1)
+    UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
+                                   target:self
+                                   action:@selector(doSave:)];
+    trashButton = [[UIBarButtonItem alloc]
+                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+                   target:self
+                   action:@selector(doRemoveAllTransforms:)];
+    undoButton = [[UIBarButtonItem alloc]
+                  initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                  target:self
+                  action:@selector(doRemoveLastTransform)];
+    stopVideoButton = [[UIBarButtonItem alloc]
+                       initWithBarButtonSystemItem:UIBarButtonSystemItemCamera
+                       target:self
+                       action:@selector(didTouchVideo:)];
+
+    UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
+    [self displayValueSlider:SLIDER_OFF];     // not displayed, for the moment
+    
+    NSArray *toolBarItems = [[NSArray alloc] initWithObjects:
+                             stopVideoButton,
+                             flexibleSpace,
+                             sliderBarButton,
+                             flexibleSpace,
+                            trashButton,
+                             fixedSpace,
+                             undoButton,
+                             fixedSpace,
+                             saveButton, nil];
+    self.toolbarItems = toolBarItems;
 
     UIColor *navyBlue = NAVY_BLUE;
     
@@ -384,18 +449,12 @@ typedef enum {
     executeTableVC.tableView.showsVerticalScrollIndicator = YES;
     executeTableVC.title = @"Active";
     executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
+    executeTableVC.tableView.allowsMultipleSelection = NO;
     UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
                                    target:self
                                    action:@selector(doEditActiveList:)];
     executeTableVC.navigationItem.rightBarButtonItem = editButton;
-    trashButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
-                                   target:self
-                                   action:@selector(doRemoveAllTransforms:)];
-    executeTableVC.navigationItem.leftBarButtonItems = [NSArray arrayWithObjects:
-                                                      trashButton,
-                                                      nil];
     
     allStatsLabel = [[UILabel alloc] initWithFrame:CGRectMake(LATER, 0, STATS_W, TABLE_ENTRY_H)];
     allStatsLabel.textAlignment = NSTextAlignmentRight;
@@ -442,8 +501,47 @@ typedef enum {
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
+
+- (void) displayValueSlider: (int) executeIndex {
+    if (executeIndex == SLIDER_OFF) {
+        valueSlider.hidden = YES;
+        return;
+    }
+    SET_VIEW_WIDTH(valueSlider, MAX_SLIDER_W);
+    valueSlider.hidden = NO;
+    valueSlider.tag = executeIndex;
+    
+    @synchronized (transforms.sequence) {
+        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
+        valueSlider.minimumValue = transform.low;
+        valueSlider.maximumValue = transform.high;
+        valueSlider.value = transform.value;
+        if (valueSlider.value != transform.value) {
+            NSLog(@"  new value is %.0f", valueSlider.value);
+            transform.value = valueSlider.value;
+            transform.newValue = YES;
+        }
+    }
+    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
+}
+
+- (IBAction) moveValueSlider:(UISlider *)slider {
+    long executeIndex = slider.tag;
+    @synchronized (transforms.sequence) {
+        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
+        if (slider.value != transform.value) {
+            NSLog(@"  new value is %.0f", slider.value);
+            transform.value = slider.value;
+            transform.newValue = YES;
+        }
+    }
+    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
+}
+
+
 - (void) adjustButtons {
     trashButton.enabled = transforms.sequence.count > 0;
+    undoButton.enabled = transforms.sequence.count > 0;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -708,12 +806,12 @@ typedef enum {
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
     BOOL isHidden = self.navigationController.navigationBarHidden;
     [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
-    // not yet  [self.navigationController setToolbarHidden:!isHidden animated:YES];
+    [self.navigationController setToolbarHidden:!isHidden animated:YES];
 }
 
 // XXXXX stub
 
-- (IBAction) didFreezeVideo:(UIBarButtonItem *)recognizer {
+- (IBAction) didTouchVideo:(UIBarButtonItem *)recognizer {
     NSLog(@"video touched");
     if ([cameraController isCameraOn]) {
         [cameraController stopCamera];
@@ -1235,6 +1333,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 label.text = [transform.name
                               stringByAppendingString:[NSString
                                                        stringWithFormat:@"  %d  ", transform.value]];
+#ifdef notdef
                 f.origin.x = RIGHT(label.frame);
                 f.size.width = SLIDER_VALUE_W;
                 UILabel *minValue = [[UILabel alloc] initWithFrame:f];
@@ -1265,9 +1364,11 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                            action:@selector(moveSlider:)
                  forControlEvents:UIControlEventValueChanged];
                 [cell.contentView addSubview:slider];
+#endif
             } else {
                 label.text = transform.name;
             }
+            label.text = transform.name;
             [cell.contentView addSubview:label];
             break;
         }
@@ -1302,6 +1403,9 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
             break;
         }
         case ActiveTable: {
+            [self displayValueSlider:(int)indexPath.row];
+            UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+            cell.selected = YES;
             break;
         }
     }
@@ -1589,19 +1693,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) dismissSourceVC:(UIBarButtonItem *)sender {
     [sourcesNavVC dismissViewControllerAnimated:YES
                                      completion:NULL];
-}
-
-- (IBAction) moveSlider:(UISlider *)slider {
-    long executeIndex = slider.tag;
-    @synchronized (transforms.sequence) {
-        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
-        if (slider.value != transform.value) {
-            NSLog(@"  new value is %.0f", slider.value);
-            transform.value = slider.value;
-            transform.newValue = YES;
-        }
-    }
-    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }
 
 @end

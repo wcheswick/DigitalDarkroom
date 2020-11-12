@@ -37,11 +37,11 @@
 }
 
 static NSString * const cameraNames[] = {
-    @"Front camera",
-    @"Rear camera",
-    @"Front 3D camera",
-    @"Rear 3D camera"
-};
+    @"Front\ncamera",
+    @"Rear\ncamera",
+    @"Front 3D\ncamera",
+    @"Rear 3D\ncamera",
+    @"File"};
 
 + (NSString *)cameraNameFor:(Cameras)camera {
     assert(ISCAMERA(camera));
