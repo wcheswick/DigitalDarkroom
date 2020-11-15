@@ -1272,7 +1272,23 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
             scale = [[UIScreen mainScreen] scale];
         }
-        float dpi = 160 * scale;
+        float dpi = 200 * scale;
+        
+        // scale the distances from MIN - MAX to mu - 0, near to far.
+#define MAX_S_DEP MAX_DEPTH // 2.0
+#define MIN_S_DEP   0   // MIN_DEPTH
+        
+        for (int i=0; i<depthImage.size.width * depthImage.size.height; i++) {
+            float z = depthImage.buf[i];
+            if (z > MAX_S_DEP)
+                z = MAX_S_DEP;
+            else if (z < MIN_S_DEP)
+                z = MIN_S_DEP;
+            float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
+            float dfz = mu - dz*mu;
+            assert(dfz <= mu && dfz >= 0);
+            depthImage.buf[i] = dfz;
+        }
         
         for (int y=0; y<H; y++) {    // convert scan lines independently
             channel pix[W];
@@ -1330,8 +1346,16 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 dest[PI(x,y)] = pix[x] ? Black : White;
             }
         }
-        dest[PI(W/2 - FARAWAY/2, H*19/20)] = Red;
-        dest[PI(W/2 + FARAWAY/2, H*19/20)] = Red;
+#define NW      5
+#define TOP_Y   (H*19/20)
+        int lx = W/2 - FARAWAY/2 - NW/2;
+        int rx = W/2 + FARAWAY/2 - NW/2;
+        for (int dy=0; dy<6; dy++) {
+            for (int dx=0; dx<NW; dx++) {
+                dest[PI(lx+dx,TOP_Y+dy)] = Red;
+                dest[PI(rx+dx,TOP_Y+dy)] = Red;
+            }
+        }
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;

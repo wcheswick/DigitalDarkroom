@@ -58,6 +58,10 @@
 
 #define EXECUTE_STATS_TAG   1
 
+// last settings
+
+#define LAST_SOURCE_KEY @"LastSource"
+
 typedef enum {
     TransformTable,
     ActiveTable,
@@ -174,10 +178,11 @@ typedef enum {
         
         inputSources = [[NSMutableArray alloc] init];
 
-        [self addCameraSource:FrontCamera label:@"Front camera"];
-        [self addCameraSource:RearCamera label:@"Rear camera"];
-        [self addCameraSource:Front3DCamera label:@"Front 3D camera"];
-        [self addCameraSource:Rear3DCamera label:@"Rear 3D camera"];
+        [inputSources addObject:[InputSource sourceForCamera:FrontCamera]];
+        [inputSources addObject:[InputSource sourceForCamera:RearCamera]];
+        [inputSources addObject:[InputSource sourceForCamera:Front3DCamera]];
+        [inputSources addObject:[InputSource sourceForCamera:Rear3DCamera]];
+
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
 #ifdef wrongformat
@@ -197,17 +202,45 @@ typedef enum {
         cameraController.delegate = self;
         currentCameraButton = nil;
         
-        Cameras sourceIndex;
-        for (sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
-            if ([cameraController isCameraAvailable:sourceIndex])
-                break;
+        nextSource = nil;
+
+        NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
+                                   stringForKey:LAST_SOURCE_KEY];
+        if (lastSourceUsedLabel) {
+            NSLog(@" -- last source: %@", lastSourceUsedLabel);
+            for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
+                nextSource = [inputSources  objectAtIndex:sourceIndex];
+                if ([lastSourceUsedLabel isEqual:nextSource.label]) {
+                    NSLog(@"  - initializing source index %d", sourceIndex);
+                    break;
+                }
+            }
         }
+        
+        if (!nextSource)  {   // no known default, pick the first camera
+            for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
+                if ([cameraController isCameraAvailable:sourceIndex]) {
+                    nextSource = [inputSources objectAtIndex:sourceIndex];
+                    NSLog(@"  - no previous source, using %d, %@", sourceIndex, nextSource.label);
+                    break;
+                }
+            }
+        }
+        
+        assert(nextSource);
+        NSLog(@" -- first source will be : %@", nextSource.label);
+
         currentSource = nil;
-        nextSource = [inputSources objectAtIndex:sourceIndex];
         fullImage = NO;
         [self newDisplayMode:medium];
     }
     return self;
+}
+
+- (void) saveCurrentSource {
+    NSLog(@" -- saved source '%@'", currentSource.label);
+    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label forKey:LAST_SOURCE_KEY];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 #ifdef notdef
@@ -299,7 +332,6 @@ typedef enum {
     InputSource *is = [[InputSource alloc] init];
     is.sourceType = c;
     is.label = l;
-    [inputSources addObject:is];
 }
 
 - (void) addFileSource:(NSString *)fn label:(NSString *)l {
@@ -340,13 +372,14 @@ typedef enum {
         [cameraNames addObject:name];
     }
 
-    sourceSelection = [[UISegmentedControl alloc]
-                       initWithItems: [NSArray arrayWithObjects:
-                                       @"Front\ncamera",
-                                       @"Rear\ncamera",
-                                       @"Front\n3D",
-                                       @"Rear\n3D",
-                                       @"File", nil]];
+    NSMutableArray *sourceNames = [[NSMutableArray alloc] init];
+    for (int i=0; i<NCAMERA; i++) {
+        InputSource *s = [inputSources objectAtIndex:i];
+        [sourceNames addObject:s.label];
+    }
+    [sourceNames addObject:@"File"];
+
+    sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
     sourceSelection.frame = CGRectMake(0, 0, 100, 44);
     [sourceSelection addTarget:self action:@selector(selectSource:)
                forControlEvents: UIControlEventValueChanged];
@@ -542,6 +575,7 @@ typedef enum {
 - (void) adjustButtons {
     trashButton.enabled = transforms.sequence.count > 0;
     undoButton.enabled = transforms.sequence.count > 0;
+    sourceSelection.selectedSegmentIndex = currentSource.sourceType;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -581,6 +615,8 @@ typedef enum {
             capturing = NO;
         }
         currentSource = nextSource;
+        [self saveCurrentSource];
+        [self adjustButtons];
         nextSource = nil;
     }
     
