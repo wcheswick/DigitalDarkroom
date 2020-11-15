@@ -36,7 +36,7 @@
 #define SOURCE_CELL_W   SOURCE_THUMB_W
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
 
-#define SECTION_HEADER_ARROW_W  100
+#define SECTION_HEADER_ARROW_W  55
 
 #define MIN_SLIDER_W    100
 #define MAX_SLIDER_W    200
@@ -57,6 +57,8 @@
 #define TRANS_SEC_VIS_ARCHIVE  @"trans_sec_vis.archive"
 
 #define EXECUTE_STATS_TAG   1
+
+#define DEPTH_TABLE_SECTION     0
 
 // last settings
 
@@ -118,7 +120,7 @@ typedef enum {
 @property (nonatomic, strong)   DepthImage *depthImage;
 @property (assign)              CGSize transformDisplaySize;
 
-@property (assign)              int depthTransformIndex;
+@property (assign)              int depthTransformIndex;    // or NO_DEPTH_TRANSFORM
 @property (assign)              BOOL fullImage;     // transform a full capture (slower)
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelection;
@@ -173,7 +175,7 @@ typedef enum {
         transformTotalElapsed = 0;
         transformCount = 0;
         depthImage = nil;
-        depthTransformIndex = 0;
+        depthTransformIndex = NO_DEPTH_TRANSFORM;
         busy = NO;
         
         inputSources = [[NSMutableArray alloc] init];
@@ -482,7 +484,6 @@ typedef enum {
     executeTableVC.tableView.showsVerticalScrollIndicator = YES;
     executeTableVC.title = @"Active";
     executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
-    executeTableVC.tableView.allowsMultipleSelection = NO;
     UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
                                    target:self
@@ -528,7 +529,6 @@ typedef enum {
                                             initWithTarget:self action:@selector(didSwipeVideoRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
     [transformView addGestureRecognizer:swipeRight];
-
 
     [self adjustButtons];
     self.view.backgroundColor = [UIColor whiteColor];
@@ -615,6 +615,7 @@ typedef enum {
             capturing = NO;
         }
         currentSource = nextSource;
+        depthTransformIndex = IS_3D_CAMERA(currentSource.sourceType) ? currentSource.sourceType : NO_DEPTH_TRANSFORM;
         [self saveCurrentSource];
         [self adjustButtons];
         nextSource = nil;
@@ -774,8 +775,12 @@ typedef enum {
         [self transformCurrentImage];
     }
     
+    [self adjustDepthInfo];
     [availableTableVC.tableView reloadData];
+}
 
+- (void) adjustDepthInfo {
+    
 }
 
 #ifdef notdef
@@ -1232,7 +1237,7 @@ viewForHeaderInSection:(NSInteger)section {
             f.origin = CGPointMake(0, 0);
             f.size.width -= SECTION_HEADER_ARROW_W;
             UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
-            sectionTitle.adjustsFontSizeToFitWidth = YES;
+            //sectionTitle.adjustsFontSizeToFitWidth = YES;
             sectionTitle.textAlignment = NSTextAlignmentLeft;
             sectionTitle.font = [UIFont
                                  systemFontOfSize:SECTION_HEADER_FONT_SIZE
@@ -1245,9 +1250,10 @@ viewForHeaderInSection:(NSInteger)section {
             f.size.width = sectionHeaderView.frame.size.width - f.origin.x;
             UILabel *rowStatus = [[UILabel alloc] initWithFrame:f];
             rowStatus.textAlignment = NSTextAlignmentRight;
+            rowStatus.adjustsFontSizeToFitWidth = YES;
             if ([self isCollapsed:name]) {
                 NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                rowStatus.text = [NSString stringWithFormat:@"(%lu)  ▼", (unsigned long)transformList.count];
+                rowStatus.text = [NSString stringWithFormat:@"(%lu) ▼", (unsigned long)transformList.count];
             } else
                 rowStatus.text = [NSString stringWithFormat:@"▲"];
             sectionHeaderView.tag = section;    // for the tap processing
@@ -1286,7 +1292,6 @@ viewForHeaderInSection:(NSInteger)section {
     }
 }
 
-
 -(CGFloat) tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
     switch (tableView.tag) {
         case ActiveTable:
@@ -1322,17 +1327,13 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                 cell.textLabel.text = [transform.name stringByAppendingString:@" ~"];
             else
                 cell.textLabel.text = transform.name;
+            cell.textLabel.font = [UIFont
+                                   systemFontOfSize:TABLE_ENTRY_FONT_SIZE
+                                   weight:UIFontWeightMedium];
             cell.detailTextLabel.text = transform.description;
             cell.indentationLevel = 1;
             cell.indentationWidth = 10;
-            if (indexPath.section == DEPTH_TRANSFORM_SECTION) {   // depth transforms
-                cell.userInteractionEnabled = transforms.depthTransform != nil;
-                cell.selected = transforms.depthTransform && depthTransformIndex == indexPath.row;
-                if (cell.selected)
-                    cell.accessoryType = UITableViewCellAccessoryCheckmark;
-            } else {
-                cell.selectionStyle = UITableViewCellSelectionStyleNone;
-            }
+            cell.highlighted = (indexPath.section == DEPTH_TABLE_SECTION && depthTransformIndex == indexPath.row);
             break;
         }
         case ActiveTable: {
@@ -1354,8 +1355,10 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
             f.size.width = MIN_ACTIVE_NAME_W;
             UILabel *label = [[UILabel alloc] initWithFrame:f];
             label.numberOfLines = 0;
-            label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE];
-            
+            label.font = [UIFont
+                                 systemFontOfSize:TABLE_ENTRY_FONT_SIZE
+                                 weight:UIFontWeightMedium];
+
             f.size.width = STATS_W;
             f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
             UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
@@ -1416,11 +1419,18 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     switch (tableView.tag) {
         case TransformTable: {
+            if (depthTransformIndex != NO_DEPTH_TRANSFORM) {
+                NSIndexPath *oldDepth = [NSIndexPath indexPathForRow:depthTransformIndex
+                                                           inSection:DEPTH_TABLE_SECTION];
+                UITableViewCell *oldSelected = [availableTableVC.tableView cellForRowAtIndexPath:oldDepth];
+                oldSelected.highlighted = NO;
+            }
             // for depth selections, just set the depthindex
             if (indexPath.section == DEPTH_TRANSFORM_SECTION) {
-                if (!transforms.depthTransform)
-                    return; // no depth, no selection
+                assert(transforms.depthTransform);
                 depthTransformIndex = (int)indexPath.row;
+                UITableViewCell *newSelected = [tableView cellForRowAtIndexPath:indexPath];
+                newSelected.highlighted = YES;
                 [transforms selectDepthTransform:depthTransformIndex];
                 return;
             }
@@ -1446,6 +1456,7 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
         }
     }
 }
+
 
 #ifdef notdef
 -(void)tableView:(UITableView *)tableView

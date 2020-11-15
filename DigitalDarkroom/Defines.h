@@ -38,7 +38,7 @@ typedef long PixelIndex_t;
 f.origin.x = ((v).frame.size.width - f.size.width)/2.0; \
 (cv).frame = f;}
 
-#define SECTION_HEADER_FONT_SIZE    24
+#define SECTION_HEADER_FONT_SIZE    20
 #define TABLE_ENTRY_FONT_SIZE       16
 
 #endif /* Defines_h */

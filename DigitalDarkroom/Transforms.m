@@ -149,7 +149,7 @@ float RGBtoDistance(Pixel p) {
 #endif
 
 - (void) buildTransformList {
-    [self add3DTransforms];
+    [self addDepthVisualizations];
     [self addColorVisionDeficits];
     [self addGeometricTransforms];
     [self addPointTransforms];
@@ -1107,8 +1107,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     depthTransform = [depthTransformList objectAtIndex:index];
 }
 
-- (void) add3DTransforms {
-    [categoryNames addObject:@"3D visualizations"];
+- (void) addDepthVisualizations {
+    [categoryNames addObject:@"Depth visuals"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
@@ -1120,7 +1120,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 #define DIST(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
 #endif
     
-    lastTransform = [Transform depthVis: @"Monochrome log distance"
+    lastTransform = [Transform depthVis: @"Monochrome log dist."
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
         size_t bufSize = H*W;
@@ -1143,7 +1143,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform depthVis: @"Monochrome distance"
+    lastTransform = [Transform depthVis: @"Monochrome dist."
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
         size_t bufSize = H*W;
@@ -1265,14 +1265,14 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     
     // SIDRS computation taken from
     // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
-    lastTransform = [Transform depthVis: @"SIRDS"
+    lastTransform = [Transform depthVis: @"SIRDS (broken)"
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
         float scale = 1;
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
             scale = [[UIScreen mainScreen] scale];
         }
-        float dpi = 200 * scale;
+        float dpi = (640/8.3) * scale;
         
         // scale the distances from MIN - MAX to mu - 0, near to far.
 #define MAX_S_DEP MAX_DEPTH // 2.0
@@ -1301,7 +1301,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 same[x] = x;
             }
             for (int x=0; x < W; x++ ) {
-                s = separation(DIST(x,y));
+                float z = DIST(x,y);
+                s = separation(z);
                 left = x - s/2;
                 right = left + s;   // pixels at left and right must be the same
                 if (left >= 0 && right < W) {
