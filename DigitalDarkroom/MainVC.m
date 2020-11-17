@@ -1021,6 +1021,22 @@ typedef enum {
     return orient;
 }
 
+#ifdef XXXX
+if captureDevice.position == AVCaptureDevicePosition.back {
+            if let image = context.createCGImage(ciImage, from: imageRect) {
+                return UIImage(cgImage: image, scale: UIScreen.main.scale, orientation: .right)
+                }
+            }
+
+                if captureDevice.position == AVCaptureDevicePosition.front {
+                    if let image = context.createCGImage(ciImage, from: imageRect) {
+                    return UIImage(cgImage: image, scale: UIScreen.main.scale, orientation: .leftMirrored)
+
+        }
+    }
+
+#endif
+
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
      didOutputDepthData:(AVDepthData *)depthData
               timestamp:(CMTime)timestamp
@@ -1345,6 +1361,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
     f.size.width = tableView.frame.size.width;
     f.size.height = cell.frame.size.height;
     cell.contentView.frame = f;
+    CGFloat labelEnd = cell.contentView.frame.size.width;
     
     // The transform table has a label and possible value display.  For the depth transforms,
     // that value display is tappable.
@@ -1361,8 +1378,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         stepStatsLabel.textAlignment = NSTextAlignmentRight;
         [cell.contentView addSubview:stepStatsLabel];
         
-        f = cell.contentView.frame;
-        f.size.width = stepStatsLabel.frame.origin.x - SEP;
+        labelEnd = f.origin.x;
     }
     
     if (transform.hasParameters) {
@@ -1372,7 +1388,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         f = UIEdgeInsetsInsetRect(cell.contentView.frame,
                                   UIEdgeInsetsMake(5, 0, 7, 5));
         CGFloat w = VALUE_LIMITS_W + LIMIT_SEP + VALUE_W + SEP/2;
-        f.origin.x = f.size.width - w;
+        f.origin.x = labelEnd - w;
         f.size.width = w;
         UIView *paramView = [[UIView alloc] initWithFrame:f];
         paramView.tag = indexPath.row;      // index of the entry in one or the other of the tableviews
@@ -1412,12 +1428,11 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 
         // XXXX add tap gesture and visual feedback of being selected
         
-        f = cell.contentView.frame;
-        f.size.width = paramView.frame.origin.x - SEP;
+        labelEnd = paramView.frame.origin.x;
     }
     
     f.origin.x += 10;
-    f.size.width -= f.origin.x;
+    f.size.width = labelEnd - f.origin.x;
     UILabel *label = [[UILabel alloc] initWithFrame:f];
     label.numberOfLines = 0;
     label.font = [UIFont
