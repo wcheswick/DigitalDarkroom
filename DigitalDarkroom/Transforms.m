@@ -1119,7 +1119,22 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 #else
 #define DIST(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
 #endif
-    
+   
+    lastTransform = [Transform depthVis: @"Monochrome dist."
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        size_t bufSize = H*W;
+        assert(depthImage.size.height * depthImage.size.width == bufSize);
+        for (int i=0; i<bufSize; i++) {
+            Distance v = depthImage.buf[i];
+            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+            channel c = trunc(Z - frac*Z);
+            Pixel p = SETRGB(0,0,c);
+            dest[i] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+
     lastTransform = [Transform depthVis: @"Monochrome log dist."
                             description: @""
                                depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
@@ -1136,21 +1151,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 d = MAX_DEPTH;
             float v = log(d);
             float frac = (v - logMin)/(logMax - logMin);
-            channel c = trunc(Z - frac*Z);
-            Pixel p = SETRGB(0,0,c);
-            dest[i] = p;
-        }
-    }];
-    [transformList addObject:lastTransform];
-
-    lastTransform = [Transform depthVis: @"Monochrome dist."
-                            description: @""
-                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
-        size_t bufSize = H*W;
-        assert(depthImage.size.height * depthImage.size.width == bufSize);
-        for (int i=0; i<bufSize; i++) {
-            Distance v = depthImage.buf[i];
-            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
             dest[i] = p;
@@ -1218,7 +1218,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     
     //[1] Zhaoping L, Ackermann J. Reversed Depth in Anticorrelated Random-Dot Stereograms and the Central-Peripheral Difference in Visual Inference[J]. Perception, 2018, 47(5): 531-539.
     
-    // simple:  https://github.com/arkjedrz/stereogram.git
+    // simple SIRDS:  https://github.com/arkjedrz/stereogram.git
     
     // another: https://github.com/CoolProgrammingUser/stereograms.git
     
@@ -1259,7 +1259,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     
     
 #define mu (1/3.0)
-#define E round(2.5*dpi)
+//#define E round(2.5*dpi)
+#define E round(dpi)
 #define separation(Z) round((1-mu*(Z))*E/(2-mu*(Z)))
 #define FARAWAY separation(0)
     
@@ -1347,14 +1348,23 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 dest[PI(x,y)] = pix[x] ? Black : White;
             }
         }
-#define NW      5
-#define TOP_Y   (H*19/20)
+
+#ifdef notdef
+        for (int y=5; y<15; y++) {
+            for (int x=10; x < W-10; x++) {
+                dest[PI(x,y)] = Green;
+            }
+        }
+#endif
+        
+#define NW      10
+#define BOTTOM_Y   (5)
         int lx = W/2 - FARAWAY/2 - NW/2;
         int rx = W/2 + FARAWAY/2 - NW/2;
         for (int dy=0; dy<6; dy++) {
             for (int dx=0; dx<NW; dx++) {
-                dest[PI(lx+dx,TOP_Y+dy)] = Red;
-                dest[PI(rx+dx,TOP_Y+dy)] = Red;
+                dest[PI(lx+dx,BOTTOM_Y+dy)] = Yellow;
+                dest[PI(rx+dx,BOTTOM_Y+dy)] = Yellow;
             }
         }
     }];
@@ -2298,7 +2308,7 @@ make_block(Pt origin, struct block *b) {
         else
             return Remap_White;
     }];
-    lastTransform.low = 17000;
+    lastTransform.low = 17;
     lastTransform.value = 4*lastTransform.low;
     lastTransform.high = 10*lastTransform.low;
     lastTransform.hasParameters = YES;

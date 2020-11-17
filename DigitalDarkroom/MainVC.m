@@ -16,6 +16,13 @@
 #define STATS_W             75
 #define STATS_FONT_SIZE     18
 
+#define VALUE_W         45
+#define VALUE_LIMITS_W  35
+#define VALUE_FONT_SIZE 22
+#define VALUE_LIMIT_FONT_SIZE   14
+
+#define CURRENT_VALUE_LABEL_TAG 1
+
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
 #define MIN_TRANSFORM_TABLE_H    140
@@ -1312,106 +1319,114 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    UITableViewCell *cell;
+    NSString *CellIdentifier = @"TableCell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    if (cell == nil) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
+                                      reuseIdentifier:CellIdentifier];
+    }
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    
+    Transform *transform;
+    
     switch (tableView.tag) {
         case TransformTable: {   // Selection table display table list
-            NSString *CellIdentifier = @"SelectionCell";
-            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-            if (cell == nil) {
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                              reuseIdentifier:CellIdentifier];
-            }
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-            Transform *transform = [transformList objectAtIndex:indexPath.row];
-            if (transform.hasParameters)
-                cell.textLabel.text = [transform.name stringByAppendingString:@" ~"];
-            else
-                cell.textLabel.text = transform.name;
-            cell.textLabel.font = [UIFont
-                                   systemFontOfSize:TABLE_ENTRY_FONT_SIZE
-                                   weight:UIFontWeightMedium];
-            cell.detailTextLabel.text = transform.description;
-            cell.indentationLevel = 1;
-            cell.indentationWidth = 10;
-            cell.highlighted = (indexPath.section == DEPTH_TABLE_SECTION && depthTransformIndex == indexPath.row);
+            transform = [transformList objectAtIndex:indexPath.row];
             break;
         }
         case ActiveTable: {
-            NSString *CellIdentifier = @"ListingCell";
-            cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-            if (cell == nil) {
-                cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                              reuseIdentifier:CellIdentifier];
-            }
-            cell.selectionStyle = UITableViewCellSelectionStyleNone;
-            [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-            
-            CGRect f = cell.contentView.frame;
-            f.size.width = tableView.frame.size.width;
-            f.size.height = cell.frame.size.height;
-            cell.contentView.frame = f;
-            
-            Transform *transform = [transforms.sequence objectAtIndex:indexPath.row];
-            f.size.width = MIN_ACTIVE_NAME_W;
-            UILabel *label = [[UILabel alloc] initWithFrame:f];
-            label.numberOfLines = 0;
-            label.font = [UIFont
-                                 systemFontOfSize:TABLE_ENTRY_FONT_SIZE
-                                 weight:UIFontWeightMedium];
-
-            f.size.width = STATS_W;
-            f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
-            UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
-            stepStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
-            stepStatsLabel.adjustsFontSizeToFitWidth = YES;
-            stepStatsLabel.tag = EXECUTE_STATS_TAG;
-            stepStatsLabel.textAlignment = NSTextAlignmentRight;
-            [cell.contentView addSubview:stepStatsLabel];
-
-            if (transform.hasParameters) {
-                label.text = [transform.name
-                              stringByAppendingString:[NSString
-                                                       stringWithFormat:@"  %d  ", transform.value]];
-#ifdef notdef
-                f.origin.x = RIGHT(label.frame);
-                f.size.width = SLIDER_VALUE_W;
-                UILabel *minValue = [[UILabel alloc] initWithFrame:f];
-                minValue.text = [NSString stringWithFormat:@"%d", transform.low];
-                minValue.textAlignment = NSTextAlignmentRight;
-                minValue.adjustsFontSizeToFitWidth = YES;
-                minValue.font = [UIFont systemFontOfSize:24];
-                [cell.contentView addSubview:minValue];
-                
-                f.origin.x -= SLIDER_VALUE_W + SEP;
-                f.size.width = SLIDER_VALUE_W;
-                UILabel *maxValue = [[UILabel alloc] initWithFrame:f];
-                maxValue.text = [NSString stringWithFormat:@"%d", transform.high];
-                maxValue.textAlignment = NSTextAlignmentLeft;
-                maxValue.adjustsFontSizeToFitWidth = YES;
-                maxValue.font = [UIFont systemFontOfSize:24];
-                [cell.contentView addSubview:maxValue];
-
-                f.origin.x = RIGHT(minValue.frame) + SEP;
-                f.size.width = maxValue.frame.origin.x - f.origin.x - SEP;
-                UISlider *slider = [[UISlider alloc] initWithFrame:f];
-                slider.minimumValue = transform.low;
-                slider.maximumValue = transform.high;
-                slider.value = transform.value;
-                slider.continuous = YES;
-                slider.tag = indexPath.row;
-                [slider addTarget:self
-                           action:@selector(moveSlider:)
-                 forControlEvents:UIControlEventValueChanged];
-                [cell.contentView addSubview:slider];
-#endif
-            } else {
-                label.text = transform.name;
-            }
-            label.text = transform.name;
-            [cell.contentView addSubview:label];
+            transform = [transforms.sequence objectAtIndex:indexPath.row];
             break;
         }
     }
+    [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    CGRect f = cell.contentView.frame;
+    f.size.width = tableView.frame.size.width;
+    f.size.height = cell.frame.size.height;
+    cell.contentView.frame = f;
+    
+    // The transform table has a label and possible value display.  For the depth transforms,
+    // that value display is tappable.
+    // The executing transforms have a label, a possible value entry, and an executing time display.
+    // So carve out what we need from the end of the contentView, and leave the rest for the label.
+    
+    if (tableView.tag == ActiveTable) {
+        f.size.width = STATS_W;
+        f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
+        UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
+        stepStatsLabel.tag = EXECUTE_STATS_TAG;
+        stepStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+        stepStatsLabel.adjustsFontSizeToFitWidth = YES;
+        stepStatsLabel.textAlignment = NSTextAlignmentRight;
+        [cell.contentView addSubview:stepStatsLabel];
+        
+        f = cell.contentView.frame;
+        f.size.width = stepStatsLabel.frame.origin.x - SEP;
+    }
+    
+    if (transform.hasParameters) {
+        // A big tappable current value, and tiny lower and upper limits stacked to the left of that
+#define LIMIT_SEP   (0)
+        
+        f = UIEdgeInsetsInsetRect(cell.contentView.frame,
+                                  UIEdgeInsetsMake(5, 0, 7, 5));
+        CGFloat w = VALUE_LIMITS_W + LIMIT_SEP + VALUE_W + SEP/2;
+        f.origin.x = f.size.width - w;
+        f.size.width = w;
+        UIView *paramView = [[UIView alloc] initWithFrame:f];
+        paramView.tag = indexPath.row;      // index of the entry in one or the other of the tableviews
+        paramView.layer.borderWidth = 1.0;
+        paramView.layer.cornerRadius = 3.0;
+        [cell.contentView addSubview:paramView];
+        
+        f.size.width = VALUE_W;
+        f.origin.x = paramView.frame.size.width - SEP/2 - f.size.width;
+        f.origin.y = 0;
+        
+        UILabel *value = [[UILabel alloc] initWithFrame:f];
+        value.tag = CURRENT_VALUE_LABEL_TAG;
+        value.text = [NSString stringWithFormat:@"%d", transform.value];
+        value.textAlignment = NSTextAlignmentRight;
+        //value.adjustsFontSizeToFitWidth = YES;
+        value.font = [UIFont systemFontOfSize:VALUE_FONT_SIZE];
+        [paramView addSubview:value];
+
+        f.origin.x = 0;
+        f.size.width = VALUE_LIMITS_W;
+        f.size.height /= 2;     // lower half, lower value, upper is upper
+        UILabel *minValue = [[UILabel alloc] initWithFrame:f];
+        minValue.text = [NSString stringWithFormat:@"%d –", transform.low];
+        minValue.textAlignment = NSTextAlignmentCenter;
+        minValue.adjustsFontSizeToFitWidth = YES;
+        minValue.font = [UIFont systemFontOfSize:VALUE_LIMIT_FONT_SIZE];
+        [paramView addSubview:minValue];
+        
+        f.origin.y += f.size.height;
+        UILabel *maxValue = [[UILabel alloc] initWithFrame:f];
+        maxValue.text = [NSString stringWithFormat:@"%d", transform.high];
+        maxValue.textAlignment = NSTextAlignmentCenter;
+        maxValue.adjustsFontSizeToFitWidth = YES;
+        maxValue.font = [UIFont systemFontOfSize:VALUE_LIMIT_FONT_SIZE];
+        [paramView addSubview:maxValue];
+
+        // XXXX add tap gesture and visual feedback of being selected
+        
+        f = cell.contentView.frame;
+        f.size.width = paramView.frame.origin.x - SEP;
+    }
+    
+    f.origin.x += 10;
+    f.size.width -= f.origin.x;
+    UILabel *label = [[UILabel alloc] initWithFrame:f];
+    label.numberOfLines = 0;
+    label.font = [UIFont
+                  systemFontOfSize:TABLE_ENTRY_FONT_SIZE
+                  weight:UIFontWeightLight];
+    label.text = transform.name;
+    label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE
+                                   weight:UIFontWeightMedium];
+    [cell.contentView addSubview:label];
     return cell;
 }
 
