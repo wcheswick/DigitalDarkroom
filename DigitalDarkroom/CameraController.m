@@ -72,7 +72,7 @@
         case Front3DCamera:
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
-                             mediaType: AVMediaTypeVideo
+                             mediaType: AVMediaTypeDepthData
                              position: AVCaptureDevicePositionFront];
             break;
         case RearCamera:
@@ -89,7 +89,7 @@
         case Rear3DCamera:
             captureDevice = [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                             mediaType: AVMediaTypeVideo
+                             mediaType: AVMediaTypeDepthData
                              position: AVCaptureDevicePositionBack];
             break;
        default:
@@ -177,12 +177,14 @@
     if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!        
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
+        NSLog(@"depth output: %@", depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
             [captureSession addOutput:depthOutput];
         } else {
             NSLog(@"**** could not add data output");
         }
-        videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeVideo];
+        videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
+        assert(videoConnection);
         [videoConnection setVideoOrientation:videoOrientation];
         NSLog(@"  + depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
@@ -224,6 +226,47 @@
            CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
 }
 
+- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format {
+    CMFormatDescriptionRef ref = format.formatDescription;
+    // I cannot seem to get the format data adjusted for device orientation.  So we
+    // swap them here, if portrait.
+    CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
+    CGFloat w, h;
+    
+    if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
+        w = dimensions.height;
+        h = dimensions.width;
+        //NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
+    } else {
+        w = dimensions.width;
+        h = dimensions.height;
+        //NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
+    }
+    return CGSizeMake(w, h);
+}
+
+- (BOOL) isNewSize:(CGSize)newSize
+   aBetterSizeThan:(CGSize)bestSize
+         forTarget:(CGSize)targetSize {
+    if (targetSize.width == 0) { // just find the largest size we have
+        if (newSize.width < bestSize.width && newSize.height < bestSize.height)
+            return NO;
+    } else {
+        // it would be nice to fit in the size given. But if we have no size, use it
+        // HRSI = high res still image dimensions.
+        //NSLog(@"  format: %@", format);
+        if (newSize.width > targetSize.width || newSize.height > targetSize.height) {
+            if (bestSize.width == 0)
+                return YES;
+            else
+                return NO;
+        }
+        if (newSize.width <= bestSize.width && newSize.height <= bestSize.height)    // we have better already
+            return NO;
+    }
+    return YES;
+}
+
 // find and return the largest size that fits into the given size. Return
 // Zero size if none works.  This should never happen.
 
@@ -242,98 +285,61 @@
     NSArray *availableFormats = captureDevice.formats;
     CGSize captureSize = CGSizeZero;
     selectedFormat = nil;
-
+//    AVCaptureDeviceFormat *depthFormat = nil;
+    
     for (AVCaptureDeviceFormat *format in availableFormats) {
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
         if (mediaType != kCMMediaType_Video)
             continue;
-        
         if (IS_3D_CAMERA(selectedCamera)) { // if we need depth-capable formats only
             if (!format.supportedDepthDataFormats)
                 continue;
-            if (!format.supportedDepthDataFormats.count)
-                continue;
-        } else {
-            FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-            switch (mediaSubType) {
-                case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-                    continue;
-                case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
-                    break;
-                default:
-                    NSLog(@"Unknown media subtype encountered in format: %@", format);
-                    continue;
-            }
-        }
-        // I cannot seem to get the format data adjusted for device orientation.  So we
-        // swap them here, if portrait.
-        
-        CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
-        CGFloat w, h;
-        
-        if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
-            w = dimensions.height;
-            h = dimensions.width;
-            //NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
-        } else {
-            w = dimensions.width;
-            h = dimensions.height;
-            //NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
-        }
-        
-        if (availableSize.width == 0) { // just find the largest size we have
-            if (w < captureSize.width && h < captureSize.height)
-                continue;
-        } else {    // must fit in the size given
-            // HRSI = high res still image dimensions.
-            //NSLog(@"  format: %@", format);
-            if (w > availableSize.width || h > availableSize.height)
-                continue;
-            if (w <= captureSize.width && h <= captureSize.height)    // we have better already
+            if (format.supportedDepthDataFormats.count == 0)
                 continue;
         }
-        captureSize = CGSizeMake(w, h);
-        //NSLog(@" ^^^^^ good");
+        
+        FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+        NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
+        switch (mediaSubType) {
+            case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+                continue;
+            case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
+            default:
+//                NSLog(@"Unknown media subtype encountered in format: %@", format);
+                break;
+        }
+        
+        CGSize newSize = [self sizeForFormat:format];
+        if (![self isNewSize:newSize aBetterSizeThan:captureSize forTarget:availableSize])
+            continue;
+        captureSize = newSize;
         selectedFormat = format;
     }
+    
     if (!selectedFormat) {
         NSLog(@"******* inconceivable: no suitable video found for %.0f x %.0f",
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }
-
+    
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = selectedFormat;
+#ifdef NOTDEF
+    if (depthFormat) {
+        NSLog(@"EEEEE depth format selected: %@", selectedFormat);
+        captureDevice.activeDepthDataFormat = depthFormat;
+        NSLog(@"FFFFF depth format selected: %@", selectedFormat);
+    }
+#endif
+    
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
+    
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     //NSLog(@"-- format selected: %@", selectedFormat.description);
     [captureDevice unlockForConfiguration];
-    
-    if (IS_3D_CAMERA(selectedCamera)) {
-        AVCaptureDeviceFormat *depthCaptureFormat = nil;
-        // useful source: https://www.raywenderlich.com/5999357-video-depth-maps-tutorial-for-ios-getting-started
-        
-        for (AVCaptureDeviceFormat *format in captureDevice.activeFormat.supportedDepthDataFormats) {
-            FourCharCode pixelFormatType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-            if (pixelFormatType == kCVPixelFormatType_DepthFloat32) {
-                depthCaptureFormat = format;
-            } else if (pixelFormatType == kCVPixelFormatType_DepthFloat16) {
-                if (!depthCaptureFormat)
-                    depthCaptureFormat = format;
-            }
-        }
-        if (!depthCaptureFormat) {
-            NSLog(@"inconceivable, no capture format found");
-            return CGSizeZero;
-        }
-        
-        [captureDevice lockForConfiguration:&error];
-        captureDevice.activeDepthDataFormat = depthCaptureFormat;
-        [captureDevice unlockForConfiguration];
-    }
     return captureSize;
 }
 

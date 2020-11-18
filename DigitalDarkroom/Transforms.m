@@ -14,7 +14,8 @@
 
 #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
-#define SETRGB(r,g,b)   (Pixel){b,g,r,Z}
+#define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
+#define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)
 #define Z               ((1<<sizeof(channel)*8) - 1)
 #define HALF_Z          (Z/2)
 
@@ -1817,6 +1818,51 @@ irand(int i) {
 
 #define INRANGE(x,y)    (x >= 0 && x < W && y >= 0 && y < H)
 
+// if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
+// we use the a channel of our pixel buffers.
+
+void convolution(const Pixel *in, Pixel *out,
+                 const float *kernel, const int kn, const BOOL normalize) {
+    assert(kn % 2 == 1);
+    assert(W > kn && H > kn);
+    const int khalf = kn / 2;
+    float min = FLT_MAX, max = -FLT_MAX;
+    
+    if (normalize) {
+        for (int x = khalf; x < W - khalf; x++) {
+            for (int y = khalf; y < H - khalf; y++) {
+                float pixel = 0.0;
+                size_t c = 0;
+                for (int j = -khalf; j <= khalf; j++) {
+                    for (int i = -khalf; i <= khalf; i++) {
+                        pixel += in[PI(x - i, y - j)].a * kernel[c];
+                        c++;
+                    }
+                }
+                if (pixel < min)
+                    min = pixel;
+                if (pixel > max)
+                    max = pixel;
+            }
+        }
+    }
+ 
+    for (int x = khalf; x < W - khalf; x++) {
+        for (int y = khalf; y < H - khalf; y++) {
+            float pixel = 0.0;
+            size_t c = 0;
+            for (int j = -khalf; j <= khalf; j++)
+                for (int i = -khalf; i <= khalf; i++) {
+                    pixel += in[PI(x - i, y - j)].a * kernel[c];
+                    c++;
+                }
+            if (normalize)
+                pixel = Z * (pixel - min) / (max - min);
+            out[PI(x, y)].a = (channel)pixel;
+        }
+    }
+}
+
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
@@ -1871,7 +1917,7 @@ irand(int i) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Horizontalshift"
+    lastTransform = [Transform areaTransform: @"Horizontal shift"
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int n) {
         n = -n;
@@ -1969,7 +2015,84 @@ irand(int i) {
         }
     }];
     [transformList addObject:lastTransform];
+    
+    /*
+     * gaussianFilter:
+     * http://www.songho.ca/dsp/cannyedge/cannyedge.html
+     * determine size of kernel (odd #)
+     * 0.0 <= sigma < 0.5 : 3
+     * 0.5 <= sigma < 1.0 : 5
+     * 1.0 <= sigma < 1.5 : 7
+     * 1.5 <= sigma < 2.0 : 9
+     * 2.0 <= sigma < 2.5 : 11
+     * 2.5 <= sigma < 3.0 : 13 ...
+     * kernelSize = 2 * int(2*sigma) + 3;
+     */
+    lastTransform = [Transform areaTransform: @"Gaussian filter (broken)"
+                                description: @"Edge detection"
+                               areaFunction: ^(Pixel *src, Pixel *dest, int tenSigma) {
+        float sigma = (float)tenSigma/10.0;
+        const int n = 2 * (int)(2 * sigma) + 3;
+        const float mean = (float)floor(n / 2.0);
+        float kernel[n * n]; // variable length array for the convolution kernel
 
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                sChan[x][y] = LUM(src[PI(x,y)]);
+            }
+        }
+
+        for (int i=0; i<configuredPixelsInImage; i++) {
+            src[i].a = LUM(src[i]);
+        }
+
+        size_t c = 0;
+         for (int i = 0; i < n; i++) {
+             for (int j = 0; j < n; j++) {
+                 kernel[c] = exp(-0.5 * (pow((i - mean) / sigma, 2.0) +
+                                         pow((j - mean) / sigma, 2.0)))
+                    / (2 * M_PI * sigma * sigma);
+                 c++;
+             }
+         }
+
+        convolution(src, dest, kernel, n, true);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                channel d = dChan[x][y];
+                dest[PI(x,y)] = SETRGB(d,d,d);    // install blue
+            }
+        }
+    }];
+    lastTransform.low = 0;
+    lastTransform.value = 10;
+    lastTransform.high = 30;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"convolution sobel filter "
+                                description: @"Edge detection"
+                               areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+        for (int i=0; i<configuredPixelsInImage; i++) {
+            src[i].a = LUM(src[i]);
+        }
+        
+        const float Gx[] = {-1, 0, 1,
+                            -2, 0, 2,
+                            -1, 0, 1};
+        convolution(src, dest, Gx, 3, false);
+     
+        const float Gy[] = { 1, 2, 1,
+                             0, 0, 0,
+                            -1,-2,-1};
+        convolution(dest, src, Gy, 3, false);
+        
+        for (int i=0; i<configuredPixelsInImage; i++) {
+            dest[i] = SETRGB(src[i].a, src[i].a, src[i].a);
+        }
+    }];
+    [transformList addObject:lastTransform];
+    
 #ifdef notdef
 
 #define RAD(A)  (M_PI*((double)(A))/180.0)
@@ -2041,46 +2164,6 @@ irand(int i) {
 #endif
 
 #ifdef NOTYET
-   // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
-   void convolution(const  (Pixel *)in, (Pixel *)out, const float *kernel,
-                    const int W, const int H, const int kn,
-                    const bool normalize) {
-       assert(kn % 2 == 1);
-       assert(nx > kn && ny > kn);
-       const int khalf = kn / 2;
-       float min = FLT_MAX, max = -FLT_MAX;
-    
-       if (normalize)
-           for (int m = khalf; m < nx - khalf; m++)
-               for (int n = khalf; n < ny - khalf; n++) {
-                   float pixel = 0.0;
-                   size_t c = 0;
-                   for (int j = -khalf; j <= khalf; j++)
-                       for (int i = -khalf; i <= khalf; i++) {
-                           pixel += in[(n - j) * nx + m - i] * kernel[c];
-                           c++;
-                       }
-                   if (pixel < min)
-                       min = pixel;
-                   if (pixel > max)
-                       max = pixel;
-                   }
-    
-       for (int m = khalf; m < nx - khalf; m++)
-           for (int n = khalf; n < ny - khalf; n++) {
-               float pixel = 0.0;
-               size_t c = 0;
-               for (int j = -khalf; j <= khalf; j++)
-                   for (int i = -khalf; i <= khalf; i++) {
-                       pixel += in[(n - j) * nx + m - i] * kernel[c];
-                       c++;
-                   }
-    
-               if (normalize)
-                   pixel = MAX_BRIGHTNESS * (pixel - min) / (max - min);
-               out[n * nx + m] = (pixel_t)pixel;
-           }
-   }
     
    /*
     * gaussianFilter:

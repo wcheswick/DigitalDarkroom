@@ -1262,9 +1262,7 @@ viewForHeaderInSection:(NSInteger)section {
             UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
             //sectionTitle.adjustsFontSizeToFitWidth = YES;
             sectionTitle.textAlignment = NSTextAlignmentLeft;
-            sectionTitle.font = [UIFont
-                                 systemFontOfSize:SECTION_HEADER_FONT_SIZE
-                                 weight:UIFontWeightMedium];
+            sectionTitle.font = [UIFont systemFontOfSize:SECTION_HEADER_FONT_SIZE];
             NSString *name = [transforms.categoryNames objectAtIndex:section];
             sectionTitle.text = [@" " stringByAppendingString:name];
             [sectionHeaderView addSubview:sectionTitle];
@@ -1431,6 +1429,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         labelEnd = paramView.frame.origin.x;
     }
     
+    f = cell.contentView.frame;
     f.origin.x += 10;
     f.size.width = labelEnd - f.origin.x;
     UILabel *label = [[UILabel alloc] initWithFrame:f];
@@ -1439,8 +1438,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
                   systemFontOfSize:TABLE_ENTRY_FONT_SIZE
                   weight:UIFontWeightLight];
     label.text = transform.name;
-    label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE
-                                   weight:UIFontWeightMedium];
+    label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE];
     [cell.contentView addSubview:label];
     return cell;
 }
@@ -1713,8 +1711,7 @@ static NSString * const sectionTitles[] = {
     thumbLabel.adjustsFontSizeToFitWidth = YES;
     thumbLabel.textAlignment = NSTextAlignmentCenter;
     thumbLabel.font = [UIFont
-                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE
-                       weight:UIFontWeightMedium];
+                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
     thumbLabel.textColor = [UIColor blackColor];
     thumbLabel.backgroundColor = [UIColor whiteColor];
     [cellView addSubview:thumbLabel];
