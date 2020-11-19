@@ -29,6 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
     CGFloat finalScale;   // to reach the desired display dimensions
     Transform * __nullable depthTransform;
+    CGSize volatile transformSize;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
@@ -41,14 +42,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              CGFloat finalScale;
 @property (assign)              BOOL debugTransforms;
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
+@property (assign, atomic)      CGSize volatile transformSize;
 
 - (UIImage *) executeTransformsWithImage:(UIImage *) image;
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
 #define NO_DEPTH_TRANSFORM  (-1)
 - (void) selectDepthTransform:(int)index;
-
-- (void) setTransformSize: (CGSize) s;
 
 @end
 

@@ -218,7 +218,6 @@ typedef enum {
         NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_SOURCE_KEY];
         if (lastSourceUsedLabel) {
-            NSLog(@" -- last source: %@", lastSourceUsedLabel);
             for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
                 nextSource = [inputSources  objectAtIndex:sourceIndex];
                 if ([lastSourceUsedLabel isEqual:nextSource.label]) {
@@ -239,8 +238,9 @@ typedef enum {
         }
         
         assert(nextSource);
-        NSLog(@" -- first source will be : %@", nextSource.label);
 
+        NSLog(@"next source is %d", nextSource.sourceType);
+        
         currentSource = nil;
         fullImage = NO;
         [self newDisplayMode:medium];
@@ -249,7 +249,6 @@ typedef enum {
 }
 
 - (void) saveCurrentSource {
-    NSLog(@" -- saved source '%@'", currentSource.label);
     [[NSUserDefaults standardUserDefaults] setObject:currentSource.label forKey:LAST_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
@@ -336,7 +335,7 @@ typedef enum {
             break;
     }
     displayMode = newMode;
-    NSLog(@"new display mode is %d", displayMode);
+    //NSLog(@"new display mode is %d", displayMode);
 }
 
 - (void) addCameraSource:(Cameras)c label:(NSString *)l {
@@ -367,9 +366,10 @@ typedef enum {
     [inputSources addObject:source];
 }
 
-- (void)viewDidLoad {
+- (void) viewDidLoad {
     [super viewDidLoad];
     
+    NSLog(@" ========= viewDidLoad =========");
     self.title = @"Digital Darkroom";
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = NO;
@@ -394,7 +394,7 @@ typedef enum {
     sourceSelection.frame = CGRectMake(0, 0, 100, 44);
     [sourceSelection addTarget:self action:@selector(selectSource:)
                forControlEvents: UIControlEventValueChanged];
-    sourceSelection.selectedSegmentIndex = 0;
+    sourceSelection.selectedSegmentIndex = nextSource.sourceType;
     sourceSelection.momentary = NO;
     for (Cameras c=0; c<NCAMERA; c++) {
         [sourceSelection setEnabled:[cameraController isCameraAvailable:c]
@@ -475,7 +475,7 @@ typedef enum {
 
     UIColor *navyBlue = NAVY_BLUE;
     
-    containerView = [[UIView alloc] init];
+    containerView = [[UIView alloc] initWithFrame:self.view.frame];
     containerView.backgroundColor = navyBlue;
     [self.view addSubview:containerView];
     
@@ -558,6 +558,32 @@ typedef enum {
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
+- (void) viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    NSLog(@"----------viewwillappear==========");
+    
+}
+
+- (void) viewWillTransitionToSize:(CGSize)newSize withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
+    [self doLayout: newSize];
+}
+
+- (void) viewWillLayoutSubviews  {
+    [super viewWillLayoutSubviews];
+    
+    NSLog(@"********* viewWillLayoutSubviews");
+
+}
+
+- (void) viewDidLayoutSubviews  {
+    [super viewDidLayoutSubviews];
+    
+    NSLog(@"********* viewDidLayoutSubviews");
+    [self doLayout: containerView.frame.size];
+
+}
 
 - (void) displayValueSlider: (int) executeIndex {
     if (executeIndex == SLIDER_OFF) {
@@ -595,11 +621,14 @@ typedef enum {
     [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }
 
-
 - (void) adjustButtons {
     trashButton.enabled = transforms.sequence.count > 0;
     undoButton.enabled = transforms.sequence.count > 0;
     sourceSelection.selectedSegmentIndex = currentSource.sourceType;
+    NSLog(@" current selection is %ld", (long)sourceSelection.selectedSegmentIndex);
+    
+    [sourceSelection setNeedsLayout];
+    
     stopCamera.enabled = capturing;
     startCamera.enabled = !stopCamera.enabled;
 }
@@ -622,8 +651,7 @@ typedef enum {
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     if (currentSource && ISCAMERA(currentSource.sourceType)) {
-        [cameraController stopCamera];
-        capturing = NO;
+        [self cameraOn:NO];
     }
 }
 
@@ -631,26 +659,22 @@ typedef enum {
 #define INSET 3 // from screen edges
 #define MIN_TRANS_TABLE_W 275
 
-- (void) viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
+- (void) doLayout:(CGSize) newSize {
+    NSLog(@"********************** doLayout ********************");
     
     // set up new source, if needed
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
-            [cameraController stopCamera];
-            capturing = NO;
+            [self cameraOn:NO];
         }
         currentSource = nextSource;
         depthTransformIndex = IS_3D_CAMERA(currentSource.sourceType) ? currentSource.sourceType : NO_DEPTH_TRANSFORM;
         [self saveCurrentSource];
-        if (ISCAMERA(currentSource.sourceType))
-            capturing = YES;
-        [self adjustButtons];
         nextSource = nil;
     }
     
     if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController selectCamera:currentSource.sourceType];
+        [cameraController selectCamera:currentSource.sourceType]; // ***
         [cameraController setupSessionForCurrentDeviceOrientation];
         if (IS_3D_CAMERA(currentSource.sourceType)) {
             [transforms selectDepthTransform:depthTransformIndex];
@@ -661,15 +685,14 @@ typedef enum {
         [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
 
     CGRect f = self.view.frame;
+    f.origin = CGPointZero;
+    f.size = newSize;
     containerView.frame = f;
 
     imageOrientation = [self imageOrientationForDeviceOrientation];
     UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
     BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);
-    NSLog(@" **** view frame: %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
-    NSLog(@"    orientation: (%d)  %@",
-          UIDeviceOrientationIsPortrait([[UIDevice currentDevice] orientation]),
-          isPortrait ? @"Portrait" : @"Landscape");
+    NSLog(@" **** device view frame:  %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
 
     // the image display starts on the upper left of the screen.  Its width
     // depends on device and orientation, and its height depends on the aspect
@@ -677,7 +700,6 @@ typedef enum {
     // how we set these sizes depends on the "fullImage" flag, which insists that
     // we gather and process the largest image we can.
     
-    CGSize sourceSize;
     CGSize processingSize;
     CGSize displaySize;
     
@@ -697,24 +719,25 @@ typedef enum {
     
     // the image size we are processing gives the display size.
     if (ISCAMERA(currentSource.sourceType)) {
+        CGSize sourceSize;
         if (fullImage)
             sourceSize = CGSizeZero;    // obtain maximum available camera size
         else
             sourceSize = displaySize;   // we will learn what fits in the given width
-        NSLog(@"sourceSize is %.0f x %.0f", sourceSize.width, sourceSize.height);
+        NSLog(@" cam source Size is %.0f x %.0f", sourceSize.width, sourceSize.height);
         processingSize = [cameraController setupCameraForSize:sourceSize
                                               displayMode:displayMode];
     } else {
         processingSize = currentSource.imageSize;
-        NSLog(@"sourceSize is %.0f x %.0f", processingSize.width, processingSize.height);
+        NSLog(@"file source Size is %.0f x %.0f", processingSize.width, processingSize.height);
     }
-    
+
     // The transforms operate on processingSize images.  What size the height of the display,
     // and how does the processed image fit in?  Scaling is ok.
     
     NSLog(@"processingSize is %.0f x %.0f", processingSize.width, processingSize.height);
-    [transforms setTransformSize:processingSize];
-    
+    transforms.transformSize = processingSize;
+   
     // We now know the size at the end of transforming.  This needs to fit into displaySize,
     // with appropriate positioning.  The display area may have its height reduced.
     // XXX this code can be simpler.
@@ -795,20 +818,30 @@ typedef enum {
     f.size.height = availableNavVC.navigationBar.frame.size.height - f.origin.y;
     availableTableVC.view.frame = f;
     
+    [self adjustDepthInfo];
+    [availableTableVC.tableView reloadData];
+
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController startCamera];
+        [self cameraOn:YES];
     } else {
         [self transformCurrentImage];
     }
-    
-    [self adjustDepthInfo];
-    [availableTableVC.tableView reloadData];
+    [self adjustButtons];
+
 }
 
 - (void) adjustDepthInfo {
-    
+}
+
+- (void) cameraOn:(BOOL) on {
+    capturing = on;
+    if (capturing)
+        [cameraController startCamera];
+    else
+        [cameraController stopCamera];
+    [self adjustButtons];
 }
 
 #ifdef notdef
@@ -1060,10 +1093,10 @@ if captureDevice.position == AVCaptureDevicePosition.back {
 
 #endif
 
-- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
-     didOutputDepthData:(AVDepthData *)depthData
-              timestamp:(CMTime)timestamp
-             connection:(AVCaptureConnection *)connection {
+- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output didOutputDepthData:(AVDepthData *)depthData
+        timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
+    if (!capturing)
+        return;
     depthCount++;
     if (busy) {
         busyCount++;
@@ -1091,7 +1124,7 @@ if captureDevice.position == AVCaptureDevicePosition.back {
 }
 
 static Pixel *depthPixelVisImage = 0;    // alloc on the heap, maybe too big for the stack
-size_t bufferSize = 0;
+size_t bufferEntries = 0;
 
 - (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) rawDepthData
                            orientation:(UIImageOrientation) orientation {
@@ -1108,15 +1141,15 @@ size_t bufferSize = 0;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
     //NSLog(@"depth data orientation %@", width > height ? @"panoramic" : @"portrait");
-    if (bufferSize != width * height) {    // put it on the heap.  This doesn't seem to help
-        if (bufferSize) {
+    if (bufferEntries != width * height) {    // put it on the heap.  This doesn't seem to help
+        if (bufferEntries) {
             free(depthPixelVisImage);
         }
-        bufferSize = width * height;
-        depthPixelVisImage = (Pixel *)malloc(bufferSize * sizeof(Pixel));
+        bufferEntries = width * height;
+        depthPixelVisImage = (Pixel *)malloc(bufferEntries * sizeof(Pixel));
     }
     if (depthImage) {
-        if (width * height != bufferSize) {
+        if (width * height != bufferEntries) {
             @synchronized(depthImage) {
                 // reallocate.  ARC should release the old buffer
                 depthImage = [[DepthImage alloc]
@@ -1126,10 +1159,11 @@ size_t bufferSize = 0;
     } else
         depthImage = [[DepthImage alloc]
                                  initWithSize: CGSizeMake(width, height)];
-
+    bufferEntries = width * height;
+    
     CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
     float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
-    memcpy(depthImage.buf, capturedDepthBuffer, bufferSize*sizeof(float));
+    memcpy(depthImage.buf, capturedDepthBuffer, bufferEntries*sizeof(float));
     CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
   
 #ifdef NOTDEF
@@ -1170,6 +1204,8 @@ size_t bufferSize = 0;
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
+    if (!capturing)
+        return;
 
     if (busy) {
         busyCount++;
@@ -1189,7 +1225,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
   didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
        fromConnection:(nonnull AVCaptureConnection *)connection {
-    NSLog(@"dropped");
+    //NSLog(@"dropped");
     droppedCount++;
 }
 
@@ -1198,7 +1234,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
               timestamp:(CMTime)timestamp
              connection:(AVCaptureConnection *)connection
                  reason:(AVCaptureOutputDataDroppedReason)reason {
-    NSLog(@"depth data dropped: %ld", (long)reason);
+    //NSLog(@"depth data dropped: %ld", (long)reason);
     droppedCount++;
 }
 
@@ -1613,6 +1649,7 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     Cameras newCam = (Cameras)sender.selectedSegmentIndex;
     if (ISCAMERA(newCam)) {
         nextSource = [InputSource sourceForCamera:newCam];
+        NSLog(@"    ***** selectSource setneedslayout");
         [self.view setNeedsLayout];
         return;
     }
@@ -1784,6 +1821,7 @@ static NSString * const sectionTitles[] = {
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     nextSource = [self sourceForIndexPath:indexPath];
     [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
+    NSLog(@"    ***** collectionView setneedslayout");
     [self.view setNeedsLayout];
 }
 

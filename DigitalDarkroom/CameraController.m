@@ -140,13 +140,10 @@
     deviceOrientation = [[UIDevice currentDevice] orientation];
     videoOrientation = [CameraController videoOrientationForDeviceOrientation];
     
-#ifdef notdef
     NSLog(@" +++ device orientation: %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
-          [CameraController dumpDeviceOrientation:[[UIDevice currentDevice] orientation]]);
-#endif
-    NSLog(@" +++ device orientation: %ld",
-          (long)[[UIDevice currentDevice] orientation]);
+          [CameraController dumpDeviceOrientationNames:[[UIDevice currentDevice]
+                                                        orientation]]);
     
     if (captureSession) {
         [captureSession stopRunning];
@@ -186,8 +183,11 @@
         videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(videoConnection);
         [videoConnection setVideoOrientation:videoOrientation];
-        NSLog(@"  + depth video orientation 2: %ld, %@", (long)videoOrientation,
+        NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
+        NSLog(@"     activeDepthDataFormat: %@",
+              [self dumpFormatType:
+               CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
 
         dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
         [depthOutput setDelegate:delegate callbackQueue:queue];
@@ -202,7 +202,7 @@
         }
         videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        NSLog(@"  + video orientation 2: %ld, %@", (long)videoOrientation,
+        NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
 
         dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
@@ -213,17 +213,10 @@
         dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
         [dataOutput setSampleBufferDelegate:delegate queue:queue];
     }
-    NSLog(@"111 activeDepthDataFormat: %@",
-          [self dumpFormatType:
-           CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
 
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
-    
-    NSLog(@"222  activeDepthDataFormat: %@",
-          [self dumpFormatType:
-           CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
 }
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format {
@@ -300,7 +293,7 @@
         }
         
         FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-        NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
+        //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
         switch (mediaSubType) {
             case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
                 continue;
@@ -344,14 +337,14 @@
 }
 
 - (void) startCamera {
-    NSLog(@"startCamera");
+    NSLog(@"+++++ startCamera");
     if (![self isCameraOn])
         [captureSession startRunning];
 }
 
 - (void) stopCamera {
     if ([self isCameraOn]) {
-        NSLog(@"stopping camera");
+        NSLog(@"----- stopCamera");
         [captureSession stopRunning];
     }
 }
@@ -377,6 +370,10 @@ static NSString * const captureOrientationNames[] = {
     @"LandscapeRight",
     @"LandscapeLeft",
 };
+
++ (NSString *) dumpDeviceOrientationNames: (UIDeviceOrientation) o {
+    return deviceOrientationNames[o];
+}
 
 static NSString * const deviceOrientationNames[] = {
     @"Unknown",

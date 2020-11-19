@@ -12,7 +12,7 @@
 #import "Transforms.h"
 #import "Defines.h"
 
-#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+// #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
 #define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)
@@ -50,14 +50,14 @@ enum SpecialRemaps {
     Remap_Unset = -7,
 };
 
-int W, H;
-
 @interface Transforms ()
 
 @property (strong, nonatomic)   NSMutableArray *executeList;
 @property (strong, nonatomic)   Transform *lastTransform;
 
 @end
+
+static int W, H;   // local size values, easy for C routines
 
 size_t configuredBytesPerRow, configuredPixelsInImage;
 
@@ -99,6 +99,8 @@ PixelIndex_t dPI(int x, int y) {
 @synthesize finalScale;
 @synthesize debugTransforms;
 @synthesize depthTransform;
+@synthesize transformSize;
+
 
 - (id)init {
     self = [super init];
@@ -122,15 +124,11 @@ PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-- (void) setTransformSize:(CGSize) s {
-    W = s.width;
-    H = s.height;
-}
-
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
     assert(depthTransform);
-    W = depthImage.size.width;    // XXX hack: this should be computed earlier
-    H = depthImage.size.height;
+    transformSize = depthImage.size;
+    H = transformSize.height;
+    W = transformSize.width;
     depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
 }
 
@@ -322,13 +320,11 @@ int sourceImageIndex, destImageIndex;
     if (configuredBytesPerRow != bytesPerRow ||
         W != width ||
         H != height) {
-#ifdef OLD
-        NSLog(@">>> format was %4zu %4zu %4zu   %4zu %4zu %4zu",
+        NSLog(@">>> format was %4zu %4d %4d   %4zu %4zu %4zu",
               configuredBytesPerRow,
               W,
               H,
               bytesPerRow, width, height);
-#endif
         if (sChan) {    // release previous memory
             for (int x=0; x<chanColumns; x++) {
                 free((void *)sChan[x]);
@@ -337,8 +333,8 @@ int sourceImageIndex, destImageIndex;
             chanColumns = 0;
         }
         configuredBytesPerRow = bytesPerRow;
-        H = (int)height;
-        W = (int)width;
+        H = transformSize.height;
+        W = transformSize.width;
         assert(configuredBytesPerRow % sizeof(Pixel) == 0); //no slop on the rows
         for (Transform *t in executeList) {
             [t clearRemap];
@@ -360,20 +356,27 @@ int sourceImageIndex, destImageIndex;
             sChan[x] = (channel *)malloc(H*sizeof(channel));
             dChan[x] = (channel *)malloc(H*sizeof(channel));
         }
-        
-        // reset depth information
+        NSLog(@">>>         is %4zu %4d %4d   %4zu %4zu %4zu",
+              configuredBytesPerRow,
+              W,
+              H,
+              bytesPerRow, width, height);
     }
     
     int sourceImageIndex = 0;
     int destImageIndex = 1;
 
+    assert(W == width);
+    assert(H == height);
+    
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGColorSpaceRetain(colorSpace);
     CGContextRef context = CGBitmapContextCreate(imBufs[sourceImageIndex], width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  BITMAP_OPTS);
-    CGColorSpaceRelease(colorSpace);
     
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGColorSpaceRelease(colorSpace);
     CGImageRelease(imageRef);
     
     NSDate *transformStart = [NSDate now];
