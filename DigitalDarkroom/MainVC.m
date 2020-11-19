@@ -116,7 +116,9 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *saveButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
-@property (nonatomic, strong)   UIBarButtonItem *stopVideoButton;
+
+@property (nonatomic, strong)   UIBarButtonItem *stopCamera;
+@property (nonatomic, strong)   UIBarButtonItem *startCamera;
 
 @property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
@@ -160,7 +162,7 @@ typedef enum {
 @synthesize transforms;
 @synthesize trashButton, saveButton;
 @synthesize undoButton, snapButton;
-@synthesize stopVideoButton;
+@synthesize stopCamera, startCamera;
 @synthesize capturing;
 @synthesize imageOrientation;
 @synthesize displayMode;
@@ -436,16 +438,31 @@ typedef enum {
                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                   target:self
                   action:@selector(doRemoveLastTransform)];
-    stopVideoButton = [[UIBarButtonItem alloc]
-                       initWithBarButtonSystemItem:UIBarButtonSystemItemCamera
-                       target:self
-                       action:@selector(didTouchVideo:)];
+    
+    sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
+    sourceSelection.frame = CGRectMake(0, 0, 100, 44);
+    [sourceSelection addTarget:self action:@selector(selectSource:)
+               forControlEvents: UIControlEventValueChanged];
+    sourceSelection.selectedSegmentIndex = 0;
+    sourceSelection.momentary = NO;
+    for (Cameras c=0; c<NCAMERA; c++) {
+        [sourceSelection setEnabled:[cameraController isCameraAvailable:c]
+                  forSegmentAtIndex:c];
+    }
+
+    stopCamera= [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPause
+                                                              target:self
+                                                              action:@selector(doPauseCamera:)];
+    startCamera = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPlay
+                                                                target:self
+                                                                action:@selector(doResumeCamera:)];
 
     UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
     [self displayValueSlider:SLIDER_OFF];     // not displayed, for the moment
     
     NSArray *toolBarItems = [[NSArray alloc] initWithObjects:
-                             stopVideoButton,
+                             stopCamera,
+                             startCamera,
                              flexibleSpace,
                              sliderBarButton,
                              flexibleSpace,
@@ -583,6 +600,8 @@ typedef enum {
     trashButton.enabled = transforms.sequence.count > 0;
     undoButton.enabled = transforms.sequence.count > 0;
     sourceSelection.selectedSegmentIndex = currentSource.sourceType;
+    stopCamera.enabled = capturing;
+    startCamera.enabled = !stopCamera.enabled;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -624,6 +643,8 @@ typedef enum {
         currentSource = nextSource;
         depthTransformIndex = IS_3D_CAMERA(currentSource.sourceType) ? currentSource.sourceType : NO_DEPTH_TRANSFORM;
         [self saveCurrentSource];
+        if (ISCAMERA(currentSource.sourceType))
+            capturing = YES;
         [self adjustButtons];
         nextSource = nil;
     }
@@ -857,16 +878,20 @@ typedef enum {
     [self.navigationController setToolbarHidden:!isHidden animated:YES];
 }
 
-// XXXXX stub
-
-- (IBAction) didTouchVideo:(UIBarButtonItem *)recognizer {
-    NSLog(@"video touched");
+- (IBAction) doPauseCamera:(UIBarButtonItem *)recognizer {
     if ([cameraController isCameraOn]) {
         [cameraController stopCamera];
-    } else {
+    }
+    capturing = NO;
+    [self adjustButtons];
+}
+
+- (IBAction) doResumeCamera:(UIBarButtonItem *)recognizer {
+    if (![cameraController isCameraOn]) {
         [cameraController startCamera];
     }
-    capturing = !capturing;
+    capturing = YES;
+    [self adjustButtons];
 }
 
 - (IBAction) doSave:(UIBarButtonItem *)barButton {
@@ -960,9 +985,7 @@ typedef enum {
 }
 
 - (void) useImage:(UIImage *)image {
-    NSLog(@"use image");
     [cameraController stopCamera];
-    
     [self adjustButtons];
     
     UIImage *transformed = [transforms executeTransformsWithImage:image];
