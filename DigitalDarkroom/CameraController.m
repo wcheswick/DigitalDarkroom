@@ -100,6 +100,8 @@
 
 - (BOOL) isCameraAvailable:(Cameras) camera {
     assert(ISCAMERA(camera));
+    if (camera == Rear3DCamera)
+        return NO;  // temp broken
     return [self captureDeviceForCamera:camera];
 }
 

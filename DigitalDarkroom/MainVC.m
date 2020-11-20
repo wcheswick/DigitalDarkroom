@@ -236,6 +236,7 @@ typedef enum {
                 }
             }
         }
+
         currentSource = nextSource;
         fullImage = NO;
         [self newDisplayMode:medium];
