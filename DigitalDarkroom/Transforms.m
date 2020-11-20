@@ -59,14 +59,14 @@ enum SpecialRemaps {
 
 static int W, H;   // local size values, easy for C routines
 
-size_t configuredBytesPerRow, configuredPixelsInImage;
+size_t configuredBytesPerRow, configuredPixelsInImage, configuredPixelsPerRow;
 
 Pixel *imBufs[2];
 channel **sChan = 0;
 channel **dChan = 0;
 int chanColumns = 0;
 
-#define RPI(x,y)    (PixelIndex_t)(((y)*W) + (x))
+#define RPI(x,y)    (PixelIndex_t)(((y)*configuredPixelsPerRow) + (x))
 
 #ifdef DEBUG_TRANSFORMS
 // Some of our transforms might be a little buggy around the edges.  Make sure
@@ -126,7 +126,9 @@ PixelIndex_t dPI(int x, int y) {
 
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
     assert(depthTransform);
-    transformSize = depthImage.size;
+    assert(depthImage.size.width == transformSize.width);
+    assert(depthImage.size.height == transformSize.height);
+    //transformSize = depthImage.size;
     H = transformSize.height;
     W = transformSize.width;
     depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
@@ -159,35 +161,6 @@ float RGBtoDistance(Pixel p) {
     [self addMonochromes];
     [self addOldies];
 }
-
-#ifdef NOTDEF
-// remap table source for pixel x,y
-
-#define dRT(x,y) (*(dRT(remapTable, im, x, y)))
-
-PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y) {
-    assert(remapTable);
-    assert(im);
-    assert(x >= 0);
-    assert(x < im->w);
-    assert(y >= 0);
-    assert(y < im->h);
-    return remapTable[(y)*((im)->w) + (x)];
-}
-
-- (void) remapPixel:(RemapPoint_t)p color:(enum SpecialRemaps) color {
-    assert(p.x >= 0);
-    assert(p.x < currentFormat.w);
-    assert(p.y >= 0);
-    assert(p.y < currentFormat.h);
-    //RT(p.x, p.y, currentFormat.w) = color;
-}
-
-- (void) remapPixel:(RemapPoint_t)p from:(RemapPoint_t) src {
-    NSLog(@"unused?");
-    NSLog(@"unused?");
-}
-#endif
 
 - (PixelIndex_t *) computeMappingFor:(Transform *) transform {
     assert(configuredBytesPerRow);
@@ -274,7 +247,14 @@ PixelIndex_t dRT(PixelIndex_t * _Nullable remapTable, Image_t *im, int x, int y)
 
 int sourceImageIndex, destImageIndex;
 
+BOOL transformsBusy = NO;
+
 - (UIImage *) executeTransformsWithImage:(UIImage *) image {
+    if (transformsBusy) {
+        return nil; // drop frame
+    }
+    transformsBusy = YES;
+    
     if (sequenceChanged) {
         [executeList removeAllObjects];
         
@@ -309,15 +289,12 @@ int sourceImageIndex, destImageIndex;
     assert(bitsPerPixel/8 == sizeof(Pixel));
     size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
     assert(bitsPerComponent == 8);
-    configuredPixelsInImage = width * height;
     size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
-    if (!bytesPerRow) { // bad, but punt.  Seems to work just fine.
-        NSLog(@"**** empty bytes per row");
-        bytesPerRow = width*sizeof(Pixel);
-    }
-    //assert(bytesPerRow == width * sizeof(Pixel));   // we assume no unused bytes in row
+    assert(bytesPerRow);
+    size_t pixelsInImage = (bytesPerRow * height)/sizeof(Pixel);
 
     if (configuredBytesPerRow != bytesPerRow ||
+        pixelsInImage != configuredPixelsInImage ||
         W != width ||
         H != height) {
         NSLog(@">>> format was %4zu %4d %4d   %4zu %4zu %4zu",
@@ -332,10 +309,12 @@ int sourceImageIndex, destImageIndex;
             }
             chanColumns = 0;
         }
-        configuredBytesPerRow = bytesPerRow;
+        configuredBytesPerRow = bytesPerRow;    // ** may be larger than width*sizeof(Pixel)
+        assert(configuredBytesPerRow % sizeof(Pixel) == 0); // ensure 32-bit boundary
+        configuredPixelsPerRow = configuredBytesPerRow / sizeof(Pixel);
+        configuredPixelsInImage = pixelsInImage;
         H = transformSize.height;
         W = transformSize.width;
-        assert(configuredBytesPerRow % sizeof(Pixel) == 0); //no slop on the rows
         for (Transform *t in executeList) {
             [t clearRemap];
         }
@@ -411,7 +390,7 @@ int sourceImageIndex, destImageIndex;
     
     CGImageRelease(quartzImage);
     CGContextRelease(context);
-
+    transformsBusy = NO;
     return transformed;
 }
 

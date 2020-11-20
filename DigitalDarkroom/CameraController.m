@@ -270,9 +270,6 @@
 - (CGSize) setupCameraForSize:(CGSize) availableSize
                   displayMode:(DisplayMode_t)displayMode {
     NSError *error;
-    NSLog(@" FFFFF   fitting into %.0f x %.0f %@",
-          availableSize.width, availableSize.height,
-          UIDeviceOrientationIsPortrait(deviceOrientation) ? @"portrait" : @"");
 
     assert(captureDevice);
     NSArray *availableFormats = captureDevice.formats;
@@ -318,13 +315,6 @@
     
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = selectedFormat;
-#ifdef NOTDEF
-    if (depthFormat) {
-        NSLog(@"EEEEE depth format selected: %@", selectedFormat);
-        captureDevice.activeDepthDataFormat = depthFormat;
-        NSLog(@"FFFFF depth format selected: %@", selectedFormat);
-    }
-#endif
     
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate

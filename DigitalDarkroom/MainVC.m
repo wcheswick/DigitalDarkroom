@@ -238,10 +238,8 @@ typedef enum {
         }
         
         assert(nextSource);
-
-        NSLog(@"next source is %d", nextSource.sourceType);
         
-        currentSource = nil;
+        currentSource = nextSource;
         fullImage = NO;
         [self newDisplayMode:medium];
     }
@@ -249,6 +247,7 @@ typedef enum {
 }
 
 - (void) saveCurrentSource {
+    NSLog(@"Saving source %d", currentSource.sourceType);
     [[NSUserDefaults standardUserDefaults] setObject:currentSource.label forKey:LAST_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
@@ -553,16 +552,13 @@ typedef enum {
                                             initWithTarget:self action:@selector(didSwipeVideoRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
     [transformView addGestureRecognizer:swipeRight];
-
-    [self adjustButtons];
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
-    NSLog(@"----------viewwillappear==========");
-    
+    NSLog(@"-------- viewwillappear --------");
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
@@ -573,69 +569,20 @@ typedef enum {
 - (void) viewWillLayoutSubviews  {
     [super viewWillLayoutSubviews];
     
-    NSLog(@"********* viewWillLayoutSubviews");
-
+    NSLog(@"--------- viewWillLayoutSubviews --------");
 }
 
 - (void) viewDidLayoutSubviews  {
     [super viewDidLayoutSubviews];
     
-    NSLog(@"********* viewDidLayoutSubviews");
+    NSLog(@"********* viewDidLayoutSubviews *********");
     [self doLayout: containerView.frame.size];
-
-}
-
-- (void) displayValueSlider: (int) executeIndex {
-    if (executeIndex == SLIDER_OFF) {
-        valueSlider.hidden = YES;
-        return;
-    }
-    SET_VIEW_WIDTH(valueSlider, MAX_SLIDER_W);
-    valueSlider.hidden = NO;
-    valueSlider.tag = executeIndex;
-    
-    @synchronized (transforms.sequence) {
-        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
-        valueSlider.minimumValue = transform.low;
-        valueSlider.maximumValue = transform.high;
-        valueSlider.value = transform.value;
-        if (valueSlider.value != transform.value) {
-            NSLog(@"  new value is %.0f", valueSlider.value);
-            transform.value = valueSlider.value;
-            transform.newValue = YES;
-        }
-    }
-    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
-}
-
-- (IBAction) moveValueSlider:(UISlider *)slider {
-    long executeIndex = slider.tag;
-    @synchronized (transforms.sequence) {
-        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
-        if (slider.value != transform.value) {
-            NSLog(@"  new value is %.0f", slider.value);
-            transform.value = slider.value;
-            transform.newValue = YES;
-        }
-    }
-    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
-}
-
-- (void) adjustButtons {
-    trashButton.enabled = transforms.sequence.count > 0;
-    undoButton.enabled = transforms.sequence.count > 0;
-    sourceSelection.selectedSegmentIndex = currentSource.sourceType;
-    NSLog(@" current selection is %ld", (long)sourceSelection.selectedSegmentIndex);
-    
-    [sourceSelection setNeedsLayout];
-    
-    stopCamera.enabled = capturing;
-    startCamera.enabled = !stopCamera.enabled;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    
+    NSLog(@"********* viewDidAppear *********");
+
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     
@@ -649,6 +596,8 @@ typedef enum {
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
+    NSLog(@"********* viewWillDisappear *********");
+    
     [super viewWillDisappear:animated];
     if (currentSource && ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:NO];
@@ -719,23 +668,23 @@ typedef enum {
     
     // the image size we are processing gives the display size.
     if (ISCAMERA(currentSource.sourceType)) {
-        CGSize sourceSize;
+        CGSize targetSize;
         if (fullImage)
-            sourceSize = CGSizeZero;    // obtain maximum available camera size
+            targetSize = CGSizeZero;    // obtain maximum available camera size
         else
-            sourceSize = displaySize;   // we will learn what fits in the given width
-        NSLog(@" cam source Size is %.0f x %.0f", sourceSize.width, sourceSize.height);
-        processingSize = [cameraController setupCameraForSize:sourceSize
+            targetSize = displaySize;   // we will learn what fits in the given width
+        NSLog(@"  cam target Size is %.0f x %.0f", targetSize.width, targetSize.height);
+        processingSize = [cameraController setupCameraForSize:targetSize
                                               displayMode:displayMode];
+        NSLog(@" cam process Size is %.0f x %.0f", processingSize.width, processingSize.height);
     } else {
         processingSize = currentSource.imageSize;
-        NSLog(@"file source Size is %.0f x %.0f", processingSize.width, processingSize.height);
+        NSLog(@"file size is %.0f x %.0f", processingSize.width, processingSize.height);
     }
 
     // The transforms operate on processingSize images.  What size the height of the display,
     // and how does the processed image fit in?  Scaling is ok.
     
-    NSLog(@"processingSize is %.0f x %.0f", processingSize.width, processingSize.height);
     transforms.transformSize = processingSize;
    
     // We now know the size at the end of transforming.  This needs to fit into displaySize,
@@ -808,18 +757,21 @@ typedef enum {
     f.origin.y = executeNavVC.navigationBar.frame.size.height;
     f.size.height = executeNavVC.navigationBar.frame.size.height - f.origin.y;
     executeTableVC.view.frame = f;
-    
     executeTableVC.tableView.tableFooterView = allStatsLabel;
-    SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
+//    [executeTableVC.view setNeedsDisplay];
+    [executeNavVC.view setNeedsLayout];
 
+    SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
+    [allStatsLabel setNeedsLayout];
+    
     f = availableNavVC.view.frame;
     f.origin.x = 0;
     f.origin.y = availableNavVC.navigationBar.frame.size.height;
     f.size.height = availableNavVC.navigationBar.frame.size.height - f.origin.y;
     availableTableVC.view.frame = f;
-    
     [self adjustDepthInfo];
-    [availableTableVC.tableView reloadData];
+//    [availableTableVC.tableView reloadData];
+    [availableNavVC.view setNeedsLayout];
 
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -829,10 +781,60 @@ typedef enum {
         [self transformCurrentImage];
     }
     [self adjustButtons];
+}
 
+- (void) displayValueSlider: (int) executeIndex {
+    if (executeIndex == SLIDER_OFF) {
+        valueSlider.hidden = YES;
+        return;
+    }
+    SET_VIEW_WIDTH(valueSlider, MAX_SLIDER_W);
+    valueSlider.hidden = NO;
+    valueSlider.tag = executeIndex;
+    
+    @synchronized (transforms.sequence) {
+        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
+        valueSlider.minimumValue = transform.low;
+        valueSlider.maximumValue = transform.high;
+        valueSlider.value = transform.value;
+        if (valueSlider.value != transform.value) {
+            NSLog(@"  new value is %.0f", valueSlider.value);
+            transform.value = valueSlider.value;
+            transform.newValue = YES;
+        }
+    }
+    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
+}
+
+- (IBAction) moveValueSlider:(UISlider *)slider {
+    long executeIndex = slider.tag;
+    @synchronized (transforms.sequence) {
+        Transform *transform = [transforms.sequence objectAtIndex:executeIndex];
+        if (slider.value != transform.value) {
+            NSLog(@"  new value is %.0f", slider.value);
+            transform.value = slider.value;
+            transform.newValue = YES;
+        }
+    }
+    [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
+}
+
+- (void) adjustButtons {
+    NSLog(@"****** adjustButtons ******");
+    
+    trashButton.enabled = transforms.sequence.count > 0;
+    undoButton.enabled = transforms.sequence.count > 0;
+    sourceSelection.selectedSegmentIndex = currentSource.sourceType;
+    NSLog(@" current selection is %ld", (long)sourceSelection.selectedSegmentIndex);
+    
+    [sourceSelection setNeedsLayout];
+    
+    stopCamera.enabled = capturing;
+    startCamera.enabled = !stopCamera.enabled;
 }
 
 - (void) adjustDepthInfo {
+    NSLog(@"-------- adjustDepthInfo ----------");
 }
 
 - (void) cameraOn:(BOOL) on {
@@ -1022,6 +1024,7 @@ typedef enum {
     [self adjustButtons];
     
     UIImage *transformed = [transforms executeTransformsWithImage:image];
+    assert(transformed);    // should never be too busy at this point
     dispatch_async(dispatch_get_main_queue(), ^{
         self->transformView.image = transformed;
         [self->transformView setNeedsDisplay];
@@ -1116,6 +1119,8 @@ if captureDevice.position == AVCaptureDevicePosition.back {
 - (void) doTransformsOn:(UIImage *)sourceImage {
     NSDate *transformStart = [NSDate now];
     UIImage *transformed = [self->transforms executeTransformsWithImage:sourceImage];
+    if (!transformed)   // too busy, transforms skipped
+        return;
     NSTimeInterval elapsed = -[transformStart timeIntervalSinceNow];
     self->transformTotalElapsed += elapsed;
     self->transformCount++;
@@ -1149,7 +1154,9 @@ size_t bufferEntries = 0;
         depthPixelVisImage = (Pixel *)malloc(bufferEntries * sizeof(Pixel));
     }
     if (depthImage) {
-        if (width * height != bufferEntries) {
+        // if size or shape has changed, reallocate
+        if (depthImage.size.width != width ||
+            depthImage.size.height != height) {
             @synchronized(depthImage) {
                 // reallocate.  ARC should release the old buffer
                 depthImage = [[DepthImage alloc]
@@ -1159,7 +1166,6 @@ size_t bufferEntries = 0;
     } else
         depthImage = [[DepthImage alloc]
                                  initWithSize: CGSizeMake(width, height)];
-    bufferEntries = width * height;
     
     CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
     float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
