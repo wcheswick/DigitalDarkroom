@@ -20,7 +20,6 @@
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
 @property (assign)              UIDeviceOrientation deviceOrientation;
-@property (strong, nonatomic)   AVCaptureConnection *videoConnection;
 
 @property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
 
@@ -35,7 +34,6 @@
 
 @synthesize captureDevice, selectedCamera;
 @synthesize deviceOrientation;
-@synthesize videoConnection;
 @synthesize captureVideoPreviewLayer;
 @synthesize selectedFormat;
 @synthesize videoOrientation;
@@ -140,7 +138,7 @@
     deviceOrientation = [[UIDevice currentDevice] orientation];
     videoOrientation = [CameraController videoOrientationForDeviceOrientation];
     
-    NSLog(@" +++ device orientation: %ld, %@",
+    NSLog(@" +++ setupSessionForCurrentDeviceOrientation : %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
           [CameraController dumpDeviceOrientationNames:[[UIDevice currentDevice]
                                                         orientation]]);
@@ -174,20 +172,18 @@
     if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!        
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
-        NSLog(@"depth output: %@", depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
             [captureSession addOutput:depthOutput];
         } else {
             NSLog(@"**** could not add data output");
         }
-        videoConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
-        assert(videoConnection);
-        [videoConnection setVideoOrientation:videoOrientation];
+        AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
+        assert(depthConnection);
+        [depthConnection setVideoOrientation:videoOrientation];
+        depthConnection.videoMirrored = (selectedCamera != Front3DCamera);    // XXX this seems exactly backwards, but it works
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
-        NSLog(@"     activeDepthDataFormat: %@",
-              [self dumpFormatType:
-               CMFormatDescriptionGetMediaSubType(captureDevice.activeDepthDataFormat.formatDescription)]);
+        NSLog(@"     activeDepthDataFormat: %@", captureDevice.activeDepthDataFormat.formatDescription);
 
         dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
         [depthOutput setDelegate:delegate callbackQueue:queue];
@@ -200,8 +196,9 @@
         } else {
             NSLog(@"**** could not add data output");
         }
-        videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
+        AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
+        videoConnection.videoMirrored = (selectedCamera != FrontCamera);    // XXX this seems exactly backwards, but it works
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
 
@@ -210,13 +207,14 @@
             (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
         };
         dataOutput.alwaysDiscardsLateVideoFrames = YES;
-        dispatch_queue_t queue = dispatch_queue_create("MyQueue", NULL);
+        dispatch_queue_t queue = dispatch_queue_create("VideoQueue", NULL);
         [dataOutput setSampleBufferDelegate:delegate queue:queue];
     }
 
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
+    NSLog(@" *** video/depth sessions set up");
 }
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format {

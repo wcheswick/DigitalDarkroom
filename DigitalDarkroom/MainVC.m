@@ -238,7 +238,7 @@ typedef enum {
         }
         
         assert(nextSource);
-        
+        nextSource = 0;
         currentSource = nextSource;
         fullImage = NO;
         [self newDisplayMode:medium];
