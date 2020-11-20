@@ -236,9 +236,6 @@ typedef enum {
                 }
             }
         }
-        
-        assert(nextSource);
-        nextSource = 0;
         currentSource = nextSource;
         fullImage = NO;
         [self newDisplayMode:medium];
@@ -292,7 +289,7 @@ typedef enum {
         BOOL collapsed = NO;;
         if (savedSettings) {
             NSNumber *value = [savedSettings objectForKey:key];
-            if (value)
+            if ([value boolValue])
                 collapsed = [value boolValue];
         }
         [rowIsCollapsed setValue:[NSNumber numberWithBool:collapsed] forKey:key];
@@ -1198,6 +1195,7 @@ size_t bufferEntries = 0;
                                                  kCGBitmapByteOrder32Little |
                                                     kCGImageAlphaPremultipliedFirst);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
     UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
                                    orientation:orientation];
@@ -1339,9 +1337,9 @@ viewForHeaderInSection:(NSInteger)section {
             rowStatus.adjustsFontSizeToFitWidth = YES;
             if ([self isCollapsed:name]) {
                 NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                rowStatus.text = [NSString stringWithFormat:@"(%lu) ▼", (unsigned long)transformList.count];
+                rowStatus.text = [NSString stringWithFormat:@"(%lu) ˃", (unsigned long)transformList.count];
             } else
-                rowStatus.text = [NSString stringWithFormat:@"▲"];
+                rowStatus.text = [NSString stringWithFormat:@"⌄"];
             sectionHeaderView.tag = section;    // for the tap processing
             [sectionHeaderView addSubview:rowStatus];
             UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]

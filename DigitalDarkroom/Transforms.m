@@ -249,7 +249,7 @@ int sourceImageIndex, destImageIndex;
 
 BOOL transformsBusy = NO;
 
-- (UIImage *) executeTransformsWithImage:(UIImage *) image {
+- (UIImage * __nullable) executeTransformsWithImage:(UIImage *) image {
     if (transformsBusy) {
         return nil; // drop frame
     }

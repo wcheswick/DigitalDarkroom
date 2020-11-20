@@ -44,7 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (assign, atomic)      CGSize volatile transformSize;
 
-- (UIImage *) executeTransformsWithImage:(UIImage *) image;
+- (UIImage * __nullable) executeTransformsWithImage:(UIImage *) image;
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
 #define NO_DEPTH_TRANSFORM  (-1)

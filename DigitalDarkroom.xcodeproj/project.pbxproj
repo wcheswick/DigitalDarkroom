@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
+		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
 		FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */; };
 		FBB1D9D0232EBD9C00845DF1 /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */; };
 		FBB1D9D1232EBD9C00845DF1 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */; };
@@ -45,6 +46,7 @@
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
 		FB389A4A254055F500E29530 /* ColorTable.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ColorTable.m; sourceTree = "<group>"; };
 		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
+		FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
 		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
 		FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
@@ -205,6 +207,7 @@
 				FBB1D9F2232FE56700845DF1 /* images */,
 				FBB1D9D9232FE3F400845DF1 /* Transforms */,
 				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
+				FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */,
 				FBF5B3B7232E974000DDFC4E /* Info.plist */,
 				FBF5B3B8232E974000DDFC4E /* main.m */,
 			);
@@ -270,6 +273,7 @@
 			files = (
 				FBB1D9FA232FE56700845DF1 /* Links in Resources */,
 				FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */,
+				FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */,
 				FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */,
 				FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */,
 				FBB1D9F4232FE56700845DF1 /* translations in Resources */,
@@ -429,7 +433,6 @@
 		FBF5B3BD232E974000DDFC4E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -450,7 +453,6 @@
 		FBF5B3BE232E974000DDFC4E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_USE_OPTIMIZATION_PROFILE = NO;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
