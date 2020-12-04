@@ -70,12 +70,18 @@
 // last settings
 
 #define LAST_SOURCE_KEY @"LastSource"
+#define UI_MODE_KEY @"UIMode"
 
 typedef enum {
     TransformTable,
     ActiveTable,
 } TableTags;
 
+
+static NSString * const uiNames[] = {
+    @"Exhibit",
+    @"Olive",
+};
 
 @interface MainVC ()
 
@@ -124,6 +130,7 @@ typedef enum {
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
 @property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              DisplayMode_t displayMode;
+@property (assign)              UIMode_t uiMode;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
 @property (nonatomic, strong)   DepthImage *depthImage;
@@ -133,6 +140,7 @@ typedef enum {
 @property (assign)              BOOL fullImage;     // transform a full capture (slower)
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelection;
+@property (nonatomic, strong)   UISegmentedControl *uiSelection;
 
 @end
 
@@ -166,6 +174,7 @@ typedef enum {
 @synthesize capturing;
 @synthesize imageOrientation;
 @synthesize displayMode;
+@synthesize uiMode;
 
 @synthesize rowIsCollapsed;
 @synthesize depthImage;
@@ -174,6 +183,7 @@ typedef enum {
 @synthesize transformDisplaySize;
 @synthesize fullImage;
 @synthesize sourceSelection;
+@synthesize uiSelection;
 
 - (id) init {
     self = [super init];
@@ -213,6 +223,17 @@ typedef enum {
         cameraController.delegate = self;
         currentCameraButton = nil;
         
+        NSString *lastUIMode = [[NSUserDefaults standardUserDefaults]
+                                     stringForKey:UI_MODE_KEY];
+        if (lastUIMode) {
+            uiMode = [lastUIMode intValue];
+        } else {
+            uiMode = exhibitUI;
+            [self saveUIMode];
+        }
+        
+        [self newDisplayMode:medium];
+
         nextSource = nil;
 
         NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
@@ -239,14 +260,21 @@ typedef enum {
 
         currentSource = nextSource;
         fullImage = NO;
-        [self newDisplayMode:medium];
     }
     return self;
 }
 
+- (void) saveUIMode {
+    NSString *uiStr = [NSString stringWithFormat:@"%d", uiMode];
+    [[NSUserDefaults standardUserDefaults] setObject:uiStr
+                                              forKey:UI_MODE_KEY];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
 - (void) saveCurrentSource {
     NSLog(@"Saving source %d", currentSource.sourceType);
-    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label forKey:LAST_SOURCE_KEY];
+    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
+                                              forKey:LAST_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
@@ -313,8 +341,7 @@ typedef enum {
         case fullScreen:
         case alternateScreen:
         case small:
-            newMode = newMode;
-            return;
+            break;
         case medium:    // iPad size, but never for iPhone
             switch ([UIDevice currentDevice].userInterfaceIdiom) {
                 case UIUserInterfaceIdiomMac:
@@ -328,11 +355,10 @@ typedef enum {
                 case UIUserInterfaceIdiomTV:
                 case UIUserInterfaceIdiomCarPlay:
                     newMode = medium;
-           }
+            }
             break;
     }
     displayMode = newMode;
-    //NSLog(@"new display mode is %d", displayMode);
 }
 
 - (void) addCameraSource:(Cameras)c label:(NSString *)l {
@@ -405,6 +431,16 @@ typedef enum {
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
+
+    uiSelection = [[UISegmentedControl alloc] initWithItems:@[@"Exhibit\nmode", @"Olive\nmode"]];
+    uiSelection.frame = CGRectMake(0, 0, 40, 44);
+    [uiSelection addTarget:self action:@selector(selectUI:)
+               forControlEvents: UIControlEventValueChanged];
+    uiSelection.selectedSegmentIndex = uiMode;
+    uiSelection.momentary = NO;
+    UIBarButtonItem *rightBarItem = [[UIBarButtonItem alloc]
+                                    initWithCustomView:uiSelection];
+    self.navigationItem.rightBarButtonItem = rightBarItem;
 
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
@@ -1659,6 +1695,12 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         return;
     }
     [self doSelecFileSource];
+}
+
+- (IBAction) selectUI:(UISegmentedControl *)sender {
+    uiMode = (UIMode_t)sender.selectedSegmentIndex;
+    [self.view setNeedsLayout];
+    [self saveUIMode];
 }
 
 #define CELLECTION_CELL_ID  @"collectionCell"

@@ -17,6 +17,11 @@ typedef enum {
     alternateScreen,
 } DisplayMode_t;
 
+typedef enum {
+    exhibitUI,
+    oliveUI,
+} UIMode_t;
+
 @interface MainVC : UIViewController
     <UITableViewDelegate,
     UITableViewDataSource,
