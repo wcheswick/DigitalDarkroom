@@ -30,11 +30,13 @@ NS_ASSUME_NONNULL_BEGIN
     CGFloat finalScale;   // to reach the desired display dimensions
     Transform * __nullable depthTransform;
     CGSize volatile transformSize;
+    NSMutableArray *flatTransformList;
 }
 
 @property (nonatomic, strong)   NSArray *categoryNames;
 @property (nonatomic, strong)   NSArray *categoryList;
 @property (nonatomic, strong)   NSMutableArray *sequence;
+@property (nonatomic, strong)   NSMutableArray *flatTransformList;
 @property (assign)              BOOL volatile sequenceChanged;
 @property (assign)              size_t bytesPerRow;
 @property (nonatomic, strong)   NSArray *updatedTransformList;

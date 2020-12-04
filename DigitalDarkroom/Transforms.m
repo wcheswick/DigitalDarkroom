@@ -100,6 +100,7 @@ PixelIndex_t dPI(int x, int y) {
 @synthesize debugTransforms;
 @synthesize depthTransform;
 @synthesize transformSize;
+@synthesize flatTransformList;
 
 
 - (id)init {
@@ -115,6 +116,7 @@ PixelIndex_t dPI(int x, int y) {
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
         sequence = [[NSMutableArray alloc] init];
+        flatTransformList = [[NSMutableArray alloc] init];
         sequenceChanged = YES;
         finalScale = 1.0;
         imBufs[0] = imBufs[1] = NULL;
@@ -151,7 +153,7 @@ float RGBtoDistance(Pixel p) {
 
 - (void) buildTransformList {
     [self addDepthVisualizations];
-    [self addColorVisionDeficits];
+//    [self addColorVisionDeficits];
     [self addGeometricTransforms];
     [self addPointTransforms];
     [self addMiscTransforms];
@@ -2075,8 +2077,52 @@ void convolution(const Pixel *in, Pixel *out,
     }];
     [transformList addObject:lastTransform];
     
-#ifdef notdef
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                 description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+        double r1 = sqrt(r*MAX_R);
+        int y = (int)CenterY+(int)(r1*sin(a));
+        if (y < 0)
+            y = 0;
+        else if (y >= H)
+            y = (int)H - 1;
+        int x = CenterX + r1*cos(a);
+        if (x < 0)
+            x = 0;
+        else if (x >= W)
+            x = (int)W - 1;
+        return PI(x, y);
+    }];
+    [transformList addObject:lastTransform];
 
+    lastTransform = [Transform areaTransform: @"Andrew's projection"
+                                  description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+        int x = CenterX + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int y = CenterY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        return PI(x, y);
+#ifdef notdef
+        if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
+        else
+            return PI(&currentFormat,CenterX + r*cos(a), CenterX + r*sin(a));
+#endif
+    }];
+    [transformList addObject:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Fish eye"
+                                 description: @""
+                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
+        double R = hypot(W, H);
+        double r1 = r*r/(R/2.0);
+        int x = (int)CenterX + (int)(r1*cos(a));
+        int y = (int)CenterY + (int)(r1*sin(a));
+        return PI(x,y);
+    }];
+    [transformList addObject:lastTransform];
+    [flatTransformList addObjectsFromArray:transformList];
+}
+
+#ifdef notdef
 #define RAD(A)  (M_PI*((double)(A))/180.0)
 #define SR(X,Y) (ht[4*tw*((Y)%th)+4*((X)%tw)+2])
 #define SG(X,Y) (ht[4*tw*((Y)%th)+4*((X)%tw)+1])
@@ -2146,7 +2192,6 @@ void convolution(const Pixel *in, Pixel *out,
 #endif
 
 #ifdef NOTYET
-    
    /*
     * gaussianFilter:
     * http://www.songho.ca/dsp/cannyedge/cannyedge.html
@@ -2341,50 +2386,6 @@ void convolution(const Pixel *in, Pixel *out,
     }];
     [transformList addObject:lastTransform];
 #endif
-    
-    lastTransform = [Transform areaTransform: @"Cone projection"
-                                 description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        double r1 = sqrt(r*MAX_R);
-        int y = (int)CenterY+(int)(r1*sin(a));
-        if (y < 0)
-            y = 0;
-        else if (y >= H)
-            y = (int)H - 1;
-        int x = CenterX + r1*cos(a);
-        if (x < 0)
-            x = 0;
-        else if (x >= W)
-            x = (int)W - 1;
-        return PI(x, y);
-    }];
-    [transformList addObject:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Andrew's projection"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        int x = CenterX + 0.6*((r - sin(a)*100 + 50) * cos(a));
-        int y = CenterY + 0.6*r*sin(a); // - (CENTER_Y/4);
-        return PI(x, y);
-#ifdef notdef
-        if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
-        else
-            return PI(&currentFormat,CenterX + r*cos(a), CenterX + r*sin(a));
-#endif
-    }];
-    [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Fish eye"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        double R = hypot(W, H);
-        double r1 = r*r/(R/2.0);
-        int x = (int)CenterX + (int)(r1*cos(a));
-        int y = (int)CenterY + (int)(r1*sin(a));
-        return PI(x,y);
-    }];
-    [transformList addObject:lastTransform];
-    
 
 #ifdef notdef
 pixel
@@ -2432,7 +2433,6 @@ can(double r, double a) {
         }
     }
 #endif
-}
 
 // For Tom's logo algorithm
 
@@ -2505,15 +2505,17 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
 
-    #ifdef notdef
-        extern  transform_t do_diff;
-        extern  transform_t do_color_logo;
-        extern  transform_t do_spectrum;
-    #endif
+    [flatTransformList addObjectsFromArray:transformList];
 }
+       
+#ifdef notdef
+    extern  transform_t do_diff;
+    extern  transform_t do_color_logo;
+    extern  transform_t do_spectrum;
+#endif
 
 - (void) addColorVisionDeficits {
-    
+//    [flatTransformList addObjectsFromArray:transformList];
 }
 
 
@@ -2967,6 +2969,8 @@ make_block(Pt origin, struct block *b) {
         }
     }];
     [transformList addObject:lastTransform];
+    
+    [flatTransformList addObjectsFromArray:transformList];
 }
 
 #ifdef notdef

@@ -43,6 +43,14 @@
 #define SOURCE_CELL_W   SOURCE_THUMB_W
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
 
+#define TRANS_INSET 2
+#define TRANS_THUMB_W  50
+#define TRANS_THUMB_H  TRANS_THUMB_W
+#define TRANS_BUTTON_FONT_SIZE 12
+//#define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
+#define TRANS_CELL_W   TRANS_THUMB_H
+#define TRANS_CELL_H   (TRANS_THUMB_H) // + SOURCE_LABEL_H)
+
 #define SECTION_HEADER_ARROW_W  55
 
 #define MIN_SLIDER_W    100
@@ -77,6 +85,10 @@ typedef enum {
     ActiveTable,
 } TableTags;
 
+typedef enum {
+    sourceCollection,
+    transformCollection
+} CollectionTags;
 
 static NSString * const uiNames[] = {
     @"Exhibit",
@@ -100,6 +112,9 @@ static NSString * const uiNames[] = {
 
 // in available VC
 @property (nonatomic, strong)   UITableViewController *availableTableVC;
+
+// Olive's collection of everything
+@property (nonatomic, strong)   UICollectionViewController *collectionVC;
 
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
@@ -155,6 +170,7 @@ static NSString * const uiNames[] = {
 
 @synthesize executeTableVC;
 @synthesize availableTableVC;
+@synthesize collectionVC;
 
 @synthesize currentCameraButton;
 
@@ -471,17 +487,6 @@ static NSString * const uiNames[] = {
                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                   target:self
                   action:@selector(doRemoveLastTransform)];
-    
-    sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
-    sourceSelection.frame = CGRectMake(0, 0, 100, 44);
-    [sourceSelection addTarget:self action:@selector(selectSource:)
-               forControlEvents: UIControlEventValueChanged];
-    sourceSelection.selectedSegmentIndex = 0;
-    sourceSelection.momentary = NO;
-    for (Cameras c=0; c<NCAMERA; c++) {
-        [sourceSelection setEnabled:[cameraController isCameraAvailable:c]
-                  forSegmentAtIndex:c];
-    }
 
     stopCamera= [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPause
                                                               target:self
@@ -512,87 +517,134 @@ static NSString * const uiNames[] = {
     containerView.backgroundColor = navyBlue;
     [self.view addSubview:containerView];
     
-    transformView = [[UIImageView alloc] init];
-    transformView.userInteractionEnabled = YES;
-    transformView.backgroundColor = navyBlue;
-    [containerView addSubview:transformView];
-    
     // touching the transformView toggles nav and tool bars
     UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [touch setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:touch];
 
-    executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
-    executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
-    availableTableVC = [[UITableViewController alloc]
-                               initWithStyle:UITableViewStylePlain];
-    availableNavVC = [[UINavigationController alloc] initWithRootViewController:availableTableVC];
+    transformView = [[UIImageView alloc] init];
+    transformView.userInteractionEnabled = YES;
+    transformView.backgroundColor = navyBlue;
+    [containerView addSubview:transformView];
 
-    [containerView addSubview:executeNavVC.view];
-    [containerView addSubview:availableNavVC.view];
+    // We have two different basic UIs at the moment, as I try to figure all this out
+    // The exhibit view attempts to recreate the functionality of the original LSC
+    // Digital Darkroom exhibit.  It has the transform display, available transforms
+    // selection, and current stack of transforms.  It is a crowded display, and I am
+    // not fond of it.
+    //
+    // The second UI is Olive mode, named after my two-year old granddaughter.  It is simply
+    // the display and a long, scrollable collectionview.  Only a single transform may be selected.
     
-    // execute has a nav bar and a table.  There is an extra entry in the table at
-    // the end, with performance stats.
-    executeTableVC.tableView.tag = ActiveTable;
-    executeTableVC.tableView.delegate = self;
-    executeTableVC.tableView.dataSource = self;
-    //executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    executeTableVC.tableView.showsVerticalScrollIndicator = YES;
-    executeTableVC.title = @"Active";
-    executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
-    UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
-                                   target:self
-                                   action:@selector(doEditActiveList:)];
-    executeTableVC.navigationItem.rightBarButtonItem = editButton;
-    
-    allStatsLabel = [[UILabel alloc] initWithFrame:CGRectMake(LATER, 0, STATS_W, TABLE_ENTRY_H)];
-    allStatsLabel.textAlignment = NSTextAlignmentRight;
-    allStatsLabel.text = nil;
-    allStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
-    allStatsLabel.adjustsFontSizeToFitWidth = YES;
+    switch (uiMode) {
+        case exhibitUI: {
+            executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
+            executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
+            availableTableVC = [[UITableViewController alloc]
+                                       initWithStyle:UITableViewStylePlain];
+            availableNavVC = [[UINavigationController alloc] initWithRootViewController:availableTableVC];
 
-    executeTableVC.tableView.tableFooterView = allStatsLabel;
+            [containerView addSubview:executeNavVC.view];
+            [containerView addSubview:availableNavVC.view];
+            
+            // execute has a nav bar and a table.  There is an extra entry in the table at
+            // the end, with performance stats.
+            executeTableVC.tableView.tag = ActiveTable;
+            executeTableVC.tableView.delegate = self;
+            executeTableVC.tableView.dataSource = self;
+            //executeTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            executeTableVC.tableView.showsVerticalScrollIndicator = YES;
+            executeTableVC.title = @"Active";
+            executeTableVC.tableView.rowHeight = ACTIVE_TABLE_ENTRY_H;
+            UIBarButtonItem *editButton = [[UIBarButtonItem alloc]
+                                           initWithBarButtonSystemItem:UIBarButtonSystemItemEdit
+                                           target:self
+                                           action:@selector(doEditActiveList:)];
+            executeTableVC.navigationItem.rightBarButtonItem = editButton;
+            
+            allStatsLabel = [[UILabel alloc] initWithFrame:CGRectMake(LATER, 0, STATS_W, TABLE_ENTRY_H)];
+            allStatsLabel.textAlignment = NSTextAlignmentRight;
+            allStatsLabel.text = nil;
+            allStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+            allStatsLabel.adjustsFontSizeToFitWidth = YES;
 
-    availableTableVC.tableView.tag = TransformTable;
-    availableTableVC.tableView.rowHeight = TABLE_ENTRY_H;
-    availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    availableTableVC.tableView.delegate = self;
-    availableTableVC.tableView.dataSource = self;
-    availableTableVC.tableView.showsVerticalScrollIndicator = YES;
-    availableTableVC.title = @"Transforms";
+            executeTableVC.tableView.tableFooterView = allStatsLabel;
 
-    UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
-                                           initWithTarget:self action:@selector(didPressVideo:)];
-    press.minimumPressDuration = 1.0;
-    [transformView addGestureRecognizer:press];
+            availableTableVC.tableView.tag = TransformTable;
+            availableTableVC.tableView.rowHeight = TABLE_ENTRY_H;
+            availableTableVC.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            availableTableVC.tableView.delegate = self;
+            availableTableVC.tableView.dataSource = self;
+            availableTableVC.tableView.showsVerticalScrollIndicator = YES;
+            availableTableVC.title = @"Transforms";
 
-    // save image to photos
-    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
-                                            initWithTarget:self action:@selector(didSwipeVideoLeft:)];
-    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    [transformView addGestureRecognizer:swipeLeft];
-    
-    // save screen to photos
-    UISwipeGestureRecognizer *twoSwipeLeft = [[UISwipeGestureRecognizer alloc]
-                                            initWithTarget:self action:@selector(didTwoSwipeVideoLeft:)];
-    twoSwipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    twoSwipeLeft.numberOfTouchesRequired = 2;
-    [transformView addGestureRecognizer:twoSwipeLeft];
+            UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc]
+                                                   initWithTarget:self action:@selector(didPressVideo:)];
+            press.minimumPressDuration = 1.0;
+            [transformView addGestureRecognizer:press];
 
-    // undo
-    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
-                                            initWithTarget:self action:@selector(didSwipeVideoRight:)];
-    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-    [transformView addGestureRecognizer:swipeRight];
+            // save image to photos
+            UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
+                                                    initWithTarget:self action:@selector(didSwipeVideoLeft:)];
+            swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+            [transformView addGestureRecognizer:swipeLeft];
+            
+            // save screen to photos
+            UISwipeGestureRecognizer *twoSwipeLeft = [[UISwipeGestureRecognizer alloc]
+                                                    initWithTarget:self action:@selector(didTwoSwipeVideoLeft:)];
+            twoSwipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+            twoSwipeLeft.numberOfTouchesRequired = 2;
+            [transformView addGestureRecognizer:twoSwipeLeft];
+
+            // undo
+            UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
+                                                    initWithTarget:self action:@selector(didSwipeVideoRight:)];
+            swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
+            [transformView addGestureRecognizer:swipeRight];
+            break;
+        }
+        case oliveUI:{
+            collectionVC = [[UICollectionViewController alloc] init];
+
+#define TRANSFORM_CELL_ID  @"transformCell"
+#define TRANSFORM_HEADER_CELL_ID  @"transformHeaderCell"
+
+            UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
+            flowLayout.sectionInset = UIEdgeInsetsMake(2*TRANS_INSET, 2*TRANS_INSET, TRANS_INSET, 2*TRANS_INSET);
+            flowLayout.itemSize = CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);
+            flowLayout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+            //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
+            //flowLayout.minimumInteritemSpacing = 16;
+            //flowLayout.minimumLineSpacing = 16;
+            flowLayout.headerReferenceSize = CGSizeMake(0, COLLECTION_HEADER_H);
+
+            UICollectionView *collectionView = [[UICollectionView alloc]
+                                                initWithFrame:containerView.frame   // adjust later
+                                                collectionViewLayout:flowLayout];
+            collectionView.dataSource = self;
+            collectionView.delegate = self;
+            collectionView.tag = transformCollection;
+            collectionView.allowsMultipleSelection = NO;
+            [collectionView registerClass:[UICollectionViewCell class]
+               forCellWithReuseIdentifier:TRANSFORM_CELL_ID];
+            collectionView.backgroundColor = [UIColor whiteColor];
+            collectionVC.view = collectionView;
+            [collectionView registerClass:[CollectionHeaderView class]
+                    forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
+                           withReuseIdentifier:TRANSFORM_HEADER_CELL_ID];
+            [containerView addSubview:collectionView];
+            break;
+        }
+    }
+
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
-    NSLog(@"-------- viewwillappear --------");
+//    NSLog(@"-------- viewwillappear --------");
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
@@ -735,77 +787,94 @@ static NSString * const uiNames[] = {
         f.origin = CGPointZero;
     transformView.frame = f;
 
-    // now position the two tables.
-    
+    switch (uiMode) {
+        case exhibitUI:     // position the two tables.
 #define EXEC_FRAC   (0.3)
-    switch (UIDevice.currentDevice.userInterfaceIdiom) {
-        case UIUserInterfaceIdiomPhone:
-            if (isPortrait) {       // image on top, execute and available stacked below
-                f.origin = CGPointMake(0, BELOW(f) + SEP);
-                f.size.width = containerView.frame.size.width;
-                f.size.height = EXEC_FRAC*(containerView.frame.size.height - f.origin.y);
-                executeNavVC.view.frame = f;
+            switch (UIDevice.currentDevice.userInterfaceIdiom) {
+                case UIUserInterfaceIdiomPhone:
+                    if (isPortrait) {       // image on top, execute and available stacked below
+                        f.origin = CGPointMake(0, BELOW(f) + SEP);
+                        f.size.width = containerView.frame.size.width;
+                        f.size.height = EXEC_FRAC*(containerView.frame.size.height - f.origin.y);
+                        executeNavVC.view.frame = f;
 
-                f.origin.y = BELOW(f) + SEP;
-                f.size.height = containerView.frame.size.height - f.origin.y;
-                availableNavVC.view.frame = f;
-            } else {    // image on the left, execute and available stacked on the right
-                f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
-                f.size.width = containerView.frame.size.width - f.origin.x - SEP;
-                f.size.height = EXEC_FRAC*containerView.frame.size.height;
-                executeNavVC.view.frame = f;
-                
-                f.origin.y += f.size.height + SEP;
-                f.size.height = containerView.frame.size.height - f.origin.y;
-                availableNavVC.view.frame = f;
+                        f.origin.y = BELOW(f) + SEP;
+                        f.size.height = containerView.frame.size.height - f.origin.y;
+                        availableNavVC.view.frame = f;
+                    } else {    // image on the left, execute and available stacked on the right
+                        f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
+                        f.size.width = containerView.frame.size.width - f.origin.x - SEP;
+                        f.size.height = EXEC_FRAC*containerView.frame.size.height;
+                        executeNavVC.view.frame = f;
+                        
+                        f.origin.y += f.size.height + SEP;
+                        f.size.height = containerView.frame.size.height - f.origin.y;
+                        availableNavVC.view.frame = f;
+                    }
+                    break;
+                case UIUserInterfaceIdiomPad:
+                    if (isPortrait) {       // image on the top, execute and avail side-by-side on the bottom
+                        f.origin = CGPointMake(0, BELOW(f) + SEP);
+                        f.size.width = containerView.frame.size.width/2 - SEP/2;
+                        f.size.height = containerView.frame.size.height - f.origin.y;
+                        executeNavVC.view.frame = f;
+
+                        f.origin.x += f.size.width + SEP;
+                        availableNavVC.view.frame = f;
+                    } else {    // image in upper left, avail on the whole right side, execute underneath
+                        f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
+                        f.size.width = containerView.frame.size.width - f.origin.x - SEP;
+                        f.size.height = containerView.frame.size.height;
+                        availableNavVC.view.frame = f;
+
+                        f.origin = CGPointMake(0, BELOW(transformView.frame));
+                        f.size.width = availableNavVC.view.frame.origin.x - SEP;
+                        f.size.height = containerView.frame.size.height - f.origin.y;
+                        executeNavVC.view.frame = f;
+                    }
+                    break;
+               default:    // one of the other Apple devices
+                    NSLog(@"***** Unplanned device: %ld", (long)UIDevice.currentDevice.userInterfaceIdiom);
+                    return;
             }
-            break;
-        case UIUserInterfaceIdiomPad:
-            if (isPortrait) {       // image on the top, execute and avail side-by-side on the bottom
-                f.origin = CGPointMake(0, BELOW(f) + SEP);
-                f.size.width = containerView.frame.size.width/2 - SEP/2;
-                f.size.height = containerView.frame.size.height - f.origin.y;
-                executeNavVC.view.frame = f;
 
-                f.origin.x += f.size.width + SEP;
-                availableNavVC.view.frame = f;
-            } else {    // image in upper left, avail on the whole right side, execute underneath
-                f.origin = CGPointMake(RIGHT(transformView.frame) + SEP, 0);
-                f.size.width = containerView.frame.size.width - f.origin.x - SEP;
-                f.size.height = containerView.frame.size.height;
-                availableNavVC.view.frame = f;
+            f = executeNavVC.view.frame;
+            f.origin.x = 0;
+            f.origin.y = executeNavVC.navigationBar.frame.size.height;
+            f.size.height = executeNavVC.navigationBar.frame.size.height - f.origin.y;
+            executeTableVC.view.frame = f;
+            executeTableVC.tableView.tableFooterView = allStatsLabel;
+        //    [executeTableVC.view setNeedsDisplay];
+            [executeNavVC.view setNeedsLayout];
 
-                f.origin = CGPointMake(0, BELOW(transformView.frame));
-                f.size.width = availableNavVC.view.frame.origin.x - SEP;
-                f.size.height = containerView.frame.size.height - f.origin.y;
-                executeNavVC.view.frame = f;
-            }
+            SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
+            [allStatsLabel setNeedsLayout];
+            
+            f = availableNavVC.view.frame;
+            f.origin.x = 0;
+            f.origin.y = availableNavVC.navigationBar.frame.size.height;
+            f.size.height = availableNavVC.navigationBar.frame.size.height - f.origin.y;
+            availableTableVC.view.frame = f;
+            [self adjustDepthInfo];
+        //    [availableTableVC.tableView reloadData];
+            [availableNavVC.view setNeedsLayout];
             break;
-       default:    // one of the other Apple devices
-            NSLog(@"***** Unplanned device: %ld", (long)UIDevice.currentDevice.userInterfaceIdiom);
+        case oliveUI: {
+            CGRect f = containerView.frame;
+            f.origin.y = BELOW(transformView.frame) + SEP;
+            f.size.height -= f.origin.y;
+            collectionVC.view.frame = f;
+            
+            
+            // how wide is the full collection view?
+            f.origin = CGPointZero;
+            
+            break;
+        }
+        default:
+            NSLog(@"*** inconceivable, unknown UI mode: %d", uiMode);
             return;
     }
-
-    f = executeNavVC.view.frame;
-    f.origin.x = 0;
-    f.origin.y = executeNavVC.navigationBar.frame.size.height;
-    f.size.height = executeNavVC.navigationBar.frame.size.height - f.origin.y;
-    executeTableVC.view.frame = f;
-    executeTableVC.tableView.tableFooterView = allStatsLabel;
-//    [executeTableVC.view setNeedsDisplay];
-    [executeNavVC.view setNeedsLayout];
-
-    SET_VIEW_X(allStatsLabel, f.size.width - allStatsLabel.frame.size.width - SEP);
-    [allStatsLabel setNeedsLayout];
-    
-    f = availableNavVC.view.frame;
-    f.origin.x = 0;
-    f.origin.y = availableNavVC.navigationBar.frame.size.height;
-    f.size.height = availableNavVC.navigationBar.frame.size.height - f.origin.y;
-    availableTableVC.view.frame = f;
-    [self adjustDepthInfo];
-//    [availableTableVC.tableView reloadData];
-    [availableNavVC.view setNeedsLayout];
 
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -1565,12 +1634,7 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
             // Append a transform to the active list
             NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
             Transform *transform = [transformList objectAtIndex:indexPath.row];
-            Transform *thisTransform = [transform copy];
-            assert(thisTransform.remapTable == NULL);
-            @synchronized (transforms.sequence) {
-                [transforms.sequence addObject:thisTransform];
-                transforms.sequenceChanged = YES;
-            }
+            [self addTransform:transform];
             [self.executeTableVC.tableView reloadData];
             [self adjustButtons];
             [self transformCurrentImage];
@@ -1585,6 +1649,14 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
+- (void) addTransform:(Transform *) transform {
+    Transform *thisTransform = [transform copy];
+    assert(thisTransform.remapTable == NULL);
+    @synchronized (transforms.sequence) {
+        [transforms.sequence addObject:thisTransform];
+        transforms.sequenceChanged = YES;
+    }
+}
 
 #ifdef notdef
 -(void)tableView:(UITableView *)tableView
@@ -1703,8 +1775,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     [self saveUIMode];
 }
 
-#define CELLECTION_CELL_ID  @"collectionCell"
-#define CELLECTION_HEADER_CELL_ID  @"collectionHeaderCell"
+#define SELECTION_CELL_ID  @"fileSelectCell"
+#define SELECTION_HEADER_CELL_ID  @"fileSelectHeaderCell"
 
 - (void) doSelecFileSource {
     UIViewController *collectionVC = [[UIViewController alloc] init];
@@ -1723,13 +1795,14 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
                                         collectionViewLayout:flowLayout];
     collectionView.dataSource = self;
     collectionView.delegate = self;
+    collectionView.tag = sourceCollection;
     [collectionView registerClass:[UICollectionViewCell class]
-       forCellWithReuseIdentifier:CELLECTION_CELL_ID];
+       forCellWithReuseIdentifier:SELECTION_CELL_ID];
     collectionView.backgroundColor = [UIColor whiteColor];
     collectionVC.view = collectionView;
     [collectionView registerClass:[CollectionHeaderView class]
             forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
-                   withReuseIdentifier:CELLECTION_HEADER_CELL_ID];
+                   withReuseIdentifier:SELECTION_HEADER_CELL_ID];
     sourcesNavVC = [[UINavigationController alloc]
                                             initWithRootViewController:collectionVC];
     UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
@@ -1746,7 +1819,10 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 }
 
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
-    return 3;
+    if (collectionView.tag == sourceCollection)
+        return 3;
+    else
+        return 1;
 }
 
 static NSString * const sectionTitles[] = {
@@ -1759,13 +1835,17 @@ static NSString * const sectionTitles[] = {
            viewForSupplementaryElementOfKind:(NSString *)kind
                                  atIndexPath:(NSIndexPath *)indexPath {
     if ([kind isEqual:UICollectionElementKindSectionHeader]) {
-        UICollectionReusableView *headerView = [collectionView
-                                            dequeueReusableSupplementaryViewOfKind:UICollectionElementKindSectionHeader
-                                            withReuseIdentifier:CELLECTION_HEADER_CELL_ID
-                                            forIndexPath:indexPath];
-        UILabel *sectionTitle = [headerView viewWithTag:SECTION_TITLE_TAG];
-        sectionTitle.text = sectionTitles[indexPath.section];
-        return headerView;
+        if (collectionView.tag == sourceCollection) {
+            UICollectionReusableView *headerView = [collectionView
+                                                dequeueReusableSupplementaryViewOfKind:UICollectionElementKindSectionHeader
+                                                withReuseIdentifier:SELECTION_HEADER_CELL_ID
+                                                forIndexPath:indexPath];
+            UILabel *sectionTitle = [headerView viewWithTag:SECTION_TITLE_TAG];
+            sectionTitle.text = sectionTitles[indexPath.section];
+            return headerView;
+        } else {
+            return nil;
+        }
     } else {
         NSLog(@"** inconceivable: unexpected collection section type: %@, indexPath %ld,%ld", kind,
               (long)indexPath.section,
@@ -1776,76 +1856,102 @@ static NSString * const sectionTitles[] = {
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView
      numberOfItemsInSection:(NSInteger)section {
-    switch (section) {
-        case 0:
-            return NCAMERA;
-        case 1:
-            return inputSources.count - NCAMERA;
-        case 2:
-            return 0;
+    if (collectionView.tag == sourceCollection) {
+        switch (section) {
+            case 0:
+                return NCAMERA;
+            case 1:
+                return inputSources.count - NCAMERA;
+            case 2:
+                return 0;
+        }
+        return inputSources.count;
+    } else {
+        return transforms.flatTransformList.count;
     }
-    return inputSources.count;
 }
 
 - (CGSize)collectionView:(UICollectionView *)collectionView
                   layout:(UICollectionViewLayout*)collectionViewLayout
   sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
+    if (collectionView.tag == sourceCollection) {
+        return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
+    } else {
+        return CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);  // XXXXX this needs to vary?
+    }
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
                   cellForItemAtIndexPath:(NSIndexPath *)indexPath {
-    UICollectionViewCell *cell=[collectionView
-                                dequeueReusableCellWithReuseIdentifier:CELLECTION_CELL_ID
-                                forIndexPath:indexPath];
-    assert(cell);
-    CGRect f = cell.contentView.frame;
-    UIView *cellView = [[UIView alloc] initWithFrame:f];
-    [cell.contentView addSubview:cellView];
-    
-    f.size = CGSizeMake(SOURCE_THUMB_W, SOURCE_THUMB_H);
-    UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
-    thumbImageView.layer.borderWidth = 1.0;
-    thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
-    thumbImageView.layer.cornerRadius = 4.0;
-    [cellView addSubview:thumbImageView];
+    if (collectionView.tag == sourceCollection) {
+        UICollectionViewCell *cell=[collectionView
+                                    dequeueReusableCellWithReuseIdentifier:SELECTION_CELL_ID
+                                    forIndexPath:indexPath];
+        assert(cell);
+        CGRect f = cell.contentView.frame;
+        UIView *cellView = [[UIView alloc] initWithFrame:f];
+        [cell.contentView addSubview:cellView];
+        
+        f.size = CGSizeMake(SOURCE_THUMB_W, SOURCE_THUMB_H);
+        UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
+        thumbImageView.layer.borderWidth = 1.0;
+        thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
+        thumbImageView.layer.cornerRadius = 4.0;
+        [cellView addSubview:thumbImageView];
 
-    f.origin.y = BELOW(f);
-    f.size.height = SOURCE_LABEL_H;
-    UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
-    thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    thumbLabel.numberOfLines = 0;
-    thumbLabel.adjustsFontSizeToFitWidth = YES;
-    thumbLabel.textAlignment = NSTextAlignmentCenter;
-    thumbLabel.font = [UIFont
-                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
-    thumbLabel.textColor = [UIColor blackColor];
-    thumbLabel.backgroundColor = [UIColor whiteColor];
-    [cellView addSubview:thumbLabel];
-    
-    InputSource *source = [self sourceForIndexPath:indexPath];
-    switch (source.sourceType) {
-        case FrontCamera:
-        case Front3DCamera:
-        case RearCamera:
-        case Rear3DCamera:
-            thumbLabel.text = [InputSource cameraNameFor:source.sourceType];
-            if (![cameraController isCameraAvailable:source.sourceType]) {
-                thumbLabel.textColor = [UIColor grayColor];
-                cell.userInteractionEnabled = NO;
+        f.origin.y = BELOW(f);
+        f.size.height = SOURCE_LABEL_H;
+        UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
+        thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        thumbLabel.numberOfLines = 0;
+        thumbLabel.adjustsFontSizeToFitWidth = YES;
+        thumbLabel.textAlignment = NSTextAlignmentCenter;
+        thumbLabel.font = [UIFont
+                           systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
+        thumbLabel.textColor = [UIColor blackColor];
+        thumbLabel.backgroundColor = [UIColor whiteColor];
+        [cellView addSubview:thumbLabel];
+        
+        InputSource *source = [self sourceForIndexPath:indexPath];
+        switch (source.sourceType) {
+            case FrontCamera:
+            case Front3DCamera:
+            case RearCamera:
+            case Rear3DCamera:
+                thumbLabel.text = [InputSource cameraNameFor:source.sourceType];
+                if (![cameraController isCameraAvailable:source.sourceType]) {
+                    thumbLabel.textColor = [UIColor grayColor];
+                    cell.userInteractionEnabled = NO;
+                }
+                break;
+            default: {
+                thumbLabel.text = source.label;
+                UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
+                thumbImageView.image = [self fitImage:sourceImage
+                                               toSize:thumbImageView.frame.size
+                                             centered:YES];
+                break;
             }
-            break;
-        default: {
-            thumbLabel.text = source.label;
-            UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
-            thumbImageView.image = [self fitImage:sourceImage
-                                           toSize:thumbImageView.frame.size
-                                         centered:YES];
-            break;
         }
-    }
 
-    return cell;
+        return cell;
+    } else {
+        UICollectionViewCell *cell=[collectionView
+                                    dequeueReusableCellWithReuseIdentifier:TRANSFORM_CELL_ID
+                                    forIndexPath:indexPath];
+        assert(cell);
+        
+        Transform *transform = [transforms.flatTransformList objectAtIndex:indexPath.row];
+        UILabel *transformLabel = [[UILabel alloc] initWithFrame:cell.contentView.frame];
+        transformLabel.textAlignment = NSTextAlignmentCenter;
+        transformLabel.text = transform.name;
+        transformLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+        transformLabel.adjustsFontSizeToFitWidth = YES;
+        transformLabel.numberOfLines = 0;
+        transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        [cell.contentView addSubview:transformLabel];
+        return cell;
+    }
 }
 
 - (InputSource *) sourceForIndexPath:(NSIndexPath *)indexPath {
@@ -1866,10 +1972,22 @@ static NSString * const sectionTitles[] = {
 
 - (void)collectionView:(UICollectionView *)collectionView
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
-    nextSource = [self sourceForIndexPath:indexPath];
-    [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
-    NSLog(@"    ***** collectionView setneedslayout");
-    [self.view setNeedsLayout];
+    if (collectionView.tag == sourceCollection) {
+        nextSource = [self sourceForIndexPath:indexPath];
+        [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
+        NSLog(@"    ***** collectionView setneedslayout");
+        [self.view setNeedsLayout];
+    } else {
+        @synchronized (transforms.sequence) {
+            [transforms.sequence removeAllObjects];
+            transforms.sequenceChanged = YES;
+        }
+        Transform *transform = [transforms.flatTransformList objectAtIndex:indexPath.row];
+        [self addTransform:transform];
+        UICollectionViewCell *cell = [collectionView cellForItemAtIndexPath:indexPath];
+        cell.selected = YES;
+        [cell setNeedsDisplay];
+    }
 }
 
 - (IBAction) dismissSourceVC:(UIBarButtonItem *)sender {
