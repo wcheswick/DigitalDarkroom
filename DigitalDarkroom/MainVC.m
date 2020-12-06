@@ -23,6 +23,7 @@
 
 #define CURRENT_VALUE_LABEL_TAG 1
 #define TRANSFORM_BASE_TAG  100
+#define TRANSFORM_LABEL_TAG 99
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -49,6 +50,9 @@
 //#define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
+
+#define OLIVE_W     TRANS_CELL_W
+#define OLIVE_H     TRANS_CELL_H
 
 #define SECTION_HEADER_ARROW_W  55
 
@@ -112,9 +116,7 @@ static NSString * const uiNames[] = {
 // in available VC
 @property (nonatomic, strong)   UITableViewController *availableTableVC;
 
-// Olive's collection of everything
-@property (nonatomic, strong)   UICollectionViewController *collectionVC;
-
+@property (nonatomic, strong)   UIView *oliveArrayView;
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
 
@@ -155,6 +157,9 @@ static NSString * const uiNames[] = {
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelection;
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
+@property (nonatomic, strong)   UIScrollView *oliveScrollView;
+
+@property (nonatomic, strong)   UIView *oliveSelectedView;
 
 @end
 
@@ -169,7 +174,7 @@ static NSString * const uiNames[] = {
 
 @synthesize executeTableVC;
 @synthesize availableTableVC;
-@synthesize collectionVC;
+@synthesize oliveArrayView;
 
 @synthesize currentCameraButton;
 
@@ -199,6 +204,8 @@ static NSString * const uiNames[] = {
 @synthesize fullImage;
 @synthesize sourceSelection;
 @synthesize uiSelection;
+@synthesize oliveScrollView;
+@synthesize oliveSelectedView;
 
 - (id) init {
     self = [super init];
@@ -209,8 +216,10 @@ static NSString * const uiNames[] = {
         transformTotalElapsed = 0;
         transformCount = 0;
         depthImage = nil;
+        oliveScrollView = nil;
         depthTransformIndex = NO_DEPTH_TRANSFORM;
         busy = NO;
+        oliveSelectedView = nil;
         
         inputSources = [[NSMutableArray alloc] init];
 
@@ -409,11 +418,6 @@ static NSString * const uiNames[] = {
     
     NSLog(@" ========= viewDidLoad =========");
     self.title = @"Digital Darkroom";
-    
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
-    self.navigationController.toolbarHidden = NO;
-    self.navigationController.toolbar.opaque = (uiMode == oliveUI);
 
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
@@ -511,17 +515,8 @@ static NSString * const uiNames[] = {
                              saveButton, nil];
     self.toolbarItems = toolBarItems;
 
-    UIColor *navyBlue = NAVY_BLUE;
-    
-    CGRect f = self.view.frame;
-    if (uiMode == oliveUI) {    // adjust the container to assume we always have bars
-        UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
-        CGFloat height = manager.statusBarFrame.size.height;
-        f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
-        f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
-    }
-    containerView = [[UIView alloc] initWithFrame:f];
-    containerView.backgroundColor = navyBlue;
+    containerView = [[UIView alloc] init];
+    containerView.backgroundColor = [UIColor whiteColor];
     [self.view addSubview:containerView];
     
     // touching the transformView toggles nav and tool bars
@@ -532,7 +527,7 @@ static NSString * const uiNames[] = {
 
     transformView = [[UIImageView alloc] init];
     transformView.userInteractionEnabled = YES;
-    transformView.backgroundColor = navyBlue;
+    transformView.backgroundColor = NAVY_BLUE;
     [containerView addSubview:transformView];
 
     // We have two different basic UIs at the moment, as I try to figure all this out
@@ -612,35 +607,9 @@ static NSString * const uiNames[] = {
             break;
         }
         case oliveUI:{
-            collectionVC = [[UICollectionViewController alloc] init];
-
-#define TRANSFORM_CELL_ID  @"transformCell"
-#define TRANSFORM_HEADER_CELL_ID  @"transformHeaderCell"
-
-            UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
-            flowLayout.sectionInset = UIEdgeInsetsMake(2*TRANS_INSET, 2*TRANS_INSET, TRANS_INSET, 2*TRANS_INSET);
-            flowLayout.itemSize = CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);
-            flowLayout.scrollDirection = UICollectionViewScrollDirectionVertical;
-            //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
-            //flowLayout.minimumInteritemSpacing = 16;
-            //flowLayout.minimumLineSpacing = 16;
-            flowLayout.headerReferenceSize = CGSizeMake(0, COLLECTION_HEADER_H);
-
-            UICollectionView *collectionView = [[UICollectionView alloc]
-                                                initWithFrame:containerView.frame   // adjust later
-                                                collectionViewLayout:flowLayout];
-            collectionView.dataSource = self;
-            collectionView.delegate = self;
-            collectionView.tag = transformCollection;
-            collectionView.allowsMultipleSelection = NO;
-            [collectionView registerClass:[UICollectionViewCell class]
-               forCellWithReuseIdentifier:TRANSFORM_CELL_ID];
-            collectionView.backgroundColor = [UIColor whiteColor];
-            collectionVC.view = collectionView;
-            [collectionView registerClass:[CollectionHeaderView class]
-                    forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
-                           withReuseIdentifier:TRANSFORM_HEADER_CELL_ID];
-            [containerView addSubview:collectionView];
+            oliveScrollView = [[UIScrollView alloc] init];
+            [containerView addSubview:oliveScrollView];
+            [containerView bringSubviewToFront:transformView];
             break;
         }
     }
@@ -651,7 +620,7 @@ static NSString * const uiNames[] = {
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
-//    NSLog(@"-------- viewwillappear --------");
+    //    NSLog(@"-------- viewwillappear --------");
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
@@ -705,6 +674,11 @@ static NSString * const uiNames[] = {
 - (void) doLayout:(CGSize) newSize {
     NSLog(@"********************** doLayout ********************");
     
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
+    self.navigationController.toolbarHidden = NO;
+    self.navigationController.toolbar.opaque = (uiMode == oliveUI);
+
     // set up new source, if needed
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
@@ -731,6 +705,15 @@ static NSString * const uiNames[] = {
     UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
     BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);
     NSLog(@" **** device view frame:  %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
+    
+    CGRect f = self.view.frame;
+    if (uiMode == oliveUI) {    // adjust the container to assume we always have bars
+        UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
+        CGFloat height = manager.statusBarFrame.size.height;
+        f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
+        f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
+    }
+    containerView.frame = f;
 
     // the image display starts on the upper left of the screen.  Its width
     // depends on device and orientation, and its height depends on the aspect
@@ -789,7 +772,6 @@ static NSString * const uiNames[] = {
     float yScale = displaySize.height / processingSize.height;
     transforms.finalScale = MIN(xScale, yScale);
     
-    CGRect f;
     f.origin = CGPointZero;
     f.size = CGSizeMake(round(processingSize.width * transforms.finalScale),
                         round(processingSize.height * transforms.finalScale));
@@ -876,19 +858,32 @@ static NSString * const uiNames[] = {
             [availableNavVC.view setNeedsLayout];
             break;
         case oliveUI: {
-            // the transform collection uses the entire screen, but the zeroth entry is space
-            // for the transform view, which obscures the collection underneath.
             CGRect f = containerView.frame;
             f.origin = CGPointZero;
-            collectionVC.view.frame = f;
-            [containerView bringSubviewToFront:transformView];
+            oliveScrollView.frame = f;
+            [containerView addSubview:oliveScrollView];
+            
+            oliveArrayView = [[UIView alloc] initWithFrame:oliveScrollView.frame];
+            [self fillOliveView: oliveArrayView];   // This will adjust its frame size
+            
+            oliveScrollView.contentSize = oliveArrayView.frame.size;
+            oliveScrollView.contentOffset = oliveArrayView.frame.origin;
+            oliveScrollView.pagingEnabled = NO;
+            oliveScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+            oliveScrollView.showsVerticalScrollIndicator = YES;
+            oliveScrollView.userInteractionEnabled = YES;
+            oliveScrollView.exclusiveTouch = NO;
+            oliveScrollView.bounces = NO;
+            oliveScrollView.delaysContentTouches = YES;
+            oliveScrollView.canCancelContentTouches = YES;
+            [oliveScrollView addSubview:oliveArrayView];
             break;
         }
         default:
             NSLog(@"*** inconceivable, unknown UI mode: %d", uiMode);
             return;
     }
-
+    
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     if (ISCAMERA(currentSource.sourceType)) {
@@ -897,6 +892,92 @@ static NSString * const uiNames[] = {
         [self transformCurrentImage];
     }
     [self adjustButtons];
+}
+
+- (void) fillOliveView:(UIView *)oliveSelectionPanel {
+    CGRect f;
+    CGFloat videoRightX = RIGHT(transformView.frame) + SEP;
+    CGFloat frameH = 0;
+    
+    f.origin = CGPointMake(videoRightX, SEP);
+    f.size = CGSizeMake(OLIVE_W, OLIVE_H);
+    for (size_t i=0; i<transforms.flatTransformList.count; i++) {
+        UIView *v = [[UIView alloc] initWithFrame:f];
+        frameH = BELOW(v.frame) + SEP;
+        v.layer.cornerRadius = 5.0;
+        
+        Transform *transform = [transforms.flatTransformList objectAtIndex:i];
+        UILabel *transformLabel = [[UILabel alloc]
+                                   initWithFrame:CGRectMake(0, 0, OLIVE_W, OLIVE_H)];
+        transformLabel.textAlignment = NSTextAlignmentCenter;
+        transformLabel.text = transform.name;
+        transformLabel.adjustsFontSizeToFitWidth = YES;
+        transformLabel.numberOfLines = 0;
+        transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        transformLabel.tag = TRANSFORM_LABEL_TAG;
+        [v addSubview:transformLabel];
+        
+        UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
+                                         initWithTarget:self action:@selector(didTapOlive:)];
+        [touch setNumberOfTouchesRequired:1];
+        [v addGestureRecognizer:touch];
+
+        v.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+        [oliveSelectionPanel addSubview:v];
+        [self adjustOliveSelected:v yes:NO];
+        
+        // where does the next one go?
+        CGFloat nextX = RIGHT(v.frame) + SEP;
+        if (nextX + OLIVE_W <= containerView.frame.size.width) {   // fits in the current row
+            f.origin.x = nextX;
+        } else {    // on to next row
+            f.origin.y += OLIVE_W + SEP;
+            if (f.origin.y >= transformView.frame.size.height + SEP) {
+                // below the video, go to far left
+                f.origin.x = SEP;
+            } else {    // next row still to the right of the video
+                f.origin.x = videoRightX;
+            }
+        }
+    }
+    f = oliveSelectionPanel.frame;
+    f.size.height = frameH;
+    oliveSelectionPanel.frame = f;
+}
+
+- (void) adjustOliveSelected:(UIView *)v yes:(BOOL)on {
+    UILabel *l = [v viewWithTag:TRANSFORM_LABEL_TAG];
+    assert(l);
+    if (on) {
+        l.font = [UIFont boldSystemFontOfSize:STATS_FONT_SIZE];
+        v.layer.borderWidth = 5.0;
+        oliveSelectedView = v;
+    } else {
+        l.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+        oliveSelectedView = nil;
+        v.layer.borderWidth = 1.0;
+    }
+    [l setNeedsDisplay];
+}
+
+- (IBAction) didTapOlive:(UITapGestureRecognizer *)recognizer {
+    @synchronized (transforms.sequence) {
+        [transforms.sequence removeAllObjects];
+        transforms.sequenceChanged = YES;
+    }
+    UIView *v = [recognizer view];
+    if (v == oliveSelectedView) {   // just turn off current one
+        [self adjustOliveSelected:oliveSelectedView yes:NO];
+        oliveSelectedView = nil;
+        return;
+    }
+    if (oliveSelectedView)
+        [self adjustOliveSelected:oliveSelectedView yes:NO];
+
+    oliveSelectedView = v;
+    size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
+    Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
+    [self addTransform:transform];
 }
 
 - (void) displayValueSlider: (int) executeIndex {
@@ -1785,6 +1866,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 
 - (IBAction) selectUI:(UISegmentedControl *)sender {
     uiMode = (UIMode_t)sender.selectedSegmentIndex;
+    for (UIView *subView in [containerView subviews])
+        [subView removeFromSuperview];  // clear the slate
     [self.view setNeedsLayout];
     [self saveUIMode];
 }
@@ -1895,59 +1978,57 @@ static NSString * const sourceSectionTitles[] = {
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
                   cellForItemAtIndexPath:(NSIndexPath *)indexPath {
-    if (collectionView.tag == sourceCollection) {
-        UICollectionViewCell *cell=[collectionView
-                                    dequeueReusableCellWithReuseIdentifier:SELECTION_CELL_ID
-                                    forIndexPath:indexPath];
-        assert(cell);
-        CGRect f = cell.contentView.frame;
-        UIView *cellView = [[UIView alloc] initWithFrame:f];
-        [cell.contentView addSubview:cellView];
-        
-        f.size = CGSizeMake(SOURCE_THUMB_W, SOURCE_THUMB_H);
-        UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
-        thumbImageView.layer.borderWidth = 1.0;
-        thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
-        thumbImageView.layer.cornerRadius = 4.0;
-        [cellView addSubview:thumbImageView];
-
-        f.origin.y = BELOW(f);
-        f.size.height = SOURCE_LABEL_H;
-        UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
-        thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
-        thumbLabel.numberOfLines = 0;
-        thumbLabel.adjustsFontSizeToFitWidth = YES;
-        thumbLabel.textAlignment = NSTextAlignmentCenter;
-        thumbLabel.font = [UIFont
-                           systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
-        thumbLabel.textColor = [UIColor blackColor];
-        thumbLabel.backgroundColor = [UIColor whiteColor];
-        [cellView addSubview:thumbLabel];
-        
-        InputSource *source = [self sourceForIndexPath:indexPath];
-        switch (source.sourceType) {
-            case FrontCamera:
-            case Front3DCamera:
-            case RearCamera:
-            case Rear3DCamera:
-                thumbLabel.text = [InputSource cameraNameFor:source.sourceType];
-                if (![cameraController isCameraAvailable:source.sourceType]) {
-                    thumbLabel.textColor = [UIColor grayColor];
-                    cell.userInteractionEnabled = NO;
-                }
-                break;
-            default: {
-                thumbLabel.text = source.label;
-                UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
-                thumbImageView.image = [self fitImage:sourceImage
-                                               toSize:thumbImageView.frame.size
-                                             centered:YES];
-                break;
+    UICollectionViewCell *cell=[collectionView
+                                dequeueReusableCellWithReuseIdentifier:SELECTION_CELL_ID
+                                forIndexPath:indexPath];
+    assert(cell);
+    CGRect f = cell.contentView.frame;
+    UIView *cellView = [[UIView alloc] initWithFrame:f];
+    [cell.contentView addSubview:cellView];
+    
+    f.size = CGSizeMake(SOURCE_THUMB_W, SOURCE_THUMB_H);
+    UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
+    thumbImageView.layer.borderWidth = 1.0;
+    thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
+    thumbImageView.layer.cornerRadius = 4.0;
+    [cellView addSubview:thumbImageView];
+    
+    f.origin.y = BELOW(f);
+    f.size.height = SOURCE_LABEL_H;
+    UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
+    thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    thumbLabel.numberOfLines = 0;
+    thumbLabel.adjustsFontSizeToFitWidth = YES;
+    thumbLabel.textAlignment = NSTextAlignmentCenter;
+    thumbLabel.font = [UIFont
+                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
+    thumbLabel.textColor = [UIColor blackColor];
+    thumbLabel.backgroundColor = [UIColor whiteColor];
+    [cellView addSubview:thumbLabel];
+    
+    InputSource *source = [self sourceForIndexPath:indexPath];
+    switch (source.sourceType) {
+        case FrontCamera:
+        case Front3DCamera:
+        case RearCamera:
+        case Rear3DCamera:
+            thumbLabel.text = [InputSource cameraNameFor:source.sourceType];
+            if (![cameraController isCameraAvailable:source.sourceType]) {
+                thumbLabel.textColor = [UIColor grayColor];
+                cell.userInteractionEnabled = NO;
             }
+            break;
+        default: {
+            thumbLabel.text = source.label;
+            UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
+            thumbImageView.image = [self fitImage:sourceImage
+                                           toSize:thumbImageView.frame.size
+                                         centered:YES];
+            break;
         }
-
-        return cell;
-    } else {
+    }
+#ifdef NOMORE
+    else {
         UICollectionViewCell *cell = [collectionView
                                     dequeueReusableCellWithReuseIdentifier:TRANSFORM_CELL_ID
                                     forIndexPath:indexPath];
@@ -1974,6 +2055,8 @@ static NSString * const sourceSectionTitles[] = {
         cell.layer.cornerRadius = 5.0;
         return cell;
     }
+#endif
+    return cell;
 }
 
 - (InputSource *) sourceForIndexPath:(NSIndexPath *)indexPath {
