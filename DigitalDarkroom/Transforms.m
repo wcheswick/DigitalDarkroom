@@ -541,6 +541,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }
 }
 
+#define ADD_TO_OLIVE(t)     [flatTransformList addObject:t];
+
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
@@ -575,7 +577,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
-
+    ADD_TO_OLIVE(lastTransform);
+    
     lastTransform = [Transform areaTransform: @"Brownian"
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int wpp) {
@@ -604,6 +607,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
 #ifdef OLD
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
@@ -631,6 +635,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.high = 2;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 #endif
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
@@ -660,6 +665,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Matisse"
                                  description: @"colored Floyd/Steinberg"
@@ -705,6 +711,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     /* timings for oil on digitalis:
      *
@@ -923,6 +930,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
@@ -953,6 +961,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
@@ -968,6 +977,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.high = 200;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Mirror"
                                   description: @"Reflect the image"
@@ -979,7 +989,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Mirror right"
                                  description: @"Reflect the right half of the screen on the left"
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pixsize) {
@@ -993,6 +1004,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
@@ -1011,6 +1023,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Color Sobel"
                                           description: @"Edge detection"
@@ -1042,6 +1055,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Surreal"
                                           description: @"Negative of Sobel filter"
@@ -1073,6 +1087,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
 #ifdef notyet
     extern  transform_t do_fs1;
@@ -1425,7 +1440,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
-
     lastTransform = [Transform areaTransform: @"Negative"
                                  description: @"Negative"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int p) {
@@ -1437,7 +1451,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1452,7 +1467,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Luminance"
                                  description: @"Convert to brightness"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1480,7 +1496,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 #endif
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Colorize"
                                  description: @"Add color"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1493,7 +1510,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Truncate pixels"
                                  description: @"Truncate pixel colors"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1506,7 +1524,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.low = 1; lastTransform.value = 3; lastTransform.high = 7;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Brighten"
                                  description: @"brighten"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1534,7 +1553,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Swap colors"
                                  description: @"r→g, g→b, b→r"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1544,6 +1564,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Auto contrast"
                                  description: @"auto contrast"
@@ -1572,6 +1593,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 }
 
 channel
@@ -1652,7 +1674,8 @@ irand(int i) {
     lastTransform.high = 40;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Old blur"
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
@@ -1678,7 +1701,8 @@ irand(int i) {
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int streak) {
@@ -1709,7 +1733,8 @@ irand(int i) {
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Mean (slow and invisible)"   // area
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int N) {
@@ -1781,17 +1806,20 @@ irand(int i) {
         return SETRGB(p.r,0,0);
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform colorTransform:@"Green channel" description:@"" pointTransform:^Pixel(Pixel p) {
         return SETRGB(0,p.g,0);
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform colorTransform:@"Blue channel" description:@"" pointTransform:^Pixel(Pixel p) {
         return SETRGB(0,0,p.b);
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     // move image
     
 }
@@ -1882,7 +1910,8 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
 #define CPP    20    /*cycles/picture*/
 
     lastTransform = [Transform areaTransform: @"Wavy shower"
@@ -1900,6 +1929,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.high = 30;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Horizontal shift"
                                   description: @""
@@ -1958,6 +1988,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Through a cylinder"
                                   description: @""
@@ -1971,6 +2002,7 @@ void convolution(const Pixel *in, Pixel *out,
             }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Tin Type"
                                  description: @"Edge detection"
@@ -1999,7 +2031,8 @@ void convolution(const Pixel *in, Pixel *out,
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     /*
      * gaussianFilter:
      * http://www.songho.ca/dsp/cannyedge/cannyedge.html
@@ -2053,6 +2086,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.high = 30;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"convolution sobel filter "
                                 description: @"Edge detection"
@@ -2076,7 +2110,8 @@ void convolution(const Pixel *in, Pixel *out,
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Cone projection"
                                  description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
@@ -2094,6 +2129,7 @@ void convolution(const Pixel *in, Pixel *out,
         return PI(x, y);
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Andrew's projection"
                                   description: @""
@@ -2108,7 +2144,8 @@ void convolution(const Pixel *in, Pixel *out,
 #endif
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Fish eye"
                                  description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
@@ -2119,7 +2156,7 @@ void convolution(const Pixel *in, Pixel *out,
         return PI(x,y);
     }];
     [transformList addObject:lastTransform];
-    [flatTransformList addObjectsFromArray:transformList];
+    ADD_TO_OLIVE(lastTransform);
 }
 
 #ifdef notdef
@@ -2504,8 +2541,7 @@ stripe(Pixel *buf, int x, int p0, int p1, int c){
     lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-
-    [flatTransformList addObjectsFromArray:transformList];
+    ADD_TO_OLIVE(lastTransform);
 }
        
 #ifdef notdef
@@ -2683,7 +2719,8 @@ make_block(Pt origin, struct block *b) {
     lastTransform.high = 250;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Edward Much #1"
                                   description: @"twist"
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {
@@ -2696,7 +2733,8 @@ make_block(Pt origin, struct block *b) {
             return Remap_White;
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Edward Munch #2"
                                   description: @"Ken's twist"
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {
@@ -2708,7 +2746,8 @@ make_block(Pt origin, struct block *b) {
             return Remap_White;
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Dali"
                                   description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {
@@ -2725,6 +2764,7 @@ make_block(Pt origin, struct block *b) {
     lastTransform.high = 10*lastTransform.low;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Seurat"
                                  description: @""
@@ -2770,6 +2810,7 @@ make_block(Pt origin, struct block *b) {
     lastTransform.high = 5;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Mondrian"
                                  description: @""
@@ -2797,7 +2838,8 @@ make_block(Pt origin, struct block *b) {
         }
     }];
     [transformList addObject:lastTransform];
-    
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
                                  description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
@@ -2850,6 +2892,7 @@ make_block(Pt origin, struct block *b) {
         }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Warhol"
                                  description: @"cartoon colors"
@@ -2878,6 +2921,7 @@ make_block(Pt origin, struct block *b) {
             }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Picasso"
                                   description: @""
@@ -2916,6 +2960,7 @@ make_block(Pt origin, struct block *b) {
             }
     }];
     [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Monet (broken)"
                                  description: @""
@@ -2969,8 +3014,6 @@ make_block(Pt origin, struct block *b) {
         }
     }];
     [transformList addObject:lastTransform];
-    
-    [flatTransformList addObjectsFromArray:transformList];
 }
 
 #ifdef notdef

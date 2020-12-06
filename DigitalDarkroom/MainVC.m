@@ -22,6 +22,7 @@
 #define VALUE_LIMIT_FONT_SIZE   14
 
 #define CURRENT_VALUE_LABEL_TAG 1
+#define TRANSFORM_BASE_TAG  100
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -44,12 +45,10 @@
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
 
 #define TRANS_INSET 2
-#define TRANS_THUMB_W  50
-#define TRANS_THUMB_H  TRANS_THUMB_W
 #define TRANS_BUTTON_FONT_SIZE 12
 //#define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
-#define TRANS_CELL_W   TRANS_THUMB_H
-#define TRANS_CELL_H   (TRANS_THUMB_H) // + SOURCE_LABEL_H)
+#define TRANS_CELL_W   120
+#define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
 #define SECTION_HEADER_ARROW_W  55
 
@@ -410,11 +409,12 @@ static NSString * const uiNames[] = {
     
     NSLog(@" ========= viewDidLoad =========");
     self.title = @"Digital Darkroom";
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.navigationBar.opaque = NO;
-    self.navigationController.toolbarHidden = NO;
-    self.navigationController.toolbar.opaque = NO;
     
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
+    self.navigationController.toolbarHidden = NO;
+    self.navigationController.toolbar.opaque = (uiMode == oliveUI);
+
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
     for (Cameras c=0; c<NCAMERA; c++) {
@@ -504,7 +504,7 @@ static NSString * const uiNames[] = {
                              flexibleSpace,
                              sliderBarButton,
                              flexibleSpace,
-                            trashButton,
+                             trashButton,
                              fixedSpace,
                              undoButton,
                              fixedSpace,
@@ -513,7 +513,14 @@ static NSString * const uiNames[] = {
 
     UIColor *navyBlue = NAVY_BLUE;
     
-    containerView = [[UIView alloc] initWithFrame:self.view.frame];
+    CGRect f = self.view.frame;
+    if (uiMode == oliveUI) {    // adjust the container to assume we always have bars
+        UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
+        CGFloat height = manager.statusBarFrame.size.height;
+        f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
+        f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
+    }
+    containerView = [[UIView alloc] initWithFrame:f];
     containerView.backgroundColor = navyBlue;
     [self.view addSubview:containerView];
     
@@ -613,7 +620,7 @@ static NSString * const uiNames[] = {
             UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
             flowLayout.sectionInset = UIEdgeInsetsMake(2*TRANS_INSET, 2*TRANS_INSET, TRANS_INSET, 2*TRANS_INSET);
             flowLayout.itemSize = CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);
-            flowLayout.scrollDirection = UICollectionViewScrollDirectionHorizontal;
+            flowLayout.scrollDirection = UICollectionViewScrollDirectionVertical;
             //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
             //flowLayout.minimumInteritemSpacing = 16;
             //flowLayout.minimumLineSpacing = 16;
@@ -647,7 +654,8 @@ static NSString * const uiNames[] = {
 //    NSLog(@"-------- viewwillappear --------");
 }
 
-- (void) viewWillTransitionToSize:(CGSize)newSize withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+- (void) viewWillTransitionToSize:(CGSize)newSize
+        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
     [self doLayout: newSize];
 }
@@ -719,11 +727,6 @@ static NSString * const uiNames[] = {
     } else
         [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
 
-    CGRect f = self.view.frame;
-    f.origin = CGPointZero;
-    f.size = newSize;
-    containerView.frame = f;
-
     imageOrientation = [self imageOrientationForDeviceOrientation];
     UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
     BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);
@@ -733,29 +736,33 @@ static NSString * const uiNames[] = {
     // depends on device and orientation, and its height depends on the aspect
     // ratio of the source.
     // how we set these sizes depends on the "fullImage" flag, which insists that
-    // we gather and process the largest image we can.
+    // we gather and process the largest image we can. Also, for oliveUI, the
+    // displayed image must never take up more the half the height or width.
     
     CGSize processingSize;
     CGSize displaySize;
     
-    displaySize.width = containerView.frame.size.width;
-    if (isPortrait) {
-        displaySize.width = containerView.frame.size.width;
-        displaySize.height = containerView.frame.size.height -
-            MIN_ACTIVE_TABLE_H - MIN_TRANSFORM_TABLE_H - 2*SEP;
-    } else {
-        displaySize.width -= TRANSFORM_LIST_W;
-        displaySize.height = containerView.frame.size.height;   // maximum display window height
+    switch (uiMode) {
+        case exhibitUI:     // position the two tables.
+            displaySize.width = containerView.frame.size.width;
+            if (isPortrait) {
+                displaySize.width = containerView.frame.size.width;
+                displaySize.height = containerView.frame.size.height -
+                    MIN_ACTIVE_TABLE_H - MIN_TRANSFORM_TABLE_H - 2*SEP;
+            } else {
+                displaySize.width -= TRANSFORM_LIST_W;
+                displaySize.height = containerView.frame.size.height;   // maximum display window height
+            }
+            break;
+        case oliveUI:
+            displaySize = CGSizeMake(containerView.frame.size.width/2.0, containerView.frame.size.height/2.0);
+            break;
     }
-  
-    f.origin = CGPointZero;
-    f.size = displaySize;
-    transformView.frame = f;
     
     // the image size we are processing gives the display size.
     if (ISCAMERA(currentSource.sourceType)) {
         CGSize targetSize;
-        if (fullImage)
+        if (fullImage)  // not implemented at the moment
             targetSize = CGSizeZero;    // obtain maximum available camera size
         else
             targetSize = displaySize;   // we will learn what fits in the given width
@@ -775,16 +782,25 @@ static NSString * const uiNames[] = {
    
     // We now know the size at the end of transforming.  This needs to fit into displaySize,
     // with appropriate positioning.  The display area may have its height reduced.
+    // For oliveUI, don't allow slop: we will use that for the transform collective.
     // XXX this code can be simpler.
     
     float xScale = displaySize.width / processingSize.width;;
     float yScale = displaySize.height / processingSize.height;
     transforms.finalScale = MIN(xScale, yScale);
-    f.size = CGSizeMake(processingSize.width * transforms.finalScale, processingSize.height * transforms.finalScale);
-    if (xScale > yScale) // center the image
-        f.origin = CGPointMake((displaySize.width - f.size.width)/2.0, 0);
-    else
-        f.origin = CGPointZero;
+    
+    CGRect f;
+    f.origin = CGPointZero;
+    f.size = CGSizeMake(round(processingSize.width * transforms.finalScale),
+                        round(processingSize.height * transforms.finalScale));
+    switch (uiMode) {
+        case exhibitUI:
+            if (xScale > yScale) // center the image
+                f.origin.x = displaySize.width - f.size.width;
+            break;
+        case oliveUI:
+            break;
+    }
     transformView.frame = f;
 
     switch (uiMode) {
@@ -860,15 +876,12 @@ static NSString * const uiNames[] = {
             [availableNavVC.view setNeedsLayout];
             break;
         case oliveUI: {
+            // the transform collection uses the entire screen, but the zeroth entry is space
+            // for the transform view, which obscures the collection underneath.
             CGRect f = containerView.frame;
-            f.origin.y = BELOW(transformView.frame) + SEP;
-            f.size.height -= f.origin.y;
-            collectionVC.view.frame = f;
-            
-            
-            // how wide is the full collection view?
             f.origin = CGPointZero;
-            
+            collectionVC.view.frame = f;
+            [containerView bringSubviewToFront:transformView];
             break;
         }
         default:
@@ -1508,6 +1521,7 @@ canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
                                       reuseIdentifier:CellIdentifier];
     }
+    assert(cell);
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
     
     Transform *transform;
@@ -1825,34 +1839,29 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         return 1;
 }
 
-static NSString * const sectionTitles[] = {
+static NSString * const sourceSectionTitles[] = {
     [0] = @"    Cameras",
     [1] = @"    Samples",
     [2] = @"    From library",
 };
 
+#ifdef BROKEN
 - (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView
            viewForSupplementaryElementOfKind:(NSString *)kind
                                  atIndexPath:(NSIndexPath *)indexPath {
-    if ([kind isEqual:UICollectionElementKindSectionHeader]) {
-        if (collectionView.tag == sourceCollection) {
-            UICollectionReusableView *headerView = [collectionView
-                                                dequeueReusableSupplementaryViewOfKind:UICollectionElementKindSectionHeader
-                                                withReuseIdentifier:SELECTION_HEADER_CELL_ID
-                                                forIndexPath:indexPath];
-            UILabel *sectionTitle = [headerView viewWithTag:SECTION_TITLE_TAG];
-            sectionTitle.text = sectionTitles[indexPath.section];
-            return headerView;
-        } else {
-            return nil;
-        }
-    } else {
-        NSLog(@"** inconceivable: unexpected collection section type: %@, indexPath %ld,%ld", kind,
-              (long)indexPath.section,
-              (long)indexPath.row);
-        return nil;
+    assert([kind isEqual:UICollectionElementKindSectionHeader]);
+    UICollectionReusableView *headerView = [collectionView
+                                            dequeueReusableSupplementaryViewOfKind:UICollectionElementKindSectionHeader
+                                            withReuseIdentifier:SELECTION_HEADER_CELL_ID
+                                            forIndexPath:indexPath];
+    assert(headerView);
+    if (collectionView.tag == sourceCollection) {
+        UILabel *sectionTitle = [headerView viewWithTag:SECTION_TITLE_TAG];
+        sectionTitle.text = sourceSectionTitles[indexPath.section];
     }
+    return headerView;
 }
+#endif
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView
      numberOfItemsInSection:(NSInteger)section {
@@ -1877,7 +1886,10 @@ static NSString * const sectionTitles[] = {
     if (collectionView.tag == sourceCollection) {
         return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
     } else {
-        return CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);  // XXXXX this needs to vary?
+        if (indexPath.row == 0) // entry zero is overlaid by the transform view
+            return transformView.frame.size;
+        else
+            return CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);  // XXXXX this needs to vary?
     }
 }
 
@@ -1936,13 +1948,17 @@ static NSString * const sectionTitles[] = {
 
         return cell;
     } else {
-        UICollectionViewCell *cell=[collectionView
+        UICollectionViewCell *cell = [collectionView
                                     dequeueReusableCellWithReuseIdentifier:TRANSFORM_CELL_ID
                                     forIndexPath:indexPath];
         assert(cell);
         
-        Transform *transform = [transforms.flatTransformList objectAtIndex:indexPath.row];
-        UILabel *transformLabel = [[UILabel alloc] initWithFrame:cell.contentView.frame];
+        if (indexPath.row == 0) {   // cell overlaid by transform view, nothing to show
+            return cell;
+        }
+        size_t flatTransformIndex = indexPath.row - 1;
+        Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
+        UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectInset(cell.contentView.frame, 3, 2)];
         transformLabel.textAlignment = NSTextAlignmentCenter;
         transformLabel.text = transform.name;
         transformLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
@@ -1950,6 +1966,12 @@ static NSString * const sectionTitles[] = {
         transformLabel.numberOfLines = 0;
         transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
         [cell.contentView addSubview:transformLabel];
+        
+        if (cell.selected)
+            cell.layer.borderWidth = 5.0;
+        else
+            cell.layer.borderWidth = 1.0;
+        cell.layer.cornerRadius = 5.0;
         return cell;
     }
 }
@@ -1977,12 +1999,14 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
         NSLog(@"    ***** collectionView setneedslayout");
         [self.view setNeedsLayout];
-    } else {
+    } else {    // transform selection
         @synchronized (transforms.sequence) {
             [transforms.sequence removeAllObjects];
             transforms.sequenceChanged = YES;
         }
-        Transform *transform = [transforms.flatTransformList objectAtIndex:indexPath.row];
+        assert(indexPath.row > 0);  // entry zero should always be obscured
+        size_t flatTransformIndex = indexPath.row - 1;
+        Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
         [self addTransform:transform];
         UICollectionViewCell *cell = [collectionView cellForItemAtIndexPath:indexPath];
         cell.selected = YES;
