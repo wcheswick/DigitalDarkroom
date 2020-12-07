@@ -21,9 +21,10 @@
 #define VALUE_FONT_SIZE 22
 #define VALUE_LIMIT_FONT_SIZE   14
 
-#define CURRENT_VALUE_LABEL_TAG 1
-#define TRANSFORM_BASE_TAG  100
-#define TRANSFORM_LABEL_TAG 99
+#define CURRENT_VALUE_LABEL_TAG     1
+#define TRANSFORM_BASE_TAG          100
+#define TRANSFORM_LABEL_TAG         98
+#define TRANSFORM_ICON_IMAGE_TAG    99
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -51,8 +52,9 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define OLIVE_W     TRANS_CELL_W
-#define OLIVE_H     TRANS_CELL_H
+#define OLIVE_W     120
+#define OLIVE_FONT_SIZE 12
+#define OLIVE_LABEL_H   (2*OLIVE_FONT_SIZE + SEP)
 
 #define SECTION_HEADER_ARROW_W  55
 
@@ -160,6 +162,7 @@ static NSString * const uiNames[] = {
 @property (nonatomic, strong)   UIScrollView *oliveScrollView;
 
 @property (nonatomic, strong)   UIView *oliveSelectedView;
+@property (assign)              BOOL oliveUpdateNeeded;
 
 @end
 
@@ -206,6 +209,7 @@ static NSString * const uiNames[] = {
 @synthesize uiSelection;
 @synthesize oliveScrollView;
 @synthesize oliveSelectedView;
+@synthesize oliveUpdateNeeded;
 
 - (id) init {
     self = [super init];
@@ -220,6 +224,7 @@ static NSString * const uiNames[] = {
         depthTransformIndex = NO_DEPTH_TRANSFORM;
         busy = NO;
         oliveSelectedView = nil;
+        oliveUpdateNeeded = NO;
         
         inputSources = [[NSMutableArray alloc] init];
 
@@ -609,7 +614,6 @@ static NSString * const uiNames[] = {
         case oliveUI:{
             oliveScrollView = [[UIScrollView alloc] init];
             [containerView addSubview:oliveScrollView];
-            [containerView bringSubviewToFront:transformView];
             break;
         }
     }
@@ -785,6 +789,9 @@ static NSString * const uiNames[] = {
     }
     transformView.frame = f;
 
+    [self updateOlivesTo:nil];
+    oliveUpdateNeeded = YES;
+    
     switch (uiMode) {
         case exhibitUI:     // position the two tables.
 #define EXEC_FRAC   (0.3)
@@ -877,6 +884,8 @@ static NSString * const uiNames[] = {
             oliveScrollView.delaysContentTouches = YES;
             oliveScrollView.canCancelContentTouches = YES;
             [oliveScrollView addSubview:oliveArrayView];
+            
+            [containerView bringSubviewToFront:transformView];
             break;
         }
         default:
@@ -895,20 +904,36 @@ static NSString * const uiNames[] = {
 }
 
 - (void) fillOliveView:(UIView *)oliveSelectionPanel {
-    CGRect f;
-    CGFloat videoRightX = RIGHT(transformView.frame) + SEP;
     CGFloat frameH = 0;
     
+    CGRect imageRect = CGRectZero;
+    imageRect.size.width = OLIVE_W;
+    float aspectRatio = transformView.frame.size.width/transformView.frame.size.height;
+    imageRect.size.height = round(imageRect.size.width / aspectRatio);
+    
+    CGRect f;   // compute position and size of first entry
+    CGFloat videoRightX = RIGHT(transformView.frame) + SEP;
     f.origin = CGPointMake(videoRightX, SEP);
-    f.size = CGSizeMake(OLIVE_W, OLIVE_H);
+    f.size.width = imageRect.size.width;
+    f.size.height = imageRect.size.height + OLIVE_LABEL_H;
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
         UIView *v = [[UIView alloc] initWithFrame:f];
         frameH = BELOW(v.frame) + SEP;
         v.layer.cornerRadius = 5.0;
         
+        UIImageView *image = [[UIImageView alloc] initWithFrame:imageRect];
+        image.frame = imageRect;
+        image.backgroundColor = [UIColor whiteColor];
+        image.contentMode = UIViewContentModeScaleAspectFit;
+        image.opaque = YES;
+        image.tag = TRANSFORM_ICON_IMAGE_TAG;
+        [v addSubview:image];   // empty placeholder at the moment
+        
         Transform *transform = [transforms.flatTransformList objectAtIndex:i];
+        
         UILabel *transformLabel = [[UILabel alloc]
-                                   initWithFrame:CGRectMake(0, 0, OLIVE_W, OLIVE_H)];
+                                   initWithFrame:CGRectMake(0, f.size.height - OLIVE_LABEL_H,
+                                                            OLIVE_W, OLIVE_LABEL_H)];
         transformLabel.textAlignment = NSTextAlignmentCenter;
         transformLabel.text = transform.name;
         transformLabel.adjustsFontSizeToFitWidth = YES;
@@ -931,7 +956,7 @@ static NSString * const uiNames[] = {
         if (nextX + OLIVE_W <= containerView.frame.size.width) {   // fits in the current row
             f.origin.x = nextX;
         } else {    // on to next row
-            f.origin.y += OLIVE_W + SEP;
+            f.origin.y += f.size.height + SEP;
             if (f.origin.y >= transformView.frame.size.height + SEP) {
                 // below the video, go to far left
                 f.origin.x = SEP;
@@ -943,6 +968,25 @@ static NSString * const uiNames[] = {
     f = oliveSelectionPanel.frame;
     f.size.height = frameH;
     oliveSelectionPanel.frame = f;
+}
+
+- (void) updateOlivesTo:(UIImage *) newImage {
+    for (size_t i=0; i<transforms.flatTransformList.count; i++) {
+        [self updateOliveImage:i to:newImage];
+    }
+}
+
+- (void) updateOliveImage:(size_t) index to:(UIImage *)newImage {
+    if (!oliveArrayView)
+        return;
+    UIImageView *v = [oliveArrayView viewWithTag:index + TRANSFORM_BASE_TAG];
+    if (!v) {
+        NSLog(@"olive view not found: %zu", index);
+        return;
+    }
+    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
+    assert(iv);
+    [iv setImage:newImage];
 }
 
 - (void) adjustOliveSelected:(UIView *)v yes:(BOOL)on {
@@ -1293,8 +1337,9 @@ if captureDevice.position == AVCaptureDevicePosition.back {
 
 #endif
 
-- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output didOutputDepthData:(AVDepthData *)depthData
-        timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
+- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
+didOutputDepthData:(AVDepthData *)depthData
+timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     if (!capturing)
         return;
     depthCount++;
@@ -1305,8 +1350,11 @@ if captureDevice.position == AVCaptureDevicePosition.back {
     busy = YES;
     
     UIImage *processedDepthImage = [self imageFromDepthDataBuffer:depthData
-                                                orientation:imageOrientation];
+                                                      orientation:imageOrientation];
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->oliveUpdateNeeded) { // we have one now
+            [self updateOlivesTo:processedDepthImage];
+        }
         [self updateThumb:processedDepthImage];
         [self doTransformsOn:processedDepthImage];
         self->busy = NO;
@@ -1418,8 +1466,10 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     busy = YES;
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer
                                              orientation:imageOrientation];
-    
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->oliveUpdateNeeded) { // we have one now
+            [self updateOlivesTo:capturedImage];
+        }
         [self updateThumb:capturedImage];
         [self doTransformsOn:capturedImage];
         self->busy = NO;
