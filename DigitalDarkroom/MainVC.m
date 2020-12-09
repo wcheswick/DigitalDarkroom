@@ -52,9 +52,9 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define OLIVE_W     120
-#define OLIVE_FONT_SIZE 12
-#define OLIVE_LABEL_H   (2*OLIVE_FONT_SIZE + SEP)
+#define OLIVE_W     100
+#define OLIVE_FONT_SIZE 18
+// #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 
 #define SECTION_HEADER_ARROW_W  55
 
@@ -94,11 +94,6 @@ typedef enum {
     sourceCollection,
     transformCollection
 } CollectionTags;
-
-static NSString * const uiNames[] = {
-    @"Exhibit",
-    @"Olive",
-};
 
 @interface MainVC ()
 
@@ -252,14 +247,18 @@ static NSString * const uiNames[] = {
         cameraController.delegate = self;
         currentCameraButton = nil;
         
+        uiMode = oliveUI;
+        [self saveUIMode];
+#ifdef OLD
         NSString *lastUIMode = [[NSUserDefaults standardUserDefaults]
                                      stringForKey:UI_MODE_KEY];
         if (lastUIMode) {
             uiMode = [lastUIMode intValue];
         } else {
-            uiMode = exhibitUI;
+            uiMode = oliveUI;
             [self saveUIMode];
         }
+#endif
         
         [self newDisplayMode:medium];
 
@@ -457,6 +456,7 @@ static NSString * const uiNames[] = {
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
 
+#ifdef OLD
     uiSelection = [[UISegmentedControl alloc] initWithItems:@[@"Exhibit\nmode", @"Olive\nmode"]];
     uiSelection.frame = CGRectMake(0, 0, 40, 44);
     [uiSelection addTarget:self action:@selector(selectUI:)
@@ -466,7 +466,8 @@ static NSString * const uiNames[] = {
     UIBarButtonItem *rightBarItem = [[UIBarButtonItem alloc]
                                     initWithCustomView:uiSelection];
     self.navigationItem.rightBarButtonItem = rightBarItem;
-
+#endif
+    
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                       target:nil action:nil];
@@ -545,6 +546,7 @@ static NSString * const uiNames[] = {
     // the display and a long, scrollable collectionview.  Only a single transform may be selected.
     
     switch (uiMode) {
+#ifdef OLD
         case exhibitUI: {
             executeTableVC = [[UITableViewController alloc] initWithStyle:UITableViewStylePlain];
             executeNavVC = [[UINavigationController alloc] initWithRootViewController:executeTableVC];
@@ -611,6 +613,7 @@ static NSString * const uiNames[] = {
             [transformView addGestureRecognizer:swipeRight];
             break;
         }
+#endif
         case oliveUI:{
             oliveScrollView = [[UIScrollView alloc] init];
             [containerView addSubview:oliveScrollView];
@@ -706,8 +709,7 @@ static NSString * const uiNames[] = {
         [transforms selectDepthTransform:NO_DEPTH_TRANSFORM];
 
     imageOrientation = [self imageOrientationForDeviceOrientation];
-    UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
-    BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);
+
     NSLog(@" **** device view frame:  %.0f x %.0f", self.view.frame.size.width, self.view.frame.size.height);
     
     CGRect f = self.view.frame;
@@ -730,8 +732,10 @@ static NSString * const uiNames[] = {
     CGSize displaySize;
     
     switch (uiMode) {
+#ifdef OLD
         case exhibitUI:     // position the two tables.
-            displaySize.width = containerView.frame.size.width;
+            UIDeviceOrientation deviceOrientation = UIDevice.currentDevice.orientation;
+            BOOL isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation);            displaySize.width = containerView.frame.size.width;
             if (isPortrait) {
                 displaySize.width = containerView.frame.size.width;
                 displaySize.height = containerView.frame.size.height -
@@ -741,8 +745,9 @@ static NSString * const uiNames[] = {
                 displaySize.height = containerView.frame.size.height;   // maximum display window height
             }
             break;
+#endif
         case oliveUI:
-            displaySize = CGSizeMake(containerView.frame.size.width/2.0, containerView.frame.size.height/2.0);
+            displaySize = CGSizeMake(containerView.frame.size.width/2.0, containerView.frame.size.height);
             break;
     }
     
@@ -779,6 +784,7 @@ static NSString * const uiNames[] = {
     f.origin = CGPointZero;
     f.size = CGSizeMake(round(processingSize.width * transforms.finalScale),
                         round(processingSize.height * transforms.finalScale));
+#ifdef OLD
     switch (uiMode) {
         case exhibitUI:
             if (xScale > yScale) // center the image
@@ -787,12 +793,14 @@ static NSString * const uiNames[] = {
         case oliveUI:
             break;
     }
+#endif
     transformView.frame = f;
 
     [self updateOlivesTo:nil];
     oliveUpdateNeeded = YES;
     
     switch (uiMode) {
+#ifdef OLD
         case exhibitUI:     // position the two tables.
 #define EXEC_FRAC   (0.3)
             switch (UIDevice.currentDevice.userInterfaceIdiom) {
@@ -864,7 +872,10 @@ static NSString * const uiNames[] = {
         //    [availableTableVC.tableView reloadData];
             [availableNavVC.view setNeedsLayout];
             break;
+#endif
         case oliveUI: {
+            [oliveScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+
             CGRect f = containerView.frame;
             f.origin = CGPointZero;
             oliveScrollView.frame = f;
@@ -915,7 +926,20 @@ static NSString * const uiNames[] = {
     CGFloat videoRightX = RIGHT(transformView.frame) + SEP;
     f.origin = CGPointMake(videoRightX, SEP);
     f.size.width = imageRect.size.width;
-    f.size.height = imageRect.size.height + OLIVE_LABEL_H;
+    f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
+    
+    NSShadow *shadow = [[NSShadow alloc] init];
+    shadow.shadowOffset = CGSizeMake(3,3);
+    shadow.shadowBlurRadius = 5.0;
+    shadow.shadowColor = [UIColor blackColor];
+    
+    NSDictionary *labelAttributes = @{
+        NSForegroundColorAttributeName:[UIColor blackColor],
+        NSBackgroundColorAttributeName: [UIColor colorWithWhite:0.7 alpha:0.7],
+        NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
+//        NSShadowAttributeName: shadow
+    };
+    
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
         UIView *v = [[UIView alloc] initWithFrame:f];
         frameH = BELOW(v.frame) + SEP;
@@ -931,16 +955,30 @@ static NSString * const uiNames[] = {
         
         Transform *transform = [transforms.flatTransformList objectAtIndex:i];
         
-        UILabel *transformLabel = [[UILabel alloc]
-                                   initWithFrame:CGRectMake(0, f.size.height - OLIVE_LABEL_H,
-                                                            OLIVE_W, OLIVE_LABEL_H)];
+        UILabel *transformLabel = [[UILabel alloc] init];
         transformLabel.textAlignment = NSTextAlignmentCenter;
-        transformLabel.text = transform.name;
-        transformLabel.adjustsFontSizeToFitWidth = YES;
+        transformLabel.adjustsFontSizeToFitWidth = NO;
         transformLabel.numberOfLines = 0;
         transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        transformLabel.attributedText = [[NSMutableAttributedString alloc]
+                                         initWithString:transform.name
+                                         attributes:labelAttributes];
+        CGSize labelSize =  [transformLabel.text
+                             boundingRectWithSize:f.size
+                             options:NSStringDrawingUsesLineFragmentOrigin
+                             attributes:@{
+                                 NSFontAttributeName : transformLabel.font,
+                                 NSShadowAttributeName: shadow
+                             }
+                             context:nil].size;
+        transformLabel.frame = CGRectMake(0, f.size.height-labelSize.height, f.size.width, labelSize.height);
         transformLabel.tag = TRANSFORM_LABEL_TAG;
+        transformLabel.opaque = NO;
+        transformLabel.backgroundColor = [UIColor clearColor];
+//        transformLabel.backgroundColor = [UIColor greenColor];
+        transformLabel.contentMode = NSLayoutAttributeBottom;
         [v addSubview:transformLabel];
+        [v bringSubviewToFront:transformLabel];
         
         UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                          initWithTarget:self action:@selector(didTapOlive:)];
@@ -993,11 +1031,11 @@ static NSString * const uiNames[] = {
     UILabel *l = [v viewWithTag:TRANSFORM_LABEL_TAG];
     assert(l);
     if (on) {
-        l.font = [UIFont boldSystemFontOfSize:STATS_FONT_SIZE];
+        l.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
         v.layer.borderWidth = 5.0;
         oliveSelectedView = v;
     } else {
-        l.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
+        l.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
         oliveSelectedView = nil;
         v.layer.borderWidth = 1.0;
     }

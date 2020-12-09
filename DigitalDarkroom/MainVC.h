@@ -18,7 +18,7 @@ typedef enum {
 } DisplayMode_t;
 
 typedef enum {
-    exhibitUI,
+//    exhibitUI,
     oliveUI,
 } UIMode_t;
 
