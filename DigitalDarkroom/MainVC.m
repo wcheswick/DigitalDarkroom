@@ -120,6 +120,7 @@ typedef enum {
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
 @property (nonatomic, strong)   InputSource *nextSource;
+@property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
 
@@ -178,6 +179,7 @@ typedef enum {
 
 @synthesize inputSources, currentSource;
 @synthesize nextSource;
+@synthesize availableCameraCount;
 
 @synthesize cameraController;
 
@@ -221,12 +223,19 @@ typedef enum {
         oliveSelectedView = nil;
         oliveUpdateNeeded = NO;
         
-        inputSources = [[NSMutableArray alloc] init];
+        cameraController = [[CameraController alloc] init];
+        cameraController.delegate = self;
+        currentCameraButton = nil;
 
-        [inputSources addObject:[InputSource sourceForCamera:FrontCamera]];
-        [inputSources addObject:[InputSource sourceForCamera:RearCamera]];
-        [inputSources addObject:[InputSource sourceForCamera:Front3DCamera]];
-        [inputSources addObject:[InputSource sourceForCamera:Rear3DCamera]];
+        inputSources = [[NSMutableArray alloc] init];
+        
+        availableCameraCount = 0;
+        for (Cameras c=0; c<NCAMERA; c++) {
+            if ([cameraController isCameraAvailable:c]) {
+                [inputSources addObject:[InputSource sourceForCamera:c]];
+                availableCameraCount++;
+            }
+        }
 
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
@@ -242,10 +251,6 @@ typedef enum {
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-        
-        cameraController = [[CameraController alloc] init];
-        cameraController.delegate = self;
-        currentCameraButton = nil;
         
         uiMode = oliveUI;
         [self saveUIMode];
@@ -431,8 +436,8 @@ typedef enum {
     }
 
     NSMutableArray *sourceNames = [[NSMutableArray alloc] init];
-    for (int i=0; i<NCAMERA; i++) {
-        InputSource *s = [inputSources objectAtIndex:i];
+    for (int cam=0; cam<availableCameraCount; cam++) {
+        InputSource *s = [inputSources objectAtIndex:cam];
         [sourceNames addObject:s.label];
     }
     [sourceNames addObject:@"File"];
@@ -443,10 +448,6 @@ typedef enum {
                forControlEvents: UIControlEventValueChanged];
     sourceSelection.selectedSegmentIndex = nextSource.sourceType;
     sourceSelection.momentary = NO;
-    for (Cameras c=0; c<NCAMERA; c++) {
-        [sourceSelection setEnabled:[cameraController isCameraAvailable:c]
-                  forSegmentAtIndex:c];
-    }
     
     UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc]
                                     initWithCustomView:sourceSelection];
@@ -1942,14 +1943,15 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
-    Cameras newCam = (Cameras)sender.selectedSegmentIndex;
-    if (ISCAMERA(newCam)) {
-        nextSource = [InputSource sourceForCamera:newCam];
-        NSLog(@"    ***** selectSource setneedslayout");
+    int segment = (Cameras)sender.selectedSegmentIndex;
+
+    nextSource = [inputSources objectAtIndex:segment];
+    if (nextSource.sourceType == NotACamera) {
+        [self doSelecFileSource];
+    } else {
         [self.view setNeedsLayout];
         return;
     }
-    [self doSelecFileSource];
 }
 
 - (IBAction) selectUI:(UISegmentedControl *)sender {
