@@ -267,8 +267,7 @@
 // size we have. If the height is zero, fit the largest to the width.  If both height and
 // width are non-zero, make it fit there.
 
-- (CGSize) setupCameraForSize:(CGSize) availableSize
-                  displayMode:(DisplayMode_t)displayMode {
+- (CGSize) setupCameraForSize:(CGSize) availableSize {
     NSError *error;
 
     assert(captureDevice);

@@ -9,7 +9,10 @@
 /* Begin PBXBuildFile section */
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
+		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
+		FB79D718258B9A9F00DEAD6A /* Params.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D717258B9A9F00DEAD6A /* Params.m */; };
 		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
+		FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9E2A752592267C00BD7E1E /* TaskGroup.m */; };
 		FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */; };
 		FBB1D9D0232EBD9C00845DF1 /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */; };
 		FBB1D9D1232EBD9C00845DF1 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */; };
@@ -30,6 +33,12 @@
 		FBB1D9FA232FE56700845DF1 /* Links in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F1232FE56700845DF1 /* Links */; };
 		FBB1D9FB232FE56700845DF1 /* images in Resources */ = {isa = PBXBuildFile; fileRef = FBB1D9F2232FE56700845DF1 /* images */; };
 		FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB1D9FD2330FD0900845DF1 /* Transform.m */; };
+		FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8A22582595300AB0B09 /* TaskCtrl.m */; };
+		FBB2C8AE2586A9E400AB0B09 /* PixBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */; };
+		FBB2C8B22586A9F800AB0B09 /* DepthBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8B12586A9F800AB0B09 /* DepthBuf.m */; };
+		FBB2C8B62586AA3C00AB0B09 /* ChBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8B52586AA3C00AB0B09 /* ChBuf.m */; };
+		FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */; };
+		FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */; };
 		FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */; };
 		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
 		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
@@ -46,7 +55,13 @@
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
 		FB389A4A254055F500E29530 /* ColorTable.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ColorTable.m; sourceTree = "<group>"; };
 		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
+		FB79D710258A67FC00DEAD6A /* Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Task.h; sourceTree = "<group>"; };
+		FB79D711258A67FC00DEAD6A /* Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Task.m; sourceTree = "<group>"; };
+		FB79D716258B9A9F00DEAD6A /* Params.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Params.h; sourceTree = "<group>"; };
+		FB79D717258B9A9F00DEAD6A /* Params.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Params.m; sourceTree = "<group>"; };
 		FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		FB9E2A742592267C00BD7E1E /* TaskGroup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TaskGroup.h; sourceTree = "<group>"; };
+		FB9E2A752592267C00BD7E1E /* TaskGroup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroup.m; sourceTree = "<group>"; };
 		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
 		FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
@@ -72,6 +87,18 @@
 		FBB1D9F3232FE56700845DF1 /* colorblind.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = colorblind.h; sourceTree = "<group>"; };
 		FBB1D9FC2330FD0900845DF1 /* Transform.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Transform.h; sourceTree = "<group>"; };
 		FBB1D9FD2330FD0900845DF1 /* Transform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Transform.m; sourceTree = "<group>"; };
+		FBB2C8A12582595300AB0B09 /* TaskCtrl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TaskCtrl.h; sourceTree = "<group>"; };
+		FBB2C8A22582595300AB0B09 /* TaskCtrl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskCtrl.m; sourceTree = "<group>"; };
+		FBB2C8AC2586A9E400AB0B09 /* PixBuf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PixBuf.h; sourceTree = "<group>"; };
+		FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PixBuf.m; sourceTree = "<group>"; };
+		FBB2C8B02586A9F800AB0B09 /* DepthBuf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DepthBuf.h; sourceTree = "<group>"; };
+		FBB2C8B12586A9F800AB0B09 /* DepthBuf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DepthBuf.m; sourceTree = "<group>"; };
+		FBB2C8B42586AA3C00AB0B09 /* ChBuf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ChBuf.h; path = ../ChBuf.h; sourceTree = "<group>"; };
+		FBB2C8B52586AA3C00AB0B09 /* ChBuf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ChBuf.m; path = ../ChBuf.m; sourceTree = "<group>"; };
+		FBB2C8B92586B9AA00AB0B09 /* RemapBuf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RemapBuf.h; sourceTree = "<group>"; };
+		FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RemapBuf.m; sourceTree = "<group>"; };
+		FBB2C8BD2587D41F00AB0B09 /* TransformInstance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TransformInstance.h; sourceTree = "<group>"; };
+		FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TransformInstance.m; sourceTree = "<group>"; };
 		FBB4E3D2251E5998000D99B7 /* ThimblebySRDS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThimblebySRDS.h; sourceTree = "<group>"; };
 		FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = InglisEtAlSRDS.c; sourceTree = "<group>"; };
 		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -196,8 +223,26 @@
 				FBB1D9FD2330FD0900845DF1 /* Transform.m */,
 				FBB1D9D3232FB24800845DF1 /* Transforms.h */,
 				FBB1D9D4232FB24800845DF1 /* Transforms.m */,
+				FBB2C8BD2587D41F00AB0B09 /* TransformInstance.h */,
+				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
+				FBB2C8A12582595300AB0B09 /* TaskCtrl.h */,
+				FBB2C8A22582595300AB0B09 /* TaskCtrl.m */,
+				FB9E2A742592267C00BD7E1E /* TaskGroup.h */,
+				FB9E2A752592267C00BD7E1E /* TaskGroup.m */,
+				FB79D710258A67FC00DEAD6A /* Task.h */,
+				FB79D711258A67FC00DEAD6A /* Task.m */,
+				FB79D716258B9A9F00DEAD6A /* Params.h */,
+				FB79D717258B9A9F00DEAD6A /* Params.m */,
 				FBF849BC25536A1D005571AF /* DepthImage.h */,
 				FBF849BD25536A1D005571AF /* DepthImage.m */,
+				FBB2C8AC2586A9E400AB0B09 /* PixBuf.h */,
+				FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */,
+				FBB2C8B92586B9AA00AB0B09 /* RemapBuf.h */,
+				FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */,
+				FBB2C8B02586A9F800AB0B09 /* DepthBuf.h */,
+				FBB2C8B12586A9F800AB0B09 /* DepthBuf.m */,
+				FBB2C8B42586AA3C00AB0B09 /* ChBuf.h */,
+				FBB2C8B52586AA3C00AB0B09 /* ChBuf.m */,
 				FB389A49254055F500E29530 /* ColorTable.h */,
 				FB389A4A254055F500E29530 /* ColorTable.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
@@ -292,6 +337,8 @@
 				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
 				FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */,
 				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
+				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
+				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
 				FBB1D9D5232FB24800845DF1 /* Transforms.m in Sources */,
 				FBB1D9F9232FE56700845DF1 /* colorblind.c in Sources */,
@@ -299,15 +346,22 @@
 				FBF5B3B9232E974000DDFC4E /* main.m in Sources */,
 				FBB1D9F5232FE56700845DF1 /* cb.c in Sources */,
 				FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */,
+				FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */,
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
 				FBF849BE25536A1D005571AF /* DepthImage.m in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
+				FBB2C8B62586AA3C00AB0B09 /* ChBuf.m in Sources */,
+				FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
 				FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */,
+				FB79D718258B9A9F00DEAD6A /* Params.m in Sources */,
+				FBB2C8AE2586A9E400AB0B09 /* PixBuf.m in Sources */,
 				FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */,
+				FBB2C8B22586A9F800AB0B09 /* DepthBuf.m in Sources */,
 				FBB1D9E7232FE44400845DF1 /* etc.c in Sources */,
 				FBB1D9E3232FE44400845DF1 /* geom.c in Sources */,
+				FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

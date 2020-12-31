@@ -8,9 +8,17 @@
 
 #import <Foundation/Foundation.h>
 #import "DepthImage.h"
+#import "PixBuf.h"
+#import "RemapBuf.h"
+#import "Params.h"
 #import "Defines.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+
+#define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedLast
+
+#define NO_DEPTH_TRANSFORM  (100)
 
 typedef enum {
     ColorTrans,
@@ -21,58 +29,66 @@ typedef enum {
     EtcTrans,
 } transform_t;
 
-typedef Pixel (^ __nullable __unsafe_unretained pointFunction_t)(Pixel p);
-typedef void (^ __nullable __unsafe_unretained areaFunction_t)(Pixel *src,
-                                                               Pixel *dest,
-                                                               int p);
-typedef PixelIndex_t (^ __unsafe_unretained remapPolarFunction_t)(float r, float a,    int p);
-typedef void (^ __nullable /*__unsafe_unretained*/ remapImageFunction_t)(PixelIndex_t *remapTable,
-                                                                         size_t w, size_t h, int p);
-typedef void (^ __nullable __unsafe_unretained depthVis_t)(DepthImage *depthBuf,
-                                                               Pixel *dest,
-                                                               int p);
+
+typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size_t n);
+
+typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)(RemapBuf *remapBuf, Params *params);
+
+#ifdef NOTUSED
+typedef void (^ __nullable __unsafe_unretained
+              pointFunction_t)(Pixel *src, Pixel *dest, int n);
+#endif
+
+typedef void (^ __nullable __unsafe_unretained
+              areaFunction_t)(PixelArray_t src, PixelArray_t dest,
+                              size_t w, size_t h, Params * __nullable param);
+
+typedef void (^ __nullable __unsafe_unretained
+              depthVis_t)(DepthImage *depthBuf,
+                          Pixel *dest,
+                          int p);
 
 @interface Transform : NSObject {
     NSString *name, *description;
     transform_t type;
-    pointFunction_t pointF;
+    BOOL hasParameters;
+    inPlacePtFunc_t ipPointF;
+//    pointFunction_t pointF;
     areaFunction_t areaF;
     depthVis_t depthVisF;
-    remapPolarFunction_t remapPolarF;
-    remapImageFunction_t remapImageF;
-    int low, value, high;   // parameter setting and range for transform
-    BOOL hasParameters;
-    BOOL newValue;
-    PixelIndex_t * _Nullable remapTable;
-    NSTimeInterval elapsedProcessingTime;
+    ComputeRemap_t remapImageF;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
-@property (assign)              pointFunction_t pointF;
+@property (assign)              inPlacePtFunc_t ipPointF;
+//@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
-@property (assign)              remapPolarFunction_t remapPolarF;
-@property (copy)                remapImageFunction_t remapImageF;
+@property (unsafe_unretained)   ComputeRemap_t remapImageF;
 @property (assign)              transform_t type;
 @property (assign)              int low, value, high;
 @property (assign)              BOOL hasParameters;
 @property (assign)              BOOL newValue;
 @property (assign)              PixelIndex_t * _Nullable remapTable;
-@property (assign)              NSTimeInterval elapsedProcessingTime;
 
-// not used
-+ (Transform *)colorTransform:(NSString *)n description:(NSString *)d
-               pointTransform: (pointFunction_t) f;
-// works:
+#ifdef NOTUSED
++ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
+                 pointFunction:(pointFunction_t) f;
+#endif
+
++ (Transform *) colorTransform:(NSString *) n
+                    description:(NSString *) d
+                    inPlacePtFunc:(inPlacePtFunc_t) f;
+
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                 areaFunction:(areaFunction_t) f;
-// sometimes?
+                areaFunction:(areaFunction_t) f;
+
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                   remapImage:(remapImageFunction_t) f;
-+ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-              remapPolar:(remapPolarFunction_t) f;
+                   remapImage:(ComputeRemap_t) f;
+
 + (Transform *) depthVis:(NSString *) n description:(NSString *) d
                 depthVis:(depthVis_t) f;
+
 - (void) clearRemap;
 
 @end

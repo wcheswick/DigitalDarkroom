@@ -10,6 +10,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
 
+// This is deprecated:
 typedef enum {
     small,  // mostly for iPhones
     medium,
@@ -23,17 +24,18 @@ typedef enum {
 } UIMode_t;
 
 @interface MainVC : UIViewController
-    <UITableViewDelegate,
-    UITableViewDataSource,
-    UIScrollViewDelegate,
-    UICollectionViewDelegate,
+<UICollectionViewDelegate,
     UICollectionViewDataSource,
     UICollectionViewDelegateFlowLayout,
+//UITableViewDelegate,
+//UITableViewDataSource,
+//UIScrollViewDelegate,
     UIPopoverPresentationControllerDelegate,
     AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureDepthDataOutputDelegate> {
 }
 
-- (void) loadImageWithURL: (NSURL *)URL;
+- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
+- (void) doLayout:(CGSize) newSize;
 
 @end

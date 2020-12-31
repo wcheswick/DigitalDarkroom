@@ -10,27 +10,10 @@
 // https://developer.apple.com/documentation/coreimage/methods_and_protocols_for_filter_creation/color_effect_filters?language=objc
 
 #import "Transforms.h"
+#import "RemapBuf.h"
 #import "Defines.h"
 
 // #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
-
-#define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
-#define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)
-#define Z               ((1<<sizeof(channel)*8) - 1)
-#define HALF_Z          (Z/2)
-
-#define CENTER_X        (W/2)
-#define CENTER_Y        (H/2)
-
-#define Black           SETRGB(0,0,0)
-#define Grey            SETRGB(Z/2,Z/2,Z/2)
-#define LightGrey       SETRGB(2*Z/3,2*Z/3,2*Z/3)
-#define White           SETRGB(Z,Z,Z)
-#define Red             SETRGB(Z,0,0)
-#define Green           SETRGB(0,Z,0)
-#define Blue            SETRGB(0,0,Z)
-#define Yellow          SETRGB(Z,Z,0)
-#define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
 
 #define LUM(p)  (channel)((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -40,33 +23,11 @@
 #define G(x) (x).g
 #define B(x) (x).b
 
-enum SpecialRemaps {
-    Remap_White = -1,
-    Remap_Red = -2,
-    Remap_Green = -3,
-    Remap_Blue = -4,
-    Remap_Black = -5,
-    Remap_Yellow = -6,
-    Remap_Unset = -7,
-};
+#define CENTER_X    (W/2)
+#define CENTER_Y    (H/2)
+#define MAX_R   (MAX(CENTER_X, CENTER_Y))
 
-@interface Transforms ()
-
-@property (strong, nonatomic)   NSMutableArray *executeList;
-@property (strong, nonatomic)   Transform *lastTransform;
-
-@end
-
-static int W, H;   // local size values, easy for C routines
-
-size_t configuredBytesPerRow, configuredPixelsInImage, configuredPixelsPerRow;
-
-Pixel *imBufs[2];
-channel **sChan = 0;
-channel **dChan = 0;
-int chanColumns = 0;
-
-#define RPI(x,y)    (PixelIndex_t)(((y)*configuredPixelsPerRow) + (x))
+#define RPI(x,y)    (PixelIndex_t)(((y)*self->execute.bytesPerRow) + (x*sizeof(Pixel)))
 
 #ifdef DEBUG_TRANSFORMS
 // Some of our transforms might be a little buggy around the edges.  Make sure
@@ -74,13 +35,13 @@ int chanColumns = 0;
 
 #define PI(x,y)   dPI((int)(x),(int)(y))   // pixel index in a buffer
 
-PixelIndex_t dPI(int x, int y) {
+static PixelIndex_t dPI(int x, int y) {
     assert(x >= 0);
     assert(x < W);
     assert(y >= 0);
     assert(y < H);
     PixelIndex_t index = RPI(x,y);
-    assert(index >= 0 && index < configuredPixelsInImage);
+    assert(index >= 0 && index < pixelsInImage);
     return index;
 }
 
@@ -88,18 +49,18 @@ PixelIndex_t dPI(int x, int y) {
 #define PI(x,y)   RPI((x),(y))
 #endif
 
+@interface Transforms ()
+
+@property (strong, nonatomic)   Transform *lastTransform;
+
+@end
+
 @implementation Transforms
 
 @synthesize categoryNames;
 @synthesize categoryList;
-@synthesize sequence, sequenceChanged;
-@synthesize executeList;
-@synthesize bytesPerRow;
 @synthesize lastTransform;
-@synthesize finalScale;
 @synthesize debugTransforms;
-@synthesize depthTransform;
-@synthesize transformSize;
 @synthesize flatTransformList;
 
 
@@ -111,354 +72,181 @@ PixelIndex_t dPI(int x, int y) {
 #else
         debugTransforms = NO;
 #endif
-        depthTransform = nil;
-        configuredBytesPerRow = 0;    // no current configuration
         categoryNames = [[NSMutableArray alloc] init];
         categoryList = [[NSMutableArray alloc] init];
-        sequence = [[NSMutableArray alloc] init];
         flatTransformList = [[NSMutableArray alloc] init];
-        sequenceChanged = YES;
-        finalScale = 1.0;
-        imBufs[0] = imBufs[1] = NULL;
-        executeList = [[NSMutableArray alloc] init];
         [self buildTransformList];
     }
     return self;
 }
 
-- (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
-    assert(depthTransform);
-    assert(depthImage.size.width == transformSize.width);
-    assert(depthImage.size.height == transformSize.height);
-    //transformSize = depthImage.size;
-    H = transformSize.height;
-    W = transformSize.width;
-    depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
-}
-
-#ifdef OLD
-#define PIXEL_EQ(p1,p2)   ((p1).r == (p2).r && (p1).g == (p2).g && (p1).b == (p2).b)
-
-float RGBtoDistance(Pixel p) {
-    if (PIXEL_EQ(p, Black))
-        return MAX_DIST;
-    else if (PIXEL_EQ(p, Red))
-        return MIN_DIST;
-    UInt32 cv = ((p.r * 256) + p.g)*256 + p.b;
-    float frac = (float)cv / RGB_SPACE;
-    float v = frac*(MAX_DIST - MIN_DIST) + MIN_DIST;
-    return v;
-}
-#endif
-
 - (void) buildTransformList {
     [self addDepthVisualizations];
+    [self addTestTransforms];
+#ifdef NOTYET
 //    [self addColorVisionDeficits];
     [self addGeometricTransforms];
     [self addPointTransforms];
     [self addMiscTransforms];
     // tested:
     [self addAreaTransforms];
-    [self addArtTransforms];
+//    [self addArtTransforms];
     [self addMonochromes];
     [self addOldies];
-}
-
-- (PixelIndex_t *) computeMappingFor:(Transform *) transform {
-    assert(configuredBytesPerRow);
-    assert(transform.type == RemapTrans);
-    NSLog(@"remap %@", transform.name);
-    PixelIndex_t *remapTable = (PixelIndex_t *)calloc(configuredPixelsInImage, sizeof(PixelIndex_t));
-    
-#ifdef DEBUG_TRANSFORMS
-    for (int i=0; i<configuredPixelsInImage; i++)
-        remapTable[i] = Remap_Unset;
 #endif
-    transform.remapTable = remapTable;
-
-    if (transform.remapPolarF) {     // polar remap
-        size_t centerX = W/2;
-        size_t centerY = H/2;
-        for (int dx=0; dx<centerX; dx++) {
-            for (int dy=0; dy<centerY; dy++) {
-                double r = hypot(dx, dy);
-                double a;
-                if (dx == 0 && dy == 0)
-                    a = 0;
-                else
-                    a = atan2(dy, dx);
-                remapTable[PI(centerX-dx, centerY-dy)] = transform.remapPolarF(r, M_PI + a, transform.value);
-                if (centerY+dy < H)
-                    remapTable[PI(centerX-dx, centerY+dy)] = transform.remapPolarF(r, M_PI - a, transform.value);
-                if (centerX+dx < W) {
-                    if (centerY+dy < H)
-                        remapTable[PI(centerX+dx, centerY+dy)] = transform.remapPolarF(r, a, transform.value);
-                    remapTable[PI(centerX+dx, centerY-dy)] = transform.remapPolarF(r, -a, transform.value);
-                }
-            }
-        }
-
-#ifdef OLDNEW
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                double rx = x - centerX;
-                double ry = y - centerY;
-                double r = hypot(rx, ry);
-                double a = atan2(ry, rx);
-                remapTable[PI(x,y)] = transform.remapPolarF(r, /* M_PI+ */ a,
-                                                            transform.p,
-                                                            W,
-                                                            H);
-            }
-        }
-#endif
-    } else {        // whole screen remap
-        NSLog(@"transform: %@", transform);
-        transform.remapImageF(remapTable,
-                              W, H,
-                              transform.value);
-    }
-    return remapTable;
 }
 
+#define ADD_TO_OLIVE(t)     [flatTransformList addObject:t];
 
-// It is important that the user interface doesn't change the transform list
-// while we are running through it.  There are several changes of interest:
-//  1) adding or deleting one or more transforms
-//  2) changing the parameter on a particular transform
-//  3) changing the display area size (via source or orientation change
-//
-// The master list of transforms to be executed is 'sequence', and is managed by
-// the GUI. We can't run from this list, because a change in the middle of transforming would
-// mess up everything.
-//
-// So the GUI changes this sequence as it wants to, using @synchronize on the array. It sets
-// a flag, sequenceChanged, when changes occur.  Right here, just before we run through a
-// transform sequence, we check for changes, and update our current transform sequence,
-// 'executeList' from a locked copy of the sequence list.
-//
-// We keep our own local list of current transforms, and keep the parameters
-// for each (a transform could appear more than once, with different params.)
-//
-// A number of transforms simply involve moving pixels around just based on position.
-// we recompute the table of pixel indicies and just use that.  That table needs to
-// be computed the first time the transform is used, whenever the param changes, or
-// when the screen size changes.  If it needs updating, the table pointer is NULL.
-// Only this routine changes this pointer.
+// For Tom's logo algorithm
 
-
-int sourceImageIndex, destImageIndex;
-
-BOOL transformsBusy = NO;
-
-- (UIImage * __nullable) executeTransformsWithImage:(UIImage *) image {
-    if (transformsBusy) {
-        return nil; // drop frame
+int
+stripe(PixelArray_t buf, int x, int p0, int p1, int c){
+    if(p0==p1){
+        if(c>Z){
+            buf[x][p0].r = Z;
+            return c-Z;
+        }
+        buf[x][p0].r = c;
+        return 0;
     }
-    transformsBusy = YES;
-    
-    if (sequenceChanged) {
-        [executeList removeAllObjects];
-        
-        @synchronized (sequence) {
-            for (Transform *t in sequence) {
-                if (t.newValue) {
-                    [t clearRemap];
-                    t.newValue = NO;
-                }
-                [executeList addObject:t];
-            }
-        }
-        sequenceChanged = NO;
-    } else {
-        @synchronized (sequence) {
-            for (Transform *t in sequence) {
-                if (t.newValue) {
-                    [t clearRemap];
-                    t.newValue = NO;
-                }
-            }
-        }
+    if (c>2*Z) {
+        buf[x][p0].r = Z;
+        buf[x][p1].r = Z;
+        return c-2*Z;
     }
-    
-    CGImageRef imageRef = [image CGImage];
-    CGImageRetain(imageRef);
-    UIImageOrientation incomingOrientation = image.imageOrientation;
-    
-    size_t width = (int)CGImageGetWidth(imageRef);
-    size_t height = (int)CGImageGetHeight(imageRef);
-    size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
-    assert(bitsPerPixel/8 == sizeof(Pixel));
-    size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
-    assert(bitsPerComponent == 8);
-    size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
-    assert(bytesPerRow);
-    size_t pixelsInImage = (bytesPerRow * height)/sizeof(Pixel);
-
-    if (configuredBytesPerRow != bytesPerRow ||
-        pixelsInImage != configuredPixelsInImage ||
-        W != width ||
-        H != height) {
-        NSLog(@">>> format was %4zu %4d %4d   %4zu %4zu %4zu",
-              configuredBytesPerRow,
-              W,
-              H,
-              bytesPerRow, width, height);
-        if (sChan) {    // release previous memory
-            for (int x=0; x<chanColumns; x++) {
-                free((void *)sChan[x]);
-                free((void *)dChan[x]);
-            }
-            chanColumns = 0;
-        }
-        configuredBytesPerRow = bytesPerRow;    // ** may be larger than width*sizeof(Pixel)
-        assert(configuredBytesPerRow % sizeof(Pixel) == 0); // ensure 32-bit boundary
-        configuredPixelsPerRow = configuredBytesPerRow / sizeof(Pixel);
-        configuredPixelsInImage = pixelsInImage;
-        H = transformSize.height;
-        W = transformSize.width;
-        for (Transform *t in executeList) {
-            [t clearRemap];
-        }
-        
-        // reallocate source and destination image buffers
-        NSLog(@" ** reallocate image buffers to new size");
-        for (int i=0; i<2; i++) {
-            if (imBufs[i])
-                free(imBufs[i]);
-            imBufs[i] = (Pixel *)calloc(configuredPixelsInImage, sizeof(Pixel));
-        }
-        // also allocate a channel-sized buffer, for single channel ops
-
-        chanColumns = W;
-        sChan = (channel **)malloc(chanColumns*sizeof(channel *));
-        dChan = (channel **)malloc(chanColumns*sizeof(channel *));
-        for (int x=0; x<W; x++) {
-            sChan[x] = (channel *)malloc(H*sizeof(channel));
-            dChan[x] = (channel *)malloc(H*sizeof(channel));
-        }
-        NSLog(@">>>         is %4zu %4d %4d   %4zu %4zu %4zu",
-              configuredBytesPerRow,
-              W,
-              H,
-              bytesPerRow, width, height);
-    }
-    
-    int sourceImageIndex = 0;
-    int destImageIndex = 1;
-
-    assert(W == width);
-    assert(H == height);
-    
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGColorSpaceRetain(colorSpace);
-    CGContextRef context = CGBitmapContextCreate(imBufs[sourceImageIndex], width, height,
-                                                 bitsPerComponent, bytesPerRow, colorSpace,
-                                                 BITMAP_OPTS);
-    
-    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    CGColorSpaceRelease(colorSpace);
-    CGImageRelease(imageRef);
-    
-    NSDate *transformStart = [NSDate now];
-    for (int i=0; i<executeList.count; i++) {
-        Transform *transform = [executeList objectAtIndex:i];
-        
-        [self performTransform:transform
-                          from:imBufs[sourceImageIndex]
-                            to:imBufs[destImageIndex]
-                        height:height
-                         width:width];
-        int t = sourceImageIndex;     // swap
-        sourceImageIndex = destImageIndex;
-        destImageIndex = t;
-        NSDate *transformEnd = [NSDate now];
-        transform.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:transformStart];
-        transformStart = transformEnd;
-    }
-    
-    // copy our bytes into the context.  This is a kludge.
-    
-    if (sourceImageIndex) {
-        memcpy(imBufs[0], imBufs[sourceImageIndex], configuredPixelsInImage*sizeof(Pixel));
-    }
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    
-    UIImage *transformed = [UIImage imageWithCGImage:quartzImage
-                                               scale:finalScale
-                                         orientation:incomingOrientation];
-
-    //UIImage *transformed = [UIImage imageWithCGImage:quartzImage];
-    
-    CGImageRelease(quartzImage);
-    CGContextRelease(context);
-    transformsBusy = NO;
-    return transformed;
+    buf[x][p0].r = c/2;
+    buf[x][p1].r = c - c/2;
+    return 0;
 }
 
-- (void) performTransform:(Transform *)transform
-                     from:(Pixel *)srcBuf
-                       to:(Pixel *)dstBuf
-                   height:(size_t) h
-                    width:(size_t) w {
-    switch (transform.type) {
-        case ColorTrans: {
-            for (int i=0; i<configuredPixelsInImage; i++) {
-                dstBuf[i] = transform.pointF(srcBuf[i]);
-            }
-            return;
+- (void) addTestTransforms {
+    [categoryNames addObject:@"Area"];
+    NSMutableArray *transformList = [[NSMutableArray alloc] init];
+    [categoryList addObject:transformList];
+    
+    lastTransform = [Transform colorTransform: @"Solarize"
+                                 description: @"Simulate extreme overexposure"
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
+                                   p.g < Z/2 ? p.g : Z-p.g,
+                                   p.b < Z/2 ? p.b : Z-p.r);
+
         }
-        case GeometricTrans:
-        case RemapTrans:
-            if (!transform.remapTable) {
-                transform.remapTable = [self computeMappingFor:transform];
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform areaTransform: @"Old blur"
+                                  description: @""
+                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
+                                                size_t w, size_t h, Params * __nullable param) {
+        for (int y=1; y<h-1; y++) {
+            for (int x=1; x<w-1; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (src[x][y].r +
+                       src[x+1][y].r +
+                       src[x-1][y].r +
+                       src[x][y-1].r +
+                       src[x][y+1].r)/5;
+                p.g = (src[x][y].g +
+                       src[x+1][y].g +
+                       src[x-1][y].g +
+                       src[x][y-1].g +
+                       src[x][y+1].g)/5;
+                p.b = (src[x][y].b +
+                       src[x+1][y].b +
+                       src[x-1][y].b +
+                       src[x][y-1].b +
+                       src[x][y+1].b)/5;
+                dest[x][y] = p;
             }
-            for (int i=0; i<configuredPixelsInImage; i++) {
-                PixelIndex_t pixelSource = transform.remapTable[i];
-                Pixel p;
-                switch (pixelSource) {
-                    case Remap_White:
-                        p = White;
-                        break;
-                    case Remap_Red:
-                        p = Red;
-                        break;
-                    case Remap_Green:
-                        p = Green;
-                        break;
-                    case Remap_Blue:
-                        p = Blue;
-                        break;
-                    case Remap_Black:
-                        p = Black;
-                        break;
-                    case Remap_Yellow:
-                        p = Yellow;
-                        break;
-                    case Remap_Unset:
-                        p = UnsetColor;
-                        break;
-                    default:
-                        p = srcBuf[pixelSource];
-                }
-                dstBuf[i] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+   
+    lastTransform = [Transform areaTransform: @"Wavy shower"
+                                 description: @"Through wavy glass"
+                     remapImage:^(RemapBuf *remapBuf, Params *params) {
+#define CPP    20    /*cycles/picture*/
+        int D = params.value;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                RA[x][y] = REMAP_DIST(RA[x][y], RA[x][y]);
             }
-            break;
-        case AreaTrans:
-            transform.areaF(srcBuf, dstBuf, transform.value);
-            break;
-        case DepthVis:
-            /// should not be reached
-            break;
-        case EtcTrans:
-            NSLog(@"stub - etctrans");
-            break;
-    }
+        }
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0+D; x<remapBuf.w-D; x++) {
+                RA[x][y] = REMAP_DIST(RA[x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w))][y], RA[x][y]);
+            }
+        }
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 23;
+    lastTransform.high = 30;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    // this destroys src
+    lastTransform = [Transform areaTransform: @"Old AT&T logo"
+                                  description: @"Tom Duff's logo transform"
+                                 areaFunction: ^(PixelArray_t src, PixelArray_t dest,
+                                                 size_t w, size_t h, Params * __nullable param) {
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = LUM(src[x][y]);
+                src[x][y] = SETRGB(c,c,c);
+            }
+        }
+        
+        int hgt = param.value;
+        int c;
+        int y0, y1;
+
+        for (int y=0; y<h; y+= hgt) {
+            if (y+hgt>h)
+                hgt = (int)h-(int)y;
+            for (int x=0; x < w; x++) {
+                c=0;
+                for(y0=0; y0<hgt; y0++)
+                    c += src[x][y+y0].r;
+
+                y0 = y+(hgt-1)/2;
+                y1 = y+(hgt-1-(hgt-1)/2);
+                for (; y0 >= y; --y0, ++y1)
+                    c = stripe(src, x, y0, y1, c);
+            }
+        }
+                    
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = src[x][y].r;
+                dest[x][y] = SETRGB(c, c, c);
+            }
+        }
+    }];
+    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 }
 
-#ifdef OLD
+- (Transform *)depthdepthTransformForIndex:(int)index {
+    if (index == NO_DEPTH_TRANSFORM) {
+        return nil;
+    }
+    NSArray *depthTransformList = [categoryList objectAtIndex:DEPTH_TRANSFORM_SECTION];
+    return (Transform *)[depthTransformList objectAtIndex:index];
+}
+
 /* Monochrome floyd-steinberg */
 
+#ifdef NOTYET
 static void
 fs(int depth, int buf[W][H]) {
     int x, y, i;
@@ -505,7 +293,7 @@ fs(int depth, int buf[W][H]) {
 }
 #endif
 
-
+#ifdef TOFIX
 void
 focus(channel *s[(int)H], channel *d[(int)H]) {
     for (int y=1; y<H-1; y++) {
@@ -540,17 +328,170 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }
 }
-
-#define ADD_TO_OLIVE(t)     [flatTransformList addObject:t];
+#endif
 
 - (void) addAreaTransforms {
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
+                                 description: @""
+                                areaFunction:^(PixelArray_t src, PixelArray_t dest,
+                                               size_t w, size_t h, Params * __nullable param) {
+        channel lum[w][h];  // XXX does this variable array work?
+        for (int y=1; y<h-1; y++)
+            for (int x=1; x<w-1; x++)
+                lum[x][y] = LUM(src[x][y]);
+
+        for (int y=1; y<h-1; y++) {
+            for (int x=1; x<w-1; x++) {
+                channel aa, bb, s;
+                aa = lum[x-1][y-1] + 2*lum[x][y-1] + lum[x+1][y-1] -
+                     lum[x-1][y+1] - 2*lum[x][y+1] - lum[x+1][y+1];
+                bb = lum[x-1][y-1] + 2*lum[x-1][y] + lum[x-1][y+1] -
+                     lum[x+1][y-1] - 2*lum[x+1][y] - lum[x+1][y+1];
+
+                channel c;
+                s = sqrt(aa*aa + bb*bb);
+                if (s > Z)
+                    c = Z;
+                else
+                    c = s;
+                dest[x][y] = SETRGB(c,c,c);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform areaTransform: @"Old blur"
+                                  description: @""
+                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
+                                                size_t w, size_t h, Params * __nullable param) {
+        for (int y=1; y<h-1; y++) {
+            for (int x=1; x<w-1; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (src[x][y].r +
+                       src[x+1][y].r +
+                       src[x-1][y].r +
+                       src[x][y-1].r +
+                       src[x][y+1].r)/5;
+                p.g = (src[x][y].g +
+                       src[x+1][y].g +
+                       src[x-1][y].g +
+                       src[x][y-1].g +
+                       src[x][y+1].g)/5;
+                p.b = (src[x][y].b +
+                       src[x+1][y].b +
+                       src[x-1][y].b +
+                       src[x][y-1].b +
+                       src[x][y+1].b)/5;
+                dest[x][y] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+#ifdef NOTYET
+    // remap test
+    lastTransform = [Transform areaTransform: @"Terry's kite"
+                                 description: @"Designed by an 8-year old"
+                                  remapImage:^(^(int w, int h, Params *params)) {
+        for (int y=0; y<h; y++) {
+            size_t ndots;
+            
+            if (y <= CENTER_Y)
+                ndots = (y*(w-1))/h;
+            else
+                ndots = ((h-y-1)*(w))/h;
+
+            table[PI(CENTER_X,y)] = PI(CENTER_X,y);
+            table[PI(0,y)] = Remap_White;
+            
+            for (int x=1; x<=ndots; x++) {
+                size_t dist = (x*(CENTER_X-1))/ndots;
+
+                table[PI(CENTER_X+x,y)] = PI(CENTER_X + dist,y);
+                table[PI(CENTER_X-x,y)] = PI(CENTER_X - dist,y);
+            }
+            for (size_t x=ndots; x<CENTER_X; x++) {
+                table[PI(CENTER_X+x,y)] = Remap_White;
+                table[PI(CENTER_X-x,y)] = Remap_White;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+#endif
+    
+#ifdef NEW
+
+#ifdef NOTYET   // channel-based
+    lastTransform = [Transform areaTransform: @"Color Sobel"
+                                          description: @"Edge detection"
+                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int w, int h) {
+        for (int y=0; y<h; y++) {    // red
+            for (int x=0; x<w; x++) {
+                sChan[x][y] = srcBuf[PI(x,y)].r;
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstBuf[PI(x,y)].r = dChan[x][y];    // install red
+                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstBuf[PI(x,y)].g = dChan[x][y];    // install green
+                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
+            }
+        }
+        sobel(sChan, dChan);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+#endif
+    
+    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
+                                 description: @"oil paint"
+                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
+        int b[W][H];
+        
+        int depth = (param == 1) ? 1 : 4;
+        
+        for (int y=0; y<H; y++)
+           for (int x=0; x<W; x++)
+                b[x][y] = LUM(src[PI(x,y)]);
+        
+        fs(depth, b);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = p.g = p.b = b[x][y];
+                dest[PI(x,y)] = p;
+            }
+        }
+    }];
+    lastTransform.value = 1;
+    lastTransform.low = 1;
+    lastTransform.high = 2;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Shear"
                                                   description: @"Shear"
-                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
+                                                areaFunction: ^(RemapBuf_t src, RemapBuf_t dest, int p) {
         int x, y, dx, dy, r, yshift[W];
         memset(yshift, 0, sizeof(yshift));
 
@@ -609,63 +550,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-#ifdef OLD
-    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
-                                 description: @"oil paint"
-                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        int b[W][H];
-        
-        int depth = (param == 1) ? 1 : 4;
-        
-        for (int y=0; y<H; y++)
-           for (int x=0; x<W; x++)
-                b[x][y] = LUM(src[PI(x,y)]);
-        
-        fs(depth, b);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = p.g = p.b = b[x][y];
-                dest[PI(x,y)] = p;
-            }
-        }
-    }];
-    lastTransform.value = 1;
-    lastTransform.low = 1;
-    lastTransform.high = 2;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-#endif
-    
-    lastTransform = [Transform areaTransform: @"Floyd Steinberg"
-                                 description: @""
-                                areaFunction:^(Pixel * _Nonnull src, Pixel * _Nonnull dest, int param) {
-        channel lum[W][H];
-        for (int y=1; y<H-1; y++)
-            for (int x=1; x<W-1; x++)
-                lum[x][y] = LUM(src[PI(x,y)]);
-
-        for (int y=1; y<H-1; y++) {
-            for (int x=1; x<W-1; x++) {
-                channel aa, bb, s;
-                aa = lum[x-1][y-1] + 2*lum[x][y-1] + lum[x+1][y-1] -
-                     lum[x-1][y+1] - 2*lum[x][y+1] - lum[x+1][y+1];
-                bb = lum[x-1][y-1] + 2*lum[x-1][y] + lum[x-1][y+1] -
-                     lum[x+1][y-1] - 2*lum[x+1][y] - lum[x+1][y+1];
-
-                channel c;
-                s = sqrt(aa*aa + bb*bb);
-                if (s > Z)
-                    c = Z;
-                else
-                    c = s;
-                dest[PI(x,y)] = SETRGB(c,c,c);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Matisse"
                                  description: @"colored Floyd/Steinberg"
@@ -935,28 +819,26 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
-        size_t centerY = h/2;
-        size_t centerX = w/2;
         for (int y=0; y<h; y++) {
             size_t ndots;
             
-            if (y <= centerY)
+            if (y <= CENTER_Y)
                 ndots = (y*(w-1))/h;
             else
                 ndots = ((h-y-1)*(w))/h;
 
-            table[PI(centerX,y)] = PI(centerX,y);
+            table[PI(CENTER_X,y)] = PI(CENTER_X,y);
             table[PI(0,y)] = Remap_White;
             
             for (int x=1; x<=ndots; x++) {
                 size_t dist = (x*(CENTER_X-1))/ndots;
 
-                table[PI(centerX+x,y)] = PI(centerX + dist,y);
-                table[PI(centerX-x,y)] = PI(centerX - dist,y);
+                table[PI(CENTER_X+x,y)] = PI(CENTER_X + dist,y);
+                table[PI(CENTER_X-x,y)] = PI(CENTER_X - dist,y);
             }
-            for (size_t x=ndots; x<centerX; x++) {
-                table[PI(centerX+x,y)] = Remap_White;
-                table[PI(centerX-x,y)] = Remap_White;
+            for (size_t x=ndots; x<CENTER_X; x++) {
+                table[PI(CENTER_X+x,y)] = Remap_White;
+                table[PI(CENTER_X-x,y)] = Remap_White;
             }
         }
     }];
@@ -1006,6 +888,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+#ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
@@ -1019,38 +902,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             for (int x=0; x<W; x++) {
                 channel d = dChan[x][y];
                 dstBuf[PI(x,y)] = SETRGB(d,d,d);    // install blue
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Color Sobel"
-                                          description: @"Edge detection"
-                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
-        for (int y=0; y<H; y++) {    // red
-            for (int x=0; x<W; x++) {
-                sChan[x][y] = srcBuf[PI(x,y)].r;
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].r = dChan[x][y];    // install red
-                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].g = dChan[x][y];    // install green
-                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
             }
         }
     }];
@@ -1088,6 +939,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+#endif
 
 #ifdef notyet
     extern  transform_t do_fs1;
@@ -1096,15 +948,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     extern  transform_t do_mean;
     extern  transform_t do_median;
 #endif
-}
-
-- (void) selectDepthTransform:(int)index {
-    if (index == NO_DEPTH_TRANSFORM) {
-        depthTransform = nil;
-        return;
-    }
-    NSArray *depthTransformList = [categoryList objectAtIndex:DEPTH_TRANSFORM_SECTION];
-    depthTransform = [depthTransformList objectAtIndex:index];
+#endif  // NEW
 }
 
 - (void) addDepthVisualizations {
@@ -1113,6 +957,59 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [categoryList addObject:transformList];
     
     assert(categoryList.count - 1 == DEPTH_TRANSFORM_SECTION);
+    
+    
+#define RGB_SPACE   ((float)((1<<24) - 1))
+
+    lastTransform = [Transform depthVis: @"Encode depth"
+                            description: @""
+                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
+        size_t bufSize = depthImage.size.height * depthImage.size.width;
+        float min = MAX_DEPTH;
+        float max = MIN_DEPTH;
+        for (int i=0; i<bufSize; i++) {
+            Distance v = depthImage.buf[i];
+            if (v < min)
+                min = v;
+            if (v > max)
+                max = v;
+            //NSLog(@" v, min, max: %.2f %.2f %.2f", v, min, max);
+            Pixel p;
+#ifdef HSV
+            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+            float hue = frac;
+            float sat = 1.0;
+            float bri = 1.0 - frac;
+            UIColor *color = [UIColor colorWithHue: hue saturation: sat
+                                        brightness: bri alpha: 1];
+            CGFloat r, g, b,a;
+            [color getRed:&r green:&g blue:&b alpha:&a];
+            p = CRGB(Z*r, Z*g, Z*b);
+#else
+            if (v < MIN_DEPTH)
+                p = Red;
+            else if (v >= MAX_DEPTH)
+                p = Black;
+            else {
+                float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
+                UInt32 cv = trunc(RGB_SPACE * frac);
+                p.b = cv % 256;
+                cv /= 256;
+                p.g = cv % 256;
+                cv /= 256;
+                assert(cv <= 255);
+                p.r = cv;
+                p.a = Z;    // alpha on, not used at the moment
+            }
+#endif
+            dest[i] = p;
+        }
+    }];
+    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+
+#ifdef NEW
     
 #ifdef DEBUG_TRANSFORMS
 #define DIST(x,y)  [depthImage distAtX:(x) Y:(y)]
@@ -1193,57 +1090,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-
-#define RGB_SPACE   ((float)((1<<24) - 1))
-
-    lastTransform = [Transform depthVis: @"Encode depth"
-                            description: @""
-                               depthVis: ^(DepthImage *depthImage, Pixel *dest, int v) {
-        size_t bufSize = H*W;
-        assert(depthImage.size.height * depthImage.size.width == bufSize);
-        float min = MAX_DEPTH;
-        float max = MIN_DEPTH;
-        for (int i=0; i<bufSize; i++) {
-            Distance v = depthImage.buf[i];
-            if (v < min)
-                min = v;
-            if (v > max)
-                max = v;
-            //NSLog(@" v, min, max: %.2f %.2f %.2f", v, min, max);
-            Pixel p;
-#ifdef HSV
-            float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
-            float hue = frac;
-            float sat = 1.0;
-            float bri = 1.0 - frac;
-            UIColor *color = [UIColor colorWithHue: hue saturation: sat
-                                        brightness: bri alpha: 1];
-            CGFloat r, g, b,a;
-            [color getRed:&r green:&g blue:&b alpha:&a];
-            p = CRGB(Z*r, Z*g, Z*b);
-#else
-            if (v < MIN_DEPTH)
-                p = Red;
-            else if (v >= MAX_DEPTH)
-                p = Black;
-            else {
-                float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
-                UInt32 cv = trunc(RGB_SPACE * frac);
-                p.b = cv % 256;
-                cv /= 256;
-                p.g = cv % 256;
-                cv /= 256;
-                assert(cv <= 255);
-                p.r = cv;
-                p.a = Z;    // alpha on, not used at the moment
-            }
-#endif
-            dest[i] = p;
-        }
-    }];
-    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
-    lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     
     // plywood?
@@ -1427,6 +1273,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }
 #endif
 
+#endif // NEW
 }
 
 // used by colorize
@@ -1440,19 +1287,18 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
-    lastTransform = [Transform areaTransform: @"Negative"
+    lastTransform = [Transform colorTransform: @"Negative"
                                  description: @"Negative"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                Pixel p = src[PI(x,y)];
-                dest[PI(x,y)] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
-            }
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+#ifdef NEW
     lastTransform = [Transform areaTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
@@ -1473,7 +1319,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                  description: @"Convert to brightness"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         // 5.2ms
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = *src++;
             int v = LUM(p);
             *dest++ = SETRGB(v,v,v);
@@ -1516,7 +1363,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                  description: @"Truncate pixel colors"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
         channel mask = ((1<<param) - 1) << (8 - param);
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = *src++;
             *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
         }
@@ -1529,7 +1377,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Brighten"
                                  description: @"brighten"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = *src++;
             *dest++ = SETRGB(p.r+(Z-p.r)/8,
                              p.g+(Z-p.g)/8,
@@ -1545,7 +1394,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"High contrast"
                                  description: @"high contrast"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = *src++;
             *dest++ = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
                              CLIP((p.g-HALF_Z)*2+HALF_Z),
@@ -1558,7 +1408,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Swap colors"
                                  description: @"r→g, g→b, b→r"
                                 areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = *src++;
             *dest++ = SETRGB(p.g, p.b, p.r);
         }
@@ -1573,16 +1424,17 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         u_long hist[Z+1];
         float map[Z+1];
         
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = src[pi];
             hist[LUM(p)]++;
         }
         ps = 0;
         for (int i = 0; i < Z+1; i++) {
-            map[i] = Z*((float)ps/((float)configuredPixelsInImage));
+            map[i] = Z*((float)ps/((float)self->execute.pixelsInImage));
             ps += hist[i];
         }
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
+        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
             Pixel p = src[pi];
             channel l = LUM(p);
             float a = (map[l] - l)/Z;
@@ -1594,6 +1446,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+#endif  // NEW
 }
 
 channel
@@ -1634,6 +1487,7 @@ irand(int i) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
+#ifdef NEW
     lastTransform = [Transform areaTransform: @"Motion blur"
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int streak) {
@@ -1702,7 +1556,8 @@ irand(int i) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
+    
+#ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int streak) {
@@ -1734,7 +1589,8 @@ irand(int i) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
+#endif
+    
     lastTransform = [Transform areaTransform: @"Mean (slow and invisible)"   // area
                                   description: @""
                                 areaFunction: ^(Pixel *src, Pixel *dest, int N) {
@@ -1765,6 +1621,8 @@ irand(int i) {
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
+#endif
+    
 }
 
 -(void) addMonochromes {
@@ -1772,6 +1630,7 @@ irand(int i) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
+#ifdef NEW
     lastTransform = [Transform colorTransform:@"Desaturate" description:@"desaturate" pointTransform:^Pixel(Pixel p) {
         channel c = (max3(p) + min3(p))/2;
         return SETRGB(c,c,c);
@@ -1821,14 +1680,12 @@ irand(int i) {
     ADD_TO_OLIVE(lastTransform);
 
     // move image
-    
+#endif //NEEW
 }
 
-#define CenterX (W/2)
-#define CenterY (H/2)
-#define MAX_R   (MAX(CenterX, CenterY))
-
 #define INRANGE(x,y)    (x >= 0 && x < W && y >= 0 && y < H)
+
+#ifdef NOTYET
 
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
 // we use the a channel of our pixel buffers.
@@ -1874,12 +1731,19 @@ void convolution(const Pixel *in, Pixel *out,
         }
     }
 }
+#endif
+
+- (void) remap:(RemapDist *)to from:(RemapDist *)from {
+    *to = from - to;
+}
 
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+
+#ifdef NEW
     lastTransform = [Transform areaTransform: @"Shower stall"
                                   description: @"Through the wet glass"
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int showerSize) {
@@ -1908,25 +1772,6 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.low = 10;
     lastTransform.value = 10;
     lastTransform.high = 20;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-#define CPP    20    /*cycles/picture*/
-
-    lastTransform = [Transform areaTransform: @"Wavy shower"
-                                  description: @"Through wavy glass"
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int D) {
-        for (int y=0; y<H; y++)
-            for (int x=0; x<W; x++)
-                table[PI(x,y)] = PI(x,y);
-        for (int y=0; y<H; y++)
-            for (int x=0+D; x<W-D; x++)
-                table[PI(x,y)]  = PI(x+(int)(D*sin(CPP*x*2*M_PI/W)), y);
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 23;
-    lastTransform.high = 30;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
@@ -1974,7 +1819,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform = [Transform areaTransform: @"Zoom"
                                   description: @""
                                         remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int z) {
-        float zoom = z/10.0;
+       float zoom = z/10.0;
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
                 long sx = CENTER_X + (x-CENTER_X)/zoom;
@@ -2033,6 +1878,7 @@ void convolution(const Pixel *in, Pixel *out,
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+#ifdef NOTYET
     /*
      * gaussianFilter:
      * http://www.songho.ca/dsp/cannyedge/cannyedge.html
@@ -2087,11 +1933,13 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
+    
     lastTransform = [Transform areaTransform: @"convolution sobel filter "
                                 description: @"Edge detection"
                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        for (int i=0; i<configuredPixelsInImage; i++) {
+        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
+
+        for (int i=0; i<self->execute.pixelsInImage; i++) {
             src[i].a = LUM(src[i]);
         }
         
@@ -2105,23 +1953,24 @@ void convolution(const Pixel *in, Pixel *out,
                             -1,-2,-1};
         convolution(dest, src, Gy, 3, false);
         
-        for (int i=0; i<configuredPixelsInImage; i++) {
+        for (int i=0; i<self->execute.pixelsInImage; i++) {
             dest[i] = SETRGB(src[i].a, src[i].a, src[i].a);
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+#endif
 
     lastTransform = [Transform areaTransform: @"Cone projection"
                                  description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
         double r1 = sqrt(r*MAX_R);
-        int y = (int)CenterY+(int)(r1*sin(a));
+        int y = (int)CENTER_Y+(int)(r1*sin(a));
         if (y < 0)
             y = 0;
         else if (y >= H)
             y = (int)H - 1;
-        int x = CenterX + r1*cos(a);
+        int x = CENTER_X + r1*cos(a);
         if (x < 0)
             x = 0;
         else if (x >= W)
@@ -2134,13 +1983,13 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform = [Transform areaTransform: @"Andrew's projection"
                                   description: @""
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
-        int x = CenterX + 0.6*((r - sin(a)*100 + 50) * cos(a));
-        int y = CenterY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        int x = CENTER_X + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int y = CENTER_Y + 0.6*r*sin(a); // - (CENTER_Y/4);
         return PI(x, y);
 #ifdef notdef
         if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
         else
-            return PI(&currentFormat,CenterX + r*cos(a), CenterX + r*sin(a));
+            return PI(&currentFormat,CENTER_X + r*cos(a), CENTER_X + r*sin(a));
 #endif
     }];
     [transformList addObject:lastTransform];
@@ -2151,12 +2000,13 @@ void convolution(const Pixel *in, Pixel *out,
                                   remapPolar:^PixelIndex_t (float r, float a, int p) {
         double R = hypot(W, H);
         double r1 = r*r/(R/2.0);
-        int x = (int)CenterX + (int)(r1*cos(a));
-        int y = (int)CenterY + (int)(r1*sin(a));
+        int x = (int)CENTER_X + (int)(r1*cos(a));
+        int y = (int)CENTER_Y + (int)(r1*sin(a));
         return PI(x,y);
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+#endif  // NEW
 }
 
 #ifdef notdef
@@ -2471,77 +2321,14 @@ can(double r, double a) {
     }
 #endif
 
-// For Tom's logo algorithm
-
-int
-stripe(Pixel *buf, int x, int p0, int p1, int c){
-    if(p0==p1){
-        if(c>Z){
-            buf[PI(x,p0)].r = Z;
-            return c-Z;
-        }
-        buf[PI(x,p0)].r = c;
-        return 0;
-    }
-    if (c>2*Z) {
-        buf[PI(x,p0)].r = Z;
-        buf[PI(x,p1)].r = Z;
-         return c-2*Z;
-    }
-    buf[PI(x,p0)].r = c/2;
-    buf[PI(x,p1)].r = c - c/2;
-    return 0;
-}
-
+       
 - (void) addMiscTransforms {
     [categoryNames addObject:@"Misc."];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
 
-    lastTransform = [Transform areaTransform: @"Old AT&T logo"
-                                                  description: @"Tom Duff's logo transform"
-                                                areaFunction: ^(Pixel *src, Pixel *dest, int p) {
-        size_t maxY = H;
-        size_t maxX = W;
-        int x, y;
-            
-        for (y=0; y<maxY; y++) {
-            for (x=0; x<maxX; x++) {
-                    channel c = LUM(src[PI(x,y)]);
-                    src[PI(x,y)] = SETRGB(c,c,c);
-                }
-            }
-            
-        int hgt = p;
-        int c;
-        int y0, y1;
-
-        for (y=0; y<maxY; y+= hgt) {
-            if (y+hgt>maxY)
-                hgt = (int)maxY-(int)y;
-            for (x=0; x < maxX; x++) {
-                c=0;
-                for(y0=0; y0<hgt; y0++)
-                    c += R(src[PI(x,y+y0)]);
-
-                y0 = y+(hgt-1)/2;
-                y1 = y+(hgt-1-(hgt-1)/2);
-                for (; y0 >= y; --y0, ++y1)
-                    c = stripe(src, x, y0, y1, c);
-            }
-        }
-                    
-        for (y=0; y<maxY; y++) {
-            for (x=0; x<maxX; x++) {
-                channel c = R(src[PI(x,y)]);
-                dest[PI(x,y)] = SETRGB(c, c, c);
-            }
-        }
-    }];
-    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
+#ifdef NEW      // uses parameter
+#endif
 }
        
 #ifdef notdef
@@ -2573,7 +2360,6 @@ Frand(void) {
     return((double)(rand() & RAN_MASK) / (double)(RAN_MASK));
 }
 
-#ifdef CHAT
 #ifdef notdef
         {"Cone projection", init_cone, do_remap, "Pinhead", "", 0, FRAME_COLOR},
         {"Fish eye",    init_fisheye, do_remap, "Fish", "eye", 0 ,AREA_COLOR},
@@ -2590,8 +2376,6 @@ Frand(void) {
         last_button->init = (void *)init_pixels4;
 
         add_button(exit_r, "exit", "(Exit)", Red, bparam(do_exit,0));
-#endif
-
 #endif
 
 typedef struct Pt {
@@ -2629,6 +2413,34 @@ make_block(Pt origin, struct block *b) {
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    lastTransform = [Transform colorTransform: @"Warhol"
+                                 description: @"cartoon colors"
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        int ave_r=0, ave_g=0, ave_b=0;
+        
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            ave_r += p.r;
+            ave_g += p.g;
+            ave_b += p.b;
+        }
+        
+        ave_r /= n;
+        ave_g /= n;
+        ave_b /= n;
+        
+        for (int i=0; i<n; i++) {
+            Pixel p = {0,0,0,Z};
+            p.r = (buf[i].r >= ave_r) ? Z : 0;
+            p.g = (buf[i].g >= ave_g) ? Z : 0;
+            p.b = (buf[i].b >= ave_b) ? Z : 0;
+            buf[i] = p;
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+#ifdef NEW
     lastTransform = [Transform areaTransform: @"Escher"
                                  description: @""
                                   remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pps) {
@@ -2721,7 +2533,7 @@ make_block(Pt origin, struct block *b) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform areaTransform: @"Edward Much #1"
+    lastTransform = [Transform areaTransform: @"Edward Munch #1"
                                   description: @"twist"
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {
         double newa = a + (r/3.0)*(M_PI/180.0);
@@ -2840,6 +2652,7 @@ make_block(Pt origin, struct block *b) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+#ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
                                  description: @""
                                 areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
@@ -2893,35 +2706,7 @@ make_block(Pt origin, struct block *b) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Warhol"
-                                 description: @"cartoon colors"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        int ave_r=0, ave_g=0, ave_b=0;
-
-        for (int y=0; y<H; y++)
-            for (int x=0; x<W; x++) {
-                Pixel p = src[PI(x,y)];
-                ave_r += p.r;
-                ave_g += p.g;
-                ave_b += p.b;
-            }
-
-        ave_r /= W*H;
-        ave_g /= W*H;
-        ave_b /= W*H;
-
-        for (int y=0; y<H; y++)
-            for (int x=0; x<W; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = (src[PI(x,y)].r >= ave_r) ? Z : 0;
-                p.g = (src[PI(x,y)].g >= ave_g) ? Z : 0;
-                p.b = (src[PI(x,y)].b >= ave_b) ? Z : 0;
-                dest[PI(x,y)] = p;
-            }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
+#endif
 
     lastTransform = [Transform areaTransform: @"Picasso"
                                   description: @""
@@ -2976,7 +2761,7 @@ make_block(Pt origin, struct block *b) {
         }
 
         i = 0;
-        memset(dest, 0, configuredPixelsInImage*sizeof(Pixel));
+        memset(dest, 0, self->execute.bytesInImage*sizeof(Pixel));
         for (y=1; y<H-1; y++) {
             for (x=0; x<W-len; x++) {
                 if (dlut[i] && LUM(src[PI(x,y-1)]) < prob) {
@@ -3014,6 +2799,7 @@ make_block(Pt origin, struct block *b) {
         }
     }];
     [transformList addObject:lastTransform];
+#endif  // NEW
 }
 
 #ifdef notdef

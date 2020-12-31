@@ -11,32 +11,30 @@
 @implementation Transform
 
 @synthesize name, description;
-@synthesize pointF;
+//@synthesize pointF;
+@synthesize ipPointF;
 @synthesize areaF;
 @synthesize depthVisF;
 @synthesize remapImageF;
-@synthesize remapPolarF;
 @synthesize type;
 @synthesize low, value, high;
 @synthesize newValue;
 @synthesize hasParameters;
 @synthesize remapTable;
-@synthesize elapsedProcessingTime;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        pointF = nil;
+        ipPointF = nil;
+//        pointF = nil;
         areaF = nil;
         remapImageF = nil;
-        remapPolarF = nil;
         depthVisF = nil;
         low = high = 0;
         newValue = NO;
         hasParameters = NO;
         remapTable = NULL;
-        elapsedProcessingTime = 0;
     }
     return self;
 }
@@ -51,13 +49,14 @@
     return t;
 }
 
-+ (Transform *) colorTransform:(NSString *) n description:(NSString *) d
-                pointTransform:(pointFunction_t) f {
++ (Transform *) colorTransform:(NSString *) n
+                   description:(NSString *) d
+                 inPlacePtFunc:(inPlacePtFunc_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
     t.type = ColorTrans;
-    t.pointF = f;
+    t.ipPointF = f;
     return t;
 }
 
@@ -72,17 +71,7 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapPolar:(remapPolarFunction_t) f {
-    Transform *t = [[Transform alloc] init];
-    t.name = n;
-    t.description = d;
-    t.type = RemapTrans;
-    t.remapPolarF = f;
-    return t;
-}
-
-+ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapImage:(remapImageFunction_t) f {
+                remapImage:(ComputeRemap_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
@@ -107,11 +96,10 @@
     copy.name = name;
     copy.type = type;
     copy.description = description;
-    copy.pointF = pointF;
+//    copy.pointF = pointF;
     copy.areaF = areaF;
     copy.depthVisF = depthVisF;
     copy.remapImageF = remapImageF;
-    copy.remapPolarF = remapPolarF;
     copy.low = low;
     copy.high = high;
     copy.value = value;

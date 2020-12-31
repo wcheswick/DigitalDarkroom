@@ -28,8 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL) isCameraAvailable:(Cameras) camera;
 - (void) selectCamera:(Cameras) camera;
 - (void) setupSessionForCurrentDeviceOrientation;
-- (CGSize) setupCameraForSize:(CGSize) availableSize
-                  displayMode:(DisplayMode_t)displayMode;
+- (CGSize) setupCameraForSize:(CGSize) availableSize;
 
 - (void) startCamera;
 - (void) stopCamera;
