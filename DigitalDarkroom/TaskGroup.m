@@ -56,6 +56,7 @@
     for (Task *task in tasks)
         [task removeLastTransform];
 }
+
 - (void) configureForSize:(CGSize) s {
     assert(tasksStatus == Stopped);
     if (s.width == transformSize.width &&
@@ -94,6 +95,18 @@
     newTask.targetImageView = tiv;
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
+}
+
+- (BOOL) isReadyForLayout {
+    if (tasksStatus == Stopped)
+        return YES;
+    for (Task *task in tasks) {
+        if (task.taskStatus == Running)
+            return NO;
+        task.taskStatus = Stopped;
+    }
+    tasksStatus = Stopped;
+    return YES;
 }
 
 - (void) layoutCompleted {
@@ -135,36 +148,26 @@
     }
     tasksStatus = Running;
     
-    CGFloat scale = transformSize.width / srcImage.size.width;
-    UIImage *scaledImage = [UIImage imageWithCGImage:srcImage.CGImage
-                                               scale:(srcImage.scale * scale)
-                                         orientation:(srcImage.imageOrientation)];
+    UIGraphicsBeginImageContext(CGSizeMake(srcPix.w, srcPix.h));
+    [srcImage drawInRect:CGRectMake(0, 0, srcPix.w, srcPix.h)];
+    UIImage *scaledImage = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    
     CGImageRef imageRef = [scaledImage CGImage];
-    
-#ifdef notdef
-    CFDataRef rawData = CGDataProviderCopyData(CGImageGetDataProvider(imageRef));
-    CFIndex length = CFDataGetLength(rawData);
-    UInt8 * buf = (UInt8 *) CFDataGetBytePtr(rawData);
-    NSLog(@" AA %ld", (long)length);
-    NSLog(@" BB %lu", srcPix.h * srcPix.w * sizeof(Pixel));
-    assert(length >= srcPix.h * srcPix.w * sizeof(Pixel));
-    size_t len = srcPix.h * srcPix.w * sizeof(Pixel);
-    memcpy(srcPix.pb, buf, len);
-    CFRelease(rawData);
-#endif
-    
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
 //    NSUInteger bytesPerPixel = CGImageGetBitsPerPixel(imageRef);
     NSUInteger bytesPerRow = CGImageGetBytesPerRow(imageRef);
     NSUInteger bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    assert(srcPix.w == width);
+    assert(srcPix.h == height);
     CGContextRef context = CGBitmapContextCreate(srcPix.pb, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  BITMAP_OPTS);
-    CGColorSpaceRelease(colorSpace);
 
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
+    CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
 
     @synchronized (srcPix) {

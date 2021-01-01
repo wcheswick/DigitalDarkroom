@@ -1,5 +1,5 @@
 //
-//  Execute.m
+//  TaskCtrl.m
 //  DigitalDarkroom
 //
 //  Created by William Cheswick on 12/10/20.
@@ -12,7 +12,6 @@
 
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (assign)              size_t centerX, centerY;
-@property (assign)              BOOL busy;
 @property (assign)              CGSize newLayoutSize;
 
 @end
@@ -23,7 +22,6 @@
 @synthesize transforms;
 @synthesize taskGroups;
 @synthesize depthTransform;
-@synthesize busy;
 @synthesize layoutNeeded;
 @synthesize newLayoutSize;
 
@@ -45,17 +43,21 @@
     return taskGroup;
 }
 
-- (void) needLayout:(CGSize) newSize {
+- (void) needLayoutTo:(CGSize) newSize {
     newLayoutSize = newSize;
-    layoutNeeded = YES;
-    for (TaskGroup *taskGroup in taskGroups) {
-        if (taskGroup.tasksStatus != Stopped)
-            return;
-    }
     assert(newLayoutSize.width > 0);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self->mainVC doLayout:self->newLayoutSize];
-    });
+    layoutNeeded = YES;
+    
+    TaskStatus_t newStatus = Stopped;
+    for (TaskGroup *taskGroup in taskGroups) {
+        if (![taskGroup isReadyForLayout])
+            newStatus = Running;
+    }
+    if (newStatus == Stopped) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self->mainVC doLayout:self->newLayoutSize];
+        });
+    }
 }
 
 - (void) layoutCompleted {

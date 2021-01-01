@@ -22,14 +22,15 @@ NS_ASSUME_NONNULL_BEGIN
     NSMutableArray *transformList;
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
+    BOOL enabled;   // if transform target is on-screen
 }
 
-@property (assign)              BOOL active, busy;
 @property (assign, atomic)      TaskStatus_t taskStatus;
 @property (nonatomic, strong)   UIImageView *targetImageView;
 @property (strong, nonatomic)   NSMutableArray *transformList;
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
+@property (assign)              BOOL enabled;
 
 - (id)initInGroup:(TaskGroup *) tg;
 

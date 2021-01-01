@@ -42,7 +42,7 @@ typedef enum {
 
 - (TaskGroup *) newTaskGroup;
 
-- (void) needLayout:(CGSize) newSize;
+- (void) needLayoutTo:(CGSize) newSize;
 - (void) layoutCompleted;
 
 - (void) selectDepthTransform:(int)index;

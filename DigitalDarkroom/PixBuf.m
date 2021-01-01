@@ -25,7 +25,7 @@
     if (self) {
         size_t bufSize = sizeof(Pixel *) * h +     // array of row arrays into ...
             sizeof(Pixel) * h * w;      // ... pixel buffer
-        buffer = [[NSMutableData alloc] initWithCapacity:bufSize];
+        buffer = [[NSMutableData alloc] initWithLength:bufSize];
         self.w = w;
         self.h = h;
         pa = (PixelArray_t)buffer.bytes;

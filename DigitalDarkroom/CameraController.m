@@ -326,14 +326,14 @@
 }
 
 - (void) startCamera {
-    NSLog(@"+++++ startCamera");
+    NSLog(@">>>>> startCamera");
     if (![self isCameraOn])
         [captureSession startRunning];
 }
 
 - (void) stopCamera {
     if ([self isCameraOn]) {
-        NSLog(@"----- stopCamera");
+        NSLog(@"<<<<< stopCamera");
         [captureSession stopRunning];
     }
 }

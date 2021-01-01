@@ -44,7 +44,6 @@ static PixelIndex_t dPI(int x, int y) {
 
 @implementation Task
 
-@synthesize active, busy;
 @synthesize transformList;
 @synthesize paramList;
 @synthesize targetImageView;
@@ -54,6 +53,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
+@synthesize enabled;
 
 - (id)initInGroup:(TaskGroup *) tg {
     self = [super init];
@@ -62,9 +62,8 @@ static PixelIndex_t dPI(int x, int y) {
         taskIndex = UNASSIGNED_TASK;
         transformList = [[NSMutableArray alloc] init];
         paramList = [[NSMutableArray alloc] init];
+        enabled = YES;
         taskStatus = Stopped;
-        active = NO;
-        busy = NO;
         targetImageView = nil;
         sChan = dChan = nil;
         imBuf0 = imBuf1 = nil;
@@ -115,11 +114,10 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) executeTransformsWithPixBuf:(const PixBuf *) srcBuf {
     assert(taskStatus == Ready);
+    if (!enabled)   // not onscreen
+        return;
     taskStatus = Running;
-    assert(active);
-    assert(!busy);
     assert(imBuf0); // buffers allocated
-    busy = YES;
     
     // We need to make our own task-specific copy of the source image.
     
@@ -160,17 +158,16 @@ static PixelIndex_t dPI(int x, int y) {
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
                                    orientation:taskGroup.imageOrientation];
+    CGContextRelease(context);
     CGImageRelease(quartzImage);
     CGColorSpaceRelease(colorSpace);
     
     dispatch_async(dispatch_get_main_queue(), ^{
         self->targetImageView.image = transformed;
         [self->targetImageView setNeedsDisplay];
-        self->busy = NO;
         self->taskStatus = Ready;
      });
 }

@@ -52,7 +52,7 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define OLIVE_W     100
+#define OLIVE_W     80
 #define OLIVE_FONT_SIZE 18
 // #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 
@@ -527,8 +527,12 @@ typedef enum {
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.layer.borderWidth = 1.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
-    [self.view addSubview:containerView];
+        [self.view addSubview:containerView];
     
+
+    // Refresh myView and/or main view
+    [self.view layoutIfNeeded];
+    //[self.myView layoutIfNeeded];
     // touching the transformView toggles nav and tool bars
     UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
@@ -541,7 +545,6 @@ typedef enum {
     [containerView addSubview:transformView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView];
-    screenTask.active = YES;
     //externalTask = [externalTasks createTaskForTargetImage:transformView.image];
     oliveScrollView = [[UIScrollView alloc] init];
     [containerView addSubview:oliveScrollView];
@@ -551,8 +554,10 @@ typedef enum {
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    
-    NSLog(@"-------- viewwillappear --------");
+ 
+    NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+
     [self needLayout: self.view.frame.size];
 }
 
@@ -562,22 +567,11 @@ typedef enum {
     [self needLayout: newSize];
 }
 
-
-- (void) viewWillLayoutSubviews  {
-    [super viewWillLayoutSubviews];
-    
-    NSLog(@"--------- viewWillLayoutSubviews --------");
-}
-
-- (void) viewDidLayoutSubviews  {
-    [super viewDidLayoutSubviews];
-    
-    NSLog(@"********* viewDidLayoutSubviews *********");
-}
-
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    NSLog(@"********* viewDidAppear *********");
+
+    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
     
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
@@ -605,25 +599,23 @@ typedef enum {
 
 - (void) needLayout:(CGSize) newSize {
     NSLog(@" --- needLayout to %0.f x %.0f", newSize.width, newSize.height);
-    [taskCtrl needLayout:newSize];
+    [taskCtrl needLayoutTo:newSize];
 }
 
 // this is called when we know the transforms are all Stopped.
 
-#define SEP 10  // between views
+#define SEP 5  // between views
 #define INSET 3 // from screen edges
 #define MIN_TRANS_TABLE_W 275
 
 - (void) doLayout:(CGSize) newSize {
-    NSLog(@"********************** doLayout ********************");
+    NSLog(@"****** doLayout to %0.f x %.0f", newSize.width, newSize.height);
     
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
     self.navigationController.toolbarHidden = NO;
     self.navigationController.toolbar.opaque = (uiMode == oliveUI);
     
-    NSLog(@" ####### navbar x, y: %.0f x %.0f", self.navigationController.navigationBar.frame.origin.x,
-          self.navigationController.navigationBar.frame.origin.y);
     // set up new source, if needed
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
@@ -681,6 +673,13 @@ typedef enum {
     CGRect f = self.view.frame;
     NSLog(@" **** device view frame:  %.0f x %.0f", f.size.width, f.size.height);
 
+    containerView.translatesAutoresizingMaskIntoConstraints = NO;
+    UILayoutGuide * guide = self.view.safeAreaLayoutGuide;
+    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
+    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
+    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
+    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
+
     UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
     CGFloat height = manager.statusBarFrame.size.height;
     f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
@@ -696,11 +695,11 @@ typedef enum {
     // of the height of the screen.
     
     CGSize displaySizeLimit = containerView.frame.size;
-    int thumbsOnRight = (displaySizeLimit.width / (OLIVE_W + SEP))/2;
+    int thumbsOnRight = (displaySizeLimit.width / (OLIVE_W + SEP)) * 0.3;
     if (thumbsOnRight == 0)
         thumbsOnRight = 1;
     displaySizeLimit.width -= thumbsOnRight * (OLIVE_W + SEP);
-    displaySizeLimit.height = round(displaySizeLimit.height * 0.67);    // no more than two thirds of the screen in height
+    displaySizeLimit.height = round(displaySizeLimit.height * 1.0);    // no more than two thirds of the screen in height
     
     // determine capture size based on various target sizes
     CGSize captureSize;
@@ -758,7 +757,7 @@ typedef enum {
     //    [thumbsTasks selectDepthTransform:depthTransformIndex];
     //    [externalTask configureForSize: processingSize];
     
-    [self updateOlivesTo:nil];
+// XXXXXX    [self updateOlivesTo:nil];
     oliveUpdateNeeded = YES;
     
     [oliveScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
@@ -794,7 +793,7 @@ typedef enum {
     }
     [self adjustButtons];
     
-    taskCtrl.layoutNeeded = NO;
+    [taskCtrl layoutCompleted];
 }
 
 - (void) fillOliveView:(UIView *)oliveSelectionPanel {
@@ -998,7 +997,7 @@ typedef enum {
 #endif
 
 - (void) adjustButtons {
-    NSLog(@"****** adjustButtons ******");
+//    NSLog(@"****** adjustButtons ******");
     
     trashButton.enabled = screenTask.transformList.count > 0;
     undoButton.enabled = screenTask.transformList.count > 0;
@@ -1265,9 +1264,9 @@ timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
         busyCount++;
         return;
     }
+    busy = YES;
     
 #ifdef TODO
-    busy = YES;
     
     UIImage *processedDepthImage = [self imageFromDepthDataBuffer:depthData
                                                       orientation:imageOrientation];
