@@ -16,7 +16,7 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 
 @interface PixBuf : NSMutableData {
     size_t w, h;
-    PixelArray_t pa;  // pixel array, pb[x][y] in our code
+    PixelArray_t pa;  // pixel array, pb[y][x] in our code
     Pixel *pb;      // pixel buffer, w*h contiguous pixels
 }
 
@@ -25,6 +25,8 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 @property (assign)  Pixel *pb;
 
 - (id)initWithWidth:(size_t) w height:(size_t)h;
+- (void) copyPixelsTo:(PixBuf *) dest;
+- (void) verify;
 
 @end
 

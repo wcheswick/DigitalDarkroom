@@ -1259,6 +1259,8 @@ didOutputDepthData:(AVDepthData *)depthData
 timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     if (!capturing)
         return;
+    if (taskCtrl.layoutNeeded)
+        return;
     depthCount++;
     if (busy) {
         busyCount++;
@@ -1380,7 +1382,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     frameCount++;
     if (!capturing)
         return;
-    
+    if (taskCtrl.layoutNeeded)
+        return;
     if (busy) {
         busyCount++;
         return;

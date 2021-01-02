@@ -90,6 +90,7 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) configureForSize:(CGSize) s {
+    assert(taskStatus == Stopped);
     imBuf0 = [[PixBuf alloc] initWithWidth:s.width height:s.height];
     imBuf1 = [[PixBuf alloc] initWithWidth:s.width height:s.height];
     assert(imBuf0);
@@ -108,6 +109,7 @@ static PixelIndex_t dPI(int x, int y) {
     Transform *transform = transformList[index];
     if (!transform.remapImageF)
         return;
+    assert(taskStatus == Stopped);
     Params *params = paramList[index];
     params.remapBuf = [taskGroup remapForTransform:transform params:params];
 }
@@ -127,7 +129,11 @@ static PixelIndex_t dPI(int x, int y) {
 #define W   srcBuf.w
 #define H   srcBuf.h
 
-    memcpy(imBuf0.pb, srcBuf.pb, W * H * sizeof(Pixel));
+    // leave our source pixels untouched for others to use.
+    // the destination already has the pixel array pointers set up
+    // for the destination buffer.
+    
+    [srcBuf copyPixelsTo:(PixBuf *)imBufs[sourceIndex]];
 
     NSDate *startTime = [NSDate now];
     for (int i=0; i<transformList.count; i++) {
@@ -140,6 +146,7 @@ static PixelIndex_t dPI(int x, int y) {
         destIndex = [self performTransform:transform
                                     params:params
                                source:sourceIndex];
+        assert(destIndex == 0 || destIndex == 1);
         sourceIndex = 1 - destIndex;
         NSDate *transformEnd = [NSDate now];
         params.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
@@ -149,21 +156,23 @@ static PixelIndex_t dPI(int x, int y) {
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
     
     PixBuf *outBuf = imBufs[sourceIndex];
+    [outBuf verify];
     
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
     NSUInteger bytesPerRow = bytesPerPixel * W;
     NSUInteger bitsPerComponent = 8*sizeof(channel);
-    CGContextRef context = CGBitmapContextCreate(outBuf.pb, W, H,
+    CGContextRef context = CGBitmapContextCreate(outBuf.pb, outBuf.w, outBuf.h,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
                                    orientation:taskGroup.imageOrientation];
-    CGContextRelease(context);
     CGImageRelease(quartzImage);
-    CGColorSpaceRelease(colorSpace);
     
     dispatch_async(dispatch_get_main_queue(), ^{
         self->targetImageView.image = transformed;

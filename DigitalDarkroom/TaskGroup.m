@@ -165,11 +165,17 @@
     CGContextRef context = CGBitmapContextCreate(srcPix.pb, width, height,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  BITMAP_OPTS);
-
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
 
+    for (int x=0; x<width; x++) {
+        srcPix.pa[30][x] = White;
+    }
+    for (int y=0; y<height; y++) {
+        srcPix.pa[y][20] = Red;
+    }
+    
     @synchronized (srcPix) {
         for (Task *task in tasks) {
             if (task.taskStatus == Running)
