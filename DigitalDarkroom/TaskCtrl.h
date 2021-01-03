@@ -51,6 +51,7 @@ typedef enum {
 
 - (Task *) createTaskInGroup:(TaskGroup *) taskGroup
                  forTargetView:(UIImageView *)tiv;
+- (void) layoutIfReady;
 
 @end
 

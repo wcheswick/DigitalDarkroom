@@ -576,7 +576,7 @@ typedef enum {
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     
-#define TICK_INTERVAL   1.0
+#define TICK_INTERVAL   0.1
     statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
                                                   target:self
                                                 selector:@selector(doTick:)
@@ -1362,8 +1362,7 @@ size_t bufferEntries = 0;
                                                  8,
                                                  bytesPerRow,
                                                  colorSpace,
-                                                 kCGBitmapByteOrder32Little |
-                                                 kCGImageAlphaPremultipliedFirst);
+                                                 BITMAP_OPTS;
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     UIImage *image = [UIImage imageWithCGImage:quartzImage
@@ -1426,7 +1425,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
-                                                 bytesPerRow, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     CVPixelBufferUnlockBaseAddress(imageBuffer,0);
     CGContextRelease(context);
@@ -1793,6 +1792,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 #endif
 
 - (void) doTick:(NSTimer *)sender {
+    if (taskCtrl.layoutNeeded)
+        [taskCtrl layoutIfReady];
 #ifdef NOTYET
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];

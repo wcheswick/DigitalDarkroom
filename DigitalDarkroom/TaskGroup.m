@@ -58,7 +58,11 @@
 }
 
 - (void) configureForSize:(CGSize) s {
-    assert(tasksStatus == Stopped);
+    if (tasksStatus != Stopped) {
+        for (Task *task in tasks)
+            NSLog(@" ** task status is %d", task.taskStatus);
+        assert(tasksStatus == Stopped);
+    }
     if (s.width == transformSize.width &&
         s.height == transformSize.height &&
         srcPix)
@@ -98,12 +102,19 @@
 }
 
 - (BOOL) isReadyForLayout {
+    assert(taskCtrl.layoutNeeded);
     if (tasksStatus == Stopped)
         return YES;
     for (Task *task in tasks) {
-        if (task.taskStatus == Running)
-            return NO;
-        task.taskStatus = Stopped;
+        switch (task.taskStatus) {
+            case Running:
+                return NO;
+            case Ready:
+                task.taskStatus = Stopped;
+                //  FALLTHROUGH
+            case Stopped:
+                ;
+        }
     }
     tasksStatus = Stopped;
     return YES;
@@ -153,10 +164,20 @@
     UIImage *scaledImage = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     
+#ifdef SKIPTRANSFORMS   // for debugging
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (Task *task in self->tasks) {
+            if (task.taskStatus == Running)
+                continue;
+            task.targetImageView.image = scaledImage;
+            [task.targetImageView setNeedsDisplay];
+        }
+     });
+#endif
+
     CGImageRef imageRef = [scaledImage CGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
-//    NSUInteger bytesPerPixel = CGImageGetBitsPerPixel(imageRef);
     NSUInteger bytesPerRow = CGImageGetBytesPerRow(imageRef);
     NSUInteger bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
@@ -168,13 +189,6 @@
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
-
-    for (int x=0; x<width; x++) {
-        srcPix.pa[30][x] = White;
-    }
-    for (int y=0; y<height; y++) {
-        srcPix.pa[y][20] = Red;
-    }
     
     @synchronized (srcPix) {
         for (Task *task in tasks) {

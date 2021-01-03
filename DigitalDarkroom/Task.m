@@ -73,6 +73,8 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) appendTransform:(Transform *) transform {
+    if (taskGroup.taskCtrl.layoutNeeded)
+        return; // nope, busy
     [transformList addObject:transform];
     Params *params = [[Params alloc] init];
     [paramList addObject:params];
@@ -164,7 +166,7 @@ static PixelIndex_t dPI(int x, int y) {
     NSUInteger bitsPerComponent = 8*sizeof(channel);
     CGContextRef context = CGBitmapContextCreate(outBuf.pb, outBuf.w, outBuf.h,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
-                                                 kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+                                                 BITMAP_OPTS);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);

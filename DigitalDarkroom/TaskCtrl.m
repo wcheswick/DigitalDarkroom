@@ -13,6 +13,7 @@
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (assign)              size_t centerX, centerY;
 @property (assign)              CGSize newLayoutSize;
+@property (assign)              volatile BOOL layingOut;
 
 @end
 
@@ -23,6 +24,7 @@
 @synthesize taskGroups;
 @synthesize depthTransform;
 @synthesize layoutNeeded;
+@synthesize layingOut;
 @synthesize newLayoutSize;
 
 - (id)init {
@@ -33,6 +35,7 @@
         taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
         depthTransform = nil;
         layoutNeeded = YES;
+        layingOut = NO;
     }
     return self;
 }
@@ -44,25 +47,34 @@
 }
 
 - (void) needLayoutTo:(CGSize) newSize {
+    assert(!layingOut);
+    layoutNeeded = YES;
     newLayoutSize = newSize;
     assert(newLayoutSize.width > 0);
-    layoutNeeded = YES;
-    
+    [self layoutIfReady];
+}
+
+- (void) layoutIfReady {
+    if (layingOut)
+        return;
     TaskStatus_t newStatus = Stopped;
     for (TaskGroup *taskGroup in taskGroups) {
         if (![taskGroup isReadyForLayout])
             newStatus = Running;
     }
     if (newStatus == Stopped) {
+        layingOut = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
             [self->mainVC doLayout:self->newLayoutSize];
         });
-    }
+    } else
+        NSLog(@"  -- still busy to layout");
 }
 
 - (void) layoutCompleted {
     NSLog(@" --- layout completed");
     layoutNeeded = NO;
+    layingOut = NO;
     for (TaskGroup *taskGroup in taskGroups)
         [taskGroup layoutCompleted];
 }

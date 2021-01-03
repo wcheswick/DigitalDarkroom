@@ -16,7 +16,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 
-#define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedLast
+#define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
 
 #define NO_DEPTH_TRANSFORM  (100)
 
