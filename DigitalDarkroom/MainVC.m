@@ -868,16 +868,17 @@ typedef enum {
         //        transformLabel.backgroundColor = [UIColor greenColor];
         transformLabel.contentMode = NSLayoutAttributeBottom;
         [v addSubview:transformLabel];
-        [v bringSubviewToFront:transformLabel];
+//        [v bringSubviewToFront:transformLabel];
         
         UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
-                                         initWithTarget:self action:@selector(didTapOlive:)];
+                                         initWithTarget:self
+                                         action:@selector(didTapOlive:)];
         [touch setNumberOfTouchesRequired:1];
         [v addGestureRecognizer:touch];
         
         v.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
         [oliveSelectionPanel addSubview:v];
-        [self adjustOliveSelected:v yes:NO];
+        [self adjustOliveSelected:v selected:NO];
         
         // where does the next one go?
         CGFloat nextX = RIGHT(v.frame) + SEP;
@@ -919,10 +920,10 @@ typedef enum {
 #endif
 }
 
-- (void) adjustOliveSelected:(UIView *)v yes:(BOOL)on {
+- (void) adjustOliveSelected:(UIView *)v selected:(BOOL)selected {
     UILabel *l = [v viewWithTag:TRANSFORM_LABEL_TAG];
     assert(l);
-    if (on) {
+    if (selected) {
         l.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
         v.layer.borderWidth = 5.0;
         oliveSelectedView = v;
@@ -932,6 +933,7 @@ typedef enum {
         v.layer.borderWidth = 1.0;
     }
     [l setNeedsDisplay];
+    [v setNeedsDisplay];
 }
 
 - (IBAction) didTapOlive:(UITapGestureRecognizer *)recognizer {
@@ -945,14 +947,13 @@ typedef enum {
     
     UIView *v = [recognizer view];
     if (v == oliveSelectedView) {   // just turn off current one
-        [self adjustOliveSelected:oliveSelectedView yes:NO];
+        [self adjustOliveSelected:oliveSelectedView selected:NO];
         oliveSelectedView = nil;
         return;
     }
-    if (oliveSelectedView)
-        [self adjustOliveSelected:oliveSelectedView yes:NO];
     
     oliveSelectedView = v;
+    [self adjustOliveSelected:oliveSelectedView selected:YES];
     size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
     Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
     [screenTask appendTransform:transform];
