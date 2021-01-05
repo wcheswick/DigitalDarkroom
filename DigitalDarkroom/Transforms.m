@@ -83,10 +83,10 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) buildTransformList {
     [self addDepthVisualizations];
     [self addTestTransforms];
+    [self addPointTransforms];
 #ifdef NOTYET
 //    [self addColorVisionDeficits];
     [self addGeometricTransforms];
-    [self addPointTransforms];
     [self addMiscTransforms];
     // tested:
     [self addAreaTransforms];
@@ -124,25 +124,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-    
-    lastTransform = [Transform colorTransform: @"Solarize"
-                                 description: @"Simulate extreme overexposure"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
-        for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
-                                   p.g < Z/2 ? p.g : Z-p.g,
-                                   p.b < Z/2 ? p.b : Z-p.r);
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
    
     lastTransform = [Transform areaTransform: @"Wavy shower"
                                  description: @"Through wavy glass"
-                     remapImage:^(RemapBuf *remapBuf, Params *params) {
+                     remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
 #define CPP    20    /*cycles/picture*/
-        int D = params.value;
+        int D = instance.value;
         for (int y=0; y<remapBuf.h; y++) {
             for (int x=0; x<remapBuf.w; x++) {
                 REMAP_TO(x,y, x,y);
@@ -165,7 +152,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                   description: @"Tom Duff's logo transform"
                                  areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                 size_t w, size_t h, Params * __nullable param) {
+                                                 size_t w, size_t h, TransformInstance *instance) {
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
                 channel c = LUM(src[y][x]);
@@ -173,7 +160,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
         }
         
-        int hgt = param.value;
+        int hgt = instance.value;
         assert(hgt > 0);
         int c;
         int y0, y1;
@@ -342,7 +329,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
                                 areaFunction:^(PixelArray_t src, PixelArray_t dest,
-                                               size_t w, size_t h, Params * __nullable param) {
+                                               size_t w, size_t h, TransformInstance *instance) {
         channel lum[w][h];  // XXX does this variable array work?
         for (int y=1; y<h-1; y++)
             for (int x=1; x<w-1; x++)
@@ -372,7 +359,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform = [Transform areaTransform: @"Old blur"
                                   description: @""
                                 areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                size_t w, size_t h, Params * __nullable param) {
+                                                size_t w, size_t h, TransformInstance *instance) {
         for (int y=1; y<h-1; y++) {
             for (int x=1; x<w-1; x++) {
                 Pixel p = {0,0,0,Z};
@@ -1301,6 +1288,56 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform: @"Solarize"
+                                 description: @"Simulate extreme overexposure"
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
+                                   p.g < Z/2 ? p.g : Z-p.g,
+                                   p.b < Z/2 ? p.b : Z-p.r);
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform:@"Red"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r,0,0);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform:@"Green"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(0,p.r,0);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform:@"Blue"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(0,0,p.r);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
 
 #ifdef NEW
     lastTransform = [Transform areaTransform: @"Solarize"
@@ -1664,24 +1701,6 @@ irand(int i) {
         return SETRGB(c,c,c);
     }];
     [transformList addObject:lastTransform];
-    
-    lastTransform = [Transform colorTransform:@"Red channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(p.r,0,0);
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform colorTransform:@"Green channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(0,p.g,0);
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform colorTransform:@"Blue channel" description:@"" pointTransform:^Pixel(Pixel p) {
-        return SETRGB(0,0,p.b);
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
 
     // move image
 #endif //NEEW

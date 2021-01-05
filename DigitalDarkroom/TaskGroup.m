@@ -99,8 +99,9 @@
 // on the pixel array size, and maybe parameter settings.  We only compute the transform/parameter
 // remap once, because it is good for every identical transform/param in all the tasks in this group.
 
-- (RemapBuf *) remapForTransform:(Transform *) transform params:(Params *)params {
-    NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, params.value];
+- (RemapBuf *) remapForTransform:(Transform *) transform
+                        instance:(TransformInstance *) instance {
+    NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, instance.value];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
     if (remapBuf) {
         NSLog(@"    GG cached remap %@   size %.0f x %.0f",
@@ -111,7 +112,7 @@
           groupName, transformSize.width, transformSize.height);
     remapBuf = [[RemapBuf alloc] initWithWidth:transformSize.width
                                         height:transformSize.height];
-    transform.remapImageF(remapBuf, params);
+    transform.remapImageF(remapBuf, instance);
     assert(remapBuf);
     [remapCache setObject:remapBuf forKey:name];
     return remapBuf;

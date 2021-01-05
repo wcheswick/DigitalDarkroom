@@ -11,15 +11,14 @@
 @implementation Transform
 
 @synthesize name, description;
-//@synthesize pointF;
+@synthesize type;
+@synthesize hasParameters;
 @synthesize ipPointF;
 @synthesize areaF;
 @synthesize depthVisF;
 @synthesize remapImageF;
-@synthesize type;
 @synthesize low, value, high;
 @synthesize newValue;
-@synthesize hasParameters;
 @synthesize remapTable;
 
 

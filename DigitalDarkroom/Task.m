@@ -6,6 +6,7 @@
 //  Copyright © 2020 Cheswick.com. All rights reserved.
 //
 
+#import "TransformInstance.h"
 #import "Task.h"
 #import "ChBuf.h"
 
@@ -101,27 +102,28 @@ static PixelIndex_t dPI(int x, int y) {
 //    assert(taskStatus == Stopped);
     CGSize s = taskGroup.transformSize;
     NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
-    Params *params = paramList[index];
-    params.remapBuf = [taskGroup remapForTransform:transform params:params];
+    TransformInstance *instance = paramList[index];
+    instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
 }
 
 - (void) appendTransform:(Transform *) transform {
 //    if (taskGroup.taskCtrl.layoutNeeded)
 //        return; // nope, busy
     [transformList addObject:transform];
-    Params *params = [[Params alloc] init];
-    [paramList addObject:params];
-    if (transform.hasParameters)
-        params.value = transform.value;
+    TransformInstance *instance = [[TransformInstance alloc]
+                                   initFromTransform:(Transform *)transform];
+    [paramList addObject:instance];
     [self configureTransformAtIndex:transformList.count - 1];
 }
 
 - (void) removeLastTransform {
     [transformList removeLastObject];
+    [paramList removeLastObject];
 }
 
 - (void) removeAllTransforms {
     [transformList removeAllObjects];
+    [paramList removeAllObjects];
 }
 
 - (void) executeTransformsWithPixBuf:(const PixBuf *) srcBuf {
@@ -155,14 +157,14 @@ static PixelIndex_t dPI(int x, int y) {
             return;
         }
         Transform *transform = transformList[i];
-        Params *params = paramList[i];
+        TransformInstance *instance = paramList[i];
         destIndex = [self performTransform:transform
-                                    params:params
+                                    instance:instance
                                source:sourceIndex];
         assert(destIndex == 0 || destIndex == 1);
         sourceIndex = destIndex;
         NSDate *transformEnd = [NSDate now];
-        params.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
+        instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
         startTime = transformEnd;
     }
 
@@ -199,7 +201,7 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (size_t) performTransform:(Transform *)transform
-                     params:(Params *)params
+                     instance:(TransformInstance *)instance
                      source:(size_t)sourceIndex {
     size_t destIndex = 1 - sourceIndex;
     PixBuf *src = imBufs[sourceIndex];
@@ -210,7 +212,7 @@ static PixelIndex_t dPI(int x, int y) {
             transform.ipPointF(src.pb, src.w*src.h);
             return sourceIndex;     // was done in place
         case AreaTrans:
-            transform.areaF(src.pa, dst.pa, src.w, src.h, params);
+            transform.areaF(src.pa, dst.pa, src.w, src.h, instance);
             break;
         case DepthVis:
             /// should not be reached
@@ -221,8 +223,8 @@ static PixelIndex_t dPI(int x, int y) {
         case GeometricTrans:
         case RemapTrans: {
             assert(transform.remapImageF);
-            assert(params.remapBuf);
-            BufferIndex *bip = params.remapBuf.rb;
+            assert(instance.remapBuf);
+            BufferIndex *bip = instance.remapBuf.rb;
             Pixel *dp = dst.pb;
             for (int i=0; i<dst.w*dst.h; i++) {
                 Pixel p;

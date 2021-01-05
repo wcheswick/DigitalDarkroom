@@ -11,14 +11,17 @@
 @implementation TransformInstance
 
 @synthesize value;
-@synthesize remapTable;
+@synthesize remapBuf;
 @synthesize elapsedProcessingTime;
+@synthesize timesCalled;
 
 
-- (id)init {
+- (id) initFromTransform:(Transform *)transform {
     self = [super init];
     if (self) {
-        remapTable = NULL;
+        remapBuf = nil;
+        value = transform.value;
+        timesCalled = 0;
         elapsedProcessingTime = 0;
     }
     return self;

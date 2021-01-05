@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "Transform.h"
+#import "TransformInstance.h"
 
 #import "TaskCtrl.h"
 
@@ -51,7 +52,8 @@ typedef enum {
 - (void) configureGroupForSize:(CGSize) s;
 
 - (void) executeTasksWithImage:(UIImage *) image;
-- (RemapBuf *) remapForTransform:(Transform *) transform params:(Params *) params;
+- (RemapBuf *) remapForTransform:(Transform *) transform
+                        instance:(TransformInstance *) instance;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
 

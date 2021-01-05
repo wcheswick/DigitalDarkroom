@@ -7,14 +7,16 @@
 //
 
 #import <Foundation/Foundation.h>
+
 #import "DepthImage.h"
 #import "PixBuf.h"
 #import "RemapBuf.h"
-#import "Params.h"
+#import "TransformInstance.h"
 #import "Defines.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class TransformInstance;
 
 #define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
 
@@ -32,7 +34,8 @@ typedef enum {
 
 typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size_t n);
 
-typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)(RemapBuf *remapBuf, Params *params);
+typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)
+            (RemapBuf *remapBuf, TransformInstance *instance);
 
 #ifdef NOTUSED
 typedef void (^ __nullable __unsafe_unretained
@@ -41,7 +44,7 @@ typedef void (^ __nullable __unsafe_unretained
 
 typedef void (^ __nullable __unsafe_unretained
               areaFunction_t)(PixelArray_t src, PixelArray_t dest,
-                              size_t w, size_t h, Params * __nullable param);
+                              size_t w, size_t h, TransformInstance * __nullable instance);
 
 typedef void (^ __nullable __unsafe_unretained
               depthVis_t)(DepthImage *depthBuf,
@@ -53,9 +56,9 @@ typedef void (^ __nullable __unsafe_unretained
     transform_t type;
     BOOL hasParameters;
     inPlacePtFunc_t ipPointF;
-//    pointFunction_t pointF;
     areaFunction_t areaF;
     depthVis_t depthVisF;
+    int low, value, high;
     ComputeRemap_t remapImageF;
 }
 
