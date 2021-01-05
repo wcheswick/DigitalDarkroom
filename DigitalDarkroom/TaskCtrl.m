@@ -40,8 +40,9 @@
     return self;
 }
 
-- (TaskGroup *) newTaskGroup {
+- (TaskGroup *) newTaskGroupNamed:(NSString *)name {
     TaskGroup *taskGroup = [[TaskGroup alloc] initWithController:self];
+    taskGroup.groupName = name;
     [taskGroups addObject:taskGroup];
     return taskGroup;
 }
@@ -77,11 +78,6 @@
     layingOut = NO;
     for (TaskGroup *taskGroup in taskGroups)
         [taskGroup layoutCompleted];
-}
-
-- (Task *) createTaskInGroup:(TaskGroup *) taskGroup
-                 forTargetView:(UIImageView *)tiv {
-    return [taskGroup createTaskForTargetImageView:tiv];
 }
 
 - (void) configureForSize:(CGSize) ts {

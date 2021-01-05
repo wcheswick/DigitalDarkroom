@@ -104,19 +104,19 @@ int
 stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     if(p0==p1){
         if(c>Z){
-            buf[x][p0].r = Z;
+            buf[p0][x].r = Z;
             return c-Z;
         }
-        buf[x][p0].r = c;
+        buf[p0][x].r = c;
         return 0;
     }
     if (c>2*Z) {
-        buf[x][p0].r = Z;
-        buf[x][p1].r = Z;
+        buf[p0][x].r = Z;
+        buf[p1][x].r = Z;
         return c-2*Z;
     }
-    buf[x][p0].r = c/2;
-    buf[x][p1].r = c - c/2;
+    buf[p0][x].r = c/2;
+    buf[p1][x].r = c - c/2;
     return 0;
 }
 
@@ -133,41 +133,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
                                    p.g < Z/2 ? p.g : Z-p.g,
                                    p.b < Z/2 ? p.b : Z-p.r);
-
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-    
-    lastTransform = [Transform areaTransform: @"Old blur"
-                                  description: @""
-                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                size_t w, size_t h, Params * __nullable param) {
-        for (int y=1; y<h-1; y++) {
-            for (int x=1; x<w-1; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = (src[x][y].r +
-                       src[x+1][y].r +
-                       src[x-1][y].r +
-                       src[x][y-1].r +
-                       src[x][y+1].r)/5;
-                p.g = (src[x][y].g +
-                       src[x+1][y].g +
-                       src[x-1][y].g +
-                       src[x][y-1].g +
-                       src[x][y+1].g)/5;
-                p.b = (src[x][y].b +
-                       src[x+1][y].b +
-                       src[x-1][y].b +
-                       src[x][y-1].b +
-                       src[x][y+1].b)/5;
-                dest[x][y] = p;
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-    
    
     lastTransform = [Transform areaTransform: @"Wavy shower"
                                  description: @"Through wavy glass"
@@ -176,12 +145,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         int D = params.value;
         for (int y=0; y<remapBuf.h; y++) {
             for (int x=0; x<remapBuf.w; x++) {
-                RA[x][y] = REMAP_DIST(RA[x][y], RA[x][y]);
+                REMAP_TO(x,y, x,y);
             }
         }
         for (int y=0; y<remapBuf.h; y++) {
             for (int x=0+D; x<remapBuf.w-D; x++) {
-                RA[x][y] = REMAP_DIST(RA[x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w))][y], RA[x][y]);
+                REMAP_TO(x,y, x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w)),y);
             }
         }
     }];
@@ -199,12 +168,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                                  size_t w, size_t h, Params * __nullable param) {
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = LUM(src[x][y]);
-                src[x][y] = SETRGB(c,c,c);
+                channel c = LUM(src[y][x]);
+                src[y][x] = SETRGB(c,c,c);
             }
         }
         
         int hgt = param.value;
+        assert(hgt > 0);
         int c;
         int y0, y1;
 
@@ -214,8 +184,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             for (int x=0; x < w; x++) {
                 c=0;
                 for(y0=0; y0<hgt; y0++)
-                    c += src[x][y+y0].r;
-
+                    c += src[y+y0][x].r;
                 y0 = y+(hgt-1)/2;
                 y1 = y+(hgt-1-(hgt-1)/2);
                 for (; y0 >= y; --y0, ++y1)
@@ -225,8 +194,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = src[x][y].r;
-                dest[x][y] = SETRGB(c, c, c);
+                channel c = src[y][x].r;
+                dest[y][x] = SETRGB(c, c, c);
             }
         }
     }];
@@ -234,6 +203,41 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
+    
+#ifdef WORKING
+    
+    lastTransform = [Transform areaTransform: @"Old blur"
+                                  description: @""
+                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
+                                                size_t w, size_t h, Params * __nullable param) {
+#define S(x,y)  src[y][x]
+        for (int y=1; y<h-1; y++) {
+            for (int x=1; x<w-1; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (S(x,y).r +
+                       S(x+1,y).r +
+                       S(x-1,y).r +
+                       S(x,y-1).r +
+                       S(x,y+1).r)/5;
+                p.g = (S(x,y).g +
+                       S(x+1,y).g +
+                       S(x-1,y).g +
+                       S(x,y-1).g +
+                       S(x,y+1).g)/5;
+                p.b = (S(x,y).b +
+                       S(x+1,y).b +
+                       S(x-1,y).b +
+                       S(x,y-1).b +
+                       S(x,y+1).b)/5;
+                dest[y][x] = p;
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+#endif
+    
 }
 
 - (Transform *)depthdepthTransformForIndex:(int)index {
@@ -1732,10 +1736,6 @@ void convolution(const Pixel *in, Pixel *out,
     }
 }
 #endif
-
-- (void) remap:(RemapDist *)to from:(RemapDist *)from {
-    *to = from - to;
-}
 
 - (void) addGeometricTransforms {
     [categoryNames addObject:@"Geometric"];

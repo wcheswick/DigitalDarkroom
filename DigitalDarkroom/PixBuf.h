@@ -24,7 +24,7 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 @property (assign)  PixelArray_t pa;
 @property (assign)  Pixel *pb;
 
-- (id)initWithWidth:(size_t) w height:(size_t)h;
+- (id)initWithSize:(CGSize)s;
 - (void) copyPixelsTo:(PixBuf *) dest;
 - (void) verify;
 

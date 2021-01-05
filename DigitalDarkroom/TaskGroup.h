@@ -34,6 +34,7 @@ typedef enum {
     size_t bytesInImage;
     size_t bitsPerComponent;
     UIImageOrientation imageOrientation;
+    NSString *groupName;        // for debug display purposes
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
@@ -44,18 +45,18 @@ typedef enum {
 @property (assign)          size_t bitsPerComponent;
 @property (assign)          size_t bytesInImage;
 @property (assign)          UIImageOrientation imageOrientation;
+@property (nonatomic, strong)   NSString *groupName;
 
 - (id)initWithController:(TaskCtrl *) caller;
+- (void) configureGroupForSize:(CGSize) s;
 
 - (void) executeTasksWithImage:(UIImage *) image;
 - (RemapBuf *) remapForTransform:(Transform *) transform params:(Params *) params;
-- (Task *) createTaskForTargetImageView:(UIImageView *)yiv;
+- (Task *) createTaskForTargetImageView:(UIImageView *) tiv
+                                  named:(NSString *)tn;
 
 - (void) removeAllTransforms;
 - (void) removeLastTransform;
-
-- (void) configureForSize:(CGSize) size;
-- (void) configureForImage:(UIImage *) image;
 
 - (BOOL) isReadyForLayout;
 - (void) layoutCompleted;

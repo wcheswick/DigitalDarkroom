@@ -231,9 +231,9 @@ typedef enum {
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
         
-        screenTasks = [taskCtrl newTaskGroup];
-        thumbTasks = [taskCtrl newTaskGroup];
-        //externalTasks = [taskCtrl newTaskGroup];
+        screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
+        thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
+        //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
 
         transformTotalElapsed = 0;
         transformCount = 0;
@@ -544,7 +544,6 @@ typedef enum {
     transformView.backgroundColor = NAVY_BLUE;
     [containerView addSubview:transformView];
     
-    screenTask = [screenTasks createTaskForTargetImageView:transformView];
     //externalTask = [externalTasks createTaskForTargetImage:transformView.image];
     oliveScrollView = [[UIScrollView alloc] init];
     [containerView addSubview:oliveScrollView];
@@ -751,8 +750,10 @@ typedef enum {
     f.origin = CGPointZero;
     f.size = displaySize;
     transformView.frame = f;
-    [screenTasks configureForSize: captureSize];
-    
+    [screenTasks configureGroupForSize: captureSize];
+    if (!screenTask)
+        screenTask = [screenTasks createTaskForTargetImageView:transformView named:@"main"];
+
     //    [screenTasks selectDepthTransform:depthTransformIndex];
     //    [thumbsTasks selectDepthTransform:depthTransformIndex];
     //    [externalTask configureForSize: processingSize];
@@ -805,7 +806,8 @@ typedef enum {
     imageRect.size.height = round(imageRect.size.width / aspectRatio);
     
     [thumbTasks removeAllTransforms];
-    [thumbTasks configureForSize: imageRect.size];
+    [thumbTasks configureGroupForSize: imageRect.size];
+
     BOOL thumbTasksEmpty = thumbTasks.tasks.count == 0; // not initialized yet
     
     CGRect f;   // compute position and size of first entry
@@ -844,7 +846,10 @@ typedef enum {
         // XXXXX        imageView.tag = THUMB_TASK_INDEX_BASE_TAG + taskIndex;  // XXX not sure this will be needed
         
         Transform *transform = [transforms.flatTransformList objectAtIndex:i];
-        
+        Task *task = [thumbTasks createTaskForTargetImageView:imageView
+                                                        named:transform.name];
+        [task appendTransform:transform];
+
         UILabel *transformLabel = [[UILabel alloc] init];
         transformLabel.textAlignment = NSTextAlignmentCenter;
         transformLabel.adjustsFontSizeToFitWidth = NO;
@@ -894,6 +899,7 @@ typedef enum {
             }
         }
     }
+
     f = oliveSelectionPanel.frame;
     f.size.height = frameH;
     oliveSelectionPanel.frame = f;
@@ -945,15 +951,21 @@ typedef enum {
 #endif
     [screenTasks removeAllTransforms];  // currently, no stacked transforms
     
+    // at present, only one view selectable
     UIView *v = [recognizer view];
-    if (v == oliveSelectedView) {   // just turn off current one
+    if (v == oliveSelectedView) {   // deselect, and we are done
         [self adjustOliveSelected:oliveSelectedView selected:NO];
         oliveSelectedView = nil;
         return;
     }
     
+    if (oliveSelectedView) {   // just turn off current one
+        [self adjustOliveSelected:oliveSelectedView selected:NO];
+    }
+    
     oliveSelectedView = v;
     [self adjustOliveSelected:oliveSelectedView selected:YES];
+    
     size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
     Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
     [screenTask appendTransform:transform];

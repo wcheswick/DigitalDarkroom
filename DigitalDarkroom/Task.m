@@ -44,6 +44,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @implementation Task
 
+@synthesize taskName;
 @synthesize transformList;
 @synthesize paramList;
 @synthesize targetImageView;
@@ -55,9 +56,10 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskStatus;
 @synthesize enabled;
 
-- (id)initInGroup:(TaskGroup *) tg {
+- (id)initInGroup:(TaskGroup *) tg name:(NSString *) n {
     self = [super init];
     if (self) {
+        taskName = n;
         taskGroup = tg;
         taskIndex = UNASSIGNED_TASK;
         transformList = [[NSMutableArray alloc] init];
@@ -72,15 +74,46 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (void) configureTaskForSize {
+    NSLog(@"   TTT %@  configureTaskForSize", taskName);
+    imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
+    imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
+    assert(imBuf0);
+    assert(imBuf1);
+    imBufs[0] = imBuf0;
+    imBufs[1] = imBuf1;
+    for (int i=0; i<transformList.count; i++) {
+        [self configureTransformAtIndex:i];
+    }
+}
+
+- (void) configureTransformAtIndex:(size_t)ti {
+    CGSize s = taskGroup.transformSize;
+    NSLog(@"    TT  %-15@   configure for size %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
+//    assert(taskStatus == Stopped);
+    [self computeRemapForTransformAtIndex:ti];
+}
+
+- (void) computeRemapForTransformAtIndex:(size_t) index {
+    Transform *transform = transformList[index];
+    if (!transform.remapImageF)
+        return;
+//    assert(taskStatus == Stopped);
+    CGSize s = taskGroup.transformSize;
+    NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
+    Params *params = paramList[index];
+    params.remapBuf = [taskGroup remapForTransform:transform params:params];
+}
+
 - (void) appendTransform:(Transform *) transform {
-    if (taskGroup.taskCtrl.layoutNeeded)
-        return; // nope, busy
+//    if (taskGroup.taskCtrl.layoutNeeded)
+//        return; // nope, busy
     [transformList addObject:transform];
     Params *params = [[Params alloc] init];
     [paramList addObject:params];
     if (transform.hasParameters)
         params.value = transform.value;
-    [self computeRemapForTransformAtIndex:transformList.count - 1];
+    [self configureTransformAtIndex:transformList.count - 1];
 }
 
 - (void) removeLastTransform {
@@ -91,38 +124,16 @@ static PixelIndex_t dPI(int x, int y) {
     [transformList removeAllObjects];
 }
 
-- (void) configureForSize:(CGSize) s {
-    assert(taskStatus == Stopped);
-    imBuf0 = [[PixBuf alloc] initWithWidth:s.width height:s.height];
-    imBuf1 = [[PixBuf alloc] initWithWidth:s.width height:s.height];
-    assert(imBuf0);
-    assert(imBuf1);
-    imBufs[0] = imBuf0;
-    imBufs[1] = imBuf1;
-
-    for (int i=0; i<transformList.count; i++) {
-        [self computeRemapForTransformAtIndex:i];
-    }
-    
-    // XXXX chbufs
-}
-
-- (void) computeRemapForTransformAtIndex:(size_t) index {
-    Transform *transform = transformList[index];
-    if (!transform.remapImageF)
-        return;
-    assert(taskStatus == Stopped);
-    Params *params = paramList[index];
-    params.remapBuf = [taskGroup remapForTransform:transform params:params];
-}
-
 - (void) executeTransformsWithPixBuf:(const PixBuf *) srcBuf {
     assert(taskStatus == Ready);
     if (!enabled)   // not onscreen
         return;
     taskStatus = Running;
-    assert(imBuf0); // buffers allocated
-    
+
+    if (transformList.count == 0) { // just display the input
+        [self updateTargetWith:srcBuf];
+        return;
+    }
     // We need to make our own task-specific copy of the source image.
     
     size_t sourceIndex = 0;
@@ -149,7 +160,7 @@ static PixelIndex_t dPI(int x, int y) {
                                     params:params
                                source:sourceIndex];
         assert(destIndex == 0 || destIndex == 1);
-        sourceIndex = 1 - destIndex;
+        sourceIndex = destIndex;
         NSDate *transformEnd = [NSDate now];
         params.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
         startTime = transformEnd;
@@ -160,11 +171,15 @@ static PixelIndex_t dPI(int x, int y) {
     PixBuf *outBuf = imBufs[sourceIndex];
     [outBuf verify];
     
+    [self updateTargetWith:outBuf];
+}
+
+- (void) updateTargetWith:(const PixBuf *)pixBuf {
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
-    NSUInteger bytesPerRow = bytesPerPixel * W;
+    NSUInteger bytesPerRow = bytesPerPixel * pixBuf.w;
     NSUInteger bitsPerComponent = 8*sizeof(channel);
-    CGContextRef context = CGBitmapContextCreate(outBuf.pb, outBuf.w, outBuf.h,
+    CGContextRef context = CGBitmapContextCreate(pixBuf.pb, pixBuf.w, pixBuf.h,
                                                  bitsPerComponent, bytesPerRow, colorSpace,
                                                  BITMAP_OPTS);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
@@ -204,15 +219,44 @@ static PixelIndex_t dPI(int x, int y) {
             NSLog(@"stub - etctrans");
             break;
         case GeometricTrans:
-        case RemapTrans:
+        case RemapTrans: {
             assert(transform.remapImageF);
             assert(params.remapBuf);
-            [self remapFrom:src.pb to:dst.pb using:params.remapBuf];
+            BufferIndex *bip = params.remapBuf.rb;
+            Pixel *dp = dst.pb;
+            for (int i=0; i<dst.w*dst.h; i++) {
+                Pixel p;
+                BufferIndex bi = *bip++;
+                switch (bi) {
+                    case Remap_White:
+                        p = White;
+                        break;
+                    case Remap_Red:
+                        p = Red;
+                        break;
+                    case Remap_Green:
+                        p = Green;
+                        break;
+                    case Remap_Blue:
+                        p = Blue;
+                        break;
+                    case Remap_Black:
+                        p = Black;
+                        break;
+                    case Remap_Yellow:
+                        p = Yellow;
+                        break;
+                    case Remap_Unset:
+                        p = UnsetColor;
+                        break;
+                    default:
+                        p = src.pb[bi];
+                }
+                *dp++ = p;
+            }
+        }
     }
     return destIndex;
-}
-
-- (void) remapFrom:(Pixel *)src to:(Pixel *)dest using:(RemapBuf *)remapBuf {
 }
 
 @end

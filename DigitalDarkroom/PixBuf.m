@@ -20,14 +20,14 @@
 @synthesize pa, pb;
 @synthesize buffer;
 
-- (id)initWithWidth:(size_t) w height:(size_t)h {
+- (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
+        self.w = s.width;
+        self.h = s.height;
         size_t rowSize = sizeof(Pixel) * w;
         size_t arraySize = sizeof(Pixel *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
-        self.w = w;
-        self.h = h;
         pa = (PixelArray_t)buffer.bytes;
         pb = (Pixel *)buffer.bytes + arraySize;
         Pixel *rowPtr = pb;
@@ -106,7 +106,7 @@
 
 // not used at the moment, maybe never:
 - (id)copyWithZone:(NSZone *)zone {
-    PixBuf *copy = [[PixBuf alloc] initWithWidth:w height:h];
+    PixBuf *copy = [[PixBuf alloc] initWithSize:CGSizeMake(w, h)];
     memcpy(copy.pb, pb, w * h * sizeof(Pixel));
     return copy;
 }

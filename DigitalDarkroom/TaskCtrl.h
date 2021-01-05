@@ -40,7 +40,7 @@ typedef enum {
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign, atomic)      BOOL layoutNeeded;
 
-- (TaskGroup *) newTaskGroup;
+- (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 
 - (void) needLayoutTo:(CGSize) newSize;
 - (void) layoutCompleted;
@@ -49,8 +49,6 @@ typedef enum {
 - (void) executeTasksWithImage:(UIImage *) image;
 - (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
-- (Task *) createTaskInGroup:(TaskGroup *) taskGroup
-                 forTargetView:(UIImageView *)tiv;
 - (void) layoutIfReady;
 
 @end

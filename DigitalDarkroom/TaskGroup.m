@@ -32,11 +32,13 @@
 @synthesize bytesInImage;
 @synthesize transformSize;
 @synthesize imageOrientation;
+@synthesize groupName;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
     if (self) {
         self.taskCtrl = caller;
+        groupName = @"";
         tasks = [[NSMutableArray alloc] init];
         remapCache = [[NSMutableDictionary alloc] init];
         srcPix = nil;
@@ -45,6 +47,33 @@
         tasksStatus = Stopped;
     }
     return self;
+}
+
+// Must be called before any tasks are added.  May be called afterwords to
+// change size.
+- (void) configureGroupForSize:(CGSize) s {
+    NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
+    transformSize = s;
+    
+    if (!srcPix) {
+        srcPix = [[PixBuf alloc] initWithSize:transformSize];
+    }
+    // clear and recompute any remaps
+    [remapCache removeAllObjects];
+    
+    for (Task *task in tasks) {
+        [task configureTaskForSize];
+    }
+}
+
+- (Task *) createTaskForTargetImageView:(UIImageView *) tiv named:(NSString *)tn {
+    assert(transformSize.width > 0);    // group must be configured for a size already
+    Task *newTask = [[Task alloc] initInGroup:self name:tn];
+    newTask.taskIndex = tasks.count;
+    newTask.targetImageView = tiv;
+    [newTask configureTaskForSize];
+    [tasks addObject:newTask];
+    return newTask;   // XXX not sure we are going to use this
 }
 
 - (void) removeAllTransforms {
@@ -57,27 +86,14 @@
         [task removeLastTransform];
 }
 
-- (void) configureForSize:(CGSize) s {
-    if (tasksStatus != Stopped) {
+        
+#ifdef notdef
+        if (tasksStatus != Stopped) {
         for (Task *task in tasks)
             NSLog(@" ** task status is %d", task.taskStatus);
         assert(tasksStatus == Stopped);
     }
-    if (s.width == transformSize.width &&
-        s.height == transformSize.height &&
-        srcPix)
-        return; // no change, nothing to do
-    transformSize = s;
-    srcPix = [[PixBuf alloc] initWithWidth:s.width height:s.height];
-    
-    // clear and recompute any remaps, since the size has changed.
-    [remapCache removeAllObjects];
-    
-    for (Task *task in tasks) {
-        [task configureForSize:(CGSize) s];
-    }
-    tasksStatus = Ready;
-}
+#endif
 
 // This is called back from task for transforms that remap pixels.  The remapping is based
 // on the pixel array size, and maybe parameter settings.  We only compute the transform/parameter
@@ -86,19 +102,19 @@
 - (RemapBuf *) remapForTransform:(Transform *) transform params:(Params *)params {
     NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, params.value];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
-    if (remapBuf)
+    if (remapBuf) {
+        NSLog(@"    GG cached remap %@   size %.0f x %.0f",
+              groupName, transformSize.width, transformSize.height);
         return remapBuf;
+    }
+    NSLog(@"    GG new remap %@   size %.0f x %.0f",
+          groupName, transformSize.width, transformSize.height);
+    remapBuf = [[RemapBuf alloc] initWithWidth:transformSize.width
+                                        height:transformSize.height];
     transform.remapImageF(remapBuf, params);
+    assert(remapBuf);
     [remapCache setObject:remapBuf forKey:name];
     return remapBuf;
-}
-
-- (Task *) createTaskForTargetImageView:(UIImageView *) tiv {
-    Task *newTask = [[Task alloc] initInGroup:self];
-    newTask.taskIndex = tasks.count;
-    newTask.targetImageView = tiv;
-    [tasks addObject:newTask];
-    return newTask;   // XXX not sure we are going to use this
 }
 
 - (BOOL) isReadyForLayout {
@@ -197,9 +213,6 @@
             [task executeTransformsWithPixBuf:srcPix];
         }
     }
-}
-
-- (void) configureForImage:(UIImage *) image {
 }
 
 @end

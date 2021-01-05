@@ -24,42 +24,28 @@ enum SpecialRemaps {
     Remap_Unset = -7,
 };
 
-// Since these are stored where we keep distances:
+// The remap buffer contains w*h entries describing where the corresponding
+// pixel should come from, or what color it should be. Corresponding pixel is
+// a simple index.  The colors are a negative number.
+//
+// Use these macros to compute entries.  They assume some version of "remapBuf" is in scope.
 
-typedef long RemapDist;      // separation in the array of the remap
+typedef int BufferIndex;      // index into a buffer at x,y
 
-// We make all these specials negative, and add a bias to make all the moves
-// positive.  The keeps testing and moving quite fast.
-
-#define REMAP_MOVE_BIAS 32768
-
-#ifdef notdef
-typedef struct RemapPt_t {
-    size_t x, y;
-} RemapPt_t;
-
-#define RP(a,b)  ((remapPt){a}, (remapPt{b})
-#endif
-
-typedef RemapDist *_Nullable *_Nonnull RemapArray_t;
-
-// these macros help computer the distances of the remaps
-
-#define RA   remapBuf.ra
-#define REMAP_DIST(t, f)      (RemapDist)((&(t) - &(f))/sizeof(RemapDist) + REMAP_MOVE_BIAS)
-#define REMAP_COLOR_TO(rc,t)    remapBuf.ra(t) = (SpecialRemaps)(rc)
+#define RBI(x,y)                ((x) + remapBuf.w*(y))  // buffer index as function of x,y
+#define REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI(fx,fy)
+#define REMAP_COLOR(tx, ty, rc) remapBuf.rb[RBI((tx),(ty))] = rc
 
 @interface RemapBuf : NSMutableData {
     size_t w, h;
-    RemapArray_t ra;  // remap array, ra[x][y] in our code
-    RemapDist *rb;  // remap buffer
+    BufferIndex *rb;  // remap buffer
 }
 
 @property (assign)  size_t w, h;
-@property (assign)  RemapArray_t ra;
-@property (assign)  RemapDist *rb;
+@property (assign)  BufferIndex *rb;
 
 - (id)initWithWidth:(size_t) w height:(size_t)h;
+- (void) verify;
 
 @end
 
