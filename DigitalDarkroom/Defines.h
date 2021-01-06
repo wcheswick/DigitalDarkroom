@@ -9,6 +9,10 @@
 #ifndef Defines_h
 #define Defines_h
 
+//#define DEBUG_CAMERA_CAPTURE_SIZE   1
+//#define DEBUG_TASK_CONFIGURATION  1
+
+
 typedef u_char channel;
 
 typedef struct {

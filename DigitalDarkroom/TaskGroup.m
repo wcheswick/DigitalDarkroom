@@ -52,7 +52,10 @@
 // Must be called before any tasks are added.  May be called afterwords to
 // change size.
 - (void) configureGroupForSize:(CGSize) s {
+#ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
+#endif
+
     transformSize = s;
     
     if (!srcPix) {
@@ -104,12 +107,16 @@
     NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, instance.value];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
     if (remapBuf) {
+#ifdef DEBUG_TASK_CONFIGURATION
         NSLog(@"    GG cached remap %@   size %.0f x %.0f",
               groupName, transformSize.width, transformSize.height);
+#endif
         return remapBuf;
     }
+#ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    GG new remap %@   size %.0f x %.0f",
           groupName, transformSize.width, transformSize.height);
+#endif
     remapBuf = [[RemapBuf alloc] initWithWidth:transformSize.width
                                         height:transformSize.height];
     transform.remapImageF(remapBuf, instance);

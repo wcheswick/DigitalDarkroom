@@ -9,6 +9,7 @@
 #import "MainVC.h"
 #import "CameraController.h"
 #import "InputSource.h"
+#import "Defines.h"
 
 
 #define MAX_FRAME_RATE  24
@@ -241,6 +242,11 @@
 - (BOOL) isNewSize:(CGSize)newSize
    aBetterSizeThan:(CGSize)bestSize
          forTarget:(CGSize)targetSize {
+#ifdef DEBUG_CAMERA_CAPTURE_SIZE
+    NSLog(@"       checking size %.0f x %.0f for %.0f x %.0f",
+          newSize.width, newSize.height,
+          targetSize.width, targetSize.height);
+#endif
     if (targetSize.width == 0) { // just find the largest size we have
         if (newSize.width < bestSize.width && newSize.height < bestSize.height)
             return NO;

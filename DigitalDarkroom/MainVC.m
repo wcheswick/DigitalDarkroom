@@ -527,7 +527,7 @@ typedef enum {
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.layer.borderWidth = 1.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
-        [self.view addSubview:containerView];
+    [self.view addSubview:containerView];
     
 
     // Refresh myView and/or main view
@@ -609,7 +609,7 @@ typedef enum {
 
 - (void) doLayout:(CGSize) newSize {
     NSLog(@"****** doLayout to %0.f x %.0f", newSize.width, newSize.height);
-    
+
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
     self.navigationController.toolbarHidden = NO;
@@ -678,11 +678,20 @@ typedef enum {
     [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
     [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
     [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
+    
+    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
+    CGFloat topPadding = window.safeAreaInsets.top;
+    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+    CGFloat leftPadding = window.safeAreaInsets.left;
+    CGFloat rightPadding = window.safeAreaInsets.right;
 
     UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
     CGFloat height = manager.statusBarFrame.size.height;
+    height += topPadding;
     f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
-    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
+    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y; //  - bottomPadding;
+    f.origin.x = leftPadding;
+    f.size.width -= rightPadding + f.origin.x;
     containerView.frame = f;
     NSLog(@"    containerview frame:  %.0f x %.0f", f.size.width, f.size.height);
 
@@ -694,10 +703,7 @@ typedef enum {
     // of the height of the screen.
     
     CGSize displaySizeLimit = containerView.frame.size;
-    int thumbsOnRight = (displaySizeLimit.width / (OLIVE_W + SEP)) * 0.3;
-    if (thumbsOnRight == 0)
-        thumbsOnRight = 1;
-    displaySizeLimit.width -= thumbsOnRight * (OLIVE_W + SEP);
+    // displaySizeLimit.width -= (OLIVE_W + SEP);
     displaySizeLimit.height = round(displaySizeLimit.height * 1.0);    // no more than two thirds of the screen in height
     
     // determine capture size based on various target sizes
@@ -714,12 +720,16 @@ typedef enum {
         } else {
             captureSize = displaySizeLimit;
         }
+#ifdef DEBUG_CAMERA_CAPTURE_SIZE
         NSLog(@"  cam target size is %.0f x %.0f", captureSize.width, captureSize.height);
+#endif
         captureSize = [cameraController setupCameraForSize:captureSize];
+#ifdef DEBUG_CAMERA_CAPTURE_SIZE
         NSLog(@"        best size is %.0f x %.0f", captureSize.width, captureSize.height);
+#endif
     }
     
-    // we now have the capture size.  Adjust the display size.
+    // we now have the capture size.  Adjust the display size and thumb area size.
     assert(captureSize.height > 0);     // should never happen, of course
 //    CGFloat aspectRatio = captureSize.width/captureSize.height;
     
@@ -807,26 +817,32 @@ typedef enum {
     
     [thumbTasks removeAllTransforms];
     [thumbTasks configureGroupForSize: imageRect.size];
-
-    BOOL thumbTasksEmpty = thumbTasks.tasks.count == 0; // not initialized yet
-    
-    CGRect f;   // compute position and size of first entry
-    CGFloat videoRightX = RIGHT(transformView.frame) + SEP;
-    f.origin = CGPointMake(videoRightX, SEP);
-    f.size.width = imageRect.size.width;
-    f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
     
     NSShadow *shadow = [[NSShadow alloc] init];
     shadow.shadowOffset = CGSizeMake(3,3);
     shadow.shadowBlurRadius = 5.0;
     shadow.shadowColor = [UIColor blackColor];
     
+    size_t thumbsPerRow = (oliveScrollView.frame.size.width - SEP) / (OLIVE_W + SEP);
     NSDictionary *labelAttributes = @{
         NSForegroundColorAttributeName:[UIColor blackColor],
         NSBackgroundColorAttributeName: [UIColor colorWithWhite:0.7 alpha:0.7],
         NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
         //        NSShadowAttributeName: shadow
     };
+
+    
+    // compute position and size of first entry. Assume there is room
+    // to the right of the transform image.
+    CGRect f;
+    f.origin.x = RIGHT(transformView.frame) + SEP;
+    f.origin.y = transformView.frame.origin.y;
+    f.size.width = imageRect.size.width;
+    f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
+    if (f.origin.x + f.size.width > containerView.frame.size.width) { // no room on the right
+        f.origin.x = transformView.frame.origin.x;
+        f.origin.y = BELOW(transformView.frame) + SEP;
+    }
     
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
         UIView *v = [[UIView alloc] initWithFrame:f];
@@ -885,17 +901,14 @@ typedef enum {
         [oliveSelectionPanel addSubview:v];
         [self adjustOliveSelected:v selected:NO];
         
-        // where does the next one go?
-        CGFloat nextX = RIGHT(v.frame) + SEP;
-        if (nextX + OLIVE_W <= containerView.frame.size.width) {   // fits in the current row
-            f.origin.x = nextX;
-        } else {    // on to next row
-            f.origin.y += f.size.height + SEP;
-            if (f.origin.y >= transformView.frame.size.height + SEP) {
-                // below the video, go to far left
-                f.origin.x = SEP;
-            } else {    // next row still to the right of the video
-                f.origin.x = videoRightX;
+        // where does the next thumb go?
+        f.origin.x = RIGHT(v.frame) + SEP;
+        if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
+            f.origin.y = BELOW(f) + SEP;
+            if (f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
+                f.origin.x = transformView.frame.origin.x;
+            } else {
+                f.origin.x = RIGHT(transformView.frame) + SEP;
             }
         }
     }

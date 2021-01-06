@@ -1319,7 +1319,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                 inPlacePtFunc: ^(Pixel *buf, size_t n) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
-            buf[i] = SETRGB(0,p.r,0);
+            buf[i] = SETRGB(0,p.g,0);
         }
         return ;
     }];
@@ -1331,13 +1331,49 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                 inPlacePtFunc: ^(Pixel *buf, size_t n) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
-            buf[i] = SETRGB(0,0,p.r);
+            buf[i] = SETRGB(0,0,p.b);
         }
         return ;
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+    
+    lastTransform = [Transform colorTransform:@"R + G"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r,p.g,0);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform colorTransform:@"R + B"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r,0,p.b);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform colorTransform:@"G + B"
+                                  description:@""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(0,p.g,p.b);
+        }
+        return ;
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
 #ifdef NEW
     lastTransform = [Transform areaTransform: @"Solarize"

@@ -76,7 +76,9 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) configureTaskForSize {
+#ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"   TTT %@  configureTaskForSize", taskName);
+#endif
     imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     assert(imBuf0);
@@ -90,7 +92,9 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) configureTransformAtIndex:(size_t)ti {
     CGSize s = taskGroup.transformSize;
+#ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    TT  %-15@   configure for size %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
+#endif
 //    assert(taskStatus == Stopped);
     [self computeRemapForTransformAtIndex:ti];
 }
@@ -101,7 +105,9 @@ static PixelIndex_t dPI(int x, int y) {
         return;
 //    assert(taskStatus == Stopped);
     CGSize s = taskGroup.transformSize;
+#ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
+#endif
     TransformInstance *instance = paramList[index];
     instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
 }
