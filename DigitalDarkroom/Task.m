@@ -215,7 +215,7 @@ static PixelIndex_t dPI(int x, int y) {
     
     switch (transform.type) {
         case ColorTrans:
-            transform.ipPointF(src.pb, src.w*src.h);
+            transform.ipPointF(src.pb, src.w*src.h, instance.value);
             return sourceIndex;     // was done in place
         case AreaTrans:
             transform.areaF(src.pa, dst.pa, src.w, src.h, instance);

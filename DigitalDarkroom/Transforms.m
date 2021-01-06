@@ -1280,7 +1280,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform: @"Negative"
                                  description: @"Negative"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
@@ -1291,7 +1291,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
@@ -1304,7 +1304,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Red"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(p.r,0,0);
@@ -1316,7 +1316,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Green"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(0,p.g,0);
@@ -1328,7 +1328,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Blue"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(0,0,p.b);
@@ -1341,7 +1341,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"R + G"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(p.r,p.g,0);
@@ -1353,7 +1353,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform:@"R + B"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(p.r,0,p.b);
@@ -1365,7 +1365,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform:@"G + B"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             buf[i] = SETRGB(0,p.g,p.b);
@@ -1375,155 +1375,123 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-#ifdef NEW
-    lastTransform = [Transform areaTransform: @"Solarize"
-                                 description: @"Simulate extreme overexposure"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                PixelIndex_t pi = PI(x,y);
-                Pixel p = src[pi];
-                dest[pi] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
-                                       p.g < Z/2 ? p.g : Z-p.g,
-                                       p.b < Z/2 ? p.b : Z-p.r);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Luminance"
+    lastTransform = [Transform colorTransform: @"Luminance"
                                  description: @"Convert to brightness"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        // 5.2ms
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = *src++;
-            int v = LUM(p);
-            *dest++ = SETRGB(v,v,v);
-        }
-#ifdef notdef
-        // 5.4ms
-        for (PixelIndex_t pi=0; pi<configuredPixelsInImage; pi++) {
-            int v = LUM(src[pi]);
-            dest[pi] = SETRGB(v,v,v);
-        }
-        // 6ms:
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                PixelIndex_t pi = PI(x,y);
-                Pixel p = src[pi];
-                int v = LUM(p);
-                dest[pi] = SETRGB(v,v,v);
-            }
-        }
-#endif
+                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+       for (int i=0; i<n; i++) {
+           channel c = LUM(buf[i]);
+           buf[i] = SETRGB(c,c,c);
+       }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform areaTransform: @"Colorize"
-                                 description: @"Add color"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                Pixel p = src[PI(x,y)];
-                channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-                dest[PI(x,y)] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
-            }
-        }
+    lastTransform = [Transform colorTransform: @"Colorize"
+                                 description: @""
+                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+       for (int i=0; i<n; i++) {
+           Pixel p = buf[i];
+           channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
+           buf[i] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+       }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform areaTransform: @"Truncate pixels"
-                                 description: @"Truncate pixel colors"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        channel mask = ((1<<param) - 1) << (8 - param);
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = *src++;
-            *dest++ = SETRGB(p.r&mask, p.g&mask, p.b&mask);
-        }
+    lastTransform = [Transform colorTransform: @"Truncate pixels"
+                                 description: @""
+                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+        channel mask = ((1<<v) - 1) << (8 - v);
+        for (int i=0; i<n; i++) {
+           Pixel p = buf[i];
+            buf[i] = SETRGB(p.r&mask, p.g&mask, p.b&mask);
+       }
     }];
-    lastTransform.low = 1; lastTransform.value = 3; lastTransform.high = 7;
+    lastTransform.low = 1; lastTransform.value = 2; lastTransform.high = 7;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Brighten"
-                                 description: @"brighten"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = *src++;
-            *dest++ = SETRGB(p.r+(Z-p.r)/8,
-                             p.g+(Z-p.g)/8,
-                             p.b+(Z-p.b)/8);
-        }
-    }];
-#ifdef notdef
-    lastTransform.low = 1; lastTransform.value = 3; lastTransform.high = 7;
-    lastTransform.hasParameters = YES;
-#endif
-    [transformList addObject:lastTransform];
     
-    lastTransform = [Transform areaTransform: @"High contrast"
-                                 description: @"high contrast"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = *src++;
-            *dest++ = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
-                             CLIP((p.g-HALF_Z)*2+HALF_Z),
-                             CLIP((p.b-HALF_Z)*2+HALF_Z));
+    lastTransform = [Transform colorTransform: @"Brighten"
+                                  description: @""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.r+(Z-p.r)/8,
+                            p.g+(Z-p.g)/8,
+                            p.b+(Z-p.b)/8);
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform: @"High contrast"
+                                  description: @""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
+                            CLIP((p.g-HALF_Z)*2+HALF_Z),
+                            CLIP((p.b-HALF_Z)*2+HALF_Z));
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+    
+    lastTransform = [Transform colorTransform: @"Auto contrast"
+                                  description: @""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.g, p.b, p.r);
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform areaTransform: @"Swap colors"
-                                 description: @"r→g, g→b, b→r"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = *src++;
-            *dest++ = SETRGB(p.g, p.b, p.r);
+    lastTransform = [Transform colorTransform: @"Swap colors"
+                                  description: @"r→g, g→b, b→r"
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
+            buf[i] = SETRGB(p.g, p.b, p.r);
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Auto contrast"
-                                 description: @"auto contrast"
-                                areaFunction: ^(Pixel *src, Pixel *dest, int param) {
+    
+    lastTransform = [Transform colorTransform: @"Auto contrast"
+                                  description: @""
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         u_long ps;
         u_long hist[Z+1];
         float map[Z+1];
         
-        assert(self->execute.bytesPerRow == self.execute.pixelsPerRow * sizeof(Pixel));
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = src[pi];
+        for (int i=0; i<Z+1; i++) {
+            hist[i] = 0;
+            map[i] = 0.0;
+        }
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
             hist[LUM(p)]++;
         }
         ps = 0;
         for (int i = 0; i < Z+1; i++) {
-            map[i] = Z*((float)ps/((float)self->execute.pixelsInImage));
+            map[i] = (float)Z * (float)ps/(float)n;
             ps += hist[i];
         }
-        for (PixelIndex_t pi=0; pi<self->execute.pixelsInImage; pi++) {
-            Pixel p = src[pi];
+        for (int i=0; i<n; i++) {
+            Pixel p = buf[i];
             channel l = LUM(p);
             float a = (map[l] - l)/Z;
             int r = p.r + (a*(Z-p.r));
             int g = p.g + (a*(Z-p.g));
             int b = p.b + (a*(Z-p.b));
-            dest[pi] = CRGB(r,g,b);
+            buf[i] = CRGB(r,g,b);
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-#endif  // NEW
 }
 
 channel
@@ -2470,7 +2438,7 @@ make_block(Pt origin, struct block *b) {
     
     lastTransform = [Transform colorTransform: @"Warhol"
                                  description: @"cartoon colors"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n) {
+                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         int ave_r=0, ave_g=0, ave_b=0;
         
         for (int i=0; i<n; i++) {
@@ -2918,7 +2886,6 @@ lsc_button(BELOW, "brghtr", do_point, init_brighten);
 lsc_button(BELOW, "dimmer", do_point, init_truncatepix);
 lsc_button(BELOW, "contrast", do_point, init_high);
 lsc_button(BELOW, "negative", do_point, init_negative);
-lsc_button(BELOW, "solar", do_point, init_solarize);
 lsc_button(BELOW, "colorize", do_point, init_colorize);
 lsc_button(BELOW, "outline", do_sobel, 0);
 lsc_button(BELOW, "raisedgray", do_edge, 0);
@@ -2943,7 +2910,6 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 {"Auto contrast",     0, do_auto, "auto", "contrast", 0, POINT_COLOR},
 
 {"Negative", init_negative, do_point, "negative", "", 1, POINT_COLOR},
-{"Solarize", init_solarize, do_point, "solarize", "", 0, POINT_COLOR},
 {"Colorize", init_colorize, do_point, "colorize", "", 0, POINT_COLOR},
 {"Swap colors", init_swapcolors, do_point, "swap", "colors", 0, POINT_COLOR},
 {"Pixels",    init_pixels4, do_remap, "big", "pixels", 0, POINT_COLOR},
@@ -3018,7 +2984,6 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
     extern  init_proc init_lum;
     extern  init_proc init_high;
     extern  init_proc init_lum;
-    extern  init_proc init_solarize;
     extern  init_proc init_truncatepix;
     extern  init_proc init_brighten;
     extern  init_proc init_auto;

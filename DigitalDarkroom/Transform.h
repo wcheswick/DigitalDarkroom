@@ -32,7 +32,7 @@ typedef enum {
 } transform_t;
 
 
-typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size_t n);
+typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size_t n, int v);
 
 typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)
             (RemapBuf *remapBuf, TransformInstance *instance);
