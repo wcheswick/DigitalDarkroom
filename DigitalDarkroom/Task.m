@@ -77,7 +77,8 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) configureTaskForSize {
 #ifdef DEBUG_TASK_CONFIGURATION
-    NSLog(@"   TTT %@  configureTaskForSize", taskName);
+    NSLog(@"   TTT %@  configureTaskForSize: %.0f x %.0f", taskName,
+          taskGroup.transformSize.width, taskGroup.transformSize.height);
 #endif
     imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];

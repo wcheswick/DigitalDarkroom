@@ -906,6 +906,7 @@ typedef enum {
         if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
             f.origin.y = BELOW(f) + SEP;
             if (f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
+                // XXXXX if the display takes the whole side, this has to stay on the right
                 f.origin.x = transformView.frame.origin.x;
             } else {
                 f.origin.x = RIGHT(transformView.frame) + SEP;
@@ -1438,8 +1439,19 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     droppedCount++;
 }
 
+BOOL haveOrientation = NO;
+UIImageOrientation lastOrientation;
+
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer
                         orientation:(UIImageOrientation) orientation {
+    if (!haveOrientation) {
+        lastOrientation = orientation;
+        NSLog(@" OOOO first capture orientation is %ld", (long)orientation);
+        haveOrientation = YES;
+    } else if (orientation != lastOrientation) {
+        NSLog(@" OOOO new capture orientation: %ld", (long)orientation);
+        lastOrientation = orientation;
+    }
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     

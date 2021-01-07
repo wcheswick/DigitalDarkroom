@@ -58,7 +58,8 @@
 
     transformSize = s;
     
-    if (!srcPix) {
+    if (!srcPix ||
+            srcPix.w != transformSize.width || srcPix.h != transformSize.height) {
         srcPix = [[PixBuf alloc] initWithSize:transformSize];
     }
     // clear and recompute any remaps
@@ -147,7 +148,7 @@
 - (void) layoutCompleted {
     tasksStatus = Ready;
     for (Task *task in tasks) {
-        assert(task.taskStatus == Stopped);
+//        assert(task.taskStatus == Stopped);
         task.taskStatus = Ready;
     }
 }
