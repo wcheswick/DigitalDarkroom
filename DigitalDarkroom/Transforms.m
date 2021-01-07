@@ -82,15 +82,15 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) buildTransformList {
     [self addDepthVisualizations];
-    [self addTestTransforms];
-    [self addPointTransforms];
+    [self addTestTransforms];   // empty
+    [self addArtTransforms];
+    [self addAreaTransforms];   // manu unimplemented
+    [self addPointTransforms];  // working:
 #ifdef NOTYET
 //    [self addColorVisionDeficits];
     [self addGeometricTransforms];
     [self addMiscTransforms];
     // tested:
-    [self addAreaTransforms];
-//    [self addArtTransforms];
     [self addMonochromes];
     [self addOldies];
 #endif
@@ -124,107 +124,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
-   
-    lastTransform = [Transform areaTransform: @"Wavy shower"
-                                 description: @"Through wavy glass"
-                     remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-#define CPP    20    /*cycles/picture*/
-        int D = instance.value;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x,y, x,y);
-            }
-        }
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0+D; x<remapBuf.w-D; x++) {
-                REMAP_TO(x,y, x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w)),y);
-            }
-        }
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 23;
-    lastTransform.high = 30;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    // this destroys src
-    lastTransform = [Transform areaTransform: @"Old AT&T logo"
-                                  description: @"Tom Duff's logo transform"
-                                 areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                 size_t w, size_t h, TransformInstance *instance) {
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = LUM(src[y][x]);
-                src[y][x] = SETRGB(c,c,c);
-            }
-        }
-        
-        int hgt = instance.value;
-        assert(hgt > 0);
-        int c;
-        int y0, y1;
-
-        for (int y=0; y<h; y+= hgt) {
-            if (y+hgt>h)
-                hgt = (int)h-(int)y;
-            for (int x=0; x < w; x++) {
-                c=0;
-                for(y0=0; y0<hgt; y0++)
-                    c += src[y+y0][x].r;
-                y0 = y+(hgt-1)/2;
-                y1 = y+(hgt-1-(hgt-1)/2);
-                for (; y0 >= y; --y0, ++y1)
-                    c = stripe(src, x, y0, y1, c);
-            }
-        }
-                    
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = src[y][x].r;
-                dest[y][x] = SETRGB(c, c, c);
-            }
-        }
-    }];
-    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-    
-#ifdef WORKING
-    
-    lastTransform = [Transform areaTransform: @"Old blur"
-                                  description: @""
-                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                size_t w, size_t h, Params * __nullable param) {
-#define S(x,y)  src[y][x]
-        for (int y=1; y<h-1; y++) {
-            for (int x=1; x<w-1; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = (S(x,y).r +
-                       S(x+1,y).r +
-                       S(x-1,y).r +
-                       S(x,y-1).r +
-                       S(x,y+1).r)/5;
-                p.g = (S(x,y).g +
-                       S(x+1,y).g +
-                       S(x-1,y).g +
-                       S(x,y-1).g +
-                       S(x,y+1).g)/5;
-                p.b = (S(x,y).b +
-                       S(x+1,y).b +
-                       S(x-1,y).b +
-                       S(x,y-1).b +
-                       S(x,y+1).b)/5;
-                dest[y][x] = p;
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-    
-#endif
-    
 }
 
 - (Transform *)depthdepthTransformForIndex:(int)index {
@@ -325,23 +224,112 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [categoryNames addObject:@"Area"];
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
+
+    lastTransform = [Transform areaTransform: @"Mirror right"
+                                 description: @"Reflect the right half of the screen on the left"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long centerX = remapBuf.w/2;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                if (x < centerX)
+                    REMAP_TO(x, y, remapBuf.w - x - 1, y);
+                else
+                    REMAP_TO(x, y, x, y);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform areaTransform: @"Flip"
+                                  description: @"vertical reflection"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, x, remapBuf.h - y - 1);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform areaTransform: @"Mirror"
+                                  description: @"Reflect the image"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, remapBuf.w - x - 1, y);
+            }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
     
+    lastTransform = [Transform areaTransform: @"Pixelate"
+                                  description: @"Giant pixels"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        int pixSize = instance.value;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, (x/pixSize)*pixSize, (y/pixSize)*pixSize);
+            }
+        }
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 6;
+    lastTransform.high = 200;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
+    lastTransform = [Transform areaTransform: @"Terry's kite"
+                                 description: @"Designed by an 8-year old"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        for (int y=0; y<remapBuf.h; y++) {
+            size_t ndots;
+            
+            if (y <= centerY)
+                ndots = (y*(remapBuf.w-1))/remapBuf.h;
+            else
+                ndots = ((remapBuf.h-y-1)*(remapBuf.w))/remapBuf.h;
+
+            REMAP_TO(centerX,y, centerX, y);
+            REMAP_TO(centerX,y, centerX, y);
+            REMAP_COLOR(0,y, Remap_White);
+            
+            for (int x=1; x<=ndots; x++) {
+                size_t dist = (x*(centerX-1))/ndots;
+
+                REMAP_TO(centerX+x,y, centerX + dist,y);
+                REMAP_TO(centerX-x,y, centerX - dist,y);
+            }
+            for (size_t x=ndots; x<centerX; x++) {
+                REMAP_COLOR(centerX+x,y, Remap_White);
+                REMAP_COLOR(centerX-x,y, Remap_White);
+             }
+        }
+    }];
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
+
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
                                 areaFunction:^(PixelArray_t src, PixelArray_t dest,
                                                size_t w, size_t h, TransformInstance *instance) {
-        channel lum[w][h];  // XXX does this variable array work?
+        channel lum[h][w];  // XXX does this variable array work?
         for (int y=1; y<h-1; y++)
             for (int x=1; x<w-1; x++)
-                lum[x][y] = LUM(src[x][y]);
+                lum[y][x] = LUM(src[y][x]);
 
         for (int y=1; y<h-1; y++) {
             for (int x=1; x<w-1; x++) {
                 channel aa, bb, s;
-                aa = lum[x-1][y-1] + 2*lum[x][y-1] + lum[x+1][y-1] -
-                     lum[x-1][y+1] - 2*lum[x][y+1] - lum[x+1][y+1];
-                bb = lum[x-1][y-1] + 2*lum[x-1][y] + lum[x-1][y+1] -
-                     lum[x+1][y-1] - 2*lum[x+1][y] - lum[x+1][y+1];
+                aa = lum[y-1][x-1] + 2*lum[y-1][x] + lum[y-1][x+1] -
+                     lum[y+1][x-1] - 2*lum[y+1][x] - lum[y+1][x+1];
+                bb = lum[y-1][x-1] + 2*lum[y][x-1] + lum[y+1][x-1] -
+                     lum[y-1][x+1] - 2*lum[y][x+1] - lum[y+1][x+1];
 
                 channel c;
                 s = sqrt(aa*aa + bb*bb);
@@ -349,76 +337,109 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                     c = Z;
                 else
                     c = s;
-                dest[x][y] = SETRGB(c,c,c);
+                dest[y][x] = SETRGB(c,c,c);
             }
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
+    // this should be a general kernel convolution
     lastTransform = [Transform areaTransform: @"Old blur"
-                                  description: @""
+                                  description: @"non-general"
                                 areaFunction: ^(PixelArray_t src, PixelArray_t dest,
                                                 size_t w, size_t h, TransformInstance *instance) {
         for (int y=1; y<h-1; y++) {
             for (int x=1; x<w-1; x++) {
                 Pixel p = {0,0,0,Z};
-                p.r = (src[x][y].r +
-                       src[x+1][y].r +
-                       src[x-1][y].r +
-                       src[x][y-1].r +
-                       src[x][y+1].r)/5;
-                p.g = (src[x][y].g +
-                       src[x+1][y].g +
-                       src[x-1][y].g +
-                       src[x][y-1].g +
-                       src[x][y+1].g)/5;
-                p.b = (src[x][y].b +
-                       src[x+1][y].b +
-                       src[x-1][y].b +
-                       src[x][y-1].b +
-                       src[x][y+1].b)/5;
-                dest[x][y] = p;
+                p.r = (src[y][x].r +
+                       src[y][x+1].r +
+                       src[y][x-1].r +
+                       src[y-1][x].r +
+                       src[y+1][x].r)/5;
+                p.g = (src[y][x].g +
+                       src[y][x+1].g +
+                       src[y][x-1].g +
+                       src[y-1][x].g +
+                       src[y+1][x].g)/5;
+                p.b = (src[y][x].b +
+                       src[y][x+1].b +
+                       src[y][x-1].b +
+                       src[y-1][x].b +
+                       src[y+1][x].b)/5;
+                dest[y][x] = p;
             }
         }
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
-#ifdef NOTYET
-    // remap test
-    lastTransform = [Transform areaTransform: @"Terry's kite"
-                                 description: @"Designed by an 8-year old"
-                                  remapImage:^(^(int w, int h, Params *params)) {
-        for (int y=0; y<h; y++) {
-            size_t ndots;
-            
-            if (y <= CENTER_Y)
-                ndots = (y*(w-1))/h;
-            else
-                ndots = ((h-y-1)*(w))/h;
-
-            table[PI(CENTER_X,y)] = PI(CENTER_X,y);
-            table[PI(0,y)] = Remap_White;
-            
-            for (int x=1; x<=ndots; x++) {
-                size_t dist = (x*(CENTER_X-1))/ndots;
-
-                table[PI(CENTER_X+x,y)] = PI(CENTER_X + dist,y);
-                table[PI(CENTER_X-x,y)] = PI(CENTER_X - dist,y);
-            }
-            for (size_t x=ndots; x<CENTER_X; x++) {
-                table[PI(CENTER_X+x,y)] = Remap_White;
-                table[PI(CENTER_X-x,y)] = Remap_White;
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-#endif
     
-#ifdef NEW
+     lastTransform = [Transform areaTransform: @"Wavy shower"
+                                  description: @"Through wavy glass"
+                      remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+ #define CPP    20    /*cycles/picture*/
+         int D = instance.value;
+         for (int y=0; y<remapBuf.h; y++) {
+             for (int x=0; x<remapBuf.w; x++) {
+                 REMAP_TO(x,y, x,y);
+             }
+         }
+         for (int y=0; y<remapBuf.h; y++) {
+             for (int x=0+D; x<remapBuf.w-D; x++) {
+                 REMAP_TO(x,y, x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w)),y);
+             }
+         }
+     }];
+     lastTransform.low = 4;
+     lastTransform.value = 23;
+     lastTransform.high = 30;
+     lastTransform.hasParameters = YES;
+     [transformList addObject:lastTransform];
+     ADD_TO_OLIVE(lastTransform);
 
+     // this destroys src
+     lastTransform = [Transform areaTransform: @"Old AT&T logo"
+                                   description: @"Tom Duff's logo transform"
+                                  areaFunction: ^(PixelArray_t src, PixelArray_t dest,
+                                                  size_t w, size_t h, TransformInstance *instance) {
+         for (int y=0; y<h; y++) {
+             for (int x=0; x<w; x++) {
+                 channel c = LUM(src[y][x]);
+                 src[y][x] = SETRGB(c,c,c);
+             }
+         }
+         
+         int hgt = instance.value;
+         assert(hgt > 0);
+         int c;
+         int y0, y1;
+
+         for (int y=0; y<h; y+= hgt) {
+             if (y+hgt>h)
+                 hgt = (int)h-(int)y;
+             for (int x=0; x < w; x++) {
+                 c=0;
+                 for(y0=0; y0<hgt; y0++)
+                     c += src[y+y0][x].r;
+                 y0 = y+(hgt-1)/2;
+                 y1 = y+(hgt-1-(hgt-1)/2);
+                 for (; y0 >= y; --y0, ++y1)
+                     c = stripe(src, x, y0, y1, c);
+             }
+         }
+                     
+         for (int y=0; y<h; y++) {
+             for (int x=0; x<w; x++) {
+                 channel c = src[y][x].r;
+                 dest[y][x] = SETRGB(c, c, c);
+             }
+         }
+     }];
+     lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
+     lastTransform.hasParameters = YES;
+     [transformList addObject:lastTransform];
+     ADD_TO_OLIVE(lastTransform);
+    
 #ifdef NOTYET   // channel-based
     lastTransform = [Transform areaTransform: @"Color Sobel"
                                           description: @"Edge detection"
@@ -451,7 +472,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-#endif
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"
@@ -807,79 +827,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform areaTransform: @"Terry's kite"
-                                 description: @"Designed by an 8-year old"
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int p) {
-        for (int y=0; y<h; y++) {
-            size_t ndots;
-            
-            if (y <= CENTER_Y)
-                ndots = (y*(w-1))/h;
-            else
-                ndots = ((h-y-1)*(w))/h;
-
-            table[PI(CENTER_X,y)] = PI(CENTER_X,y);
-            table[PI(0,y)] = Remap_White;
-            
-            for (int x=1; x<=ndots; x++) {
-                size_t dist = (x*(CENTER_X-1))/ndots;
-
-                table[PI(CENTER_X+x,y)] = PI(CENTER_X + dist,y);
-                table[PI(CENTER_X-x,y)] = PI(CENTER_X - dist,y);
-            }
-            for (size_t x=ndots; x<CENTER_X; x++) {
-                table[PI(CENTER_X+x,y)] = Remap_White;
-                table[PI(CENTER_X-x,y)] = Remap_White;
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Pixelate"
-                                  description: @"Giant pixels"
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t y, int pixsize) {
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                table[PI(x,y)] = PI((x/pixsize)*pixsize, (y/pixsize)*pixsize);
-            }
-        }
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 6;
-    lastTransform.high = 200;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Mirror"
-                                  description: @"Reflect the image"
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pixsize) {
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                table[PI(x,y)] = PI(w - x - 1,y);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-    lastTransform = [Transform areaTransform: @"Mirror right"
-                                 description: @"Reflect the right half of the screen on the left"
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pixsize) {
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                if (x < w/2)
-                    table[PI(x,y)] = PI(w - x - 1,y);
-                else
-                    table[PI(x,y)] = PI(x,y);
-            }
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
-
-#ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
                                         areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int p) {
@@ -930,16 +877,13 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-#endif
 
-#ifdef notyet
     extern  transform_t do_fs1;
     extern  transform_t do_fs2;
     extern  transform_t do_sampled_zoom;
     extern  transform_t do_mean;
     extern  transform_t do_median;
 #endif
-#endif  // NEW
 }
 
 - (void) addDepthVisualizations {
@@ -2394,11 +2338,6 @@ Frand(void) {
         last_top = last_button;
         add_button(below(last_button->r), "fisheye", "Fish eye", OLD, do_remap);
         last_button->init = (void *)init_fisheye;
-
-        add_button(right(last_top->r), "pixels", "Pixels", Green, do_remap);
-        last_button->init = (void *)init_pixels4;
-
-        add_button(exit_r, "exit", "(Exit)", Red, bparam(do_exit,0));
 #endif
 
 typedef struct Pt {
@@ -2406,6 +2345,8 @@ typedef struct Pt {
 } Pt;
 
 /*
+ * The following is used for the Escher transform.
+ *
  * corner zero of each block is the unshared corner.  Corners are labeled
  * clockwise, and so are the block faces.
  */
@@ -2463,20 +2404,19 @@ make_block(Pt origin, struct block *b) {
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
     
-#ifdef NEW
     lastTransform = [Transform areaTransform: @"Escher"
                                  description: @""
-                                  remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int pps) {
-        pixPerSide = pps;
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        pixPerSide = instance.value;
         dxToBlockCenter = ((int)(pixPerSide*sqrt(0.75)));
         
-        for (int x=0; x<W; x++) {
-            for (int y=0; y<H; y++)
-            table[PI(x,y)] = Remap_White;
+        for (int x=0; x<remapBuf.w; x++) {
+            for (int y=0; y<remapBuf.h; y++)
+                REMAP_COLOR(x, y, Remap_White);
         }
 
-        int nxBlocks = (((int)W/(2*dxToBlockCenter)) + 2);
-        int nyBlocks = (int)((H/(3*pixPerSide/2)) + 2);
+        int nxBlocks = (((int)remapBuf.w/(2*dxToBlockCenter)) + 2);
+        int nyBlocks = (int)((remapBuf.h/(3*pixPerSide/2)) + 2);
         
         struct block_list {
             int    x,y;    // the location of the lower left corner
@@ -2509,8 +2449,8 @@ make_block(Pt origin, struct block *b) {
                 Pt p = block_list[col][row].b.f[i][j];
                 int x = p.x;
                 int y = p.y;
-                if (INRANGE(x,y))
-                    table[PI(x,y)] = Remap_Black;
+                if (IS_IN_REMAP(x, y))
+                    REMAP_COLOR(x,y,Remap_Black);
             }
         }
         
@@ -2532,17 +2472,17 @@ make_block(Pt origin, struct block *b) {
                     int ul = (ll + 1 + dir) % 4;
 #endif
                     
-                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)W;
-                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)W;
-                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)H;
-                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)H;
+                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)remapBuf.w;
+                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)remapBuf.w;
+                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)remapBuf.h;
+                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)remapBuf.h;
                     
-                    for (int y=0; y<H; y++) {    // we could actually skip some of these
-                        for (int x=0; x<W; x++)    {
+                    for (int y=0; y<remapBuf.h; y++) {    // we could actually skip some of these
+                        for (int x=0; x<remapBuf.w; x++)    {
                             int nx = CORNERS[ll].x + y*dyx + x*dxx;
                             int ny = CORNERS[ll].y + y*dyy + x*dxy;
-                            if (INRANGE(nx,ny))
-                                table[PI(nx,ny)] = PI(x,y);
+                            if (IS_IN_REMAP(nx, ny))
+                                REMAP_TO(nx,ny, x,y);
                         }
                     }
                 }
@@ -2555,7 +2495,8 @@ make_block(Pt origin, struct block *b) {
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-
+    
+#ifdef NEW
     lastTransform = [Transform areaTransform: @"Edward Munch #1"
                                   description: @"twist"
                                   remapPolar:^PixelIndex_t (float r, float a, int param) {

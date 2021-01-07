@@ -35,6 +35,7 @@ typedef int BufferIndex;      // index into a buffer at x,y
 #define RBI(x,y)                ((x) + remapBuf.w*(y))  // buffer index as function of x,y
 #define REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI(fx,fy)
 #define REMAP_COLOR(tx, ty, rc) remapBuf.rb[RBI((tx),(ty))] = rc
+#define IS_IN_REMAP(x,y)    ((x) >= 0 && (x) < remapBuf.w && (y) >= 0 && (y) < remapBuf.h)
 
 @interface RemapBuf : NSMutableData {
     size_t w, h;
