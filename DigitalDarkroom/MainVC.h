@@ -33,9 +33,13 @@ typedef enum {
     UIPopoverPresentationControllerDelegate,
     AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureDepthDataOutputDelegate> {
+        UIDeviceOrientation currentDeviceOrientation;
 }
+
+@property (assign)  UIDeviceOrientation currentDeviceOrientation;
 
 - (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 - (void) doLayout:(CGSize) newSize;
+- (void) deviceRotated;
 
 @end

@@ -33,12 +33,10 @@
     navController = [[UINavigationController alloc]
                      initWithRootViewController:mainVC];
     
-#ifdef notdef
     [[NSNotificationCenter defaultCenter] addObserver:mainVC
                                              selector:@selector(deviceRotated)
                                                  name:UIDeviceOrientationDidChangeNotification
                                                object:nil];
-#endif
     
     self.window.rootViewController = navController;
     [self.window makeKeyAndVisible];

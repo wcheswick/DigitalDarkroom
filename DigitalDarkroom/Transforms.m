@@ -1283,7 +1283,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     ADD_TO_OLIVE(lastTransform);
 
     
-    lastTransform = [Transform colorTransform:@"R + G"
+    lastTransform = [Transform colorTransform:@"No blue"
                                   description:@""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
@@ -1295,7 +1295,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform colorTransform:@"R + B"
+    lastTransform = [Transform colorTransform:@"No green"
                                   description:@""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
@@ -1307,7 +1307,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform colorTransform:@"G + B"
+    lastTransform = [Transform colorTransform:@"No red"
                                   description:@""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
@@ -1319,7 +1319,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
 
-    lastTransform = [Transform colorTransform: @"Luminance"
+    lastTransform = [Transform colorTransform: @"No color"
                                  description: @"Convert to brightness"
                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
        for (int i=0; i<n; i++) {

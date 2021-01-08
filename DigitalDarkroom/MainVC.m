@@ -221,6 +221,7 @@ typedef enum {
 @synthesize oliveScrollView;
 @synthesize oliveSelectedView;
 @synthesize oliveUpdateNeeded;
+@synthesize currentDeviceOrientation;
 
 - (id) init {
     self = [super init];
@@ -230,6 +231,7 @@ typedef enum {
         
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
+        currentDeviceOrientation = UIDeviceOrientationUnknown;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
@@ -443,11 +445,18 @@ typedef enum {
     [inputSources addObject:source];
 }
 
+- (void) deviceRotated {
+    currentDeviceOrientation = [[UIDevice currentDevice] orientation];
+#ifdef DEBUG_LAYOUT
+    NSLog(@"device rotated to %@", [CameraController
+                                     dumpDeviceOrientationName:currentDeviceOrientation]);
+#endif
+}
+
 - (void) viewDidLoad {
     [super viewDidLoad];
     
     NSLog(@" ========= viewDidLoad =========");
-    self.title = @"Digital Darkroom";
     
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
@@ -669,6 +678,17 @@ typedef enum {
     
     imageOrientation = [self imageOrientationForDeviceOrientation];
     
+    // not room for title in iphones in portrait mode
+    NSLog(@"device idiom: %ld", (long)[UIDevice currentDevice].userInterfaceIdiom);
+    NSLog(@"device is %@", [CameraController
+                                     dumpDeviceOrientationName:currentDeviceOrientation]);
+    NSLog(@" is portrait: %d", UIDeviceOrientationIsPortrait(currentDeviceOrientation));
+    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone ||
+        !UIDeviceOrientationIsPortrait(currentDeviceOrientation))
+        self.title = @"Digital Darkroom";
+    else
+        self.title = @"";
+        
     CGRect f = self.view.frame;
     NSLog(@" **** device view frame:  %.0f x %.0f", f.size.width, f.size.height);
 
@@ -684,10 +704,15 @@ typedef enum {
     CGFloat bottomPadding = window.safeAreaInsets.bottom;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
-
+    
+#ifdef DEBUG_LAYOUT
+    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f %0.f",
+          leftPadding, rightPadding, topPadding, bottomPadding);
+#endif
+    
     UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
     CGFloat height = manager.statusBarFrame.size.height;
-    height += topPadding;
+    // not needed, apparently height += topPadding;
     f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
     f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y; //  - bottomPadding;
     f.origin.x = leftPadding;
@@ -830,7 +855,6 @@ typedef enum {
         NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
         //        NSShadowAttributeName: shadow
     };
-
     
     // compute position and size of first entry. Assume there is room
     // to the right of the transform image.
@@ -843,7 +867,10 @@ typedef enum {
         f.origin.x = transformView.frame.origin.x;
         f.origin.y = BELOW(transformView.frame) + SEP;
     }
-    
+ 
+    BOOL roomUnderTransformView = BELOW(transformView.frame) +
+            SEP + f.size.height <= containerView.frame.size.height;
+
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
         UIView *v = [[UIView alloc] initWithFrame:f];
         frameH = BELOW(v.frame) + SEP;
@@ -905,8 +932,7 @@ typedef enum {
         f.origin.x = RIGHT(v.frame) + SEP;
         if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
             f.origin.y = BELOW(f) + SEP;
-            if (f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
-                // XXXXX if the display takes the whole side, this has to stay on the right
+            if (roomUnderTransformView && f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
                 f.origin.x = transformView.frame.origin.x;
             } else {
                 f.origin.x = RIGHT(transformView.frame) + SEP;
@@ -1439,11 +1465,14 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     droppedCount++;
 }
 
+#ifdef DEBUG_TASK_CONFIGURATION
 BOOL haveOrientation = NO;
 UIImageOrientation lastOrientation;
+#endif
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer
                         orientation:(UIImageOrientation) orientation {
+#ifdef DEBUG_TASK_CONFIGURATION
     if (!haveOrientation) {
         lastOrientation = orientation;
         NSLog(@" OOOO first capture orientation is %ld", (long)orientation);
@@ -1452,6 +1481,7 @@ UIImageOrientation lastOrientation;
         NSLog(@" OOOO new capture orientation: %ld", (long)orientation);
         lastOrientation = orientation;
     }
+#endif
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     

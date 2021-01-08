@@ -143,7 +143,7 @@
     
     NSLog(@" +++ setupSessionForCurrentDeviceOrientation : %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
-          [CameraController dumpDeviceOrientationNames:[[UIDevice currentDevice]
+          [CameraController dumpDeviceOrientationName:[[UIDevice currentDevice]
                                                         orientation]]);
     
     if (captureSession) {
@@ -366,10 +366,6 @@ static NSString * const captureOrientationNames[] = {
     @"LandscapeLeft",
 };
 
-+ (NSString *) dumpDeviceOrientationNames: (UIDeviceOrientation) o {
-    return deviceOrientationNames[o];
-}
-
 static NSString * const deviceOrientationNames[] = {
     @"Unknown",
     @"Portrait",
@@ -379,6 +375,10 @@ static NSString * const deviceOrientationNames[] = {
     @"FaceUp",
     @"FaceDown"
 };
+
++ (NSString *) dumpDeviceOrientationName: (UIDeviceOrientation) o {
+    return deviceOrientationNames[o];
+}
 
 static NSString * const imageOrientation[] = {
     @"default",            // default orientation
