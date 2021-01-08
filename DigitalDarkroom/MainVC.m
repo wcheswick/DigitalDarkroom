@@ -56,6 +56,10 @@
 #define OLIVE_FONT_SIZE 18
 // #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 
+#define EXECUTE_LABEL_H 22
+#define EXECUTE_LABEL_FONT  18
+#define EXECUTE_SHOWN   1 // 5   // number of total lines shown on screen (not yet)
+
 #define SECTION_HEADER_ARROW_W  55
 
 #define MIN_SLIDER_W    100
@@ -102,11 +106,10 @@ typedef enum {
 @property (nonatomic, strong)   UIView *containerView;
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
-@property (nonatomic, strong)   TaskGroup *screenTasks;
+@property (nonatomic, strong)   TaskGroup *screenTasks; // only one task in this group
 @property (nonatomic, strong)   TaskGroup *thumbTasks;
-@property (nonatomic, strong)   TaskGroup *externalTasks;   // not yet
-@property (nonatomic, strong)   TaskGroup *hiresTasks;       // not yet
-
+@property (nonatomic, strong)   TaskGroup *externalTasks;   // not yet, only one task in this group
+@property (nonatomic, strong)   TaskGroup *hiresTasks;       // not yet, only one task in this group
 
 @property (nonatomic, strong)   Task *screenTask;
 @property (nonatomic, strong)   Task *externalTask;
@@ -545,9 +548,11 @@ typedef enum {
     transformImageView.backgroundColor = NAVY_BLUE;
     [transformView addSubview:transformImageView];
     
-    executeControlView = [[UIView alloc] init];
+    executeControlView = [[UIView alloc]
+                          initWithFrame:CGRectMake(0, LATER, LATER, EXECUTE_SHOWN * EXECUTE_LABEL_H)];
     executeControlView.opaque = NO;
     [transformView addSubview:executeControlView];
+    [transformView bringSubviewToFront:executeControlView];
      
     oliveScrollView = [[UIScrollView alloc] init];
     [containerView addSubview:oliveScrollView];
@@ -785,8 +790,15 @@ typedef enum {
     f.origin = CGPointZero;
     f.size = displaySize;
     transformView.frame = f;
+    
     f.origin = CGPointZero;
     transformImageView.frame = f;
+    
+    f = transformView.frame;
+    f.origin.x = 0;
+    f.size.height = EXECUTE_LABEL_H*EXECUTE_SHOWN;
+    f.origin.y = transformView.frame.size.height - f.size.height;
+    executeControlView.frame = f;
     
     [screenTasks configureGroupForSize: captureSize];
     if (!screenTask)
@@ -796,7 +808,6 @@ typedef enum {
     //    [thumbsTasks selectDepthTransform:depthTransformIndex];
     //    [externalTask configureForSize: processingSize];
     
-// XXXXXX    [self updateOlivesTo:nil];
     oliveUpdateNeeded = YES;
     
     [oliveScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
@@ -867,6 +878,16 @@ typedef enum {
     assert(roomUndertransformView || roomRightOftransformView);
     
     CGRect f;
+    if (!roomRightOftransformView || !roomUndertransformView) {
+        f = transformView.frame;
+        if (!roomRightOftransformView) {    // center the transform display
+            f.origin.x = (containerView.frame.size.width - f.size.width)/2;
+        } else {
+            f.origin.y = (containerView.frame.size.height - f.size.height)/2;
+        }
+        transformView.frame = f;
+    }
+    
     f.size.width = imageRect.size.width;
     f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
     if (roomRightOftransformView) {
@@ -1015,6 +1036,29 @@ typedef enum {
     size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
     Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
     [screenTask appendTransform:transform];
+    
+    [self updateExecuteDisplay];
+}
+
+- (void) updateExecuteDisplay {
+    [executeControlView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    // show the list in reverse order
+    CGRect f = executeControlView.frame;
+    f.origin = CGPointMake(0, f.size.height);
+    f.size = CGSizeMake(f.size.width, EXECUTE_LABEL_H);
+    for (int i=0; i<EXECUTE_SHOWN && i < screenTask.transformList.count; i++) {
+        Transform *transform = screenTask.transformList[screenTask.transformList.count - 1 - i];
+        UILabel *label = [[UILabel alloc] initWithFrame:f];
+        label.text = [NSString stringWithFormat:@"%@", transform.name];
+        label.textAlignment = NSTextAlignmentCenter;
+        label.adjustsFontSizeToFitWidth = YES;
+        label.font = [UIFont systemFontOfSize:EXECUTE_LABEL_FONT];
+        label.opaque = YES;
+        //label.backgroundColor = [UIColor clearColor];
+        [executeControlView addSubview:label];
+        f.origin.y -= f.size.height;
+    }
+    [executeControlView setNeedsDisplay];
 }
 
 #ifdef OLD
