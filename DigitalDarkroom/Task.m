@@ -92,8 +92,8 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) configureTransformAtIndex:(size_t)ti {
-    CGSize s = taskGroup.transformSize;
 #ifdef DEBUG_TASK_CONFIGURATION
+    CGSize s = taskGroup.transformSize;
     NSLog(@"    TT  %-15@   configure for size %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
 #endif
 //    assert(taskStatus == Stopped);

@@ -37,7 +37,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (id)initInGroup:(TaskGroup *) tg name:(NSString *) n;
 - (void) configureTaskForSize;
-- (void) configureTransforms;
 - (void) configureTransformAtIndex:(size_t)ti;
 
 - (void) appendTransform:(Transform *) transform;

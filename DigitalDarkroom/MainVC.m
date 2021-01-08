@@ -111,22 +111,17 @@ typedef enum {
 @property (nonatomic, strong)   Task *screenTask;
 @property (nonatomic, strong)   Task *externalTask;
 
-
-// screen views in containerView
-@property (nonatomic, strong)   UIImageView *transformView;           // area reserved for transform display
-@property (nonatomic, strong)   UINavigationController *sourcesNavVC;
-@property (nonatomic, strong)   UINavigationController *executeNavVC;       // table of current transforms
-@property (nonatomic, strong)   UINavigationController *availableNavVC;        // available transforms
-
-// in execute view
-@property (nonatomic, strong)   UITableViewController *executeTableVC;
-
-// in available VC
-@property (nonatomic, strong)   UITableViewController *availableTableVC;
-
+// in containerview:
+@property (nonatomic, strong)   UIView *transformView;              // area reserved for transform display and related
 @property (nonatomic, strong)   UIView *oliveArrayView;
+
+// in transformview
+@property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
+@property (nonatomic, strong)   UIView *executeControlView;             // list of applied transforms, and controls
+
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
+@property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
@@ -183,13 +178,11 @@ typedef enum {
 
 @synthesize containerView;
 @synthesize transformView;
-@synthesize sourcesNavVC;
-@synthesize executeNavVC;
-@synthesize availableNavVC;
-
-@synthesize executeTableVC;
-@synthesize availableTableVC;
+@synthesize transformImageView;
+@synthesize executeControlView;
 @synthesize oliveArrayView;
+
+@synthesize sourcesNavVC;
 
 @synthesize currentCameraButton;
 
@@ -535,27 +528,34 @@ typedef enum {
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.layer.borderWidth = 1.0;
+#ifdef DEBUG_LAYOUT
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
-    [self.view addSubview:containerView];
+#endif
     
-
-    // Refresh myView and/or main view
-    [self.view layoutIfNeeded];
-    //[self.myView layoutIfNeeded];
-    // touching the transformView toggles nav and tool bars
+    transformView = [[UIView alloc] init];
     UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [touch setNumberOfTouchesRequired:1];
-    [transformView addGestureRecognizer:touch];
-    
-    transformView = [[UIImageView alloc] init];
-    transformView.userInteractionEnabled = YES;
-    transformView.backgroundColor = NAVY_BLUE;
+    [transformImageView addGestureRecognizer:touch];
+
     [containerView addSubview:transformView];
     
-    //externalTask = [externalTasks createTaskForTargetImage:transformView.image];
+    transformImageView = [[UIImageView alloc] init];
+    transformImageView.userInteractionEnabled = YES;
+    transformImageView.backgroundColor = NAVY_BLUE;
+    [transformView addSubview:transformImageView];
+    
+    executeControlView = [[UIView alloc] init];
+    executeControlView.opaque = NO;
+    [transformView addSubview:executeControlView];
+     
     oliveScrollView = [[UIScrollView alloc] init];
     [containerView addSubview:oliveScrollView];
+    
+    [self.view layoutIfNeeded];
+    [self.view addSubview:containerView];
+    
+    //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
     
     self.view.backgroundColor = [UIColor whiteColor];
 }
@@ -785,9 +785,12 @@ typedef enum {
     f.origin = CGPointZero;
     f.size = displaySize;
     transformView.frame = f;
+    f.origin = CGPointZero;
+    transformImageView.frame = f;
+    
     [screenTasks configureGroupForSize: captureSize];
     if (!screenTask)
-        screenTask = [screenTasks createTaskForTargetImageView:transformView named:@"main"];
+        screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
 
     //    [screenTasks selectDepthTransform:depthTransformIndex];
     //    [thumbsTasks selectDepthTransform:depthTransformIndex];
@@ -820,7 +823,7 @@ typedef enum {
     
     [containerView bringSubviewToFront:transformView];
     
-    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformView.layer;
+    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     if (ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:YES];
@@ -837,7 +840,7 @@ typedef enum {
     
     CGRect imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
-    float aspectRatio = transformView.frame.size.width/transformView.frame.size.height;
+    float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
     imageRect.size.height = round(imageRect.size.width / aspectRatio);
     
     [thumbTasks removeAllTransforms];
@@ -848,7 +851,6 @@ typedef enum {
     shadow.shadowBlurRadius = 5.0;
     shadow.shadowColor = [UIColor blackColor];
     
-    size_t thumbsPerRow = (oliveScrollView.frame.size.width - SEP) / (OLIVE_W + SEP);
     NSDictionary *labelAttributes = @{
         NSForegroundColorAttributeName:[UIColor blackColor],
         NSBackgroundColorAttributeName: [UIColor colorWithWhite:0.7 alpha:0.7],
@@ -856,20 +858,24 @@ typedef enum {
         //        NSShadowAttributeName: shadow
     };
     
-    // compute position and size of first entry. Assume there is room
-    // to the right of the transform image.
+    BOOL roomRightOftransformView = RIGHT(transformView.frame) +
+        SEP + imageRect.size.width <= containerView.frame.size.width;
+    
+    BOOL roomUndertransformView = BELOW(transformView.frame) +
+        SEP + imageRect.size.height <= containerView.frame.size.height;
+    
+    assert(roomUndertransformView || roomRightOftransformView);
+    
     CGRect f;
-    f.origin.x = RIGHT(transformView.frame) + SEP;
-    f.origin.y = transformView.frame.origin.y;
     f.size.width = imageRect.size.width;
     f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
-    if (f.origin.x + f.size.width > containerView.frame.size.width) { // no room on the right
+    if (roomRightOftransformView) {
+        f.origin.x = RIGHT(transformView.frame) + SEP;
+        f.origin.y = transformView.frame.origin.y;
+    } else {
         f.origin.x = transformView.frame.origin.x;
         f.origin.y = BELOW(transformView.frame) + SEP;
     }
- 
-    BOOL roomUnderTransformView = BELOW(transformView.frame) +
-            SEP + f.size.height <= containerView.frame.size.height;
 
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
         UIView *v = [[UIView alloc] initWithFrame:f];
@@ -932,7 +938,7 @@ typedef enum {
         f.origin.x = RIGHT(v.frame) + SEP;
         if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
             f.origin.y = BELOW(f) + SEP;
-            if (roomUnderTransformView && f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
+            if (roomUndertransformView && f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
                 f.origin.x = transformView.frame.origin.x;
             } else {
                 f.origin.x = RIGHT(transformView.frame) + SEP;
@@ -1161,7 +1167,7 @@ typedef enum {
 
 - (IBAction) doSave:(UIBarButtonItem *)barButton {
     NSLog(@"saving");   // XXX need full image for a save
-    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(transformImageView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
     UIWindow* keyWindow = nil;
@@ -1250,8 +1256,8 @@ typedef enum {
 #ifdef EXECUTEDAUTOMATICALLY
     assert(transformed);    // should never be too busy at this point
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->transformView.image = transformed;
-        [self->transformView setNeedsDisplay];
+        self->transformImageView.image = transformed;
+        [self->transformImageView setNeedsDisplay];
     });
 #endif
     
