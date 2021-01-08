@@ -52,13 +52,13 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define OLIVE_W     80
-#define OLIVE_FONT_SIZE 18
-// #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
-
 #define EXECUTE_LABEL_H 22
 #define EXECUTE_LABEL_FONT  18
 #define EXECUTE_SHOWN   1 // 5   // number of total lines shown on screen (not yet)
+
+#define OLIVE_W     80
+#define OLIVE_FONT_SIZE 14
+#define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 
 #define SECTION_HEADER_ARROW_W  55
 
@@ -733,8 +733,9 @@ typedef enum {
     // of the height of the screen.
     
     CGSize displaySizeLimit = containerView.frame.size;
-    // displaySizeLimit.width -= (OLIVE_W + SEP);
     displaySizeLimit.height = round(displaySizeLimit.height * 1.0);    // no more than two thirds of the screen in height
+    if (displaySizeLimit.width > 768)
+        displaySizeLimit.width = 768;
     
     // determine capture size based on various target sizes
     CGSize captureSize;
@@ -864,22 +865,31 @@ typedef enum {
     
     NSDictionary *labelAttributes = @{
         NSForegroundColorAttributeName:[UIColor blackColor],
-        NSBackgroundColorAttributeName: [UIColor colorWithWhite:0.7 alpha:0.7],
+        NSBackgroundColorAttributeName: [UIColor whiteColor],
         NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
         //        NSShadowAttributeName: shadow
     };
     
+    CGRect nextButtonFrame;
+    nextButtonFrame.size = CGSizeMake(imageRect.size.width,
+                                   imageRect.size.height + OLIVE_LABEL_H);
+    
     BOOL roomRightOftransformView = RIGHT(transformView.frame) +
-        SEP + imageRect.size.width <= containerView.frame.size.width;
-    
+        SEP + nextButtonFrame.size.width <= containerView.frame.size.width;
     BOOL roomUndertransformView = BELOW(transformView.frame) +
-        SEP + imageRect.size.height <= containerView.frame.size.height;
+        SEP + nextButtonFrame.size.height <= containerView.frame.size.height;
+    assert(roomUndertransformView || roomRightOftransformView); // we need space somewhere...
+
+    if (roomRightOftransformView) {
+        nextButtonFrame.origin.x = RIGHT(transformView.frame) + SEP;
+        nextButtonFrame.origin.y = transformView.frame.origin.y;
+    } else {
+        nextButtonFrame.origin.x = transformView.frame.origin.x;
+        nextButtonFrame.origin.y = BELOW(transformView.frame) + SEP;
+    }
     
-    assert(roomUndertransformView || roomRightOftransformView);
-    
-    CGRect f;
     if (!roomRightOftransformView || !roomUndertransformView) {
-        f = transformView.frame;
+        CGRect f = transformView.frame;
         if (!roomRightOftransformView) {    // center the transform display
             f.origin.x = (containerView.frame.size.width - f.size.width)/2;
         } else {
@@ -887,19 +897,9 @@ typedef enum {
         }
         transformView.frame = f;
     }
-    
-    f.size.width = imageRect.size.width;
-    f.size.height = imageRect.size.height; // + OLIVE_LABEL_H;
-    if (roomRightOftransformView) {
-        f.origin.x = RIGHT(transformView.frame) + SEP;
-        f.origin.y = transformView.frame.origin.y;
-    } else {
-        f.origin.x = transformView.frame.origin.x;
-        f.origin.y = BELOW(transformView.frame) + SEP;
-    }
 
     for (size_t i=0; i<transforms.flatTransformList.count; i++) {
-        UIView *v = [[UIView alloc] initWithFrame:f];
+        UIView *v = [[UIView alloc] initWithFrame:nextButtonFrame];
         frameH = BELOW(v.frame) + SEP;
         v.layer.cornerRadius = 5.0;
         
@@ -909,22 +909,47 @@ typedef enum {
         imageView.contentMode = UIViewContentModeScaleAspectFit;
         imageView.opaque = YES;
         [v addSubview:imageView];   // empty placeholder at the moment
-//        if (thumbTasksEmpty) {
-//            Task *newTask = [thumbTasks createTaskForTargetImageView:imageView];
-//        }
-
-        // XXXXX        imageView.tag = THUMB_TASK_INDEX_BASE_TAG + taskIndex;  // XXX not sure this will be needed
         
         Transform *transform = [transforms.flatTransformList objectAtIndex:i];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView
                                                         named:transform.name];
         [task appendTransform:transform];
 
-        UILabel *transformLabel = [[UILabel alloc] init];
+        CGRect f = imageRect;
+        f.origin.y = BELOW(f);
+        f.size.height = OLIVE_LABEL_H;
+        
+        UILabel *transformLabel = [[UILabel alloc] initWithFrame:f];
         transformLabel.textAlignment = NSTextAlignmentCenter;
-        transformLabel.adjustsFontSizeToFitWidth = NO;
+        transformLabel.adjustsFontSizeToFitWidth = YES;
         transformLabel.numberOfLines = 0;
+        //transformLabel.backgroundColor = [UIColor whiteColor];
         transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        transformLabel.text = transform.name;
+        UIColor *typeColor; // XXX a table lookup will be better
+        switch (transform.type) {   // XXX colors not working, and not easy to see. Tint?
+            case ColorTrans:
+                typeColor = [UIColor redColor];
+                break;
+            case   GeometricTrans:
+                typeColor = NAVY_BLUE;
+                break;
+            case    RemapTrans:
+                typeColor = RETLO_GREEN;
+                break;
+            case    AreaTrans:
+                typeColor = [UIColor colorWithRed:0 green:0 blue:0.5 alpha:1];
+                break;
+            case    DepthVis:
+                typeColor = [UIColor blackColor];
+                break;
+            case    EtcTrans:
+                typeColor = [UIColor cyanColor];
+                break;
+        }
+        transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
+        transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+#ifdef NOTDEF
         transformLabel.attributedText = [[NSMutableAttributedString alloc]
                                          initWithString:transform.name
                                          attributes:labelAttributes];
@@ -936,14 +961,12 @@ typedef enum {
                                  NSShadowAttributeName: shadow
                              }
                              context:nil].size;
-        transformLabel.frame = CGRectMake(0, f.size.height-labelSize.height, f.size.width, labelSize.height);
+        transformLabel.contentMode = NSLayoutAttributeTop;
+#endif
         transformLabel.tag = TRANSFORM_LABEL_TAG;
         transformLabel.opaque = NO;
-        transformLabel.backgroundColor = [UIColor clearColor];
-        //        transformLabel.backgroundColor = [UIColor greenColor];
-        transformLabel.contentMode = NSLayoutAttributeBottom;
+        transformLabel.layer.borderWidth = 0.5;
         [v addSubview:transformLabel];
-//        [v bringSubviewToFront:transformLabel];
         
         UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                          initWithTarget:self
@@ -956,18 +979,21 @@ typedef enum {
         [self adjustOliveSelected:v selected:NO];
         
         // where does the next thumb go?
+        f = nextButtonFrame;
         f.origin.x = RIGHT(v.frame) + SEP;
         if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
             f.origin.y = BELOW(f) + SEP;
-            if (roomUndertransformView && f.origin.y >= BELOW(transformView.frame) + SEP) {   // underneath the display
-                f.origin.x = transformView.frame.origin.x;
+            if (roomUndertransformView && f.origin.y >=
+                BELOW(transformView.frame) + SEP) {   // underneath the display
+                    f.origin.x = transformView.frame.origin.x;
             } else {
                 f.origin.x = RIGHT(transformView.frame) + SEP;
             }
         }
+        nextButtonFrame = f;
     }
 
-    f = oliveSelectionPanel.frame;
+    CGRect f = oliveSelectionPanel.frame;
     f.size.height = frameH;
     oliveSelectionPanel.frame = f;
 }
@@ -1954,8 +1980,8 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
         [self doSelecFileSource];
     } else {
         [self.view setNeedsLayout];
-        return;
     }
+    [self needLayout: self.view.frame.size];
 }
 
 - (IBAction) selectUI:(UISegmentedControl *)sender {

@@ -1381,17 +1381,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
-    
-    lastTransform = [Transform colorTransform: @"Auto contrast"
-                                  description: @""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
-        for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.g, p.b, p.r);
-        }
-    }];
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform colorTransform: @"Swap colors"
                                   description: @"r→g, g→b, b→r"
@@ -1404,6 +1393,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     [transformList addObject:lastTransform];
     ADD_TO_OLIVE(lastTransform);
     
+    // BROKEN: too blue
     lastTransform = [Transform colorTransform: @"Auto contrast"
                                   description: @""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
@@ -1713,7 +1703,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform = [Transform areaTransform: @"Zoom"
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        float zoom = instance.value;///10.0;
+        float zoom = instance.value;
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
         for (int y=0; y<remapBuf.h; y++) {
