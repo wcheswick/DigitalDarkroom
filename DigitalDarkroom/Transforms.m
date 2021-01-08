@@ -82,13 +82,13 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) buildTransformList {
     [self addDepthVisualizations];
+    [self addGeometricTransforms];
     [self addTestTransforms];   // empty
     [self addArtTransforms];
     [self addAreaTransforms];   // manu unimplemented
     [self addPointTransforms];  // working:
 #ifdef NOTYET
 //    [self addColorVisionDeficits];
-    [self addGeometricTransforms];
     [self addMiscTransforms];
     // tested:
     [self addMonochromes];
@@ -1709,6 +1709,27 @@ void convolution(const Pixel *in, Pixel *out,
     NSMutableArray *transformList = [[NSMutableArray alloc] init];
     [categoryList addObject:transformList];
     
+    // broken:
+    lastTransform = [Transform areaTransform: @"Zoom"
+                                 description: @""
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        float zoom = instance.value;///10.0;
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                long sx = centerX + (x-centerX)/zoom;
+                long sy = centerY + (y-centerY)/zoom;
+                REMAP_TO(x,y, sx,sy);
+            }
+        }
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 2;
+    lastTransform.high = 10;
+    lastTransform.hasParameters = YES;
+    [transformList addObject:lastTransform];
+    ADD_TO_OLIVE(lastTransform);
 
 #ifdef NEW
     lastTransform = [Transform areaTransform: @"Shower stall"
@@ -1782,25 +1803,6 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.high = +200;
     lastTransform.hasParameters = YES;
     [transformList addObject:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Zoom"
-                                  description: @""
-                                        remapImage:^void (PixelIndex_t *table, size_t w, size_t h, int z) {
-       float zoom = z/10.0;
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                long sx = CENTER_X + (x-CENTER_X)/zoom;
-                long sy = CENTER_Y + (y-CENTER_Y)/zoom;
-                table[PI(x,y)] = PI(sx,sy);
-            }
-    }
-    }];
-    lastTransform.low = 1;
-    lastTransform.value = 2;
-    lastTransform.high = 10;
-    lastTransform.hasParameters = YES;
-    [transformList addObject:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
 
     lastTransform = [Transform areaTransform: @"Through a cylinder"
                                   description: @""
