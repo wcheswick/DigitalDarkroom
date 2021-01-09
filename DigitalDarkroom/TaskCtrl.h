@@ -33,16 +33,18 @@ typedef enum {
     Transforms *transforms;
     NSMutableArray *taskGroups;
     volatile BOOL layoutNeeded;
+    volatile int reconfiguring;
 }
 
 @property (nonatomic, strong)   MainVC *mainVC;
 @property (nonatomic, strong)   NSMutableArray *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign, atomic)      BOOL layoutNeeded;
+@property (assign, atomic)      int reconfiguring;
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 
-- (void) needLayoutTo:(CGSize) newSize;
+- (void) needLayout;
 - (void) layoutCompleted;
 
 - (void) selectDepthTransform:(int)index;

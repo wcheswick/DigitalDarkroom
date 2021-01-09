@@ -442,11 +442,12 @@ typedef enum {
 }
 
 - (void) deviceRotated {
-    currentDeviceOrientation = [[UIDevice currentDevice] orientation];
 #ifdef DEBUG_LAYOUT
     NSLog(@"device rotated to %@", [CameraController
                                      dumpDeviceOrientationName:currentDeviceOrientation]);
 #endif
+    currentDeviceOrientation = [[UIDevice currentDevice] orientation];
+//    [self reconfigure];
 }
 
 - (void) viewDidLoad {
@@ -571,13 +572,23 @@ typedef enum {
     NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
           self.view.frame.size.width, self.view.frame.size.height);
 
-    [self needLayout: self.view.frame.size];
+    [self reconfigure];
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
         withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+#ifdef DEBUG_LAYOUT
     NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
-    [self needLayout: newSize];
+#endif
+    [self reconfigure];
+}
+
+- (void) reconfigure {
+    taskCtrl.reconfiguring++;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"********* reconfiguring: %d", taskCtrl.reconfiguring);
+#endif
+   [taskCtrl needLayout];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -610,9 +621,7 @@ typedef enum {
 // tell the transforms we need to layout.   It will call doLayout
 // when ready.
 
-- (void) needLayout:(CGSize) newSize {
-    NSLog(@" --- needLayout to %0.f x %.0f", newSize.width, newSize.height);
-    [taskCtrl needLayoutTo:newSize];
+- (void) needLayout {
 }
 
 // this is called when we know the transforms are all Stopped.
@@ -621,9 +630,12 @@ typedef enum {
 #define INSET 3 // from screen edges
 #define MIN_TRANS_TABLE_W 275
 
-- (void) doLayout:(CGSize) newSize {
-    NSLog(@"****** doLayout to %0.f x %.0f", newSize.width, newSize.height);
-
+- (void) doLayout {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"****** doLayout self.view %0.f x %.0f",
+          self.view.frame.size.width, self.view.frame.size.height);
+#endif
+    
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
     self.navigationController.toolbarHidden = NO;
@@ -633,6 +645,7 @@ typedef enum {
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
             [self cameraOn:NO];
+            [self adjustButtons];
         }
         currentSource = nextSource;
         if (IS_3D_CAMERA(currentSource.sourceType)) {
@@ -723,8 +736,10 @@ typedef enum {
     f.origin.x = leftPadding;
     f.size.width -= rightPadding + f.origin.x;
     containerView.frame = f;
+#ifdef DEBUG_LAYOUT
     NSLog(@"    containerview frame:  %.0f x %.0f", f.size.width, f.size.height);
-
+#endif
+    
     // Compute the size available for the image on the screen.  We include various constraints
     // for layout reasons.
     // the image display starts on the upper left of the screen.  Its width
@@ -837,14 +852,22 @@ typedef enum {
     
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
+    [self adjustButtons];
+    [taskCtrl layoutCompleted];
+    
     if (ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:YES];
     } else {
         [self transformCurrentImage];
     }
-    [self adjustButtons];
-    
-    [taskCtrl layoutCompleted];
+}
+
+- (void) transformCurrentImage {
+    assert(!ISCAMERA(currentSource.sourceType));
+    UIImage *currentImage = [UIImage imageWithContentsOfFile:currentSource.imagePath];
+    assert(currentImage);
+    [screenTasks executeTasksWithImage:currentImage];
+    [thumbTasks executeTasksWithImage:currentImage];
 }
 
 - (void) fillOliveView:(UIView *)oliveSelectionPanel {
@@ -1317,21 +1340,6 @@ typedef enum {
     return newImage;
 }
 
-- (void) useImage:(UIImage *)image {
-    [cameraController stopCamera];
-    [self adjustButtons];
-    
-    [screenTasks executeTasksWithImage:image];
-    [thumbTasks executeTasksWithImage:image];
-#ifdef EXECUTEDAUTOMATICALLY
-    assert(transformed);    // should never be too busy at this point
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self->transformImageView.image = transformed;
-        [self->transformImageView setNeedsDisplay];
-    });
-#endif
-    
-}
 
 - (UIImageOrientation) imageOrientationForDeviceOrientation {
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
@@ -1390,6 +1398,8 @@ timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
         return;
     if (taskCtrl.layoutNeeded)
         return;
+    if (taskCtrl.reconfiguring)
+        return;
     depthCount++;
     if (busy) {
         busyCount++;
@@ -1416,13 +1426,6 @@ timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     [thumbTasks executeTasksWithImage:sourceImage];
 }
 
-- (void) transformCurrentImage {
-    if (ISCAMERA(currentSource.sourceType)) // cameras don't have a current image, do they?
-        return;
-    UIImage *currentImage = [UIImage imageWithContentsOfFile:currentSource.imagePath];
-    assert(currentImage);
-    [self doTransformsOn:currentImage];
-}
 
 #ifdef TODO
 static Pixel *depthPixelVisImage = 0;    // alloc on the heap, maybe too big for the stack
@@ -1511,6 +1514,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     if (!capturing)
         return;
     if (taskCtrl.layoutNeeded)
+        return;
+    if (taskCtrl.reconfiguring)
         return;
     if (busy) {
         busyCount++;
@@ -1978,10 +1983,10 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
     nextSource = [inputSources objectAtIndex:segment];
     if (nextSource.sourceType == NotACamera) {
         [self doSelecFileSource];
+        [self reconfigure];
     } else {
-        [self.view setNeedsLayout];
+        [self reconfigure];
     }
-    [self needLayout: self.view.frame.size];
 }
 
 - (IBAction) selectUI:(UISegmentedControl *)sender {
@@ -2201,7 +2206,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         nextSource = [self sourceForIndexPath:indexPath];
         [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
         NSLog(@"    ***** collectionView setneedslayout");
-        [self.view setNeedsLayout];
+        [self reconfigure];
     }
 #ifdef V0
     else {    // transform selection

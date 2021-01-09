@@ -12,7 +12,6 @@
 
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (assign)              size_t centerX, centerY;
-@property (assign)              CGSize newLayoutSize;
 @property (assign)              volatile BOOL layingOut;
 
 @end
@@ -25,17 +24,17 @@
 @synthesize depthTransform;
 @synthesize layoutNeeded;
 @synthesize layingOut;
-@synthesize newLayoutSize;
+@synthesize reconfiguring;
 
 - (id)init {
     self = [super init];
     if (self) {
         mainVC = nil;
-        newLayoutSize = CGSizeZero;
         taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
         depthTransform = nil;
         layoutNeeded = YES;
         layingOut = NO;
+        reconfiguring = 0;
     }
     return self;
 }
@@ -47,11 +46,11 @@
     return taskGroup;
 }
 
-- (void) needLayoutTo:(CGSize) newSize {
+- (void) needLayout {
+    if (layingOut)
+        return;
     assert(!layingOut);
     layoutNeeded = YES;
-    newLayoutSize = newSize;
-    assert(newLayoutSize.width > 0);
     [self layoutIfReady];
 }
 
@@ -66,7 +65,7 @@
     if (newStatus == Stopped) {
         layingOut = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self->mainVC doLayout:self->newLayoutSize];
+            [self->mainVC doLayout];
         });
     } else
         NSLog(@"  -- still busy to layout");
@@ -76,6 +75,11 @@
     NSLog(@" --- layout completed");
     layoutNeeded = NO;
     layingOut = NO;
+    reconfiguring--;
+    if (reconfiguring < 0) {
+        NSLog(@"** reconfiguring error: %d", reconfiguring);
+        reconfiguring = 0;
+    }
     for (TaskGroup *taskGroup in taskGroups)
         [taskGroup layoutCompleted];
 }
@@ -208,6 +212,4 @@
         }
     }
 #endif
-
-
 @end
