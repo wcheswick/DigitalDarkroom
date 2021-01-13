@@ -88,6 +88,7 @@
 // last settings
 
 #define LAST_SOURCE_KEY @"LastSource"
+#define LAST_FILE_SOURCE_KEY @"LastFileSource"
 #define UI_MODE_KEY @"UIMode"
 
 typedef enum {
@@ -129,6 +130,7 @@ typedef enum {
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
 @property (nonatomic, strong)   InputSource *nextSource;
+@property (nonatomic, strong)   InputSource *fileSource;
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
@@ -164,6 +166,8 @@ typedef enum {
 @property (assign)              int depthTransformIndex;    // or NO_DEPTH_TRANSFORM, -1 selected index if disabled
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelection;
+@property (nonatomic, strong)   NSString *lastFileSourceUsed;
+
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
 @property (nonatomic, strong)   UIScrollView *oliveScrollView;
 
@@ -213,6 +217,7 @@ typedef enum {
 
 @synthesize transformDisplaySize;
 @synthesize sourceSelection;
+@synthesize lastFileSourceUsed;
 @synthesize uiSelection;
 @synthesize oliveScrollView;
 @synthesize oliveSelectedView;
@@ -286,14 +291,17 @@ typedef enum {
 #endif
         
         [self newDisplayMode:medium];
+        
 
         nextSource = nil;
 
+        lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
+                                   stringForKey:LAST_FILE_SOURCE_KEY];
         NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_SOURCE_KEY];
         if (lastSourceUsedLabel) {
             for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
-                nextSource = [inputSources  objectAtIndex:sourceIndex];
+                nextSource = [inputSources objectAtIndex:sourceIndex];
                 if ([lastSourceUsedLabel isEqual:nextSource.label]) {
                     NSLog(@"  - initializing source index %d", sourceIndex);
                     break;
@@ -310,7 +318,6 @@ typedef enum {
                 }
             }
         }
-
         currentSource = nextSource;
     }
     return self;
@@ -324,9 +331,11 @@ typedef enum {
 }
 
 - (void) saveCurrentSource {
-    NSLog(@"Saving source %d", currentSource.sourceType);
+    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
     [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
                                               forKey:LAST_SOURCE_KEY];
+    [[NSUserDefaults standardUserDefaults] setObject:lastFileSourceUsed
+                                              forKey:LAST_FILE_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
@@ -461,7 +470,7 @@ typedef enum {
         NSString *name = [InputSource cameraNameFor:c];
         [cameraNames addObject:name];
     }
-    
+
     NSMutableArray *sourceNames = [[NSMutableArray alloc] init];
     for (int cam=0; cam<availableCameraCount; cam++) {
         InputSource *s = [inputSources objectAtIndex:cam];
@@ -473,9 +482,12 @@ typedef enum {
     sourceSelection.frame = CGRectMake(0, 0, 100, 44);
     [sourceSelection addTarget:self action:@selector(selectSource:)
               forControlEvents: UIControlEventValueChanged];
-    sourceSelection.selectedSegmentIndex = nextSource.sourceType;
     sourceSelection.momentary = NO;
-    
+    if (ISCAMERA(currentSource.sourceType))
+        sourceSelection.selectedSegmentIndex = currentSource.sourceType;
+    else
+        sourceSelection.selectedSegmentIndex = sourceSelection.numberOfSegments - 1;    // file segment
+
     UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc]
                                     initWithCustomView:sourceSelection];
     self.navigationItem.leftBarButtonItem = leftBarItem;
@@ -646,6 +658,9 @@ typedef enum {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
             [self cameraOn:NO];
             [self adjustButtons];
+        }
+        if (!ISCAMERA(nextSource.sourceType)) {
+            lastFileSourceUsed = nextSource.label;
         }
         currentSource = nextSource;
         if (IS_3D_CAMERA(currentSource.sourceType)) {
@@ -886,12 +901,14 @@ typedef enum {
     shadow.shadowBlurRadius = 5.0;
     shadow.shadowColor = [UIColor blackColor];
     
+#ifdef NOTDEF
     NSDictionary *labelAttributes = @{
         NSForegroundColorAttributeName:[UIColor blackColor],
         NSBackgroundColorAttributeName: [UIColor whiteColor],
         NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
         //        NSShadowAttributeName: shadow
     };
+#endif
     
     CGRect nextButtonFrame;
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
@@ -1072,10 +1089,11 @@ typedef enum {
     if (v == oliveSelectedView) {   // deselect, and we are done
         [self adjustOliveSelected:oliveSelectedView selected:NO];
         oliveSelectedView = nil;
+        [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
         return;
     }
     
-    if (oliveSelectedView) {   // just turn off current one
+    if (oliveSelectedView) {   // turn off current one...
         [self adjustOliveSelected:oliveSelectedView selected:NO];
     }
     
@@ -1087,6 +1105,7 @@ typedef enum {
     [screenTask appendTransform:transform];
     
     [self updateExecuteDisplay];
+    [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
 }
 
 - (void) updateExecuteDisplay {
@@ -1153,11 +1172,6 @@ typedef enum {
     
     trashButton.enabled = screenTask.transformList.count > 0;
     undoButton.enabled = screenTask.transformList.count > 0;
-    sourceSelection.selectedSegmentIndex = currentSource.sourceType;
-    NSLog(@" current selection is %ld", (long)sourceSelection.selectedSegmentIndex);
-    
-    [sourceSelection setNeedsLayout];
-    
     stopCamera.enabled = capturing;
     startCamera.enabled = !stopCamera.enabled;
 }
@@ -1979,14 +1993,13 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
     int segment = (Cameras)sender.selectedSegmentIndex;
-    
-    nextSource = [inputSources objectAtIndex:segment];
-    if (nextSource.sourceType == NotACamera) {
+    if (segment == sender.numberOfSegments - 1) {   // file selection
+        sender.selectedSegmentIndex = segment;
         [self doSelecFileSource];
-        [self reconfigure];
-    } else {
-        [self reconfigure];
+        return;
     }
+    nextSource = [inputSources objectAtIndex:segment];
+    [self reconfigure];
 }
 
 - (IBAction) selectUI:(UISegmentedControl *)sender {
