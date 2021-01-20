@@ -14,6 +14,7 @@
 @interface TaskGroup ()
 
 @property (nonatomic, strong)   PixBuf *srcPix;   // common source pixels for all tasks in this group
+@property (nonatomic, strong)   DepthBuf *depthBuf;
 // remapping for every transform of current size, plus parameter
 @property (nonatomic, strong)   NSMutableDictionary *remapCache;
 
@@ -23,6 +24,7 @@
 
 @synthesize taskCtrl;
 @synthesize srcPix;
+@synthesize depthBuf;
 @synthesize tasksStatus;
 
 @synthesize tasks;
@@ -42,6 +44,7 @@
         tasks = [[NSMutableArray alloc] init];
         remapCache = [[NSMutableDictionary alloc] init];
         srcPix = nil;
+        depthBuf = nil;
         bytesPerRow = 0;    // no current configuration
         transformSize = CGSizeZero; // unconfigured group
         tasksStatus = Stopped;
@@ -58,10 +61,16 @@
 
     transformSize = s;
     
-    if (!srcPix ||
-            srcPix.w != transformSize.width || srcPix.h != transformSize.height) {
+    if (!srcPix || srcPix.w != transformSize.width ||
+            srcPix.h != transformSize.height) {
         srcPix = [[PixBuf alloc] initWithSize:transformSize];
     }
+    
+    if (!depthBuf || depthBuf.w != transformSize.width ||
+            depthBuf.h != transformSize.height) {
+        depthBuf = [[DepthBuf alloc] initWithSize:transformSize];
+    }
+
     // clear and recompute any remaps
     [remapCache removeAllObjects];
     
@@ -90,15 +99,6 @@
         [task removeLastTransform];
 }
 
-        
-#ifdef notdef
-        if (tasksStatus != Stopped) {
-        for (Task *task in tasks)
-            NSLog(@" ** task status is %d", task.taskStatus);
-        assert(tasksStatus == Stopped);
-    }
-#endif
-
 // This is called back from task for transforms that remap pixels.  The remapping is based
 // on the pixel array size, and maybe parameter settings.  We only compute the transform/parameter
 // remap once, because it is good for every identical transform/param in all the tasks in this group.
@@ -122,6 +122,9 @@
                                         height:transformSize.height];
     transform.remapImageF(remapBuf, instance);
     assert(remapBuf);
+#ifdef DEBUG
+    [remapBuf verify];
+#endif
     [remapCache setObject:remapBuf forKey:name];
     return remapBuf;
 }
@@ -219,8 +222,51 @@
         for (Task *task in tasks) {
             if (task.taskStatus == Running)
                 continue;
-            [task executeTransformsWithPixBuf:srcPix];
+            [task executeTransformsFromPixBuf:srcPix];
         }
+    }
+}
+
+// same idea as image tasks, but convert the depth buffer
+// into an image first.
+
+- (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf {
+    DepthBuf *activeDepthBuf = rawDepthBuf;
+    if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
+        // cheap scaling
+        float yScale = (float)depthBuf.h/(float)rawDepthBuf.h;
+        float xScale =(float)depthBuf.h/(float)rawDepthBuf.h;
+        for (int x=0; x<depthBuf.w; x++) {
+            int sx = round(x/xScale);
+            assert(sx < rawDepthBuf.w);
+            for (int y=0; y<depthBuf.h; y++) {
+                int sy = trunc(y/yScale);
+                assert(sy < rawDepthBuf.h);
+                depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];
+            }
+        }
+        activeDepthBuf = depthBuf;
+    }
+    
+#ifdef IFNEEDED
+    float min = MAX_DEPTH;
+    float max = MIN_DEPTH;
+    for (int i=0; i<bufferSize; i++) {
+        float f = depthImage.buf[i];
+        if (f < min)
+            min = f;
+        if (f > max)
+            max = f;
+    }
+    for (int i=0; i<100; i++)
+    NSLog(@"%2d   %.02f", i, depthImage.buf[i]);
+    NSLog(@" src min, max = %.2f %.2f", min, max);
+#endif
+
+    for (Task *task in tasks) {
+        if (task.taskStatus == Running)
+            continue;
+        [task startTransformsWithDepthBuf:activeDepthBuf];
     }
 }
 

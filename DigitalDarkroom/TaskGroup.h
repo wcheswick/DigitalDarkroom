@@ -52,6 +52,8 @@ typedef enum {
 - (void) configureGroupForSize:(CGSize) s;
 
 - (void) executeTasksWithImage:(UIImage *) image;
+- (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf;
+
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv

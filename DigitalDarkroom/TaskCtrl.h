@@ -47,9 +47,7 @@ typedef enum {
 - (void) needLayout;
 - (void) layoutCompleted;
 
-- (void) selectDepthTransform:(int)index;
 - (void) executeTasksWithImage:(UIImage *) image;
-- (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage;
 
 - (void) layoutIfReady;
 

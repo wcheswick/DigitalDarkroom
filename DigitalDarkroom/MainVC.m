@@ -13,6 +13,13 @@
 #import "TaskCtrl.h"
 #import "Defines.h"
 
+// last settings
+
+#define LAST_SOURCE_KEY         @"LastSource"
+#define LAST_FILE_SOURCE_KEY    @"LastFileSource"
+#define UI_MODE_KEY             @"UIMode"
+#define LAST_DEPTH_TRANSFORM    @"LastDepthTransform"
+
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
 #define STATS_FONT_SIZE     18
@@ -24,7 +31,8 @@
 
 #define CURRENT_VALUE_LABEL_TAG     1
 #define TRANSFORM_BASE_TAG          100
-#define TRANSFORM_LABEL_TAG         98
+#define THUMB_LABEL_TAG         98
+#define THUMB_IMAGE_TAG         97
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -81,15 +89,8 @@
 #define TRANS_SEC_VIS_ARCHIVE  @"trans_sec_vis.archive"
 
 #define EXECUTE_STATS_TAG   1
-#define THUMB_TASK_INDEX_BASE_TAG   200
 
 #define DEPTH_TABLE_SECTION     0
-
-// last settings
-
-#define LAST_SOURCE_KEY @"LastSource"
-#define LAST_FILE_SOURCE_KEY @"LastFileSource"
-#define UI_MODE_KEY @"UIMode"
 
 typedef enum {
     TransformTable,
@@ -100,6 +101,13 @@ typedef enum {
     sourceCollection,
     transformCollection
 } CollectionTags;
+
+typedef enum {
+    sampleSource,
+    librarySource,
+} FixedSources;
+
+#define N_FIXED_SOURCES 2
 
 @interface MainVC ()
 
@@ -117,14 +125,14 @@ typedef enum {
 
 // in containerview:
 @property (nonatomic, strong)   UIView *transformView;              // area reserved for transform display and related
-@property (nonatomic, strong)   UIView *oliveArrayView;
+@property (nonatomic, strong)   UIView *thumbArrayView;
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UIView *executeControlView;             // list of applied transforms, and controls
+@property (nonatomic, strong)   UIView *executeControlView;         // list of applied transforms, and controls
 
 // in sources view
-@property (nonatomic, strong)   UIButton *currentCameraButton;  // or nil if no camera is selected
+@property (nonatomic, strong)   UIButton *currentCameraButton;      // or nil if no camera is selected
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
@@ -134,6 +142,7 @@ typedef enum {
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
+@property (nonatomic, strong)   Transform *depthTransform;  // current one, must not be nil
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
 @property (nonatomic, strong)   UILabel *allStatsLabel;
@@ -160,19 +169,17 @@ typedef enum {
 @property (assign)              UIMode_t uiMode;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
-@property (nonatomic, strong)   DepthImage *depthImage;
+@property (nonatomic, strong)   DepthBuf *depthBuf;
 @property (assign)              CGSize transformDisplaySize;
-
-@property (assign)              int depthTransformIndex;    // or NO_DEPTH_TRANSFORM, -1 selected index if disabled
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelection;
 @property (nonatomic, strong)   NSString *lastFileSourceUsed;
 
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
-@property (nonatomic, strong)   UIScrollView *oliveScrollView;
+@property (nonatomic, strong)   UIScrollView *thumbScrollView;
 
-@property (nonatomic, strong)   UIView *oliveSelectedView;
-@property (assign)              BOOL oliveUpdateNeeded;
+@property (nonatomic, strong)   UIView *selectedDepthView;
+@property (nonatomic, strong)   UIView *selectedTransformView;
 
 @end
 
@@ -187,7 +194,7 @@ typedef enum {
 @synthesize transformView;
 @synthesize transformImageView;
 @synthesize executeControlView;
-@synthesize oliveArrayView;
+@synthesize thumbArrayView;
 
 @synthesize sourcesNavVC;
 
@@ -203,7 +210,7 @@ typedef enum {
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize capturing, busy, needHires;
 @synthesize statsTimer, allStatsLabel, lastTime;
-@synthesize transforms;
+@synthesize transforms, depthTransform;
 @synthesize trashButton, hiresButton;
 @synthesize undoButton, snapButton;
 @synthesize stopCamera, startCamera;
@@ -212,23 +219,35 @@ typedef enum {
 @synthesize uiMode;
 
 @synthesize rowIsCollapsed;
-@synthesize depthImage;
-@synthesize depthTransformIndex;
+@synthesize depthBuf;
 
 @synthesize transformDisplaySize;
 @synthesize sourceSelection;
 @synthesize lastFileSourceUsed;
 @synthesize uiSelection;
-@synthesize oliveScrollView;
-@synthesize oliveSelectedView;
-@synthesize oliveUpdateNeeded;
+@synthesize thumbScrollView;
+@synthesize selectedDepthView;
+@synthesize selectedTransformView;
 @synthesize currentDeviceOrientation;
 
 - (id) init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
-        [self loadTransformSectionVisInfo];
+        
+        NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
+                                   stringForKey:LAST_DEPTH_TRANSFORM];
+        assert(transforms.depthTransforms.count > 0);
+        depthTransform = [transforms.depthTransforms objectAtIndex:0];  // default
+        for (int i=0; i < transforms.depthTransforms.count; i++) {
+            Transform *transform = [transforms.depthTransforms objectAtIndex:i];
+            if ([transform.name isEqual:depthTransformName]) {
+                depthTransform = transform;
+                break;
+            }
+        }
+        [self saveDepthTransformName];
+        selectedDepthView = nil;    // must be filled in
         
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
@@ -240,13 +259,10 @@ typedef enum {
 
         transformTotalElapsed = 0;
         transformCount = 0;
-        depthImage = nil;
-        oliveScrollView = nil;
-        depthTransformIndex = NO_DEPTH_TRANSFORM;
+        depthBuf = nil;
+        thumbScrollView = nil;
         busy = NO;
         needHires = NO;
-        oliveSelectedView = nil;
-        oliveUpdateNeeded = NO;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -279,6 +295,7 @@ typedef enum {
         
         uiMode = oliveUI;
         [self saveUIMode];
+        
 #ifdef OLD
         NSString *lastUIMode = [[NSUserDefaults standardUserDefaults]
                                      stringForKey:UI_MODE_KEY];
@@ -292,7 +309,6 @@ typedef enum {
         
         [self newDisplayMode:medium];
         
-
         nextSource = nil;
 
         lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
@@ -308,7 +324,7 @@ typedef enum {
                 }
             }
         }
-        
+nextSource = nil; // XXXXX debugging
         if (!nextSource)  {   // no known default, pick the first camera
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
@@ -321,6 +337,13 @@ typedef enum {
         currentSource = nextSource;
     }
     return self;
+}
+
+- (void) saveDepthTransformName {
+    assert(depthTransform);
+    [[NSUserDefaults standardUserDefaults] setObject:depthTransform.name
+                                              forKey:LAST_DEPTH_TRANSFORM];
+    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (void) saveUIMode {
@@ -361,41 +384,6 @@ typedef enum {
                       fromURL:nil];
 }
 #endif
-
-// The section headings might change.  Only propagate or initialize the ones we have now.
-
-- (void) loadTransformSectionVisInfo {
-    NSError *error;
-    NSData *savedSettingsData = [NSData dataWithContentsOfFile:TRANS_SEC_VIS_ARCHIVE];
-    NSMutableDictionary *savedSettings = nil;
-    if (savedSettingsData)
-        savedSettings = [NSKeyedUnarchiver
-                         unarchivedObjectOfClass: NSMutableDictionary.class
-                         fromData: savedSettingsData
-                         error:&error];
-    rowIsCollapsed = [[NSMutableDictionary alloc]
-                    initWithCapacity:transforms.categoryList.count];
-    for (NSString *key in transforms.categoryNames) {
-        BOOL collapsed = NO;;
-        if (savedSettings) {
-            NSNumber *value = [savedSettings objectForKey:key];
-            if ([value boolValue])
-                collapsed = [value boolValue];
-        }
-        [rowIsCollapsed setValue:[NSNumber numberWithBool:collapsed] forKey:key];
-    }
-}
-
-- (void) saveTransformSectionVisInfo {
-    NSError *error;
-    NSData *settingsData = [NSKeyedArchiver archivedDataWithRootObject:rowIsCollapsed
-                                                 requiringSecureCoding:NO
-                                                                 error:&error];
-    if (error)
-        NSLog(@"inconceivable, archive error %@", [error localizedDescription]);
-    else
-        [settingsData writeToFile:TRANS_SEC_VIS_ARCHIVE atomically:NO];
-}
 
 - (void) newDisplayMode:(DisplayMode_t) newMode {
     switch (newMode) {
@@ -479,7 +467,8 @@ typedef enum {
     [sourceNames addObject:@"File"];
     
     sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
-    sourceSelection.frame = CGRectMake(0, 0, 100, 44);
+    sourceSelection.frame = CGRectMake(0, 0,
+                                       100, self.navigationController.navigationBar.frame.size.height);
     [sourceSelection addTarget:self action:@selector(selectSource:)
               forControlEvents: UIControlEventValueChanged];
     sourceSelection.momentary = NO;
@@ -567,8 +556,8 @@ typedef enum {
     [transformView addSubview:executeControlView];
     [transformView bringSubviewToFront:executeControlView];
      
-    oliveScrollView = [[UIScrollView alloc] init];
-    [containerView addSubview:oliveScrollView];
+    thumbScrollView = [[UIScrollView alloc] init];
+    [containerView addSubview:thumbScrollView];
     
     [self.view layoutIfNeeded];
     [self.view addSubview:containerView];
@@ -647,6 +636,7 @@ typedef enum {
     NSLog(@"****** doLayout self.view %0.f x %.0f",
           self.view.frame.size.width, self.view.frame.size.height);
 #endif
+    BOOL adjustSourceInfo = (nextSource != nil);
     
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
@@ -657,19 +647,11 @@ typedef enum {
     if (nextSource) {
         if (currentSource && ISCAMERA(currentSource.sourceType)) {
             [self cameraOn:NO];
-            [self adjustButtons];
         }
         if (!ISCAMERA(nextSource.sourceType)) {
             lastFileSourceUsed = nextSource.label;
         }
         currentSource = nextSource;
-        if (IS_3D_CAMERA(currentSource.sourceType)) {
-            if (depthTransformIndex < 0)    // use previous value
-                depthTransformIndex = - depthTransformIndex;
-            else if (depthTransformIndex == NO_DEPTH_TRANSFORM)
-                depthTransformIndex = 0;
-        } else
-            depthTransformIndex = NO_DEPTH_TRANSFORM;
         [self saveCurrentSource];
         nextSource = nil;
     }
@@ -832,63 +814,70 @@ typedef enum {
     executeControlView.frame = f;
     
     [screenTasks configureGroupForSize: captureSize];
-    if (!screenTask)
+    if (!screenTask) {
         screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
+        assert(depthTransform);
+        screenTask.depthTransform = depthTransform;
+    }
 
-    //    [screenTasks selectDepthTransform:depthTransformIndex];
-    //    [thumbsTasks selectDepthTransform:depthTransformIndex];
     //    [externalTask configureForSize: processingSize];
     
-    oliveUpdateNeeded = YES;
-    
-    [oliveScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    [thumbScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     
     f = containerView.frame;
     f.origin = CGPointZero;
-    oliveScrollView.frame = f;
-    [containerView addSubview:oliveScrollView];
+    thumbScrollView.frame = f;
+    [containerView addSubview:thumbScrollView];
     
-    oliveArrayView = [[UIView alloc] initWithFrame:oliveScrollView.frame];
-    [self fillOliveView: oliveArrayView];   // This will adjust its frame size
+    thumbArrayView = [[UIView alloc] initWithFrame:thumbScrollView.frame];
+    [self fillThumbArrayView];   // This will adjust its frame size
     
-    oliveScrollView.contentSize = oliveArrayView.frame.size;
-    oliveScrollView.contentOffset = oliveArrayView.frame.origin;
-    oliveScrollView.pagingEnabled = NO;
-    oliveScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
-    oliveScrollView.showsVerticalScrollIndicator = YES;
-    oliveScrollView.userInteractionEnabled = YES;
-    oliveScrollView.exclusiveTouch = NO;
-    oliveScrollView.bounces = NO;
-    oliveScrollView.delaysContentTouches = YES;
-    oliveScrollView.canCancelContentTouches = YES;
-    [oliveScrollView addSubview:oliveArrayView];
+    thumbScrollView.contentSize = thumbArrayView.frame.size;
+    thumbScrollView.contentOffset = thumbArrayView.frame.origin;
+    thumbScrollView.pagingEnabled = NO;
+    thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+    thumbScrollView.showsVerticalScrollIndicator = YES;
+    thumbScrollView.userInteractionEnabled = YES;
+    thumbScrollView.exclusiveTouch = NO;
+    thumbScrollView.bounces = NO;
+    thumbScrollView.delaysContentTouches = YES;
+    thumbScrollView.canCancelContentTouches = YES;
+    [thumbScrollView addSubview:thumbArrayView];
     
     [containerView bringSubviewToFront:transformView];
     
+    if (adjustSourceInfo) {
+        [self adjustCameraButtons];
+    }
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
-    [self adjustButtons];
     [taskCtrl layoutCompleted];
     
     if (ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:YES];
     } else {
-        [self transformCurrentImage];
+        [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
     }
 }
 
-- (void) transformCurrentImage {
-    assert(!ISCAMERA(currentSource.sourceType));
-    UIImage *currentImage = [UIImage imageWithContentsOfFile:currentSource.imagePath];
-    assert(currentImage);
-    [screenTasks executeTasksWithImage:currentImage];
-    [thumbTasks executeTasksWithImage:currentImage];
+- (void) adjustCameraButtons {
+//    NSLog(@"****** adjustButtons ******");
+    
+    trashButton.enabled = screenTask.transformList.count > 0;
+    undoButton.enabled = screenTask.transformList.count > 0;
+    stopCamera.enabled = capturing;
+    startCamera.enabled = !stopCamera.enabled;
 }
 
-- (void) fillOliveView:(UIView *)oliveSelectionPanel {
+CGRect imageRect;
+CGRect nextButtonFrame;
+BOOL roomRightOftransformView;
+BOOL roomUndertransformView;
+
+- (void) fillThumbArrayView {
     CGFloat frameH = 0;
     
-    CGRect imageRect = CGRectZero;
+    imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
     float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
     imageRect.size.height = round(imageRect.size.width / aspectRatio);
@@ -910,13 +899,12 @@ typedef enum {
     };
 #endif
     
-    CGRect nextButtonFrame;
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
                                    imageRect.size.height + OLIVE_LABEL_H);
     
-    BOOL roomRightOftransformView = RIGHT(transformView.frame) +
+    roomRightOftransformView = RIGHT(transformView.frame) +
         SEP + nextButtonFrame.size.width <= containerView.frame.size.width;
-    BOOL roomUndertransformView = BELOW(transformView.frame) +
+    roomUndertransformView = BELOW(transformView.frame) +
         SEP + nextButtonFrame.size.height <= containerView.frame.size.height;
     assert(roomUndertransformView || roomRightOftransformView); // we need space somewhere...
 
@@ -937,145 +925,164 @@ typedef enum {
         }
         transformView.frame = f;
     }
+    
+    UITapGestureRecognizer *touch;
+    if (IS_3D_CAMERA(currentSource.sourceType)) {
+        for (size_t i=0; i<transforms.depthTransforms.count; i++) {
+            Transform *transform = [transforms.depthTransforms objectAtIndex:i];
+            UIView *thumbView = [self makeThumbForTransform:transform];
+            thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+            [self adjustThumb:thumbView selected:NO];
 
-    for (size_t i=0; i<transforms.flatTransformList.count; i++) {
-        UIView *v = [[UIView alloc] initWithFrame:nextButtonFrame];
-        frameH = BELOW(v.frame) + SEP;
-        v.layer.cornerRadius = 5.0;
+            BOOL isCurrentDepthTransform = [transform.name isEqual:depthTransform.name];
+            if (isCurrentDepthTransform && !selectedDepthView)
+                selectedDepthView = thumbView;
+            
+            touch = [[UITapGestureRecognizer alloc]
+                     initWithTarget:self
+                     action:@selector(doSelectDepthVis:)];
+            touch.enabled = !isCurrentDepthTransform;
+            [thumbView addGestureRecognizer:touch];
+            
+            // no live updates for depth views for now
+            UIImageView *imageView = [thumbView viewWithTag:THUMB_LABEL_TAG];
+            NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
+            NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@""];
+            if (imagePath) {
+                imageView.contentMode = UIViewContentModeScaleAspectFit;
+                imageView.image = [UIImage imageWithContentsOfFile:imagePath];
+                NSLog(@"thumb image at '%@'", imagePath);
+            } else {
+                NSLog(@"thumb image '%@' not found", file);
+            }
+            frameH = BELOW(thumbView.frame) + SEP;
+        }
+        [self adjustThumb:selectedDepthView selected:YES];
+    }
+    
+    selectedTransformView = nil;
+    
+    Transform *currentTransform = [screenTask currentTransform];
+    for (size_t i=0; i<transforms.transforms.count; i++) {
+        Transform *transform = [transforms.transforms objectAtIndex:i];
+        UIView *thumbView = [self makeThumbForTransform:transform];
+        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
         
-        UIImageView *imageView = [[UIImageView alloc] initWithFrame:imageRect];
-        imageView.frame = imageRect;
-        imageView.backgroundColor = [UIColor whiteColor];
-        imageView.contentMode = UIViewContentModeScaleAspectFit;
-        imageView.opaque = YES;
-        [v addSubview:imageView];   // empty placeholder at the moment
+        touch = [[UITapGestureRecognizer alloc]
+                 initWithTarget:self
+                 action:@selector(doTapTransform:)];
+        touch.enabled = YES;
+        [thumbView addGestureRecognizer:touch];
         
-        Transform *transform = [transforms.flatTransformList objectAtIndex:i];
+        // we will have multiples soon:
+        BOOL isCurrentTransform = currentTransform && [currentTransform.name isEqual:transform.name];
+        if (isCurrentTransform)
+            selectedTransformView = thumbView;
+        [self adjustThumb:thumbView selected:isCurrentTransform];
+        
+        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView
                                                         named:transform.name];
+        task.depthTransform = depthTransform;
         [task appendTransform:transform];
-
-        CGRect f = imageRect;
-        f.origin.y = BELOW(f);
-        f.size.height = OLIVE_LABEL_H;
-        
-        UILabel *transformLabel = [[UILabel alloc] initWithFrame:f];
-        transformLabel.textAlignment = NSTextAlignmentCenter;
-        transformLabel.adjustsFontSizeToFitWidth = YES;
-        transformLabel.numberOfLines = 0;
-        //transformLabel.backgroundColor = [UIColor whiteColor];
-        transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-        transformLabel.text = transform.name;
-        UIColor *typeColor; // XXX a table lookup will be better
-        switch (transform.type) {   // XXX colors not working, and not easy to see. Tint?
-            case ColorTrans:
-                typeColor = [UIColor redColor];
-                break;
-            case   GeometricTrans:
-                typeColor = NAVY_BLUE;
-                break;
-            case    RemapTrans:
-                typeColor = RETLO_GREEN;
-                break;
-            case    AreaTrans:
-                typeColor = [UIColor colorWithRed:0 green:0 blue:0.5 alpha:1];
-                break;
-            case    DepthVis:
-                typeColor = [UIColor blackColor];
-                break;
-            case    EtcTrans:
-                typeColor = [UIColor cyanColor];
-                break;
-        }
-        transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
-        transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-#ifdef NOTDEF
-        transformLabel.attributedText = [[NSMutableAttributedString alloc]
-                                         initWithString:transform.name
-                                         attributes:labelAttributes];
-        CGSize labelSize =  [transformLabel.text
-                             boundingRectWithSize:f.size
-                             options:NSStringDrawingUsesLineFragmentOrigin
-                             attributes:@{
-                                 NSFontAttributeName : transformLabel.font,
-                                 NSShadowAttributeName: shadow
-                             }
-                             context:nil].size;
-        transformLabel.contentMode = NSLayoutAttributeTop;
-#endif
-        transformLabel.tag = TRANSFORM_LABEL_TAG;
-        transformLabel.opaque = NO;
-        transformLabel.layer.borderWidth = 0.5;
-        [v addSubview:transformLabel];
-        
-        UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
-                                         initWithTarget:self
-                                         action:@selector(didTapOlive:)];
-        [touch setNumberOfTouchesRequired:1];
-        [v addGestureRecognizer:touch];
-        
-        v.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
-        [oliveSelectionPanel addSubview:v];
-        [self adjustOliveSelected:v selected:NO];
-        
-        // where does the next thumb go?
-        f = nextButtonFrame;
-        f.origin.x = RIGHT(v.frame) + SEP;
-        if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
-            f.origin.y = BELOW(f) + SEP;
-            if (roomUndertransformView && f.origin.y >=
-                BELOW(transformView.frame) + SEP) {   // underneath the display
-                    f.origin.x = transformView.frame.origin.x;
-            } else {
-                f.origin.x = RIGHT(transformView.frame) + SEP;
-            }
-        }
-        nextButtonFrame = f;
+        frameH = BELOW(thumbView.frame) + SEP;
     }
-
-    CGRect f = oliveSelectionPanel.frame;
+ 
+    CGRect f = thumbArrayView.frame;
     f.size.height = frameH;
-    oliveSelectionPanel.frame = f;
+    thumbArrayView.frame = f;
 }
 
-- (void) updateOlivesTo:(UIImage *) newImage {
-    for (size_t i=0; i<transforms.flatTransformList.count; i++) {
-        [self updateOliveImage:i to:newImage];
-    }
-}
+- (UIView *) makeThumbForTransform:(Transform *)transform {
+    UIView *newThumbView = [[UIView alloc] initWithFrame:nextButtonFrame];
+    newThumbView.layer.cornerRadius = 1.0;
+    [thumbArrayView addSubview:newThumbView];
 
-- (void) updateOliveImage:(size_t) index to:(UIImage *)newImage {
-    if (!oliveArrayView)
-        return;
-    UIImageView *v = [oliveArrayView viewWithTag:index + TRANSFORM_BASE_TAG];
-    if (!v) {
-        NSLog(@"olive view not found: %zu", index);
-        return;
-    }
-#ifdef OLD
-    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
-    assert(iv);
-    [iv setImage:newImage];
+    CGRect f = imageRect;
+    f.origin.y = BELOW(f);
+    f.size.height = OLIVE_LABEL_H;
+    UILabel *transformLabel = [[UILabel alloc] initWithFrame:f];
+    transformLabel.tag = THUMB_LABEL_TAG;
+    transformLabel.textAlignment = NSTextAlignmentCenter;
+    transformLabel.adjustsFontSizeToFitWidth = YES;
+    transformLabel.numberOfLines = 0;
+    //transformLabel.backgroundColor = [UIColor whiteColor];
+    transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    transformLabel.text = transform.name;
+    
+    transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
+    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+#ifdef NOTDEF
+    transformLabel.attributedText = [[NSMutableAttributedString alloc]
+                                     initWithString:transform.name
+                                     attributes:labelAttributes];
+    CGSize labelSize =  [transformLabel.text
+                         boundingRectWithSize:f.size
+                         options:NSStringDrawingUsesLineFragmentOrigin
+                         attributes:@{
+                             NSFontAttributeName : transformLabel.font,
+                             NSShadowAttributeName: shadow
+                         }
+                         context:nil].size;
+    transformLabel.contentMode = NSLayoutAttributeTop;
 #endif
-}
+    transformLabel.opaque = NO;
+    transformLabel.layer.borderWidth = 0.5;
+    [newThumbView addSubview:transformLabel];
 
-- (void) adjustOliveSelected:(UIView *)v selected:(BOOL)selected {
-    UILabel *l = [v viewWithTag:TRANSFORM_LABEL_TAG];
-    assert(l);
-    if (selected) {
-        l.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-        v.layer.borderWidth = 5.0;
-        oliveSelectedView = v;
-    } else {
-        l.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
-        oliveSelectedView = nil;
-        v.layer.borderWidth = 1.0;
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:imageRect];
+    imageView.tag = THUMB_IMAGE_TAG;
+    imageView.frame = imageRect;
+    imageView.backgroundColor = [UIColor whiteColor];
+    imageView.contentMode = UIViewContentModeScaleAspectFit;
+    imageView.opaque = YES;
+    [newThumbView addSubview:imageView];   // empty placeholder at the moment
+    
+    // where does the next thumb go?
+    f = nextButtonFrame;
+    f.origin.x = RIGHT(newThumbView.frame) + SEP;
+    if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
+        f.origin.y = BELOW(f) + SEP;
+        if (roomUndertransformView && f.origin.y >=
+            BELOW(transformView.frame) + SEP) {   // underneath the display
+                f.origin.x = transformView.frame.origin.x;
+        } else {
+            f.origin.x = RIGHT(transformView.frame) + SEP;
+        }
     }
-    [l setNeedsDisplay];
-    [v setNeedsDisplay];
+    nextButtonFrame = f;
+
+    return newThumbView;
 }
 
-- (IBAction) didTapOlive:(UITapGestureRecognizer *)recognizer {
+// select a new depth visualization.
+- (IBAction) doSelectDepthVis:(UITapGestureRecognizer *)recognizer {
+    UIView *newView = recognizer.view;
+    if (newView == selectedDepthView)   // should not happen
+        return;
+
+    [self adjustThumb:selectedDepthView selected:NO];
+    selectedDepthView = newView;
+    [self adjustThumb:selectedDepthView selected:YES];
+    
+    long index = newView.tag - TRANSFORM_BASE_TAG;
+    depthTransform = [transforms.depthTransforms objectAtIndex:index];
+    screenTask.depthTransform = depthTransform;
+}
+
+- (void) adjustThumb:(UIView *)thumbView selected:(BOOL)selected {
+    UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+    if (selected) {
+        label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+        thumbView.layer.borderWidth = 5.0;
+    } else {
+        label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
+        selectedDepthView.layer.borderWidth = 1.0;
+    }
+    [thumbView setNeedsDisplay];
+}
+
+- (IBAction) doTapTransform:(UITapGestureRecognizer *)recognizer {
 #ifdef OLD
     @synchronized (transforms.sequence) {
         [transforms.sequence removeAllObjects];
@@ -1086,26 +1093,46 @@ typedef enum {
     
     // at present, only one view selectable
     UIView *v = [recognizer view];
-    if (v == oliveSelectedView) {   // deselect, and we are done
-        [self adjustOliveSelected:oliveSelectedView selected:NO];
-        oliveSelectedView = nil;
+    if (v == selectedTransformView) {   // deselect, and we are done
+        [self adjustThumb:selectedTransformView selected:NO];
+        selectedTransformView = nil;
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
         return;
     }
     
-    if (oliveSelectedView) {   // turn off current one...
-        [self adjustOliveSelected:oliveSelectedView selected:NO];
+    if (selectedTransformView) {   // turn off current one...
+        [self adjustThumb:selectedTransformView selected:NO];
     }
     
-    oliveSelectedView = v;
-    [self adjustOliveSelected:oliveSelectedView selected:YES];
-    
+    selectedTransformView = v;
+    [self adjustThumb:selectedTransformView selected:YES];
+
     size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
-    Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
+    Transform *transform = [transforms.transforms objectAtIndex:flatTransformIndex];
     [screenTask appendTransform:transform];
     
     [self updateExecuteDisplay];
-    [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
+}
+
+- (void) updateOlivesTo:(UIImage *) newImage {
+    for (size_t i=0; i<transforms.transforms.count; i++) {
+        [self updateThumbImage:i to:newImage];
+    }
+}
+
+- (void) updateThumbImage:(size_t) index to:(UIImage *)newImage {
+    if (!thumbArrayView)
+        return;
+    UIImageView *v = [thumbArrayView viewWithTag:index + TRANSFORM_BASE_TAG];
+    if (!v) {
+        NSLog(@"olive view not found: %zu", index);
+        return;
+    }
+#ifdef OLD
+    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
+    assert(iv);
+    [iv setImage:newImage];
+#endif
 }
 
 - (void) updateExecuteDisplay {
@@ -1167,15 +1194,6 @@ typedef enum {
 }
 #endif
 
-- (void) adjustButtons {
-//    NSLog(@"****** adjustButtons ******");
-    
-    trashButton.enabled = screenTask.transformList.count > 0;
-    undoButton.enabled = screenTask.transformList.count > 0;
-    stopCamera.enabled = capturing;
-    startCamera.enabled = !stopCamera.enabled;
-}
-
 - (void) adjustDepthInfo {
     NSLog(@"-------- adjustDepthInfo ----------");
 }
@@ -1186,7 +1204,7 @@ typedef enum {
         [cameraController startCamera];
     else
         [cameraController stopCamera];
-    [self adjustButtons];
+    [self adjustCameraButtons];
 }
 
 #ifdef notdef
@@ -1261,7 +1279,7 @@ typedef enum {
         [cameraController stopCamera];
     }
     capturing = NO;
-    [self adjustButtons];
+    [self adjustCameraButtons];
 }
 
 - (IBAction) doResumeCamera:(UIBarButtonItem *)recognizer {
@@ -1269,7 +1287,7 @@ typedef enum {
         [cameraController startCamera];
     }
     capturing = YES;
-    [self adjustButtons];
+    [self adjustCameraButtons];
 }
 
 - (IBAction) doSave:(UIBarButtonItem *)barButton {
@@ -1406,11 +1424,9 @@ if captureDevice.position == AVCaptureDevicePosition.front {
 #endif
 
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
-didOutputDepthData:(AVDepthData *)depthData
-timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
+        didOutputDepthData:(AVDepthData *)rawDepthData
+        timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     if (!capturing)
-        return;
-    if (taskCtrl.layoutNeeded)
         return;
     if (taskCtrl.reconfiguring)
         return;
@@ -1421,106 +1437,38 @@ timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     }
     busy = YES;
     
-#ifdef TODO
+    AVDepthData *depthData;
+    if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
+        depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
+    else
+        depthData = rawDepthData;
+
+    CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
+    size_t width = CVPixelBufferGetWidth(pixelBufferRef);
+    size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+    if (!depthBuf || depthBuf.w != width || depthBuf.h != height) {
+        depthBuf = [[DepthBuf alloc]
+                    initWithSize: CGSizeMake(width, height)];
+    }
     
-    UIImage *processedDepthImage = [self imageFromDepthDataBuffer:depthData
-                                                      orientation:imageOrientation];
+    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+    assert(sizeof(Distance) == sizeof(float));
+    float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
+    memcpy(depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
+    CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
+    
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self->oliveUpdateNeeded) { // we have one now
-            [self updateOlivesTo:processedDepthImage];
-        }
-        [self doTransformsOn:processedDepthImage];
+        [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
+        [self->thumbTasks executeTasksWithDepthBuf:self->depthBuf];
         self->busy = NO;
     });
-#endif
 }
 
 - (void) doTransformsOn:(UIImage *)sourceImage {
     [screenTasks executeTasksWithImage:sourceImage];
     [thumbTasks executeTasksWithImage:sourceImage];
 }
-
-
-#ifdef TODO
-static Pixel *depthPixelVisImage = 0;    // alloc on the heap, maybe too big for the stack
-size_t bufferEntries = 0;
-
-- (UIImage *) imageFromDepthDataBuffer:(AVDepthData *) rawDepthData
-                           orientation:(UIImageOrientation) orientation {
-    //NSLog(@"         type: %@", [cameraController dumpFormatType:rawDepthData.depthDataType]);
-    // this is hdis, displarity16, on iphone X
-    //assert(rawDepthData.depthDataType == kCVPixelFormatType_DepthFloat32); // what we are expecting, for now
-    AVDepthData *depthData;
-    if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
-        depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
-    else
-        depthData = rawDepthData;
     
-    CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
-    size_t width = CVPixelBufferGetWidth(pixelBufferRef);
-    size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-    //NSLog(@"depth data orientation %@", width > height ? @"panoramic" : @"portrait");
-    if (bufferEntries != width * height) {    // put it on the heap.  This doesn't seem to help
-        if (bufferEntries) {
-            free(depthPixelVisImage);
-        }
-        bufferEntries = width * height;
-        depthPixelVisImage = (Pixel *)malloc(bufferEntries * sizeof(Pixel));
-    }
-    if (depthImage) {
-        // if size or shape has changed, reallocate
-        if (depthImage.size.width != width ||
-            depthImage.size.height != height) {
-            @synchronized(depthImage) {
-                // reallocate.  ARC should release the old buffer
-                depthImage = [[DepthImage alloc]
-                              initWithSize: CGSizeMake(width, height)];
-            }
-        }
-    } else
-        depthImage = [[DepthImage alloc]
-                      initWithSize: CGSizeMake(width, height)];
-    
-    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
-    float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
-    memcpy(depthImage.buf, capturedDepthBuffer, bufferEntries*sizeof(float));
-    CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
-    
-#ifdef TODO
-    float min = MAX_DEPTH;
-    float max = MIN_DEPTH;
-    for (int i=0; i<bufferSize; i++) {
-        float f = depthImage.buf[i];
-        if (f < min)
-            min = f;
-        if (f > max)
-            max = f;
-    }
-    for (int i=0; i<100; i++)
-    NSLog(@"%2d   %.02f", i, depthImage.buf[i]);
-    NSLog(@" src min, max = %.2f %.2f", min, max);
-    
-    [transforms depthToPixels: depthImage pixels:(Pixel *)depthPixelVisImage];
-    size_t bytesPerRow = depthImage.size.width*sizeof(Pixel);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(depthPixelVisImage,
-                                                 width, height,
-                                                 8,
-                                                 bytesPerRow,
-                                                 colorSpace,
-                                                 BITMAP_OPTS;
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
-    UIImage *image = [UIImage imageWithCGImage:quartzImage
-                                         scale:1.0
-                                   orientation:orientation];
-    CGImageRelease(quartzImage);
-    CGColorSpaceRelease(colorSpace);
-#endif
-    return image;
-}
-#endif
-
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
@@ -1865,7 +1813,6 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
             Transform *transform = [transformList objectAtIndex:indexPath.row];
             [self addTransform:transform];
             [self.executeTableVC.tableView reloadData];
-            [self adjustButtons];
             [self transformCurrentImage];
             break;
         }
@@ -1925,7 +1872,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                 [transforms.sequence removeObjectAtIndex:indexPath.row];
                 transforms.sequenceChanged = YES;
             }
-            [self adjustButtons];
             [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
                              withRowAnimation:UITableViewRowAnimationBottom];
             [self transformCurrentImage];
@@ -2054,16 +2000,12 @@ moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
 }
 
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
-    if (collectionView.tag == sourceCollection)
-        return 3;
-    else
-        return 1;
+    return N_FIXED_SOURCES;
 }
 
 static NSString * const sourceSectionTitles[] = {
-    [0] = @"    Cameras",
-    [1] = @"    Samples",
-    [2] = @"    From library",
+    [sampleSource] = @"    Samples",
+    [librarySource] = @"    From library",
 };
 
 #ifdef BROKEN
@@ -2086,32 +2028,18 @@ static NSString * const sourceSectionTitles[] = {
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView
      numberOfItemsInSection:(NSInteger)section {
-    if (collectionView.tag == sourceCollection) {
-        switch (section) {
-            case 0:
-                return NCAMERA;
-            case 1:
-                return inputSources.count - NCAMERA;
-            case 2:
-                return 0;
-        }
-        return inputSources.count;
-    } else {
-        return transforms.flatTransformList.count;
+    switch ((FixedSources) section) {
+        case sampleSource:
+            return inputSources.count - NCAMERA;
+        case librarySource:
+            return 0;   // XXX not yet
     }
 }
 
 - (CGSize)collectionView:(UICollectionView *)collectionView
                   layout:(UICollectionViewLayout*)collectionViewLayout
   sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    if (collectionView.tag == sourceCollection) {
-        return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
-    } else {
-        if (indexPath.row == 0) // entry zero is overlaid by the transform view
-            return transformView.frame.size;
-        else
-            return CGSizeMake(TRANS_CELL_W, TRANS_CELL_H);  // XXXXX this needs to vary?
-    }
+    return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
@@ -2144,19 +2072,9 @@ static NSString * const sourceSectionTitles[] = {
     thumbLabel.backgroundColor = [UIColor whiteColor];
     [cellView addSubview:thumbLabel];
     
-    InputSource *source = [self sourceForIndexPath:indexPath];
-    switch (source.sourceType) {
-        case FrontCamera:
-        case Front3DCamera:
-        case RearCamera:
-        case Rear3DCamera:
-            thumbLabel.text = [InputSource cameraNameFor:source.sourceType];
-            if (![cameraController isCameraAvailable:source.sourceType]) {
-                thumbLabel.textColor = [UIColor grayColor];
-                cell.userInteractionEnabled = NO;
-            }
-            break;
-        default: {
+    switch ((FixedSources)indexPath.section) {
+        case sampleSource: {
+            InputSource *source = [inputSources objectAtIndex:indexPath.row + NCAMERA];
             thumbLabel.text = source.label;
             UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
             thumbImageView.image = [self fitImage:sourceImage
@@ -2164,78 +2082,24 @@ static NSString * const sourceSectionTitles[] = {
                                          centered:YES];
             break;
         }
+        case librarySource:
+            ; // XXX stub
     }
-#ifdef NOMORE
-    else {
-        UICollectionViewCell *cell = [collectionView
-                                      dequeueReusableCellWithReuseIdentifier:TRANSFORM_CELL_ID
-                                      forIndexPath:indexPath];
-        assert(cell);
-        
-        if (indexPath.row == 0) {   // cell overlaid by transform view, nothing to show
-            return cell;
-        }
-        size_t flatTransformIndex = indexPath.row - 1;
-        Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
-        UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectInset(cell.contentView.frame, 3, 2)];
-        transformLabel.textAlignment = NSTextAlignmentCenter;
-        transformLabel.text = transform.name;
-        transformLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
-        transformLabel.adjustsFontSizeToFitWidth = YES;
-        transformLabel.numberOfLines = 0;
-        transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-        [cell.contentView addSubview:transformLabel];
-        
-        if (cell.selected)
-            cell.layer.borderWidth = 5.0;
-        else
-            cell.layer.borderWidth = 1.0;
-        cell.layer.cornerRadius = 5.0;
-        return cell;
-    }
-#endif
     return cell;
-}
-
-- (InputSource *) sourceForIndexPath:(NSIndexPath *)indexPath {
-    size_t i;
-    switch (indexPath.section) {
-        case 0: // cameras
-            i = indexPath.row;
-            break;
-        case 1: // examples
-            i = indexPath.row + NCAMERA;
-            break;
-        default: //from library
-            i = 0;
-    }
-    InputSource *source = [inputSources objectAtIndex:i];
-    return source;
 }
 
 - (void)collectionView:(UICollectionView *)collectionView
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
-    if (collectionView.tag == sourceCollection) {
-        nextSource = [self sourceForIndexPath:indexPath];
-        [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
-        NSLog(@"    ***** collectionView setneedslayout");
-        [self reconfigure];
+    switch ((FixedSources)indexPath.section) {
+        case sampleSource:
+            nextSource = [inputSources objectAtIndex:indexPath.row + NCAMERA];
+            break;
+        case librarySource:
+            ; // XXX stub
     }
-#ifdef V0
-    else {    // transform selection
-        @synchronized (transforms.sequence) {
-            [transforms.sequence removeAllObjects];
-            transforms.sequenceChanged = YES;
-        }
-        assert(indexPath.row > 0);  // entry zero should always be obscured
-        size_t flatTransformIndex = indexPath.row - 1;
-        Transform *transform = [transforms.flatTransformList objectAtIndex:flatTransformIndex];
-        [self addTransform:transform];
-        UICollectionViewCell *cell = [collectionView cellForItemAtIndexPath:indexPath];
-        cell.selected = YES;
-        [cell setNeedsDisplay];
-    }
-#endif
+    [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
+    NSLog(@"    ***** collectionView setneedslayout");
+    [self reconfigure];
 }
 
 - (IBAction) dismissSourceVC:(UIBarButtonItem *)sender {

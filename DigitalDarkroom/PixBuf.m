@@ -71,6 +71,7 @@
     for (int i=0; i<h * w; i++) {
         assert((void *)&pb[i] < bufferEnd);
         Pixel p = pb[i];
+        USED(p);
     }
     
     // are the row arrays in range? First, the location of each row array pointer.
@@ -92,7 +93,9 @@
             assert(pixAddr >= (void *)pb);
             assert(pixAddr < bufferEnd);
             long pixIndex = (void *)pb + w * h * sizeof(Pixel) - pixAddr;
+            USED(pixIndex);
             Pixel p = pa[y][x];
+            USED(p);
         }
     }
 }

@@ -47,6 +47,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @synthesize taskName;
 @synthesize transformList;
+@synthesize depthTransform;
 @synthesize paramList;
 @synthesize targetImageView;
 @synthesize sChan, dChan;
@@ -105,8 +106,8 @@ static PixelIndex_t dPI(int x, int y) {
     if (!transform.remapImageF)
         return;
 //    assert(taskStatus == Stopped);
-    CGSize s = taskGroup.transformSize;
 #ifdef DEBUG_TASK_CONFIGURATION
+    CGSize s = taskGroup.transformSize;
     NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
 #endif
     TransformInstance *instance = paramList[index];
@@ -114,6 +115,7 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) appendTransform:(Transform *) transform {
+    assert(transform.type != DepthVis);
 //    if (taskGroup.taskCtrl.layoutNeeded)
 //        return; // nope, busy
     [transformList addObject:transform];
@@ -133,7 +135,23 @@ static PixelIndex_t dPI(int x, int y) {
     [paramList removeAllObjects];
 }
 
-- (void) executeTransformsWithPixBuf:(const PixBuf *) srcBuf {
+// first, apply depth vis on the depthdata, then run it through
+// the other transforms. Don't mess with the incoming DepthBuf,
+
+- (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf {
+    assert(taskStatus == Ready);
+    if (!enabled)   // not onscreen
+        return;
+    taskStatus = Running;
+    depthTransform.depthVisF(depthBuf, imBuf0.pb, depthTransform.value);
+    [self executeTransformsStartingWithImBuf0];
+}
+
+// run the srcBuf image through the transforms. We need to make our own
+// task-specific copy of the source image, because other tasks need a clean
+// source.
+
+- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf {
     assert(taskStatus == Ready);
     if (!enabled)   // not onscreen
         return;
@@ -143,19 +161,22 @@ static PixelIndex_t dPI(int x, int y) {
         [self updateTargetWith:srcBuf];
         return;
     }
-    // We need to make our own task-specific copy of the source image.
     
-    size_t sourceIndex = 0;
-    size_t destIndex;
-    
-#define W   srcBuf.w
-#define H   srcBuf.h
+    // we copy the pixels into the correctly-sized, previously-created imBuf0,
+    // which is also imBufs[0]
+    [srcBuf copyPixelsTo:imBuf0];
+    [self executeTransformsStartingWithImBuf0];
+}
 
-    // leave our source pixels untouched for others to use.
-    // the destination already has the pixel array pointers set up
-    // for the destination buffer.
+- (void) executeTransformsStartingWithImBuf0 {
+    assert(taskStatus == Running);
+    if (transformList.count == 0) { // just display the input
+        [self updateTargetWith:imBuf0];
+        return;
+    }
     
-    [srcBuf copyPixelsTo:(PixBuf *)imBufs[sourceIndex]];
+    size_t sourceIndex = 0; // imBuf0, where the input is
+    size_t destIndex;
 
     NSDate *startTime = [NSDate now];
     for (int i=0; i<transformList.count; i++) {
@@ -178,8 +199,9 @@ static PixelIndex_t dPI(int x, int y) {
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
     
     PixBuf *outBuf = imBufs[sourceIndex];
+#ifdef DEBUG
     [outBuf verify];
-    
+#endif
     [self updateTargetWith:outBuf];
 }
 
@@ -222,7 +244,7 @@ static PixelIndex_t dPI(int x, int y) {
             transform.areaF(src.pa, dst.pa, src.w, src.h, instance);
             break;
         case DepthVis:
-            /// should not be reached
+            assert(0);  // no depths here, please
             break;
         case EtcTrans:
             NSLog(@"stub - etctrans");
@@ -231,6 +253,9 @@ static PixelIndex_t dPI(int x, int y) {
         case RemapTrans: {
             assert(transform.remapImageF);
             assert(instance.remapBuf);
+#ifdef DEBUG
+            [instance.remapBuf verify];
+#endif
             BufferIndex *bip = instance.remapBuf.rb;
             Pixel *dp = dst.pb;
             for (int i=0; i<dst.w*dst.h; i++) {
@@ -259,6 +284,7 @@ static PixelIndex_t dPI(int x, int y) {
                         p = UnsetColor;
                         break;
                     default:
+                        assert(bi >= 0 && bi < dst.w*dst.h);
                         p = src.pb[bi];
                 }
                 *dp++ = p;
@@ -266,6 +292,14 @@ static PixelIndex_t dPI(int x, int y) {
         }
     }
     return destIndex;
+}
+
+
+- (Transform *) currentTransform {
+    if (transformList.count == 0)
+        return nil;
+    Transform *t = [transformList objectAtIndex:0]; // only one, for now
+    return t;
 }
 
 @end

@@ -10,7 +10,6 @@
 
 @interface TaskCtrl ()
 
-@property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (assign)              size_t centerX, centerY;
 @property (assign)              volatile BOOL layingOut;
 
@@ -21,7 +20,6 @@
 @synthesize mainVC;
 @synthesize transforms;
 @synthesize taskGroups;
-@synthesize depthTransform;
 @synthesize layoutNeeded;
 @synthesize layingOut;
 @synthesize reconfiguring;
@@ -31,7 +29,6 @@
     if (self) {
         mainVC = nil;
         taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
-        depthTransform = nil;
         layoutNeeded = YES;
         layingOut = NO;
         reconfiguring = 0;
@@ -96,15 +93,6 @@
             continue;
         [taskGroup executeTasksWithImage: image];
     }
-}
-
-- (void) selectDepthTransform:(int)index {
-    depthTransform = [transforms depthTransformForIndex:index];
-}
-
-- (void) depthToPixels: (DepthImage *)depthImage pixels:(Pixel *)depthPixelVisImage {
-    assert(depthTransform);
-    depthTransform.depthVisF(depthImage, depthPixelVisImage, depthTransform.value);
 }
 
 #ifdef GONE

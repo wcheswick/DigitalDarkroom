@@ -22,6 +22,8 @@ NS_ASSUME_NONNULL_BEGIN
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;
     NSMutableArray *transformList;
+    Transform *depthTransform;  // never nil, needs a default
+
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL enabled;   // if transform target is on-screen
@@ -34,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
 @property (assign)              BOOL enabled;
+@property (strong, nonatomic)   Transform *depthTransform;
 
 - (id)initInGroup:(TaskGroup *) tg name:(NSString *) n;
 - (void) configureTaskForSize;
@@ -42,7 +45,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) appendTransform:(Transform *) transform;
 - (void) removeLastTransform;
 - (void) removeAllTransforms;
-- (void) executeTransformsWithPixBuf:(const PixBuf *) srcBuf;
+- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
+- (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
+
+
+- (Transform *) currentTransform;
 
 @end
 

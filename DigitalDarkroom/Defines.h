@@ -45,4 +45,6 @@ f.origin.x = ((v).frame.size.width - f.size.width)/2.0; \
 #define SECTION_HEADER_FONT_SIZE    24
 #define TABLE_ENTRY_FONT_SIZE       18
 
+#define USED(x) ((void)(x))
+
 #endif /* Defines_h */

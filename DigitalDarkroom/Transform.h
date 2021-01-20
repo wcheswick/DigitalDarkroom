@@ -8,9 +8,10 @@
 
 #import <Foundation/Foundation.h>
 
-#import "DepthImage.h"
+#import "DepthBuf.h"
 #import "PixBuf.h"
 #import "RemapBuf.h"
+#import "DepthBuf.h"
 #import "TransformInstance.h"
 #import "Defines.h"
 
@@ -47,7 +48,7 @@ typedef void (^ __nullable __unsafe_unretained
                               size_t w, size_t h, TransformInstance * __nullable instance);
 
 typedef void (^ __nullable __unsafe_unretained
-              depthVis_t)(DepthImage *depthBuf,
+              depthVis_t)(const DepthBuf *depthBuf,
                           Pixel *dest,
                           int p);
 

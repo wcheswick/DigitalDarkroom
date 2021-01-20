@@ -32,26 +32,25 @@ NS_ASSUME_NONNULL_BEGIN
 #define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
 
 @interface Transforms : NSObject {
-    NSMutableArray *categoryNames;
-    NSMutableArray *categoryList;
+
+    NSMutableArray *transforms;
+    NSMutableArray *depthTransforms;
     BOOL debugTransforms;
     
     size_t bytesPerRow;
     NSArray *newTransformList;      // must be locked, set by caller, cleared here
     CGFloat finalScale;   // to reach the desired display dimensions
 //    CGSize volatile transformSize;
-    NSMutableArray *flatTransformList;
 }
 
-@property (nonatomic, strong)   NSArray *categoryNames;
-@property (nonatomic, strong)   NSArray *categoryList;
-@property (nonatomic, strong)   NSMutableArray *flatTransformList;
+
+@property (nonatomic, strong)   NSMutableArray *depthTransforms;
+@property (nonatomic, strong)   NSMutableArray *transforms;
+
 //@property (assign)              size_t bytesPerRow;
 //@property (nonatomic, strong)   NSArray *updatedTransformList;
 //@property (assign)              volatile BOOL paramsChanged;
 @property (assign)              BOOL debugTransforms;
-
-- (Transform *)depthTransformForIndex:(int)index;
 
 @end
 

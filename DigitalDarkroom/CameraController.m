@@ -101,8 +101,8 @@
 
 - (BOOL) isCameraAvailable:(Cameras) camera {
     assert(ISCAMERA(camera));
-    if (camera == Rear3DCamera)
-        return NO;  // temp broken
+//    if (camera == Rear3DCamera)
+//        return NO;  // temp broken. XXXXX why?
     return [self captureDeviceForCamera:camera];
 }
 
@@ -182,6 +182,17 @@
         }
         AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(depthConnection);
+        // not sure why this is needed:
+        switch (videoOrientation) {
+            case AVCaptureVideoOrientationLandscapeRight:
+                videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
+                break;
+            case AVCaptureVideoOrientationLandscapeLeft:
+                videoOrientation = AVCaptureVideoOrientationLandscapeRight;
+                break;
+            default:
+                ;
+        }
         [depthConnection setVideoOrientation:videoOrientation];
         depthConnection.videoMirrored = (selectedCamera != Front3DCamera);    // XXX this seems exactly backwards, but it works
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,

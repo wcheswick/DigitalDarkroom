@@ -35,11 +35,13 @@
 }
 
 - (void) verify {
-    size_t bufferSize = w * sizeof(BufferIndex) * h;
+    size_t bufferSize = w * h;
     for (int i=0; i<bufferSize; i++) {
         BufferIndex bi = rb[i];
-        assert(bi < bufferSize);
-        assert(bi >= Remap_Unset);
+        if (bi < 0)
+            assert(bi >= Remap_Unset);
+        else
+            assert(bi < bufferSize);
     }
 }
 
