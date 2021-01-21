@@ -619,12 +619,6 @@ nextSource = nil; // XXXXX debugging
     }
 }
 
-// tell the transforms we need to layout.   It will call doLayout
-// when ready.
-
-- (void) needLayout {
-}
-
 // this is called when we know the transforms are all Stopped.
 
 #define SEP 5  // between views
@@ -853,6 +847,12 @@ nextSource = nil; // XXXXX debugging
     //cameraController.captureVideoPreviewLayer = previewLayer;
     [taskCtrl layoutCompleted];
     
+    // adjust scroll depending on depth buttons
+    if (IS_3D_CAMERA(currentSource.sourceType))
+        [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
+    else
+        [thumbScrollView setContentOffset:CGPointMake(0, topOfTransformArray) animated:YES];
+
     if (ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:YES];
     } else {
@@ -873,6 +873,8 @@ CGRect imageRect;
 CGRect nextButtonFrame;
 BOOL roomRightOftransformView;
 BOOL roomUndertransformView;
+BOOL atStartOfRow;
+CGFloat topOfTransformArray;
 
 - (void) fillThumbArrayView {
     CGFloat frameH = 0;
@@ -925,43 +927,45 @@ BOOL roomUndertransformView;
         }
         transformView.frame = f;
     }
+    atStartOfRow = YES;
     
+    // layout the 3d transforms.  If the input isn't a 3D source, these will always be
+    // scrolled off the top of the view.
     UITapGestureRecognizer *touch;
-    if (IS_3D_CAMERA(currentSource.sourceType)) {
-        for (size_t i=0; i<transforms.depthTransforms.count; i++) {
-            Transform *transform = [transforms.depthTransforms objectAtIndex:i];
-            UIView *thumbView = [self makeThumbForTransform:transform];
-            thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
-            [self adjustThumb:thumbView selected:NO];
-
-            BOOL isCurrentDepthTransform = [transform.name isEqual:depthTransform.name];
-            if (isCurrentDepthTransform && !selectedDepthView)
-                selectedDepthView = thumbView;
-            
-            touch = [[UITapGestureRecognizer alloc]
-                     initWithTarget:self
-                     action:@selector(doSelectDepthVis:)];
-            touch.enabled = !isCurrentDepthTransform;
-            [thumbView addGestureRecognizer:touch];
-            
-            // no live updates for depth views for now
-            UIImageView *imageView = [thumbView viewWithTag:THUMB_LABEL_TAG];
-            NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
-            NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@""];
-            if (imagePath) {
-                imageView.contentMode = UIViewContentModeScaleAspectFit;
-                imageView.image = [UIImage imageWithContentsOfFile:imagePath];
-                NSLog(@"thumb image at '%@'", imagePath);
-            } else {
-                NSLog(@"thumb image '%@' not found", file);
-            }
-            frameH = BELOW(thumbView.frame) + SEP;
+    for (size_t i=0; i<transforms.depthTransforms.count; i++) {
+        Transform *transform = [transforms.depthTransforms objectAtIndex:i];
+        UIView *thumbView = [self makeThumbForTransform:transform];
+        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+        [self adjustThumb:thumbView selected:NO];
+        
+        BOOL isCurrentDepthTransform = [transform.name isEqual:depthTransform.name];
+        if (isCurrentDepthTransform && !selectedDepthView)
+            selectedDepthView = thumbView;
+        
+        touch = [[UITapGestureRecognizer alloc]
+                 initWithTarget:self
+                 action:@selector(doSelectDepthVis:)];
+        [thumbView addGestureRecognizer:touch];
+        
+        // no live updates for depth views for now
+        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+        NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
+        NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@"jpeg"];
+        if (imagePath) {
+            imageView.contentMode = UIViewContentModeScaleAspectFit;
+            imageView.image = [UIImage imageWithContentsOfFile:imagePath];
+            NSLog(@"thumb image at '%@'", imagePath);
+        } else {
+            NSLog(@"thumb image '%@' not found", file);
         }
-        [self adjustThumb:selectedDepthView selected:YES];
+        frameH = BELOW(thumbView.frame) + SEP;
     }
+    assert(selectedDepthView);
+    
+    [self buttonsContinueOnNextRow];
+    topOfTransformArray = nextButtonFrame.origin.y;
     
     selectedTransformView = nil;
-    
     Transform *currentTransform = [screenTask currentTransform];
     for (size_t i=0; i<transforms.transforms.count; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
@@ -987,7 +991,6 @@ BOOL roomUndertransformView;
         [task appendTransform:transform];
         frameH = BELOW(thumbView.frame) + SEP;
     }
- 
     CGRect f = thumbArrayView.frame;
     f.size.height = frameH;
     thumbArrayView.frame = f;
@@ -1041,24 +1044,34 @@ BOOL roomUndertransformView;
     // where does the next thumb go?
     f = nextButtonFrame;
     f.origin.x = RIGHT(newThumbView.frame) + SEP;
-    if (RIGHT(f) > containerView.frame.size.width) {   // go to next row
-        f.origin.y = BELOW(f) + SEP;
-        if (roomUndertransformView && f.origin.y >=
-            BELOW(transformView.frame) + SEP) {   // underneath the display
-                f.origin.x = transformView.frame.origin.x;
-        } else {
-            f.origin.x = RIGHT(transformView.frame) + SEP;
-        }
+    if (RIGHT(f) > containerView.frame.size.width) {
+        [self buttonsContinueOnNextRow];
+    } else {
+        nextButtonFrame = f;
+        atStartOfRow = NO;
+    }
+    return newThumbView;
+}
+
+- (void) buttonsContinueOnNextRow {
+    if (atStartOfRow)
+        return;
+    CGRect f = nextButtonFrame;
+    f.origin.y = BELOW(f) + SEP;
+    if (roomUndertransformView && f.origin.y >=
+        BELOW(transformView.frame) + SEP) {   // underneath the display
+            f.origin.x = transformView.frame.origin.x;
+    } else {
+        f.origin.x = RIGHT(transformView.frame) + SEP;
     }
     nextButtonFrame = f;
-
-    return newThumbView;
+    atStartOfRow = YES;
 }
 
 // select a new depth visualization.
 - (IBAction) doSelectDepthVis:(UITapGestureRecognizer *)recognizer {
     UIView *newView = recognizer.view;
-    if (newView == selectedDepthView)   // should not happen
+    if (newView == selectedDepthView)
         return;
 
     [self adjustThumb:selectedDepthView selected:NO];

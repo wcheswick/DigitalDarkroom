@@ -143,7 +143,7 @@ static PixelIndex_t dPI(int x, int y) {
     if (!enabled)   // not onscreen
         return;
     taskStatus = Running;
-    depthTransform.depthVisF(depthBuf, imBuf0.pb, depthTransform.value);
+    depthTransform.depthVisF(depthBuf, imBuf0, depthTransform.value);
     [self executeTransformsStartingWithImBuf0];
 }
 

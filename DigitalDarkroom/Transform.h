@@ -49,7 +49,7 @@ typedef void (^ __nullable __unsafe_unretained
 
 typedef void (^ __nullable __unsafe_unretained
               depthVis_t)(const DepthBuf *depthBuf,
-                          Pixel *dest,
+                          PixBuf *pixBuf,
                           int p);
 
 @interface Transform : NSObject {

@@ -856,7 +856,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 - (void) addDepthVisualizations {
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         size_t bufSize = depthBuf.h * depthBuf.w;
         float min = MAX_DEPTH;
         float max = MIN_DEPTH;
@@ -895,7 +895,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 p.a = Z;    // alpha on, not used at the moment
             }
 #endif
-            dest[i] = p;
+            pixBuf.pb[i] = p;
         }
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
@@ -903,14 +903,15 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [depthTransforms addObject:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
-#define DIST(x,y)  [depthImage distAtX:(x) Y:(y)]
+#define DIST(x,y)  [depthBuf distAtX:(x) Y:(y)]
 #else
-#define DIST(x,y)  depthImage.buf[(x) + (y)*(int)depthImage.size.width]
+#define DIST(x,y)  depthBuf.da[y][x]
 #endif
-   
-    lastTransform = [Transform depthVis: @"Monochrome dist."
+    
+#ifdef DEBUG
+    lastTransform = [Transform depthVis: @"Mono dist"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         size_t bufSize = depthBuf.h * depthBuf.w;
         assert(depthBuf.h * depthBuf.w == bufSize);
         for (int i=0; i<bufSize; i++) {
@@ -918,14 +919,15 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             float frac = (v - MIN_DEPTH)/(MAX_DEPTH - MIN_DEPTH);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
-            dest[i] = p;
+            pixBuf.pb[i] = p;
         }
     }];
     [depthTransforms addObject:lastTransform];
-
-    lastTransform = [Transform depthVis: @"Monochrome log dist."
+#endif
+    
+    lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         size_t bufSize = depthBuf.h * depthBuf.w;
         assert(depthBuf.h * depthBuf.w == bufSize);
         assert(MIN_DEPTH >= 0.1);
@@ -941,14 +943,14 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             float frac = (v - logMin)/(logMax - logMin);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
-            dest[i] = p;
+            pixBuf.pb[i] = p;
         }
     }];
     [depthTransforms addObject:lastTransform];
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         size_t bufSize = depthBuf.h * depthBuf.w;
         assert(depthBuf.h * depthBuf.w == bufSize);
         float mincm = 10.0;
@@ -976,7 +978,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 [color getRed:&r green:&g blue:&b alpha:&a];
                 p = SETRGB(r*Z,g*Z,b*Z);
             }
-            dest[i] = p;
+            pixBuf.pb[i] = p;
         }
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
@@ -1000,16 +1002,12 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     // promising anaglyph: https://github.com/JanosRado/StereoMonitorCalibration.git
     
 #ifdef NEW
-    
-
-#ifdef notyet
     lastTransform = [Transform depthVis: @"3D level visualization"
                                  description: @""
                                 depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
+        for (int i=0; i< depthBuf.h * depthBuf.w; i++) {
                 Pixel p;
-                Distance z = DIST(x,y);
+                Distance z = depthBuf.db[i];
                 // closest to farthest, even v is dark blue to light blue,
                 // odd v is yellow to dark yellow
                 if (z >= MAX_DEPTH)
@@ -1025,7 +1023,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                         p = SETRGB(c,c,0);
                     }
                 }
-                dest[PI(x,y)] = p;
+                dest.pb[i] = p;
             }
         }
     }];
@@ -1033,8 +1031,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.hasParameters = YES;
     [depthTransforms addObject:lastTransform];
 #endif
-    
-    
+
 #define mu (1/3.0)
 //#define E round(2.5*dpi)
 #define E round(dpi)
@@ -1043,9 +1040,9 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     
     // SIDRS computation taken from
     // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
-    lastTransform = [Transform depthVis: @"SIRDS (broken)"
+    lastTransform = [Transform depthVis: @"SIRDS"
                             description: @""
-                               depthVis: (const DepthBuf *depthBuf, Pixel *dest, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         float scale = 1;
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
             scale = [[UIScreen mainScreen] scale];
@@ -1056,8 +1053,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 #define MAX_S_DEP MAX_DEPTH // 2.0
 #define MIN_S_DEP   0   // MIN_DEPTH
         
-        for (int i=0; i<depthImage.size.width * depthImage.size.height; i++) {
-            float z = depthImage.buf[i];
+        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
+            float z = depthBuf.db[i];
             if (z > MAX_S_DEP)
                 z = MAX_S_DEP;
             else if (z < MIN_S_DEP)
@@ -1065,51 +1062,51 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
             float dfz = mu - dz*mu;
             assert(dfz <= mu && dfz >= 0);
-            depthImage.buf[i] = dfz;
+            depthBuf.db[i] = dfz;
         }
         
-        for (int y=0; y<H; y++) {    // convert scan lines independently
-            channel pix[W];
+        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
+            channel pix[depthBuf.w];
             //  Points to a pixel to the right ... */ /* ... that is constrained to be this color:
-            int same[W];
+            int same[depthBuf.w];
             int s;  // stereo sep at this point
             int left, right;    // x values for left and right eyes
             
-            for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
+            for (int x=0; x < depthBuf.w; x++ ) {  // link initial pixels with themselves
                 same[x] = x;
             }
-            for (int x=0; x < W; x++ ) {
+            for (int x=0; x < depthBuf.w; x++ ) {
                 float z = DIST(x,y);
                 s = separation(z);
                 left = x - s/2;
                 right = left + s;   // pixels at left and right must be the same
-                if (left >= 0 && right < W) {
+                if (left >= 0 && right < depthBuf.w) {
                     int visible;    // first, perform hidden surface removal
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
                     Distance zt;       //  Z-coord of ray at these two points
                     
                     do {
                         zt = DIST(x,y) + 2*(2 - mu*DIST(x,y))*t/(mu*E);
-                        BOOL inRange = (x-t >= 0) && (x+t < W);
+                        BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
                         visible = inRange && DIST(x-t,y) < zt && DIST(x+t,y) < zt;  // false if obscured
                         t++;
                     } while (visible && zt < 1);    // end of hidden surface removal
                     if (visible) {  // record that pixels at l and r are the same
-                        assert(left >= 0 && left < W);
+                        assert(left >= 0 && left < depthBuf.w);
                         int l = same[left];
-                        assert(l >= 0 && l < W);
+                        assert(l >= 0 && l < depthBuf.w);
                         while (l != left && l != right) {
                             if (l < right) {    // first, jiggle the pointers...
                                 left = l;       // until either same[left] == left
-                                assert(left >= 0 && left < W);
+                                assert(left >= 0 && left < depthBuf.w);
                                 l = same[left]; // .. or same[left == right
-                                assert(l >= 0 && l < W);
+                                assert(l >= 0 && l < depthBuf.w);
                             } else {
-                                assert(left >= 0 && left < W);
+                                assert(left >= 0 && left < depthBuf.w);
                                 same[left] = right;
                                 left = right;
                                 l = same[left];
-                                assert(l >= 0 && l < W);
+                                assert(l >= 0 && l < depthBuf.w);
                                 right = l;
                             }
                         }
@@ -1117,12 +1114,12 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                     }
                 }
             }
-            for (long x=W-1; x>=0; x--)    { // set the pixels in the scan line
+            for (long x=depthBuf.w-1; x>=0; x--)    { // set the pixels in the scan line
                 if (same[x] == x)
                     pix[x] = random()&1;  // free choice, do it randomly
                 else
                     pix[x] = pix[same[x]];  // constrained choice, obey constraint
-                dest[PI(x,y)] = pix[x] ? Black : White;
+                pixBuf.pa[y][x] = pix[x] ? Black : White;
             }
         }
 
@@ -1136,37 +1133,18 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         
 #define NW      10
 #define BOTTOM_Y   (5)
-        int lx = W/2 - FARAWAY/2 - NW/2;
-        int rx = W/2 + FARAWAY/2 - NW/2;
+        int lx = depthBuf.w/2 - FARAWAY/2 - NW/2;
+        int rx = depthBuf.w/2 + FARAWAY/2 - NW/2;
         for (int dy=0; dy<6; dy++) {
             for (int dx=0; dx<NW; dx++) {
-                dest[PI(lx+dx,BOTTOM_Y+dy)] = Yellow;
-                dest[PI(rx+dx,BOTTOM_Y+dy)] = Yellow;
+                pixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
+                pixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
             }
         }
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
     [depthTransforms addObject:lastTransform];
-
-#ifdef SPECTRUMTEST
-    
-    for (int di=0; di < 100; di++) {
-        Distance d;
-        if (di % 10 == 0)
-            d = -1.0;
-        else
-            d = (float)di/10.0;
-        for (int i=0; i<5; i++) {
-            int x = di*5 + i;
-            for (int y=0; y<height; y++) {
-                DI(x,y) = d;
-            }
-        }
-    }
-#endif
-
-#endif // NEW
 }
 
 // used by colorize
