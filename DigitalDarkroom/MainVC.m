@@ -237,10 +237,10 @@ typedef enum {
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
-        assert(transforms.depthTransforms.count > 0);
-        depthTransform = [transforms.depthTransforms objectAtIndex:0];  // default
-        for (int i=0; i < transforms.depthTransforms.count; i++) {
-            Transform *transform = [transforms.depthTransforms objectAtIndex:i];
+        assert(transforms.depthTransformCount > 0);
+        depthTransform = [transforms.transforms objectAtIndex:0];  // default
+        for (int i=0; i < transforms.depthTransformCount; i++) {
+            Transform *transform = [transforms.transforms objectAtIndex:i];
             if ([transform.name isEqual:depthTransformName]) {
                 depthTransform = transform;
                 break;
@@ -542,7 +542,6 @@ nextSource = nil; // XXXXX debugging
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [touch setNumberOfTouchesRequired:1];
     [transformImageView addGestureRecognizer:touch];
-
     [containerView addSubview:transformView];
     
     transformImageView = [[UIImageView alloc] init];
@@ -557,7 +556,20 @@ nextSource = nil; // XXXXX debugging
     [transformView bringSubviewToFront:executeControlView];
      
     thumbScrollView = [[UIScrollView alloc] init];
+    thumbScrollView.pagingEnabled = NO;
+    thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+    thumbScrollView.showsVerticalScrollIndicator = YES;
+    thumbScrollView.userInteractionEnabled = YES;
+    thumbScrollView.exclusiveTouch = NO;
+    thumbScrollView.bounces = NO;
+    thumbScrollView.delaysContentTouches = YES;
+    thumbScrollView.canCancelContentTouches = YES;
     [containerView addSubview:thumbScrollView];
+    
+    thumbArrayView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
+    [thumbScrollView addSubview:thumbArrayView];
+
+    [self createThumbArray];    // animate to correct positions later
     
     [self.view layoutIfNeeded];
     [self.view addSubview:containerView];
@@ -565,6 +577,93 @@ nextSource = nil; // XXXXX debugging
     //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
     
     self.view.backgroundColor = [UIColor whiteColor];
+}
+
+- (void) createThumbArray {
+    UITapGestureRecognizer *touch;
+    for (size_t i=0; i<transforms.depthTransformCount; i++) {
+        Transform *transform = [transforms.transforms objectAtIndex:i];
+        UIView *thumbView = [self makeThumbForTransform:transform];
+        [self adjustThumb:thumbView selected:NO];
+        touch = [[UITapGestureRecognizer alloc]
+                 initWithTarget:self
+                 action:@selector(doSelectDepthVis:)];
+        [thumbView addGestureRecognizer:touch];
+        
+        // no live updates for depth views for now
+        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+        NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
+        NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@"jpeg"];
+        if (imagePath) {
+            imageView.contentMode = UIViewContentModeScaleAspectFit;
+            imageView.image = [UIImage imageWithContentsOfFile:imagePath];
+        } else {
+            NSLog(@"thumb image '%@' not found", file);
+        }
+        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+        [thumbArrayView addSubview:thumbView];
+    }
+    
+    for (size_t i=transforms.depthTransformCount; i<transforms.transforms.count; i++) {
+        Transform *transform = [transforms.transforms objectAtIndex:i];
+        UIView *thumbView = [self makeThumbForTransform:transform];
+        
+        touch = [[UITapGestureRecognizer alloc]
+                 initWithTarget:self
+                 action:@selector(doTapTransform:)];
+        touch.enabled = YES;
+        [thumbView addGestureRecognizer:touch];
+        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+        [thumbArrayView addSubview:thumbView];
+        
+        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+        Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
+        [task appendTransform:transform];
+   }
+}
+
+- (UIView *) makeThumbForTransform:(Transform *)transform {
+    UIView *newThumbView = [[UIView alloc] initWithFrame:CGRectMake(LATER, LATER, LATER, LATER)];
+    newThumbView.layer.cornerRadius = 1.0;
+    [thumbArrayView addSubview:newThumbView];
+
+    UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+    transformLabel.tag = THUMB_LABEL_TAG;
+    transformLabel.textAlignment = NSTextAlignmentCenter;
+    transformLabel.adjustsFontSizeToFitWidth = YES;
+    transformLabel.numberOfLines = 0;
+    //transformLabel.backgroundColor = [UIColor whiteColor];
+    transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    transformLabel.text = transform.name;
+    
+    transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
+    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+#ifdef NOTDEF
+    transformLabel.attributedText = [[NSMutableAttributedString alloc]
+                                     initWithString:transform.name
+                                     attributes:labelAttributes];
+    CGSize labelSize =  [transformLabel.text
+                         boundingRectWithSize:f.size
+                         options:NSStringDrawingUsesLineFragmentOrigin
+                         attributes:@{
+                             NSFontAttributeName : transformLabel.font,
+                             NSShadowAttributeName: shadow
+                         }
+                         context:nil].size;
+    transformLabel.contentMode = NSLayoutAttributeTop;
+#endif
+    transformLabel.opaque = NO;
+    transformLabel.layer.borderWidth = 0.5;
+    [newThumbView addSubview:transformLabel];
+
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(LATER, LATER, LATER, LATER)];
+    imageView.tag = THUMB_IMAGE_TAG;
+    imageView.backgroundColor = [UIColor whiteColor];
+    imageView.contentMode = UIViewContentModeScaleAspectFit;
+    imageView.opaque = YES;
+    [newThumbView addSubview:imageView];   // empty placeholder at the moment
+    
+    return newThumbView;
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -816,27 +915,13 @@ nextSource = nil; // XXXXX debugging
 
     //    [externalTask configureForSize: processingSize];
     
-    [thumbScrollView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    
-    f = containerView.frame;
-    f.origin = CGPointZero;
-    thumbScrollView.frame = f;
-    [containerView addSubview:thumbScrollView];
-    
-    thumbArrayView = [[UIView alloc] initWithFrame:thumbScrollView.frame];
-    [self fillThumbArrayView];   // This will adjust its frame size
-    
-    thumbScrollView.contentSize = thumbArrayView.frame.size;
-    thumbScrollView.contentOffset = thumbArrayView.frame.origin;
-    thumbScrollView.pagingEnabled = NO;
-    thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
-    thumbScrollView.showsVerticalScrollIndicator = YES;
-    thumbScrollView.userInteractionEnabled = YES;
-    thumbScrollView.exclusiveTouch = NO;
-    thumbScrollView.bounces = NO;
-    thumbScrollView.delaysContentTouches = YES;
-    thumbScrollView.canCancelContentTouches = YES;
-    [thumbScrollView addSubview:thumbArrayView];
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        CGRect f = self->containerView.frame;
+        f.origin = CGPointZero;
+        self->thumbScrollView.frame = f;
+        // move views to where they need to be now.
+        [self positionThumbArray];
+    }];
     
     [containerView bringSubviewToFront:transformView];
     
@@ -846,12 +931,6 @@ nextSource = nil; // XXXXX debugging
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     [taskCtrl layoutCompleted];
-    
-    // adjust scroll depending on depth buttons
-    if (IS_3D_CAMERA(currentSource.sourceType))
-        [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
-    else
-        [thumbScrollView setContentOffset:CGPointMake(0, topOfTransformArray) animated:YES];
 
     if (ISCAMERA(currentSource.sourceType)) {
         [self cameraOn:YES];
@@ -876,30 +955,16 @@ BOOL roomUndertransformView;
 BOOL atStartOfRow;
 CGFloat topOfTransformArray;
 
-- (void) fillThumbArrayView {
-    CGFloat frameH = 0;
-    
+// layout the 3d transforms.  If the input isn't a 3D source, these will always be
+// scrolled off the top of the view.
+
+- (void) positionThumbArray {
     imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
     float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
     imageRect.size.height = round(imageRect.size.width / aspectRatio);
-    
-    [thumbTasks removeAllTransforms];
-    [thumbTasks configureGroupForSize: imageRect.size];
-    
-    NSShadow *shadow = [[NSShadow alloc] init];
-    shadow.shadowOffset = CGSizeMake(3,3);
-    shadow.shadowBlurRadius = 5.0;
-    shadow.shadowColor = [UIColor blackColor];
-    
-#ifdef NOTDEF
-    NSDictionary *labelAttributes = @{
-        NSForegroundColorAttributeName:[UIColor blackColor],
-        NSBackgroundColorAttributeName: [UIColor whiteColor],
-        NSFontAttributeName : [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE],
-        //        NSShadowAttributeName: shadow
-    };
-#endif
+
+    [thumbTasks configureGroupForSize:imageRect.size];
     
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
                                    imageRect.size.height + OLIVE_LABEL_H);
@@ -928,129 +993,75 @@ CGFloat topOfTransformArray;
         transformView.frame = f;
     }
     atStartOfRow = YES;
+
+    // Run through all the transforms, computing the corresponding thumb sizes and
+    // positions for the current situation.
     
-    // layout the 3d transforms.  If the input isn't a 3D source, these will always be
-    // scrolled off the top of the view.
-    UITapGestureRecognizer *touch;
-    for (size_t i=0; i<transforms.depthTransforms.count; i++) {
-        Transform *transform = [transforms.depthTransforms objectAtIndex:i];
-        UIView *thumbView = [self makeThumbForTransform:transform];
-        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
-        [self adjustThumb:thumbView selected:NO];
+    for (size_t i=0; i<transforms.depthTransformCount; i++) {   // position depth transforms
+        UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
+        assert(thumb);  // gotta be there
+        thumb.frame = nextButtonFrame;
         
-        BOOL isCurrentDepthTransform = [transform.name isEqual:depthTransform.name];
-        if (isCurrentDepthTransform && !selectedDepthView)
-            selectedDepthView = thumbView;
-        
-        touch = [[UITapGestureRecognizer alloc]
-                 initWithTarget:self
-                 action:@selector(doSelectDepthVis:)];
-        [thumbView addGestureRecognizer:touch];
-        
-        // no live updates for depth views for now
-        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
-        NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@"jpeg"];
-        if (imagePath) {
-            imageView.contentMode = UIViewContentModeScaleAspectFit;
-            imageView.image = [UIImage imageWithContentsOfFile:imagePath];
-            NSLog(@"thumb image at '%@'", imagePath);
-        } else {
-            NSLog(@"thumb image '%@' not found", file);
-        }
-        frameH = BELOW(thumbView.frame) + SEP;
+        UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
+        imageView.frame = imageRect;
+
+        UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
+        label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
+#ifdef OLD
+    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
+    assert(iv);
+    [iv setImage:newImage];
+#endif
+        [self nextButtonPositionAfter:thumb];
     }
-    assert(selectedDepthView);
-    
     [self buttonsContinueOnNextRow];
-    topOfTransformArray = nextButtonFrame.origin.y;
     
-    selectedTransformView = nil;
-    Transform *currentTransform = [screenTask currentTransform];
-    for (size_t i=0; i<transforms.transforms.count; i++) {
-        Transform *transform = [transforms.transforms objectAtIndex:i];
-        UIView *thumbView = [self makeThumbForTransform:transform];
-        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
+    if (IS_3D_CAMERA(currentSource.sourceType))
+        topOfTransformArray = 0;
+    else
+        topOfTransformArray = nextButtonFrame.origin.y;
+
+    for (size_t i=transforms.depthTransformCount; i<transforms.transforms.count; i++) {  // position regular transforms
+        UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
+        assert(thumb);  // gotta be there
+        thumb.frame = nextButtonFrame;
         
-        touch = [[UITapGestureRecognizer alloc]
-                 initWithTarget:self
-                 action:@selector(doTapTransform:)];
-        touch.enabled = YES;
-        [thumbView addGestureRecognizer:touch];
-        
-        // we will have multiples soon:
-        BOOL isCurrentTransform = currentTransform && [currentTransform.name isEqual:transform.name];
-        if (isCurrentTransform)
-            selectedTransformView = thumbView;
-        [self adjustThumb:thumbView selected:isCurrentTransform];
-        
-        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        Task *task = [thumbTasks createTaskForTargetImageView:imageView
-                                                        named:transform.name];
-        task.depthTransform = depthTransform;
-        [task appendTransform:transform];
-        frameH = BELOW(thumbView.frame) + SEP;
+        UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
+        imageView.frame = imageRect;
+
+        UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
+        label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
+#ifdef OLD
+    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
+    assert(iv);
+    [iv setImage:newImage];
+#endif
+        [self nextButtonPositionAfter:thumb];
     }
-    CGRect f = thumbArrayView.frame;
-    f.size.height = frameH;
-    thumbArrayView.frame = f;
+    
+    thumbScrollView.contentSize = thumbArrayView.frame.size;
+    thumbScrollView.contentOffset = thumbArrayView.frame.origin;
+    
+    // adjust scroll depending on depth buttons
+    if (IS_3D_CAMERA(currentSource.sourceType))
+        [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
+    else
+        [thumbScrollView setContentOffset:CGPointMake(0, topOfTransformArray) animated:YES];
 }
 
-- (UIView *) makeThumbForTransform:(Transform *)transform {
-    UIView *newThumbView = [[UIView alloc] initWithFrame:nextButtonFrame];
-    newThumbView.layer.cornerRadius = 1.0;
-    [thumbArrayView addSubview:newThumbView];
-
-    CGRect f = imageRect;
-    f.origin.y = BELOW(f);
-    f.size.height = OLIVE_LABEL_H;
-    UILabel *transformLabel = [[UILabel alloc] initWithFrame:f];
-    transformLabel.tag = THUMB_LABEL_TAG;
-    transformLabel.textAlignment = NSTextAlignmentCenter;
-    transformLabel.adjustsFontSizeToFitWidth = YES;
-    transformLabel.numberOfLines = 0;
-    //transformLabel.backgroundColor = [UIColor whiteColor];
-    transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    transformLabel.text = transform.name;
-    
-    transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
-    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-#ifdef NOTDEF
-    transformLabel.attributedText = [[NSMutableAttributedString alloc]
-                                     initWithString:transform.name
-                                     attributes:labelAttributes];
-    CGSize labelSize =  [transformLabel.text
-                         boundingRectWithSize:f.size
-                         options:NSStringDrawingUsesLineFragmentOrigin
-                         attributes:@{
-                             NSFontAttributeName : transformLabel.font,
-                             NSShadowAttributeName: shadow
-                         }
-                         context:nil].size;
-    transformLabel.contentMode = NSLayoutAttributeTop;
-#endif
-    transformLabel.opaque = NO;
-    transformLabel.layer.borderWidth = 0.5;
-    [newThumbView addSubview:transformLabel];
-
-    UIImageView *imageView = [[UIImageView alloc] initWithFrame:imageRect];
-    imageView.tag = THUMB_IMAGE_TAG;
-    imageView.frame = imageRect;
-    imageView.backgroundColor = [UIColor whiteColor];
-    imageView.contentMode = UIViewContentModeScaleAspectFit;
-    imageView.opaque = YES;
-    [newThumbView addSubview:imageView];   // empty placeholder at the moment
-    
-    // where does the next thumb go?
-    f = nextButtonFrame;
-    f.origin.x = RIGHT(newThumbView.frame) + SEP;
+- (void) nextButtonPositionAfter:(UIView *) thumb {
+    CGRect f = nextButtonFrame;
+    if (RIGHT(f) > thumbArrayView.frame.size.width)
+        SET_VIEW_WIDTH(thumbArrayView, RIGHT(f));
+    if (BELOW(f) > thumbArrayView.frame.size.height)
+        SET_VIEW_HEIGHT(thumbArrayView, BELOW(f));
+    f.origin.x = RIGHT(thumb.frame) + SEP;
     if (RIGHT(f) > containerView.frame.size.width) {
         [self buttonsContinueOnNextRow];
     } else {
         nextButtonFrame = f;
         atStartOfRow = NO;
     }
-    return newThumbView;
 }
 
 - (void) buttonsContinueOnNextRow {
@@ -1079,7 +1090,7 @@ CGFloat topOfTransformArray;
     [self adjustThumb:selectedDepthView selected:YES];
     
     long index = newView.tag - TRANSFORM_BASE_TAG;
-    depthTransform = [transforms.depthTransforms objectAtIndex:index];
+    depthTransform = [transforms.transforms objectAtIndex:index];
     screenTask.depthTransform = depthTransform;
 }
 
@@ -1141,11 +1152,6 @@ CGFloat topOfTransformArray;
         NSLog(@"olive view not found: %zu", index);
         return;
     }
-#ifdef OLD
-    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
-    assert(iv);
-    [iv setImage:newImage];
-#endif
 }
 
 - (void) updateExecuteDisplay {

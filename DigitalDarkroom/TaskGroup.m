@@ -80,11 +80,11 @@
 }
 
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv named:(NSString *)tn {
-    assert(transformSize.width > 0);    // group must be configured for a size already
+//    assert(transformSize.width > 0);    // group must be configured for a size already
     Task *newTask = [[Task alloc] initInGroup:self name:tn];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
-    [newTask configureTaskForSize];
+//    [newTask configureTaskForSize];
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
 }

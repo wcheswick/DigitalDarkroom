@@ -49,6 +49,8 @@ typedef enum {
 @property (nonatomic, strong)   NSString *groupName;
 
 - (id)initWithController:(TaskCtrl *) caller;
+- (Task *) createTaskForTargetImageView:(UIImageView *) tiv
+                                 named:(NSString *)tn;
 - (void) configureGroupForSize:(CGSize) s;
 
 - (void) executeTasksWithImage:(UIImage *) image;
@@ -56,8 +58,6 @@ typedef enum {
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;
-- (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn;
 
 - (void) removeAllTransforms;
 - (void) removeLastTransform;

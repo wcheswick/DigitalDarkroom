@@ -58,7 +58,7 @@ static PixelIndex_t dPI(int x, int y) {
 @implementation Transforms
 
 @synthesize lastTransform;
-@synthesize depthTransforms;
+@synthesize depthTransformCount;
 @synthesize debugTransforms;
 @synthesize transforms;
 
@@ -72,7 +72,7 @@ static PixelIndex_t dPI(int x, int y) {
         debugTransforms = NO;
 #endif
         transforms = [[NSMutableArray alloc] init];
-        depthTransforms = [[NSMutableArray alloc] init];
+        depthTransformCount = 0;
         [self buildTransformList];
     }
     return self;
@@ -900,7 +900,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [depthTransforms addObject:lastTransform];
+    [transforms addObject:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
 #define DIST(x,y)  [depthBuf distAtX:(x) Y:(y)]
@@ -922,7 +922,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             pixBuf.pb[i] = p;
         }
     }];
-    [depthTransforms addObject:lastTransform];
+    [transforms addObject:lastTransform];
 #endif
     
     lastTransform = [Transform depthVis: @"Mono log dist"
@@ -946,7 +946,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             pixBuf.pb[i] = p;
         }
     }];
-    [depthTransforms addObject:lastTransform];
+    [transforms addObject:lastTransform];
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
@@ -983,23 +983,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
-    [depthTransforms addObject:lastTransform];
-
-    // plywood?
-    
-    // apple's encoding?
-    
-    //" random dot anaglyph github"
-    // in python: https://github.com/sashaperigo/random-dot-stereogram/blob/master/README.md
-    // no, image only
-    
-    //[1] Zhaoping L, Ackermann J. Reversed Depth in Anticorrelated Random-Dot Stereograms and the Central-Peripheral Difference in Visual Inference[J]. Perception, 2018, 47(5): 531-539.
-    
-    // simple SIRDS:  https://github.com/arkjedrz/stereogram.git
-    
-    // another: https://github.com/CoolProgrammingUser/stereograms.git
-    
-    // promising anaglyph: https://github.com/JanosRado/StereoMonitorCalibration.git
+    [transforms addObject:lastTransform];
     
 #ifdef NEW
     lastTransform = [Transform depthVis: @"3D level visualization"
@@ -1029,7 +1013,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [depthTransforms addObject:lastTransform];
+    [transforms addObject:lastTransform];
 #endif
 
 #define mu (1/3.0)
@@ -1144,7 +1128,24 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
-    [depthTransforms addObject:lastTransform];
+    [transforms addObject:lastTransform];
+
+// plywood?
+
+// apple's encoding?
+
+//" random dot anaglyph github"
+// in python: https://github.com/sashaperigo/random-dot-stereogram/blob/master/README.md
+// no, image only
+
+//[1] Zhaoping L, Ackermann J. Reversed Depth in Anticorrelated Random-Dot Stereograms and the Central-Peripheral Difference in Visual Inference[J]. Perception, 2018, 47(5): 531-539.
+
+// simple SIRDS:  https://github.com/arkjedrz/stereogram.git
+
+// another: https://github.com/CoolProgrammingUser/stereograms.git
+
+// promising anaglyph: https://github.com/JanosRado/StereoMonitorCalibration.git
+    depthTransformCount = transforms.count;
 }
 
 // used by colorize
