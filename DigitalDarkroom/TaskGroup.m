@@ -35,6 +35,7 @@
 @synthesize transformSize;
 @synthesize imageOrientation;
 @synthesize groupName;
+@synthesize defaultDepthTransform;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -48,6 +49,7 @@
         bytesPerRow = 0;    // no current configuration
         transformSize = CGSizeZero; // unconfigured group
         tasksStatus = Stopped;
+        defaultDepthTransform = nil;
     }
     return self;
 }

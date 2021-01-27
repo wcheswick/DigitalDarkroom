@@ -256,7 +256,9 @@ typedef enum {
         currentDeviceOrientation = UIDeviceOrientationUnknown;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
+        screenTasks.defaultDepthTransform = currentDepthTransform;
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
+        thumbTasks.defaultDepthTransform = currentDepthTransform;
         //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
 
         transformTotalElapsed = 0;
@@ -593,6 +595,7 @@ nextSource = nil; // XXXXX debugging
                  action:@selector(doSelectDepthVis:)];
         [thumbView addGestureRecognizer:touch];
         
+#ifdef OLD
         // no live updates for depth views for now
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
@@ -603,6 +606,11 @@ nextSource = nil; // XXXXX debugging
         } else {
             NSLog(@"thumb image '%@' not found", file);
         }
+#endif
+        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+        Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
+        task.depthTransform = transform;    // we are our own depth transform
+
         thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
         [thumbArrayView addSubview:thumbView];
     }
@@ -621,6 +629,7 @@ nextSource = nil; // XXXXX debugging
         
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
+        task.depthTransform = nil;  // use default
         [task appendTransform:transform];
    }
 }
@@ -913,6 +922,7 @@ nextSource = nil; // XXXXX debugging
         screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
         assert(currentDepthTransform);
         screenTask.depthTransform = currentDepthTransform;
+        thumbTasks.defaultDepthTransform = currentDepthTransform;
     }
     [screenTasks configureGroupForSize: captureSize];
 
@@ -933,7 +943,7 @@ nextSource = nil; // XXXXX debugging
         f.origin = CGPointZero;
         self->thumbScrollView.frame = f;
         // move views to where they need to be now.
-        [self positionThumbArray];
+        [self layoutThumbArray];
     }];
     
     [containerView bringSubviewToFront:transformView];
@@ -979,7 +989,7 @@ CGFloat topOfNonDepthArray = 0;
 // layout the 3d transforms.  If the input isn't a 3D source, these will always be
 // scrolled off the top of the view.
 
-- (void) positionThumbArray {
+- (void) layoutThumbArray {
     imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
     float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
@@ -1020,38 +1030,49 @@ CGFloat topOfNonDepthArray = 0;
     // which are first.
     
     CGFloat thumbsH = 0;
+    BOOL is3D = IS_3D_CAMERA(currentSource.sourceType);
     
     for (size_t i=0; i<transforms.transforms.count; i++) {   // position depth transforms
         Transform *transform = [transforms.transforms objectAtIndex:i];
-
         UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
         assert(thumb);  // gotta be there
+
+        if (transform.type == DepthVis && !is3D) {
+            // just push them off to the side and disappear them
+            CGRect f = nextButtonFrame;
+            f.origin = CGPointZero;
+            thumb.frame = f;
+            thumb.hidden = YES;
+            continue;
+        }
+        
         thumb.frame = nextButtonFrame;
-        atStartOfRow = NO;
+        thumb.hidden = NO;
+        thumb.userInteractionEnabled = YES;
+
         UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
         imageView.frame = imageRect;
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
         
         if (transform.type == DepthVis) {
-            if (!IS_3D_CAMERA(currentSource.sourceType)) {
-                thumb.userInteractionEnabled = NO;
-            } else
-                thumb.userInteractionEnabled = YES;
             if ([currentDepthTransform.name isEqual:transform.name]) {
                 [self thumbSelected:thumb selected:YES];
                 selectedDepthView = thumb;
             } else
                 [self thumbSelected:thumb selected:NO];
         } else {    // regular transform
-            thumb.userInteractionEnabled = YES;
             [self thumbSelected:thumb selected:currentTransform &&
              [currentTransform.name isEqual:transform.name]];
         }
-        
+        screenTasks.defaultDepthTransform = currentDepthTransform;
+        thumbTasks.defaultDepthTransform = currentDepthTransform;
+
+        atStartOfRow = NO;
         thumbsH = BELOW(thumb.frame);
+        
         // next thumb position.  On a new line, if this is the end of the depthvis
-        if (i == transforms.depthTransformCount - 1) {  // end of depth transforms
+        if (is3D && i == transforms.depthTransformCount - 1) {  // end of depth transforms
             [self buttonsContinueOnNextRow];
             topOfNonDepthArray = nextButtonFrame.origin.y;
         } else
