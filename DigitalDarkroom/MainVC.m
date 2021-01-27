@@ -142,7 +142,8 @@ typedef enum {
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-@property (nonatomic, strong)   Transform *depthTransform;  // current one, must not be nil
+@property (nonatomic, strong)   Transform *currentDepthTransform;  // current one, must not be nil
+@property (nonatomic, strong)   Transform *currentTransform;  // might be nil, going away
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
 @property (nonatomic, strong)   UILabel *allStatsLabel;
@@ -210,7 +211,7 @@ typedef enum {
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize capturing, busy, needHires;
 @synthesize statsTimer, allStatsLabel, lastTime;
-@synthesize transforms, depthTransform;
+@synthesize transforms, currentDepthTransform, currentTransform;
 @synthesize trashButton, hiresButton;
 @synthesize undoButton, snapButton;
 @synthesize stopCamera, startCamera;
@@ -234,15 +235,16 @@ typedef enum {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
+        currentTransform = nil;     // XXX change to implement ADD
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
         assert(transforms.depthTransformCount > 0);
-        depthTransform = [transforms.transforms objectAtIndex:0];  // default
+        currentDepthTransform = [transforms.transforms objectAtIndex:0];  // default
         for (int i=0; i < transforms.depthTransformCount; i++) {
             Transform *transform = [transforms.transforms objectAtIndex:i];
             if ([transform.name isEqual:depthTransformName]) {
-                depthTransform = transform;
+                currentDepthTransform = transform;
                 break;
             }
         }
@@ -340,8 +342,8 @@ nextSource = nil; // XXXXX debugging
 }
 
 - (void) saveDepthTransformName {
-    assert(depthTransform);
-    [[NSUserDefaults standardUserDefaults] setObject:depthTransform.name
+    assert(currentDepthTransform);
+    [[NSUserDefaults standardUserDefaults] setObject:currentDepthTransform.name
                                               forKey:LAST_DEPTH_TRANSFORM];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
@@ -568,6 +570,7 @@ nextSource = nil; // XXXXX debugging
     
     thumbArrayView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
     [thumbScrollView addSubview:thumbArrayView];
+    [containerView addSubview:thumbArrayView];
 
     [self createThumbArray];    // animate to correct positions later
     
@@ -584,7 +587,7 @@ nextSource = nil; // XXXXX debugging
     for (size_t i=0; i<transforms.depthTransformCount; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
         UIView *thumbView = [self makeThumbForTransform:transform];
-        [self adjustThumb:thumbView selected:NO];
+        [self thumbSelected:thumbView selected:NO];
         touch = [[UITapGestureRecognizer alloc]
                  initWithTarget:self
                  action:@selector(doSelectDepthVis:)];
@@ -821,9 +824,9 @@ nextSource = nil; // XXXXX debugging
     UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
     CGFloat height = manager.statusBarFrame.size.height;
     // not needed, apparently height += topPadding;
-    f.origin.y = height + self.navigationController.navigationBar.frame.size.height;
+    f.origin.y = height + self.navigationController.navigationBar.frame.size.height + topPadding + SEP;
     f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y; //  - bottomPadding;
-    f.origin.x = leftPadding;
+    f.origin.x = leftPadding + SEP;
     f.size.width -= rightPadding + f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
@@ -906,15 +909,25 @@ nextSource = nil; // XXXXX debugging
     f.origin.y = transformView.frame.size.height - f.size.height;
     executeControlView.frame = f;
     
-    [screenTasks configureGroupForSize: captureSize];
     if (!screenTask) {
         screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
-        assert(depthTransform);
-        screenTask.depthTransform = depthTransform;
+        assert(currentDepthTransform);
+        screenTask.depthTransform = currentDepthTransform;
     }
+    [screenTasks configureGroupForSize: captureSize];
 
     //    [externalTask configureForSize: processingSize];
     
+    // for a start, these fit in the container, though we may
+    // adjust them later.
+    
+    f = containerView.frame;
+    f.origin = CGPointMake(0, transformView.frame.origin.y);
+    f.size.height -= f.origin.y;
+    thumbScrollView.frame = f;
+    f.origin = CGPointZero;
+    thumbArrayView.frame = f;   // the final may be higher
+
     [UIView animateWithDuration:0.5 animations:^(void) {
         CGRect f = self->containerView.frame;
         f.origin = CGPointZero;
@@ -924,6 +937,7 @@ nextSource = nil; // XXXXX debugging
     }];
     
     [containerView bringSubviewToFront:transformView];
+//    transformView.hidden = YES;
     
     if (adjustSourceInfo) {
         [self adjustCameraButtons];
@@ -948,12 +962,19 @@ nextSource = nil; // XXXXX debugging
     startCamera.enabled = !stopCamera.enabled;
 }
 
+// A thumb can have three states:
+//  - disabled
+//  - enabled, but not selected
+//  - selected
+//
+// This information is stored in the touch and view properties of each thumb.
+
 CGRect imageRect;
 CGRect nextButtonFrame;
 BOOL roomRightOftransformView;
 BOOL roomUndertransformView;
 BOOL atStartOfRow;
-CGFloat topOfTransformArray;
+CGFloat topOfNonDepthArray = 0;
 
 // layout the 3d transforms.  If the input isn't a 3D source, these will always be
 // scrolled off the top of the view.
@@ -995,50 +1016,49 @@ CGFloat topOfTransformArray;
     atStartOfRow = YES;
 
     // Run through all the transforms, computing the corresponding thumb sizes and
-    // positions for the current situation.
+    // positions for the current situation. Skip to a new row after depth transforms,
+    // which are first.
     
-    for (size_t i=0; i<transforms.depthTransformCount; i++) {   // position depth transforms
+    CGFloat thumbsH = 0;
+    
+    for (size_t i=0; i<transforms.transforms.count; i++) {   // position depth transforms
+        Transform *transform = [transforms.transforms objectAtIndex:i];
+
         UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
         assert(thumb);  // gotta be there
         thumb.frame = nextButtonFrame;
-        
+        atStartOfRow = NO;
         UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
         imageView.frame = imageRect;
-
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
-#ifdef OLD
-    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
-    assert(iv);
-    [iv setImage:newImage];
-#endif
-        [self nextButtonPositionAfter:thumb];
-    }
-    [self buttonsContinueOnNextRow];
-    
-    if (IS_3D_CAMERA(currentSource.sourceType))
-        topOfTransformArray = 0;
-    else
-        topOfTransformArray = nextButtonFrame.origin.y;
-
-    for (size_t i=transforms.depthTransformCount; i<transforms.transforms.count; i++) {  // position regular transforms
-        UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
-        assert(thumb);  // gotta be there
-        thumb.frame = nextButtonFrame;
         
-        UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
-        imageView.frame = imageRect;
-
-        UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
-        label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
-#ifdef OLD
-    UIImageView *iv = [v viewWithTag:TRANSFORM_ICON_IMAGE_TAG];
-    assert(iv);
-    [iv setImage:newImage];
-#endif
-        [self nextButtonPositionAfter:thumb];
+        if (transform.type == DepthVis) {
+            if (!IS_3D_CAMERA(currentSource.sourceType)) {
+                thumb.userInteractionEnabled = NO;
+            } else
+                thumb.userInteractionEnabled = YES;
+            if ([currentDepthTransform.name isEqual:transform.name]) {
+                [self thumbSelected:thumb selected:YES];
+                selectedDepthView = thumb;
+            } else
+                [self thumbSelected:thumb selected:NO];
+        } else {    // regular transform
+            thumb.userInteractionEnabled = YES;
+            [self thumbSelected:thumb selected:currentTransform &&
+             [currentTransform.name isEqual:transform.name]];
+        }
+        
+        thumbsH = BELOW(thumb.frame);
+        // next thumb position.  On a new line, if this is the end of the depthvis
+        if (i == transforms.depthTransformCount - 1) {  // end of depth transforms
+            [self buttonsContinueOnNextRow];
+            topOfNonDepthArray = nextButtonFrame.origin.y;
+        } else
+            [self nextButtonPosition];
     }
     
+    SET_VIEW_HEIGHT(thumbArrayView, thumbsH);
     thumbScrollView.contentSize = thumbArrayView.frame.size;
     thumbScrollView.contentOffset = thumbArrayView.frame.origin;
     
@@ -1046,19 +1066,15 @@ CGFloat topOfTransformArray;
     if (IS_3D_CAMERA(currentSource.sourceType))
         [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
     else
-        [thumbScrollView setContentOffset:CGPointMake(0, topOfTransformArray) animated:YES];
+        [thumbScrollView setContentOffset:CGPointMake(0, topOfNonDepthArray) animated:YES];
 }
 
-- (void) nextButtonPositionAfter:(UIView *) thumb {
+- (void) nextButtonPosition {
     CGRect f = nextButtonFrame;
-    if (RIGHT(f) > thumbArrayView.frame.size.width)
-        SET_VIEW_WIDTH(thumbArrayView, RIGHT(f));
-    if (BELOW(f) > thumbArrayView.frame.size.height)
-        SET_VIEW_HEIGHT(thumbArrayView, BELOW(f));
-    f.origin.x = RIGHT(thumb.frame) + SEP;
-    if (RIGHT(f) > containerView.frame.size.width) {
+    if (RIGHT(f) + SEP + f.size.width > thumbArrayView.frame.size.width) {   // on to next line
         [self buttonsContinueOnNextRow];
     } else {
+        f.origin.x = RIGHT(f) + SEP;
         nextButtonFrame = f;
         atStartOfRow = NO;
     }
@@ -1069,11 +1085,18 @@ CGFloat topOfTransformArray;
         return;
     CGRect f = nextButtonFrame;
     f.origin.y = BELOW(f) + SEP;
-    if (roomUndertransformView && f.origin.y >=
-        BELOW(transformView.frame) + SEP) {   // underneath the display
-            f.origin.x = transformView.frame.origin.x;
-    } else {
-        f.origin.x = RIGHT(transformView.frame) + SEP;
+    if (roomRightOftransformView) {
+        if (f.origin.y < BELOW(transformView.frame)) {   // we are still on the right
+            f.origin.x = RIGHT(transformView.frame) + SEP;
+        } else {    // below transformView. Space underneath?
+            if (roomUndertransformView)
+                f.origin.x = 0;
+            else
+                f.origin.x = RIGHT(transformView.frame) + SEP;
+        }
+    } else {    // room only under transform view
+        assert(roomUndertransformView);
+        f.origin.x = transformView.frame.origin.x;
     }
     nextButtonFrame = f;
     atStartOfRow = YES;
@@ -1085,25 +1108,25 @@ CGFloat topOfTransformArray;
     if (newView == selectedDepthView)
         return;
 
-    [self adjustThumb:selectedDepthView selected:NO];
+    [self thumbSelected:selectedDepthView selected:NO];
     selectedDepthView = newView;
-    [self adjustThumb:selectedDepthView selected:YES];
+    [self thumbSelected:selectedDepthView selected:YES];
     
     long index = newView.tag - TRANSFORM_BASE_TAG;
-    depthTransform = [transforms.transforms objectAtIndex:index];
-    screenTask.depthTransform = depthTransform;
+    currentDepthTransform = [transforms.transforms objectAtIndex:index];
+    screenTask.depthTransform = currentDepthTransform;
 }
 
-- (void) adjustThumb:(UIView *)thumbView selected:(BOOL)selected {
-    UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+- (void) thumbSelected:(UIView *) thumb selected:(BOOL)selected {
+    UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
     if (selected) {
         label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-        thumbView.layer.borderWidth = 5.0;
+        thumb.layer.borderWidth = 5.0;
     } else {
         label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
         selectedDepthView.layer.borderWidth = 1.0;
     }
-    [thumbView setNeedsDisplay];
+    [thumb setNeedsDisplay];
 }
 
 - (IBAction) doTapTransform:(UITapGestureRecognizer *)recognizer {
@@ -1116,23 +1139,23 @@ CGFloat topOfTransformArray;
     [screenTasks removeAllTransforms];  // currently, no stacked transforms
     
     // at present, only one view selectable
-    UIView *v = [recognizer view];
-    if (v == selectedTransformView) {   // deselect, and we are done
-        [self adjustThumb:selectedTransformView selected:NO];
+    UIView *thumb = [recognizer view];
+    if (thumb == selectedTransformView) {   // deselect, and we are done
+        [self thumbSelected:thumb selected:NO];
         selectedTransformView = nil;
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
         return;
     }
     
     if (selectedTransformView) {   // turn off current one...
-        [self adjustThumb:selectedTransformView selected:NO];
+        [self thumbSelected:thumb selected:NO];
     }
     
-    selectedTransformView = v;
-    [self adjustThumb:selectedTransformView selected:YES];
+    selectedTransformView = thumb;
+    [self thumbSelected:thumb selected:YES];
 
-    size_t flatTransformIndex = v.tag - TRANSFORM_BASE_TAG;
-    Transform *transform = [transforms.transforms objectAtIndex:flatTransformIndex];
+    size_t transformIndex = thumb.tag - TRANSFORM_BASE_TAG;
+    Transform *transform = [transforms.transforms objectAtIndex:transformIndex];
     [screenTask appendTransform:transform];
     
     [self updateExecuteDisplay];

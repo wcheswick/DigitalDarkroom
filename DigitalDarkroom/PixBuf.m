@@ -101,6 +101,12 @@
 }
 
 - (void) copyPixelsTo:(PixBuf *) dest {
+    assert(dest);
+    if (w != dest.w || h != dest.h) {
+        NSLog(@"copyPixelsTo: size mismatch %zu x %zu to %zu x %zu",
+              w, h, dest.w, dest.h);
+        abort();
+    }
     assert(w == dest.w);
     assert(h == dest.h);    // the PixelArray pointers in the destination will do
     memcpy(dest.pb, pb, w * h * sizeof(Pixel));
