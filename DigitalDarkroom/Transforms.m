@@ -1016,6 +1016,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     [transforms addObject:lastTransform];
 #endif
 
+#ifdef broken
 #define mu (1/3.0)
 //#define E round(2.5*dpi)
 #define E round(dpi)
@@ -1129,6 +1130,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
     [transforms addObject:lastTransform];
+#endif
 
 // plywood?
 

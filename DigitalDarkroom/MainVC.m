@@ -1042,7 +1042,7 @@ CGFloat topOfNonDepthArray = 0;
             CGRect f = nextButtonFrame;
             f.origin = CGPointZero;
             thumb.frame = f;
-            thumb.hidden = YES;
+//            thumb.hidden = YES;
             continue;
         }
         
