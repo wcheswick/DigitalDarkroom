@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define DEPTH_TRANSFORM_SECTION 0
 
+#define NO_TRANSFORM    (-1)    // for indicies into transform array
+
 #define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
 #define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)
 #define Z               ((1<<sizeof(channel)*8) - 1)
@@ -49,6 +51,8 @@ NS_ASSUME_NONNULL_BEGIN
 //@property (nonatomic, strong)   NSArray *updatedTransformList;
 //@property (assign)              volatile BOOL paramsChanged;
 @property (assign)              BOOL debugTransforms;
+
+- (Transform * __nullable) transformAtIndex:(long) index;
 
 @end
 

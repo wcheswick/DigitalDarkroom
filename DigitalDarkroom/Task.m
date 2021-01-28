@@ -66,6 +66,7 @@ static PixelIndex_t dPI(int x, int y) {
         taskIndex = UNASSIGNED_TASK;
         transformList = [[NSMutableArray alloc] init];
         paramList = [[NSMutableArray alloc] init];
+        depthTransform = nil;
         enabled = YES;
         taskStatus = Stopped;
         targetImageView = nil;

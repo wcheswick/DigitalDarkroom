@@ -94,6 +94,14 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
 }
 
+// transform at given index, or nil if NO_TRANSFORM
+
+- (Transform * __nullable) transformAtIndex:(long) index {
+    if (index == NO_TRANSFORM)
+        return nil;
+    return [transforms objectAtIndex:index];
+}
+
 // For Tom's logo algorithm
 
 int

@@ -142,8 +142,9 @@ typedef enum {
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-@property (nonatomic, strong)   Transform *currentDepthTransform;  // current one, must not be nil
-@property (nonatomic, strong)   Transform *currentTransform;  // might be nil, going away
+//@property (nonatomic, strong)   Transform *currentDepthTransform;  // current one, must not be nil
+@property (assign)              long currentTransformIndex;      // or NO_TRANSFORM
+@property (assign)              long currentDepthTransformIndex; // or NO_TRANSFORM
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
 @property (nonatomic, strong)   UILabel *allStatsLabel;
@@ -179,9 +180,6 @@ typedef enum {
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
 @property (nonatomic, strong)   UIScrollView *thumbScrollView;
 
-@property (nonatomic, strong)   UIView *selectedDepthView;
-@property (nonatomic, strong)   UIView *selectedTransformView;
-
 @end
 
 @implementation MainVC
@@ -202,6 +200,9 @@ typedef enum {
 @synthesize currentCameraButton;
 
 @synthesize inputSources, currentSource;
+@synthesize currentTransformIndex;
+@synthesize currentDepthTransformIndex;
+
 @synthesize nextSource;
 @synthesize availableCameraCount;
 
@@ -211,7 +212,7 @@ typedef enum {
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize capturing, busy, needHires;
 @synthesize statsTimer, allStatsLabel, lastTime;
-@synthesize transforms, currentDepthTransform, currentTransform;
+@synthesize transforms;
 @synthesize trashButton, hiresButton;
 @synthesize undoButton, snapButton;
 @synthesize stopCamera, startCamera;
@@ -227,39 +228,39 @@ typedef enum {
 @synthesize lastFileSourceUsed;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
-@synthesize selectedDepthView;
-@synthesize selectedTransformView;
 @synthesize currentDeviceOrientation;
 
 - (id) init {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
-        currentTransform = nil;     // XXX change to implement ADD
+        currentDepthTransformIndex = NO_TRANSFORM;
+        currentTransformIndex = NO_TRANSFORM;   // XXX this is going to be a list
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
         assert(transforms.depthTransformCount > 0);
-        currentDepthTransform = [transforms.transforms objectAtIndex:0];  // default
+        currentDepthTransformIndex = 0; // gotta have a default, use first one
         for (int i=0; i < transforms.depthTransformCount; i++) {
             Transform *transform = [transforms.transforms objectAtIndex:i];
             if ([transform.name isEqual:depthTransformName]) {
-                currentDepthTransform = transform;
+                currentDepthTransformIndex = i;
                 break;
             }
         }
         [self saveDepthTransformName];
-        selectedDepthView = nil;    // must be filled in
         
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
         currentDeviceOrientation = UIDeviceOrientationUnknown;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
-        screenTasks.defaultDepthTransform = currentDepthTransform;
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        thumbTasks.defaultDepthTransform = currentDepthTransform;
         //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
+        
+        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+        screenTasks.defaultDepthTransform = depthTransform;
+        thumbTasks.defaultDepthTransform = depthTransform;
 
         transformTotalElapsed = 0;
         transformCount = 0;
@@ -344,8 +345,9 @@ nextSource = nil; // XXXXX debugging
 }
 
 - (void) saveDepthTransformName {
-    assert(currentDepthTransform);
-    [[NSUserDefaults standardUserDefaults] setObject:currentDepthTransform.name
+    assert(currentDepthTransformIndex != NO_TRANSFORM);
+    Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
+    [[NSUserDefaults standardUserDefaults] setObject:transform.name
                                               forKey:LAST_DEPTH_TRANSFORM];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
@@ -589,7 +591,7 @@ nextSource = nil; // XXXXX debugging
     for (size_t i=0; i<transforms.depthTransformCount; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
         UIView *thumbView = [self makeThumbForTransform:transform];
-        [self thumbSelected:thumbView selected:NO];
+        [self adjustThumb:thumbView selected:NO];
         touch = [[UITapGestureRecognizer alloc]
                  initWithTarget:self
                  action:@selector(doSelectDepthVis:)];
@@ -629,7 +631,6 @@ nextSource = nil; // XXXXX debugging
         
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
-        task.depthTransform = nil;  // use default
         [task appendTransform:transform];
    }
 }
@@ -920,9 +921,10 @@ nextSource = nil; // XXXXX debugging
     
     if (!screenTask) {
         screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
-        assert(currentDepthTransform);
-        screenTask.depthTransform = currentDepthTransform;
-        thumbTasks.defaultDepthTransform = currentDepthTransform;
+        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+        assert(depthTransform);
+        screenTask.depthTransform = depthTransform;
+        thumbTasks.defaultDepthTransform = depthTransform;
     }
     [screenTasks configureGroupForSize: captureSize];
 
@@ -1037,14 +1039,27 @@ CGFloat topOfNonDepthArray = 0;
         UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
         assert(thumb);  // gotta be there
 
-        if (transform.type == DepthVis && !is3D) {
-            // just push them off to the side and disappear them
-            CGRect f = nextButtonFrame;
-            f.origin = CGPointZero;
-            thumb.frame = f;
-//            thumb.hidden = YES;
-            continue;
+        if (transform.type == DepthVis) {
+            if (i == currentDepthTransformIndex) {
+                [self adjustThumb:thumb selected:YES];
+            } else
+                [self adjustThumb:thumb selected:NO];
+            if (!is3D) {
+                // just push them off to where they are not visible
+                CGRect f = nextButtonFrame;
+                f.origin = CGPointZero;
+                thumb.frame = f;
+//              thumb.hidden = YES;
+                continue;
+            }
+        } else {    // regular transform
+            if (currentTransformIndex != NO_TRANSFORM && i == currentTransformIndex) {
+                [self adjustThumb:thumb selected:YES];
+            } else {
+                [self adjustThumb:thumb selected:NO];
+            }
         }
+
         
         thumb.frame = nextButtonFrame;
         thumb.hidden = NO;
@@ -1054,19 +1069,10 @@ CGFloat topOfNonDepthArray = 0;
         imageView.frame = imageRect;
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
-        
-        if (transform.type == DepthVis) {
-            if ([currentDepthTransform.name isEqual:transform.name]) {
-                [self thumbSelected:thumb selected:YES];
-                selectedDepthView = thumb;
-            } else
-                [self thumbSelected:thumb selected:NO];
-        } else {    // regular transform
-            [self thumbSelected:thumb selected:currentTransform &&
-             [currentTransform.name isEqual:transform.name]];
-        }
-        screenTasks.defaultDepthTransform = currentDepthTransform;
-        thumbTasks.defaultDepthTransform = currentDepthTransform;
+
+        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+        screenTasks.defaultDepthTransform = depthTransform;
+        thumbTasks.defaultDepthTransform = depthTransform;
 
         atStartOfRow = NO;
         thumbsH = BELOW(thumb.frame);
@@ -1126,28 +1132,25 @@ CGFloat topOfNonDepthArray = 0;
 // select a new depth visualization.
 - (IBAction) doSelectDepthVis:(UITapGestureRecognizer *)recognizer {
     UIView *newView = recognizer.view;
-    if (newView == selectedDepthView)
-        return;
-
-    [self thumbSelected:selectedDepthView selected:NO];
-    selectedDepthView = newView;
-    [self thumbSelected:selectedDepthView selected:YES];
-    
-    long index = newView.tag - TRANSFORM_BASE_TAG;
-    currentDepthTransform = [transforms.transforms objectAtIndex:index];
-    screenTask.depthTransform = currentDepthTransform;
+    [self newDepthVizAtThumb:newView];
 }
 
-- (void) thumbSelected:(UIView *) thumb selected:(BOOL)selected {
-    UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
-    if (selected) {
-        label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-        thumb.layer.borderWidth = 5.0;
-    } else {
-        label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
-        selectedDepthView.layer.borderWidth = 1.0;
-    }
-    [thumb setNeedsDisplay];
+- (void) newDepthVizAtThumb:(UIView *) newView {
+    long newTransformIndex = newView.tag - TRANSFORM_BASE_TAG;
+    assert(newTransformIndex >= 0 && newTransformIndex < transforms.transforms.count);
+    if (newTransformIndex == currentDepthTransformIndex)
+        return;
+    
+    assert(currentDepthTransformIndex != NO_TRANSFORM);
+    UIView *oldSelectedDepthThumb = [thumbArrayView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
+
+    [self adjustThumb:oldSelectedDepthThumb selected:NO];
+    [self adjustThumb:newView selected:YES];
+    
+    currentDepthTransformIndex = newTransformIndex;
+    screenTask.depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+    assert(screenTask.depthTransform.type == DepthVis);
+    [self saveDepthTransformName];
 }
 
 - (IBAction) doTapTransform:(UITapGestureRecognizer *)recognizer {
@@ -1157,35 +1160,48 @@ CGFloat topOfNonDepthArray = 0;
         transforms.sequenceChanged = YES;
     }
 #endif
+    UIView *tappedThumb = [recognizer view];
+    [self transformThumbTapped: tappedThumb];
+}
+
+- (void) transformThumbTapped: (UIView *) tappedThumb {
     [screenTasks removeAllTransforms];  // currently, no stacked transforms
-    
     // at present, only one view selectable
-    UIView *thumb = [recognizer view];
-    if (thumb == selectedTransformView) {   // deselect, and we are done
-        [self thumbSelected:thumb selected:NO];
-        selectedTransformView = nil;
+    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
+    if (tappedTransformIndex == currentTransformIndex) {
+        // tapped the current one.  Deselect, and we are done.
+        [self adjustThumb:tappedThumb selected:NO];
+        currentTransformIndex = NO_TRANSFORM;
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
         return;
     }
     
-    if (selectedTransformView) {   // turn off current one...
-        [self thumbSelected:thumb selected:NO];
+    // If there is an old one, deselect it
+    if (currentTransformIndex != NO_TRANSFORM) {
+        UIView *oldSelectedThumb = [thumbArrayView viewWithTag:currentTransformIndex + TRANSFORM_BASE_TAG];
+        assert(oldSelectedThumb);
+        [self adjustThumb:oldSelectedThumb selected:NO];
     }
     
-    selectedTransformView = thumb;
-    [self thumbSelected:thumb selected:YES];
+    [self adjustThumb:tappedThumb selected:YES];
+    currentTransformIndex = tappedTransformIndex;
 
-    size_t transformIndex = thumb.tag - TRANSFORM_BASE_TAG;
-    Transform *transform = [transforms.transforms objectAtIndex:transformIndex];
-    [screenTask appendTransform:transform];
+    Transform *tappedTransform = [transforms transformAtIndex:currentTransformIndex];
+    [screenTask appendTransform:tappedTransform];
     
     [self updateExecuteDisplay];
 }
 
-- (void) updateOlivesTo:(UIImage *) newImage {
-    for (size_t i=0; i<transforms.transforms.count; i++) {
-        [self updateThumbImage:i to:newImage];
+- (void) adjustThumb:(UIView *) thumb selected:(BOOL)selected {
+    UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
+    if (selected) {
+        label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+        thumb.layer.borderWidth = 5.0;
+    } else {
+        label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
+        thumb.layer.borderWidth = 1.0;
     }
+    [thumb setNeedsDisplay];
 }
 
 - (void) updateThumbImage:(size_t) index to:(UIImage *)newImage {

@@ -22,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;
     NSMutableArray *transformList;
-    Transform *depthTransform;  // never nil, needs a default
+    Transform * _Nullable depthTransform;  // use group transform if nil
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
