@@ -69,7 +69,9 @@
 }
 
 - (void) layoutCompleted {
+#ifdef DEBUG_LAYOUT
     NSLog(@" --- layout completed");
+#endif
     layoutNeeded = NO;
     layingOut = NO;
     reconfiguring--;

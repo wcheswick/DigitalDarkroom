@@ -324,12 +324,12 @@ typedef enum {
             for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
                 nextSource = [inputSources objectAtIndex:sourceIndex];
                 if ([lastSourceUsedLabel isEqual:nextSource.label]) {
-                    NSLog(@"  - initializing source index %d", sourceIndex);
+ //                   NSLog(@"  - initializing source index %d", sourceIndex);
                     break;
                 }
             }
         }
-nextSource = nil; // XXXXX debugging
+
         if (!nextSource)  {   // no known default, pick the first camera
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
@@ -360,7 +360,7 @@ nextSource = nil; // XXXXX debugging
 }
 
 - (void) saveCurrentSource {
-    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
+//    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
     [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
                                               forKey:LAST_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] setObject:lastFileSourceUsed
@@ -456,7 +456,9 @@ nextSource = nil; // XXXXX debugging
 - (void) viewDidLoad {
     [super viewDidLoad];
     
+#ifdef DEBUG_LAYOUT
     NSLog(@" ========= viewDidLoad =========");
+#endif
     
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
@@ -684,10 +686,10 @@ nextSource = nil; // XXXXX debugging
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
- 
+#ifdef DEBUG_LAYOUT
     NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
           self.view.frame.size.width, self.view.frame.size.height);
-
+#endif
     [self reconfigure];
 }
 
@@ -710,8 +712,10 @@ nextSource = nil; // XXXXX debugging
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
+#ifdef DEBUG_LAYOUT
     NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
           self.view.frame.size.width, self.view.frame.size.height);
+#endif
     
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
@@ -814,7 +818,9 @@ nextSource = nil; // XXXXX debugging
         self.title = @"";
         
     CGRect f = self.view.frame;
+#ifdef DEBUG_LAYOUT
     NSLog(@" **** device view frame:  %.0f x %.0f", f.size.width, f.size.height);
+#endif
 
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
@@ -909,8 +915,10 @@ nextSource = nil; // XXXXX debugging
         displaySize = CGSizeMake(captureSize.width * yScale, captureSize.height * yScale);
     } else
         displaySize = captureSize;
+#ifdef DEBUG_LAYOUT
     NSLog(@"     display size is %.0f x %.0f", displaySize.width, displaySize.height);
-
+#endif
+    
     f.origin = CGPointZero;
     f.size = displaySize;
     f.size.height += EXECUTE_H;
