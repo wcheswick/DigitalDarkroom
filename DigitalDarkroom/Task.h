@@ -36,7 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
 @property (assign)              BOOL enabled;
-@property (strong, nonatomic)   Transform *depthTransform;
+@property (strong, nonatomic)   Transform * _Nullable depthTransform;
 
 - (id)initInGroup:(TaskGroup *) tg name:(NSString *) n;
 - (void) configureTaskForSize;
@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) removeAllTransforms;
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
-
+- (NSString *) executeStatus;
 
 - (Transform *) currentTransform;
 

@@ -214,7 +214,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 #endif
 
 - (void) addAreaTransforms {
-    lastTransform = [Transform areaTransform: @"Mirror right"
+    lastTransform = [Transform areaTransform: @"O no!"
                                  description: @"Reflect the right half of the screen on the left"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         long centerX = remapBuf.w/2;
@@ -1275,7 +1275,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     [transforms addObject:lastTransform];
 
-    lastTransform = [Transform colorTransform: @"Truncate pixels"
+    lastTransform = [Transform colorTransform: @"Truncate colors"
                                  description: @""
                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         channel mask = ((1<<v) - 1) << (8 - v);
@@ -2197,7 +2197,7 @@ can(double r, double a) {
 //    [flattransforms addObjectsFromArray:transformList];
 }
 
-
+#ifdef NOTDEF
 static Pixel
 ave(Pixel p1, Pixel p2) {
     Pixel p;
@@ -2207,8 +2207,9 @@ ave(Pixel p1, Pixel p2) {
     p.a = Z;
     return p;
 }
-
-#define        RAN_MASK    0x1fff
+#endif
+       
+#define     RAN_MASK    0x1fff
 #define     LUT_RES        (Z+1)
 
 float

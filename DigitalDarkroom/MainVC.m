@@ -60,9 +60,9 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define EXECUTE_LABEL_H 22
-#define EXECUTE_LABEL_FONT  18
-#define EXECUTE_SHOWN   1 // 5   // number of total lines shown on screen (not yet)
+#define EXECUTE_TEXT_FONT_SIZE  18
+#define EXECUTE_TEXT_MIN_LINES   3// 5   // number of total lines shown on screen (not yet)
+#define EXECUTE_H ((EXECUTE_TEXT_FONT_SIZE + 4) * EXECUTE_TEXT_MIN_LINES)
 
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
@@ -129,7 +129,7 @@ typedef enum {
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UIView *executeControlView;         // list of applied transforms, and controls
+@property (nonatomic, strong)   UITextView *executeControlView;         // list of applied transforms, and controls
 
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;      // or nil if no camera is selected
@@ -555,11 +555,15 @@ nextSource = nil; // XXXXX debugging
     transformImageView.backgroundColor = NAVY_BLUE;
     [transformView addSubview:transformImageView];
     
-    executeControlView = [[UIView alloc]
-                          initWithFrame:CGRectMake(0, LATER, LATER, EXECUTE_SHOWN * EXECUTE_LABEL_H)];
-    executeControlView.opaque = NO;
+    executeControlView = [[UITextView alloc]
+                          initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+    executeControlView.editable = NO;
+    executeControlView.allowsEditingTextAttributes = NO;
+    executeControlView.selectable = NO;
+    executeControlView.font = [UIFont boldSystemFontOfSize:EXECUTE_TEXT_FONT_SIZE];
     [transformView addSubview:executeControlView];
-    [transformView bringSubviewToFront:executeControlView];
+    
+//    [transformView bringSubviewToFront:executeControlView];
      
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -623,7 +627,7 @@ nextSource = nil; // XXXXX debugging
         
         touch = [[UITapGestureRecognizer alloc]
                  initWithTarget:self
-                 action:@selector(doTapTransform:)];
+                 action:@selector(doTapThumb:)];
         touch.enabled = YES;
         [thumbView addGestureRecognizer:touch];
         thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
@@ -648,8 +652,7 @@ nextSource = nil; // XXXXX debugging
     //transformLabel.backgroundColor = [UIColor whiteColor];
     transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
     transformLabel.text = transform.name;
-    
-    transformLabel.textColor = RETLO_GREEN; // [UIColor greenColor];
+    transformLabel.textColor = [UIColor blackColor];
     transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
 #ifdef NOTDEF
     transformLabel.attributedText = [[NSMutableAttributedString alloc]
@@ -814,7 +817,7 @@ nextSource = nil; // XXXXX debugging
     NSLog(@" **** device view frame:  %.0f x %.0f", f.size.width, f.size.height);
 
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
-    UILayoutGuide * guide = self.view.safeAreaLayoutGuide;
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
     [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
     [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
@@ -844,14 +847,16 @@ nextSource = nil; // XXXXX debugging
 #endif
     
     // Compute the size available for the image on the screen.  We include various constraints
-    // for layout reasons.
-    // the image display starts on the upper left of the screen.  Its width
-    // must leave room for at least one thumb on the right, the aspect ratio
-    // must match the image source, and it may not use more than a certain percentage
-    // of the height of the screen.
+    // for layout reasons. We also need room for the execute display, a few lines of text below
+    // the transformed image.
+    //
+    // the image display starts on the upper left of the screen.  The aspect ratio
+    // must match the image source. We try to come out with layouts that work based on device
+    // and orientation.  This is highly-constrained for iPhones and such.
     
     CGSize displaySizeLimit = containerView.frame.size;
-    displaySizeLimit.height = round(displaySizeLimit.height * 1.0);    // no more than two thirds of the screen in height
+    displaySizeLimit.height -= EXECUTE_H;
+    displaySizeLimit.height = round(displaySizeLimit.height * 1.0);
     if (displaySizeLimit.width > 768)
         displaySizeLimit.width = 768;
     
@@ -908,28 +913,31 @@ nextSource = nil; // XXXXX debugging
 
     f.origin = CGPointZero;
     f.size = displaySize;
+    f.size.height += EXECUTE_H;
     transformView.frame = f;
-    
+
     f.origin = CGPointZero;
+    f.size = displaySize;
     transformImageView.frame = f;
-    
-    f = transformView.frame;
-    f.origin.x = 0;
-    f.size.height = EXECUTE_LABEL_H*EXECUTE_SHOWN;
-    f.origin.y = transformView.frame.size.height - f.size.height;
+
+    f.origin.y = BELOW(transformImageView.frame);
+    f.size.height = EXECUTE_H;
     executeControlView.frame = f;
-    
+
+    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     if (!screenTask) {
         screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
-        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        assert(depthTransform);
-        screenTask.depthTransform = depthTransform;
         thumbTasks.defaultDepthTransform = depthTransform;
     }
     [screenTasks configureGroupForSize: captureSize];
+    
+    if (IS_3D_CAMERA(currentSource.sourceType))
+        screenTask.depthTransform = depthTransform;
+    else
+        screenTask.depthTransform = nil;
 
     //    [externalTask configureForSize: processingSize];
-    
+
     // for a start, these fit in the container, though we may
     // adjust them later.
     
@@ -1071,7 +1079,10 @@ CGFloat topOfNonDepthArray = 0;
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
 
         Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        screenTasks.defaultDepthTransform = depthTransform;
+        if (is3D)
+            screenTasks.defaultDepthTransform = depthTransform;
+        else
+            screenTasks.defaultDepthTransform = nil;
         thumbTasks.defaultDepthTransform = depthTransform;
 
         atStartOfRow = NO;
@@ -1153,7 +1164,7 @@ CGFloat topOfNonDepthArray = 0;
     [self saveDepthTransformName];
 }
 
-- (IBAction) doTapTransform:(UITapGestureRecognizer *)recognizer {
+- (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
 #ifdef OLD
     @synchronized (transforms.sequence) {
         [transforms.sequence removeAllObjects];
@@ -1173,6 +1184,7 @@ CGFloat topOfNonDepthArray = 0;
         [self adjustThumb:tappedThumb selected:NO];
         currentTransformIndex = NO_TRANSFORM;
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
+        [self updateExecuteDisplay];
         return;
     }
     
@@ -1215,6 +1227,10 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) updateExecuteDisplay {
+    NSString *statusText = [screenTask executeStatus];
+    executeControlView.text = statusText;
+    [executeControlView setNeedsDisplay];
+#ifdef OLD
     [executeControlView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     // show the list in reverse order
     CGRect f = executeControlView.frame;
@@ -1233,6 +1249,7 @@ CGFloat topOfNonDepthArray = 0;
         f.origin.y -= f.size.height;
     }
     [executeControlView setNeedsDisplay];
+#endif
 }
 
 #ifdef OLD

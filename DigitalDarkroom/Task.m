@@ -36,7 +36,8 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
-@property (strong, nonatomic)   NSMutableArray *paramList;         // settings per transform step
+@property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
+@property (strong, nonatomic)   TransformInstance *depthParams;
 @property (nonatomic, strong)   ChBuf *sChan, *dChan;
 @property (nonatomic, strong)   PixBuf *imBuf0, *imBuf1;
 @property (nonatomic, strong)   NSMutableArray *imBufs;
@@ -48,7 +49,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskName;
 @synthesize transformList;
 @synthesize depthTransform;
-@synthesize paramList;
+@synthesize paramList, depthParams;
 @synthesize targetImageView;
 @synthesize sChan, dChan;
 @synthesize imBufs;
@@ -66,6 +67,7 @@ static PixelIndex_t dPI(int x, int y) {
         taskIndex = UNASSIGNED_TASK;
         transformList = [[NSMutableArray alloc] init];
         paramList = [[NSMutableArray alloc] init];
+        depthParams = nil;
         depthTransform = nil;
         enabled = YES;
         taskStatus = Stopped;
@@ -75,6 +77,28 @@ static PixelIndex_t dPI(int x, int y) {
         imBufs = [[NSMutableArray alloc] initWithCapacity:2];
     }
     return self;
+}
+
+- (NSString *) statusFor: (Transform *)transform params:(TransformInstance *) p {
+    NSString *param = @"??";
+    NSString *time = @"--";
+    return [NSString stringWithFormat:@"%30@  %@  %@",
+            transform.name, param, time];
+}
+
+- (NSString *) executeStatus {
+    NSString *status = @"";
+    if (depthTransform) {   // top line is depth transform, if any
+        NSString *s = [self statusFor:depthTransform params:depthParams];
+        status = [NSString stringWithFormat:@"%@\n", s];
+    }
+    for (long i=0; i<transformList.count; i++) {
+        Transform *transform = [transformList objectAtIndex:i];
+        TransformInstance *instance = [paramList objectAtIndex:i];
+        NSString *s = [self statusFor:transform params:instance];
+        status = [NSString stringWithFormat:@"%@\n%@", status, s];
+    }
+    return status;
 }
 
 - (void) configureTaskForSize {

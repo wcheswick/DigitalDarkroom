@@ -36,7 +36,7 @@ typedef enum {
     size_t bitsPerComponent;
     UIImageOrientation imageOrientation;
     NSString *groupName;        // for debug display purposes
-    Transform *defaultDepthTransform;   // if the task doesn't have its own
+    Transform * _Nullable defaultDepthTransform;   // if the task doesn't have its own
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
@@ -48,7 +48,7 @@ typedef enum {
 @property (assign)          size_t bytesInImage;
 @property (assign)          UIImageOrientation imageOrientation;
 @property (nonatomic, strong)   NSString *groupName;
-@property (nonatomic, strong)   Transform *defaultDepthTransform;
+@property (nonatomic, strong)   Transform * _Nullable defaultDepthTransform;
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv

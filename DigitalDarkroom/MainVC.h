@@ -36,7 +36,7 @@ typedef enum {
 
 @property (assign)  UIDeviceOrientation currentDeviceOrientation;
 
-- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
+//- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 - (void) doLayout;
 - (void) deviceRotated;
 
