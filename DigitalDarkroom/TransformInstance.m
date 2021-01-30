@@ -27,4 +27,12 @@
     return self;
 }
 
+- (NSString *) valueInfo {
+    return [NSString stringWithFormat:@"%4d", value];
+}
+
+- (NSString *) timeInfo {
+    return [NSString stringWithFormat:@"%5.1f", 23.1];
+}
+
 @end

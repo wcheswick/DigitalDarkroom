@@ -22,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;
     NSMutableArray *transformList;
-    Transform * _Nullable depthTransform;  // use group transform if nil
+    NSMutableArray *paramList;
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
@@ -33,23 +33,29 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign, atomic)      TaskStatus_t taskStatus;
 @property (nonatomic, strong)   UIImageView *targetImageView;
 @property (strong, nonatomic)   NSMutableArray *transformList;
+@property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
 @property (assign)              BOOL enabled;
-@property (strong, nonatomic)   Transform * _Nullable depthTransform;
 
 - (id)initInGroup:(TaskGroup *) tg name:(NSString *) n;
 - (void) configureTaskForSize;
 - (void) configureTransformAtIndex:(size_t)ti;
 
 - (void) appendTransform:(Transform *) transform;
+- (void) removeTransformAtIndex:(long) index;
 - (void) removeLastTransform;
 - (void) removeAllTransforms;
+
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
-- (NSString *) executeStatus;
+
+- (NSString *) infoForScreenTransformAtIndex:(long) index;
+- (NSString *) infoForDepthProcessing;
 
 - (Transform *) currentTransform;
+
+- (void) useDepthTransform:(Transform * _Nullable) dt;
 
 @end
 

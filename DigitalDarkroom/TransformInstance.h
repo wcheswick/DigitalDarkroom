@@ -27,6 +27,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t timesCalled;
 
 - (id) initFromTransform:(Transform *)transform;
+- (NSString *) valueInfo;
+- (NSString *) timeInfo;
+
 
 @end
 

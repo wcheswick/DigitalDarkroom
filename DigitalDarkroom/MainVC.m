@@ -129,7 +129,9 @@ typedef enum {
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UITextView *executeControlView;         // list of applied transforms, and controls
+@property (nonatomic, strong)   UIView *executeControlView;
+@property (nonatomic, strong)   UITableView *executingTable;
+@property (assign)              long selectedExecution;         // or NO_TRANSFORM
 
 // in sources view
 @property (nonatomic, strong)   UIButton *currentCameraButton;      // or nil if no camera is selected
@@ -142,7 +144,6 @@ typedef enum {
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-//@property (nonatomic, strong)   Transform *currentDepthTransform;  // current one, must not be nil
 @property (assign)              long currentTransformIndex;      // or NO_TRANSFORM
 @property (assign)              long currentDepthTransformIndex; // or NO_TRANSFORM
 
@@ -193,6 +194,8 @@ typedef enum {
 @synthesize transformView;
 @synthesize transformImageView;
 @synthesize executeControlView;
+@synthesize executingTable;
+@synthesize selectedExecution;
 @synthesize thumbArrayView;
 
 @synthesize sourcesNavVC;
@@ -315,16 +318,15 @@ typedef enum {
         [self newDisplayMode:medium];
         
         nextSource = nil;
-
         lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_FILE_SOURCE_KEY];
         NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
-                                   stringForKey:LAST_SOURCE_KEY];
+                                         stringForKey:LAST_SOURCE_KEY];
         if (lastSourceUsedLabel) {
             for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
                 nextSource = [inputSources objectAtIndex:sourceIndex];
                 if ([lastSourceUsedLabel isEqual:nextSource.label]) {
- //                   NSLog(@"  - initializing source index %d", sourceIndex);
+                    NSLog(@"  - initializing source index %d", sourceIndex);
                     break;
                 }
             }
@@ -340,6 +342,7 @@ typedef enum {
             }
         }
         currentSource = nextSource;
+        selectedExecution = NO_TRANSFORM;
     }
     return self;
 }
@@ -352,19 +355,21 @@ typedef enum {
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
+- (void) saveCurrentSource {
+//    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
+    assert(currentSource);
+    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
+                                              forKey:LAST_SOURCE_KEY];
+    if (lastFileSourceUsed)
+        [[NSUserDefaults standardUserDefaults] setObject:lastFileSourceUsed
+                                                  forKey:LAST_FILE_SOURCE_KEY];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
 - (void) saveUIMode {
     NSString *uiStr = [NSString stringWithFormat:@"%d", uiMode];
     [[NSUserDefaults standardUserDefaults] setObject:uiStr
                                               forKey:UI_MODE_KEY];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
-- (void) saveCurrentSource {
-//    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
-    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
-                                              forKey:LAST_SOURCE_KEY];
-    [[NSUserDefaults standardUserDefaults] setObject:lastFileSourceUsed
-                                              forKey:LAST_FILE_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
@@ -557,15 +562,36 @@ typedef enum {
     transformImageView.backgroundColor = NAVY_BLUE;
     [transformView addSubview:transformImageView];
     
+#ifdef OLD
     executeControlView = [[UITextView alloc]
                           initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     executeControlView.editable = NO;
     executeControlView.allowsEditingTextAttributes = NO;
     executeControlView.selectable = NO;
     executeControlView.font = [UIFont boldSystemFontOfSize:EXECUTE_TEXT_FONT_SIZE];
+    executeControlView.layer.borderWidth = 0.5;
+    executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
+//    [transformView addSubview:executeControlView];
+#endif
+    
+    executeControlView = [[UIView alloc] init];
+//    executeControlView.backgroundColor = [UIColor blackColor];
+    executeControlView.opaque = NO;
+    executeControlView.layer.cornerRadius = 10.0;
+    executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
+    executeControlView.layer.borderWidth = 1.0;
+    executeControlView.clipsToBounds = YES;
     [transformView addSubview:executeControlView];
     
-//    [transformView bringSubviewToFront:executeControlView];
+    executingTable = [[UITableView alloc]
+                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
+                      style:UITableViewStylePlain];
+    executingTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
+    executingTable.separatorStyle = UITableViewCellSeparatorStyleNone;
+    executingTable.delegate = self;
+    executingTable.dataSource = self;
+    executingTable.layer.borderWidth = 0.5;
+    [executeControlView addSubview:executingTable];
      
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -617,7 +643,7 @@ typedef enum {
 #endif
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
-        task.depthTransform = transform;    // we are our own depth transform
+        [task useDepthTransform:transform];
 
         thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
         [thumbArrayView addSubview:thumbView];
@@ -765,9 +791,10 @@ typedef enum {
             lastFileSourceUsed = nextSource.label;
         }
         currentSource = nextSource;
-        [self saveCurrentSource];
         nextSource = nil;
+        [self saveCurrentSource];
     }
+    assert(currentSource);
     
     // We have several image sizes to consider and process:
     //
@@ -831,7 +858,7 @@ typedef enum {
     
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
     CGFloat topPadding = window.safeAreaInsets.top;
-    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
@@ -928,9 +955,15 @@ typedef enum {
     f.size = displaySize;
     transformImageView.frame = f;
 
-    f.origin.y = BELOW(transformImageView.frame);
+    f.origin.x = transformImageView.frame.origin.x + INSET;
+    f.origin.y = BELOW(transformImageView.frame) + SEP;
     f.size.height = EXECUTE_H;
+    f.size.width = transformImageView.frame.size.width - 2*INSET;
     executeControlView.frame = f;
+    
+    f.origin.y = 0;
+    executingTable.frame = CGRectInset(f, 2, 2);
+//    executingTable.backgroundColor = RETLO_GREEN;
 
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     if (!screenTask) {
@@ -940,9 +973,9 @@ typedef enum {
     [screenTasks configureGroupForSize: captureSize];
     
     if (IS_3D_CAMERA(currentSource.sourceType))
-        screenTask.depthTransform = depthTransform;
+        [screenTask useDepthTransform:depthTransform];
     else
-        screenTask.depthTransform = nil;
+        [screenTask useDepthTransform:nil];
 
     //    [externalTask configureForSize: processingSize];
 
@@ -962,6 +995,7 @@ typedef enum {
         self->thumbScrollView.frame = f;
         // move views to where they need to be now.
         [self layoutThumbArray];
+        [self->executingTable reloadData];
     }];
     
     [containerView bringSubviewToFront:transformView];
@@ -1167,9 +1201,11 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustThumb:newView selected:YES];
     
     currentDepthTransformIndex = newTransformIndex;
-    screenTask.depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-    assert(screenTask.depthTransform.type == DepthVis);
+    Transform *transform = [transforms transformAtIndex:currentDepthTransformIndex];
+    assert(transform.type == DepthVis);
+    [screenTask useDepthTransform:transform];
     [self saveDepthTransformName];
+    [executingTable reloadData];
 }
 
 - (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
@@ -1192,7 +1228,7 @@ CGFloat topOfNonDepthArray = 0;
         [self adjustThumb:tappedThumb selected:NO];
         currentTransformIndex = NO_TRANSFORM;
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
-        [self updateExecuteDisplay];
+        [executingTable reloadData];
         return;
     }
     
@@ -1209,7 +1245,7 @@ CGFloat topOfNonDepthArray = 0;
     Transform *tappedTransform = [transforms transformAtIndex:currentTransformIndex];
     [screenTask appendTransform:tappedTransform];
     
-    [self updateExecuteDisplay];
+    [executingTable reloadData];
 }
 
 - (void) adjustThumb:(UIView *) thumb selected:(BOOL)selected {
@@ -1221,6 +1257,7 @@ CGFloat topOfNonDepthArray = 0;
         label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
         thumb.layer.borderWidth = 1.0;
     }
+    [label setNeedsDisplay];
     [thumb setNeedsDisplay];
 }
 
@@ -1234,12 +1271,8 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (void) updateExecuteDisplay {
-    NSString *statusText = [screenTask executeStatus];
-    executeControlView.text = statusText;
-    [executeControlView setNeedsDisplay];
 #ifdef OLD
-    [executeControlView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    [fuitable.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     // show the list in reverse order
     CGRect f = executeControlView.frame;
     f.origin = CGPointMake(0, f.size.height);
@@ -1257,10 +1290,7 @@ CGFloat topOfNonDepthArray = 0;
         f.origin.y -= f.size.height;
     }
     [executeControlView setNeedsDisplay];
-#endif
-}
 
-#ifdef OLD
 - (void) displayValueSlider: (int) executeIndex {
     if (executeIndex == SLIDER_OFF) {
         valueSlider.hidden = YES;
@@ -1297,10 +1327,6 @@ CGFloat topOfNonDepthArray = 0;
     [self transformCurrentImage];   // XXX if video capturing is off, we still need to update.  check
 }
 #endif
-
-- (void) adjustDepthInfo {
-    NSLog(@"-------- adjustDepthInfo ----------");
-}
 
 - (void) cameraOn:(BOOL) on {
     capturing = on;
@@ -1659,297 +1685,13 @@ UIImageOrientation lastOrientation;
     }
 }
 
-#ifdef V0
-- (IBAction) doEditActiveList:(UIBarButtonItem *)button {
-    NSLog(@"edit transform list");
-    [executeTableVC.tableView setEditing:!executeTableVC.tableView.editing animated:YES];
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    switch (tableView.tag) {
-        case TransformTable:
-            return transforms.categoryNames.count;
-        case ActiveTable:
-            return 1;
-    }
-    return 1;
-}
-
-- (BOOL) isCollapsed: (NSString *) key {
-    NSNumber *v = [rowIsCollapsed objectForKey:key];
-    return v.boolValue;
-}
-
-- (NSInteger)tableView:(UITableView *)tableView
- numberOfRowsInSection:(NSInteger)section {
-    switch (tableView.tag) {
-        case TransformTable: {
-            NSString *name = [transforms.categoryNames objectAtIndex:section];
-            if ([self isCollapsed:name]) {
-                return 0;
-            } else {
-                NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                return transformList.count;
-            }
-        }
-        case ActiveTable:
-            return screenTask.transformList.count;
-    }
-    return 1;
-}
-
-- (UIView *)tableView:(UITableView *)tableView
-viewForHeaderInSection:(NSInteger)section {
-    CGRect f;
-    TableTags tableType = (TableTags) tableView.tag;
-    switch (tableType) {
-        case TransformTable: {
-            f = CGRectMake(SEP, 0, tableView.frame.size.width - SEP, TABLE_ENTRY_H);
-            UIView *sectionHeaderView = [[UIView alloc] initWithFrame:f];
-            f.origin = CGPointMake(0, 0);
-            f.size.width -= SECTION_HEADER_ARROW_W;
-            UILabel *sectionTitle = [[UILabel alloc] initWithFrame:f];
-            //sectionTitle.adjustsFontSizeToFitWidth = YES;
-            sectionTitle.textAlignment = NSTextAlignmentLeft;
-            sectionTitle.font = [UIFont systemFontOfSize:SECTION_HEADER_FONT_SIZE];
-            NSString *name = [transforms.categoryNames objectAtIndex:section];
-            sectionTitle.text = [@" " stringByAppendingString:name];
-            [sectionHeaderView addSubview:sectionTitle];
-            
-            f.origin.x = RIGHT(f);
-            f.size.width = sectionHeaderView.frame.size.width - f.origin.x;
-            UILabel *rowStatus = [[UILabel alloc] initWithFrame:f];
-            rowStatus.textAlignment = NSTextAlignmentRight;
-            rowStatus.adjustsFontSizeToFitWidth = YES;
-            if ([self isCollapsed:name]) {
-                NSArray *transformList = [transforms.categoryList objectAtIndex:section];
-                rowStatus.text = [NSString stringWithFormat:@"(%lu) ˃", (unsigned long)transformList.count];
-            } else
-                rowStatus.text = [NSString stringWithFormat:@"⌄"];
-            sectionHeaderView.tag = section;    // for the tap processing
-            [sectionHeaderView addSubview:rowStatus];
-            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                           initWithTarget:self
-                                           action:@selector(tapSectionHeader:)];
-            [sectionHeaderView addGestureRecognizer:tap];
-            return sectionHeaderView;
-        }
-        case ActiveTable:
-            return nil;
-    }
-}
-
-- (IBAction) tapSectionHeader:(UITapGestureRecognizer *)tapGesture {
-    size_t section = tapGesture.view.tag;
-    NSString *name = [transforms.categoryNames objectAtIndex:section];
-    BOOL newSectionHidden = ![self isCollapsed:name];
-    [rowIsCollapsed setObject:[NSNumber numberWithBool:newSectionHidden] forKey:name];
-    [self saveTransformSectionVisInfo];
-    
-    NSIndexSet *indexSet = [NSIndexSet indexSetWithIndex:section];
-    [availableTableVC.tableView beginUpdates];
-    [availableTableVC.tableView reloadSections:indexSet
-                              withRowAnimation:UITableViewRowAnimationTop];
-    [availableTableVC.tableView endUpdates];
-}
-
--(CGFloat) tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    switch (tableView.tag) {
-        case ActiveTable:
-            return 0;
-        default:
-            return UITableViewAutomaticDimension;
-    }
-}
-
--(CGFloat) tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section {
-    switch (tableView.tag) {
-        case ActiveTable:
-            return TABLE_ENTRY_H;
-        default:
-            return 0;
-    }
-}
-
-- (BOOL)tableView:(UITableView *)tableView
-canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
-    return YES;
-}
-
-- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    return YES;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView
-         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSString *CellIdentifier = @"TableCell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
-    if (cell == nil) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault
-                                      reuseIdentifier:CellIdentifier];
-    }
-    assert(cell);
-    cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    
-    Transform *transform;
-    
-    switch (tableView.tag) {
-        case TransformTable: {   // Selection table display table list
-            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-            transform = [transformList objectAtIndex:indexPath.row];
-            break;
-        }
-        case ActiveTable: {
-            transform = [screenTask.transformList objectAtIndex:indexPath.row];
-            break;
-        }
-    }
-    [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    CGRect f = cell.contentView.frame;
-    f.size.width = tableView.frame.size.width;
-    f.size.height = cell.frame.size.height;
-    cell.contentView.frame = f;
-    CGFloat labelEnd = cell.contentView.frame.size.width;
-    
-    // The transform table has a label and possible value display.  For the depth transforms,
-    // that value display is tappable.
-    // The executing transforms have a label, a possible value entry, and an executing time display.
-    // So carve out what we need from the end of the contentView, and leave the rest for the label.
-    
-    if (tableView.tag == ActiveTable) {
-        f.size.width = STATS_W;
-        f.origin.x = cell.contentView.frame.size.width - f.size.width - SEP;
-        UILabel *stepStatsLabel = [[UILabel alloc] initWithFrame:f];
-        stepStatsLabel.tag = EXECUTE_STATS_TAG;
-        stepStatsLabel.font = [UIFont systemFontOfSize:STATS_FONT_SIZE];
-        stepStatsLabel.adjustsFontSizeToFitWidth = YES;
-        stepStatsLabel.textAlignment = NSTextAlignmentRight;
-        [cell.contentView addSubview:stepStatsLabel];
-        
-        labelEnd = f.origin.x;
-    }
-    
-    if (transform.hasParameters) {
-        // A big tappable current value, and tiny lower and upper limits stacked to the left of that
-#define LIMIT_SEP   (0)
-        
-        f = UIEdgeInsetsInsetRect(cell.contentView.frame,
-                                  UIEdgeInsetsMake(5, 0, 7, 5));
-        CGFloat w = VALUE_LIMITS_W + LIMIT_SEP + VALUE_W + SEP/2;
-        f.origin.x = labelEnd - w;
-        f.size.width = w;
-        UIView *paramView = [[UIView alloc] initWithFrame:f];
-        paramView.tag = indexPath.row;      // index of the entry in one or the other of the tableviews
-        paramView.layer.borderWidth = 1.0;
-        paramView.layer.cornerRadius = 3.0;
-        [cell.contentView addSubview:paramView];
-        
-        f.size.width = VALUE_W;
-        f.origin.x = paramView.frame.size.width - SEP/2 - f.size.width;
-        f.origin.y = 0;
-        
-        UILabel *value = [[UILabel alloc] initWithFrame:f];
-        value.tag = CURRENT_VALUE_LABEL_TAG;
-        value.text = [NSString stringWithFormat:@"%d", transform.value];
-        value.textAlignment = NSTextAlignmentRight;
-        //value.adjustsFontSizeToFitWidth = YES;
-        value.font = [UIFont systemFontOfSize:VALUE_FONT_SIZE];
-        [paramView addSubview:value];
-        
-        f.origin.x = 0;
-        f.size.width = VALUE_LIMITS_W;
-        f.size.height /= 2;     // lower half, lower value, upper is upper
-        UILabel *minValue = [[UILabel alloc] initWithFrame:f];
-        minValue.text = [NSString stringWithFormat:@"%d –", transform.low];
-        minValue.textAlignment = NSTextAlignmentCenter;
-        minValue.adjustsFontSizeToFitWidth = YES;
-        minValue.font = [UIFont systemFontOfSize:VALUE_LIMIT_FONT_SIZE];
-        [paramView addSubview:minValue];
-        
-        f.origin.y += f.size.height;
-        UILabel *maxValue = [[UILabel alloc] initWithFrame:f];
-        maxValue.text = [NSString stringWithFormat:@"%d", transform.high];
-        maxValue.textAlignment = NSTextAlignmentCenter;
-        maxValue.adjustsFontSizeToFitWidth = YES;
-        maxValue.font = [UIFont systemFontOfSize:VALUE_LIMIT_FONT_SIZE];
-        [paramView addSubview:maxValue];
-        
-        // XXXX add tap gesture and visual feedback of being selected
-        
-        labelEnd = paramView.frame.origin.x;
-    }
-    
-    f = cell.contentView.frame;
-    f.origin.x += 10;
-    f.size.width = labelEnd - f.origin.x;
-    UILabel *label = [[UILabel alloc] initWithFrame:f];
-    label.numberOfLines = 0;
-    label.font = [UIFont
-                  systemFontOfSize:TABLE_ENTRY_FONT_SIZE
-                  weight:UIFontWeightLight];
-    label.text = transform.name;
-    label.font = [UIFont systemFontOfSize:TABLE_ENTRY_FONT_SIZE];
-    [cell.contentView addSubview:label];
-    return cell;
-}
-
-- (void)tableView:(UITableView *)tableView
-didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    switch (tableView.tag) {
-        case TransformTable: {
-            if (depthTransformIndex != NO_DEPTH_TRANSFORM) {
-                NSIndexPath *oldDepth = [NSIndexPath indexPathForRow:depthTransformIndex
-                                                           inSection:DEPTH_TABLE_SECTION];
-                UITableViewCell *oldSelected = [availableTableVC.tableView cellForRowAtIndexPath:oldDepth];
-                oldSelected.highlighted = NO;
-            }
-            // for depth selections, just set the depthindex
-            if (indexPath.section == DEPTH_TRANSFORM_SECTION) {
-                assert(transforms.depthTransform);
-                depthTransformIndex = (int)indexPath.row;
-                UITableViewCell *newSelected = [tableView cellForRowAtIndexPath:indexPath];
-                newSelected.highlighted = YES;
-                [transforms selectDepthTransform:depthTransformIndex];
-                return;
-            }
-            // Append a transform to the active list
-            NSArray *transformList = [transforms.categoryList objectAtIndex:indexPath.section];
-            Transform *transform = [transformList objectAtIndex:indexPath.row];
-            [self addTransform:transform];
-            [self.executeTableVC.tableView reloadData];
-            [self transformCurrentImage];
-            break;
-        }
-        case ActiveTable: {
-            [self displayValueSlider:(int)indexPath.row];
-            UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-            cell.selected = YES;
-            break;
-        }
-    }
-}
-
-- (void) addTransform:(Transform *) transform {
-    Transform *thisTransform = [transform copy];
-    assert(thisTransform.remapTable == NULL);
-    @synchronized (transforms.sequence) {
-        [transforms.sequence addObject:thisTransform];
-        transforms.sequenceChanged = YES;
-    }
-}
-#endif
-
-#ifdef notdef
--(void)tableView:(UITableView *)tableView
-didDeselectRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (tableView)
-        [tableView cellForRowAtIndexPath:indexPath].accessoryType = UITableViewCellAccessoryNone;
-}
-#endif
-
 - (IBAction) doRemoveLastTransform {
+    [self removeScreenTransformAtIndex:screenTask.transformList.count - 1];
     [screenTasks removeLastTransform];
-    [thumbTasks removeLastTransform];
+}
+
+- (void) removeScreenTransformAtIndex:(long) index {
+    [screenTask removeTransformAtIndex:index];
 }
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
@@ -1962,47 +1704,6 @@ didDeselectRowAtIndexPath:(NSIndexPath *)indexPath {
     NSLog(@"high res now %d", needHires);
     button.style = needHires ? UIBarButtonItemStyleDone : UIBarButtonItemStylePlain;
 }
-
-
-#ifdef V0
-// These operations is only for the execute table:
-
-- (void)tableView:(UITableView *)tableView
-commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
-forRowAtIndexPath:(NSIndexPath *)indexPath {
-    switch (editingStyle) {
-        case UITableViewCellEditingStyleDelete: {
-            @synchronized (transforms.sequence) {
-                [transforms.sequence removeObjectAtIndex:indexPath.row];
-                transforms.sequenceChanged = YES;
-            }
-            [tableView deleteRowsAtIndexPaths:[NSArray arrayWithObject:indexPath]
-                             withRowAnimation:UITableViewRowAnimationBottom];
-            [self transformCurrentImage];
-            break;
-        }
-        case UITableViewCellEditingStyleInsert:
-            NSLog(@"insert?");
-            [self transformCurrentImage];
-            break;
-        default:
-            NSLog(@"commitEditingStyle: never mind: %ld", (long)editingStyle);
-    }
-}
-
-- (void)tableView:(UITableView *)tableView
-moveRowAtIndexPath:(NSIndexPath *)fromIndexPath
-      toIndexPath:(NSIndexPath *)toIndexPath {
-    @synchronized (transforms.sequence) {
-        Transform *t = [transforms.sequence objectAtIndex:fromIndexPath.row];
-        [transforms.sequence removeObjectAtIndex:fromIndexPath.row];
-        [transforms.sequence insertObject:t atIndex:toIndexPath.row];
-        transforms.sequenceChanged = YES;
-        [self transformCurrentImage];
-    }
-    [tableView reloadData];
-}
-#endif
 
 - (void) doTick:(NSTimer *)sender {
     if (taskCtrl.layoutNeeded)
@@ -2209,6 +1910,79 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 - (IBAction) dismissSourceVC:(UIBarButtonItem *)sender {
     [sourcesNavVC dismissViewControllerAnimated:YES
                                      completion:NULL];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView
+ numberOfRowsInSection:(NSInteger)section {
+    size_t depthRow = IS_3D_CAMERA(currentSource.sourceType) ? 1: 0;
+    return screenTask.transformList.count + depthRow;
+}
+
+- (BOOL)tableView:(UITableView *)tableView
+canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    return YES;
+}
+
+- (void)tableView:(UITableView *)tableView
+commitEditingStyle:(UITableViewCellEditingStyle)editingStyle
+forRowAtIndexPath:(NSIndexPath *)indexPath {
+    assert(editingStyle == UITableViewCellEditingStyleDelete);
+    [self removeScreenTransformAtIndex:indexPath.row];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView
+         cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    static NSString *CellIdentifier = @"ExecuteCell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    if (cell == nil) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
+                                      reuseIdentifier:CellIdentifier];
+    }
+    
+    SET_VIEW_HEIGHT(cell, tableView.rowHeight);
+    [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+
+    BOOL hasDepth = IS_3D_CAMERA(currentSource.sourceType);
+    NSString *info;
+    
+    if (hasDepth) {
+        if (indexPath.row == 0)
+            info = [screenTask infoForDepthProcessing];
+        else
+            info = [screenTask infoForScreenTransformAtIndex:indexPath.row - 1];
+    } else {
+        info = [screenTask infoForScreenTransformAtIndex:indexPath.row];
+    }
+    NSArray *fields = [info componentsSeparatedByString:@";"];
+    
+    CGRect f = cell.contentView.frame;
+    f.size.width = f.size.width / 2.0;
+    UILabel *name = [[UILabel alloc] initWithFrame:f];
+    name.text = [fields objectAtIndex:0];
+    [cell.contentView addSubview:name];
+    
+    f.size.width = f.size.width / 2.0;
+    f.origin.x = RIGHT(name.frame);
+    UILabel *param = [[UILabel alloc] initWithFrame:f];
+    param.text = [fields objectAtIndex:1];
+    [cell.contentView addSubview:param];
+    
+    f.size.width = f.size.width / 2.0;
+    f.origin.x = RIGHT(param.frame);
+    UILabel *timing = [[UILabel alloc] initWithFrame:f];
+    timing.text = [fields objectAtIndex:1];
+    
+    if (selectedExecution != NO_TRANSFORM && selectedExecution == indexPath.row) {
+        cell.contentView.layer.borderColor = [UIColor blackColor].CGColor;
+        cell.contentView.layer.borderWidth = 1.5;
+    }
+    [cell.contentView addSubview:timing];
+
+    return cell;
 }
 
 @end

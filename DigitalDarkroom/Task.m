@@ -36,8 +36,8 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
-@property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
-@property (strong, nonatomic)   TransformInstance *depthParams;
+@property (strong, nonatomic)   Transform * _Nullable depthTransform;
+@property (strong, nonatomic)   TransformInstance * _Nullable depthParams;
 @property (nonatomic, strong)   ChBuf *sChan, *dChan;
 @property (nonatomic, strong)   PixBuf *imBuf0, *imBuf1;
 @property (nonatomic, strong)   NSMutableArray *imBufs;
@@ -79,26 +79,29 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-- (NSString *) statusFor: (Transform *)transform params:(TransformInstance *) p {
-    NSString *param = @"??";
-    NSString *time = @"--";
-    return [NSString stringWithFormat:@"%30@  %@  %@",
-            transform.name, param, time];
+- (void) useDepthTransform:(Transform *_Nullable) dt {
+    depthTransform = dt;
+    if (dt)
+        depthParams = [[TransformInstance alloc]
+                   initFromTransform:(Transform *)dt];
+    else
+        depthParams = nil;
 }
 
-- (NSString *) executeStatus {
-    NSString *status = @"";
-    if (depthTransform) {   // top line is depth transform, if any
-        NSString *s = [self statusFor:depthTransform params:depthParams];
-        status = [NSString stringWithFormat:@"%@\n", s];
-    }
-    for (long i=0; i<transformList.count; i++) {
-        Transform *transform = [transformList objectAtIndex:i];
-        TransformInstance *instance = [paramList objectAtIndex:i];
-        NSString *s = [self statusFor:transform params:instance];
-        status = [NSString stringWithFormat:@"%@\n%@", status, s];
-    }
-    return status;
+- (NSString *) infoForScreenTransformAtIndex:(long) index {
+    Transform *transform = [transformList objectAtIndex:index];
+    TransformInstance *instance = [paramList objectAtIndex:index];
+    return [NSString stringWithFormat:@"%@;%@;%@",
+            transform.name,
+            [instance valueInfo], [instance timeInfo]];
+}
+
+- (NSString *) infoForDepthProcessing {
+    assert(depthTransform);
+    assert(depthParams);
+    return [NSString stringWithFormat:@"%@;%@;%@",
+            depthTransform.name,
+            [depthParams valueInfo], [depthParams timeInfo]];
 }
 
 - (void) configureTaskForSize {
@@ -158,6 +161,12 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) removeAllTransforms {
     [transformList removeAllObjects];
     [paramList removeAllObjects];
+}
+
+- (void) removeTransformAtIndex:(long) index {
+    assert(index < transformList.count);
+    [transformList removeObjectAtIndex:index];
+    [paramList removeObjectAtIndex:index];
 }
 
 // first, apply depth vis on the depthdata, then run it through
