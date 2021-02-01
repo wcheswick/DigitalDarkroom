@@ -294,6 +294,11 @@
     selectedFormat = nil;
 //    AVCaptureDeviceFormat *depthFormat = nil;
     
+    // XX [availableFormats filteredArrayUsingPredicate:<#(nonnull NSPredicate *)#>]
+    // to optimize this search for the right depth format, and try to get
+    // native delivery of kCVPixelFormatType_DepthFloat32 without having
+    // to translate every frame in the input stream ourselves.
+    
     for (AVCaptureDeviceFormat *format in availableFormats) {
         CMFormatDescriptionRef ref = format.formatDescription;
         CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
@@ -305,7 +310,7 @@
             if (format.supportedDepthDataFormats.count == 0)
                 continue;
         }
-        
+//        NSLog(@"format:  %@", format);
         FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
         //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
         switch (mediaSubType) {
@@ -329,7 +334,8 @@
               availableSize.width, availableSize.height);
         return CGSizeZero;
     }
-    
+//    NSLog(@"SSSSS  format:  %@", selectedFormat);
+
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = selectedFormat;
     

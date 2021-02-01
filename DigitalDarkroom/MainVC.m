@@ -1961,7 +1961,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     SET_VIEW_HEIGHT(cell, tableView.rowHeight);
     [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
 
-    BOOL hasDepth = IS_3D_CAMERA(currentSource.sourceType);
+//    BOOL hasDepth = IS_3D_CAMERA(currentSource.sourceType);
     NSString *info = [screenTask infoForScreenTransformAtIndex:indexPath.row];
     NSArray *fields = [info componentsSeparatedByString:@";"];
     
