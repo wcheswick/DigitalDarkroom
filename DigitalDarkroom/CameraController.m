@@ -194,7 +194,7 @@
                 ;
         }
         [depthConnection setVideoOrientation:videoOrientation];
-        depthConnection.videoMirrored = (selectedCamera != Front3DCamera);    // XXX this seems exactly backwards, but it works
+        depthConnection.videoMirrored = (selectedCamera == Front3DCamera);
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
         NSLog(@"     activeDepthDataFormat: %@", captureDevice.activeDepthDataFormat.formatDescription);
@@ -210,6 +210,7 @@
         } else {
             NSLog(@"**** could not add data output");
         }
+        // depthDataByApplyingExifOrientation
         AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
         videoConnection.videoMirrored = (selectedCamera != FrontCamera);    // XXX this seems exactly backwards, but it works

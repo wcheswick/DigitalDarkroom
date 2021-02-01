@@ -9,6 +9,7 @@
 #import "MainVC.h"
 #import "CollectionHeaderView.h"
 #import "CameraController.h"
+
 #import "Transforms.h"  // includes DepthImage.h
 #import "TaskCtrl.h"
 #import "Defines.h"
@@ -1564,7 +1565,7 @@ if captureDevice.position == AVCaptureDevicePosition.front {
         depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
     else
         depthData = rawDepthData;
-
+            
     CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
     size_t width = CVPixelBufferGetWidth(pixelBufferRef);
     size_t height = CVPixelBufferGetHeight(pixelBufferRef);
