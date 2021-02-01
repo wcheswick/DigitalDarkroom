@@ -36,8 +36,6 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
-@property (strong, nonatomic)   Transform * _Nullable depthTransform;
-@property (strong, nonatomic)   TransformInstance * _Nullable depthParams;
 @property (nonatomic, strong)   ChBuf *sChan, *dChan;
 @property (nonatomic, strong)   PixBuf *imBuf0, *imBuf1;
 @property (nonatomic, strong)   NSMutableArray *imBufs;
@@ -48,8 +46,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @synthesize taskName;
 @synthesize transformList;
-@synthesize depthTransform;
-@synthesize paramList, depthParams;
+@synthesize paramList;
 @synthesize targetImageView;
 @synthesize sChan, dChan;
 @synthesize imBufs;
@@ -57,9 +54,9 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
-@synthesize enabled;
+@synthesize enabled, depthLocked;
 
-- (id)initInGroup:(TaskGroup *) tg name:(NSString *) n {
+- (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg usingDepth:(Transform *) dt {
     self = [super init];
     if (self) {
         taskName = n;
@@ -67,9 +64,9 @@ static PixelIndex_t dPI(int x, int y) {
         taskIndex = UNASSIGNED_TASK;
         transformList = [[NSMutableArray alloc] init];
         paramList = [[NSMutableArray alloc] init];
-        depthParams = nil;
-        depthTransform = nil;
+        [self useDepthTransform:dt];
         enabled = YES;
+        depthLocked = NO;
         taskStatus = Stopped;
         targetImageView = nil;
         sChan = dChan = nil;
@@ -79,29 +76,59 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-- (void) useDepthTransform:(Transform *_Nullable) dt {
-    depthTransform = dt;
-    if (dt)
-        depthParams = [[TransformInstance alloc]
-                   initFromTransform:(Transform *)dt];
-    else
-        depthParams = nil;
+// we may not reveal it, but it is always there
+
+- (void) useDepthTransform:(Transform *) transform {
+    assert(transform);
+    assert(transform.type = DepthVis);
+    TransformInstance *instance = [[TransformInstance alloc]
+                                   initFromTransform:(Transform *)transform];
+    if (transformList.count == 0) {
+        // starting up.  first entry is always depth transform needed
+        assert(DEPTH_TRANSFORM == 0);
+        [transformList addObject:transform];
+        [paramList addObject:instance];
+    } else {
+        [transformList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:transform];
+        [paramList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:instance];
+    }
+}
+
+- (void) appendTransform:(Transform *) transform {
+    assert(transformList.count > 0);    // depth has to be there already
+    assert(transform.type != DepthVis); // we have depth, don't add another one
+//    if (taskGroup.taskCtrl.layoutNeeded)
+//        return; // nope, busy
+    [transformList addObject:transform];
+    TransformInstance *instance = [[TransformInstance alloc]
+                                   initFromTransform:(Transform *)transform];
+    [paramList addObject:instance];
+    [self configureTransformAtIndex:transformList.count - 1];
+}
+
+- (void) removeLastTransform {
+    if (transformList.count == 1)
+        return;     // do not return manditory depth viz
+    [transformList removeLastObject];
+    [paramList removeLastObject];
+}
+
+- (void) removeAllTransforms {
+    size_t count = transformList.count - 1; // never remove depth transform, at zero
+    if (count == 0)
+        return;
+    [transformList removeObjectsInRange:NSMakeRange(DEPTH_TRANSFORM+1, count)];
+    [paramList removeObjectsInRange:NSMakeRange(DEPTH_TRANSFORM+1, count)];
 }
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index {
+    assert(index < transformList.count);
+    assert(index < paramList.count);
     Transform *transform = [transformList objectAtIndex:index];
     TransformInstance *instance = [paramList objectAtIndex:index];
     return [NSString stringWithFormat:@"%@;%@;%@",
             transform.name,
             [instance valueInfo], [instance timeInfo]];
-}
-
-- (NSString *) infoForDepthProcessing {
-    assert(depthTransform);
-    assert(depthParams);
-    return [NSString stringWithFormat:@"%@;%@;%@",
-            depthTransform.name,
-            [depthParams valueInfo], [depthParams timeInfo]];
 }
 
 - (void) configureTaskForSize {
@@ -115,7 +142,7 @@ static PixelIndex_t dPI(int x, int y) {
     assert(imBuf1);
     imBufs[0] = imBuf0;
     imBufs[1] = imBuf1;
-    for (int i=0; i<transformList.count; i++) {
+    for (int i=1; i<transformList.count; i++) { // XXX not depth viz
         [self configureTransformAtIndex:i];
     }
 }
@@ -126,10 +153,12 @@ static PixelIndex_t dPI(int x, int y) {
     NSLog(@"    TT  %-15@   configureTransform  %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
 #endif
 //    assert(taskStatus == Stopped);
+    assert(ti > DEPTH_TRANSFORM);
     [self computeRemapForTransformAtIndex:ti];
 }
 
 - (void) computeRemapForTransformAtIndex:(size_t) index {
+    assert(index > DEPTH_TRANSFORM);
     Transform *transform = transformList[index];
     if (!transform.remapImageF)
         return;
@@ -142,28 +171,8 @@ static PixelIndex_t dPI(int x, int y) {
     instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
 }
 
-- (void) appendTransform:(Transform *) transform {
-    assert(transform.type != DepthVis);
-//    if (taskGroup.taskCtrl.layoutNeeded)
-//        return; // nope, busy
-    [transformList addObject:transform];
-    TransformInstance *instance = [[TransformInstance alloc]
-                                   initFromTransform:(Transform *)transform];
-    [paramList addObject:instance];
-    [self configureTransformAtIndex:transformList.count - 1];
-}
-
-- (void) removeLastTransform {
-    [transformList removeLastObject];
-    [paramList removeLastObject];
-}
-
-- (void) removeAllTransforms {
-    [transformList removeAllObjects];
-    [paramList removeAllObjects];
-}
-
 - (void) removeTransformAtIndex:(long) index {
+    assert(index > DEPTH_TRANSFORM);  // cannot remove depth viz
     assert(index < transformList.count);
     [transformList removeObjectAtIndex:index];
     [paramList removeObjectAtIndex:index];
@@ -177,11 +186,10 @@ static PixelIndex_t dPI(int x, int y) {
     if (!enabled)   // not onscreen
         return;
     taskStatus = Running;
-    Transform *dt = depthTransform ? depthTransform : taskGroup.defaultDepthTransform;
-    assert(dt);
-    assert(dt.type == DepthVis);
-    dt.depthVisF(depthBuf, imBuf0, depthTransform.value);
-        
+    assert(transformList.count > 0);
+    Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
+    TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
+    transform.depthVisF(depthBuf, imBuf0, instance.value);
     [self executeTransformsStartingWithImBuf0];
 }
 
@@ -217,7 +225,7 @@ static PixelIndex_t dPI(int x, int y) {
     size_t destIndex;
 
     NSDate *startTime = [NSDate now];
-    for (int i=0; i<transformList.count; i++) {
+    for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.layoutNeeded) {  // abort our processing
             taskStatus = Stopped;
             return;
@@ -330,14 +338,6 @@ static PixelIndex_t dPI(int x, int y) {
         }
     }
     return destIndex;
-}
-
-
-- (Transform *) currentTransform {
-    if (transformList.count == 0)
-        return nil;
-    Transform *t = [transformList objectAtIndex:0]; // only one, for now
-    return t;
 }
 
 @end

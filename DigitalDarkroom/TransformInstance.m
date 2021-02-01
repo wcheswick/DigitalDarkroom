@@ -10,6 +10,7 @@
 
 @implementation TransformInstance
 
+@synthesize hasParams;
 @synthesize value;
 @synthesize remapBuf;
 @synthesize elapsedProcessingTime;
@@ -20,6 +21,7 @@
     self = [super init];
     if (self) {
         remapBuf = nil;
+        hasParams = transform.hasParameters;
         value = transform.value;
         timesCalled = 0;
         elapsedProcessingTime = 0;
@@ -28,11 +30,17 @@
 }
 
 - (NSString *) valueInfo {
-    return [NSString stringWithFormat:@"%4d", value];
+    if (hasParams)
+        return [NSString stringWithFormat:@"%d", value];
+    else
+        return @" ";
 }
 
 - (NSString *) timeInfo {
-    return [NSString stringWithFormat:@"%5.1f", 23.1];
+    if (timesCalled == 0 || elapsedProcessingTime == 0)
+        return @" ";
+    else
+        return [NSString stringWithFormat:@"%5.1f", 1000.0*elapsedProcessingTime/timesCalled];
 }
 
 @end

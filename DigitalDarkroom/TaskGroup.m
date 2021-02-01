@@ -35,7 +35,6 @@
 @synthesize transformSize;
 @synthesize imageOrientation;
 @synthesize groupName;
-@synthesize defaultDepthTransform;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -49,7 +48,6 @@
         bytesPerRow = 0;    // no current configuration
         transformSize = CGSizeZero; // unconfigured group
         tasksStatus = Stopped;
-        defaultDepthTransform = nil;
     }
     return self;
 }
@@ -81,14 +79,24 @@
     }
 }
 
-- (Task *) createTaskForTargetImageView:(UIImageView *) tiv named:(NSString *)tn {
+- (Task *) createTaskForTargetImageView:(UIImageView *) tiv
+                                  named:(NSString *)tn
+                         depthTransform:(Transform *)dt {
 //    assert(transformSize.width > 0);    // group must be configured for a size already
-    Task *newTask = [[Task alloc] initInGroup:self name:tn];
+    Task *newTask = [[Task alloc] initTaskNamed:tn inGroup:self usingDepth:dt];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
 //    [newTask configureTaskForSize];
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
+}
+
+- (void) configureGroupWithNewDepthTransform:(Transform *) dt {
+    for (Task *task in tasks) {
+        if (task.depthLocked)
+            continue;
+        [task useDepthTransform:dt];
+    }
 }
 
 - (void) removeAllTransforms {

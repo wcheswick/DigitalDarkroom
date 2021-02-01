@@ -16,17 +16,19 @@
 NS_ASSUME_NONNULL_BEGIN
 
 #define UNASSIGNED_TASK (-1)
+#define DEPTH_TRANSFORM 0
 
 @interface Task : NSObject {
     NSString *taskName;
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;
-    NSMutableArray *transformList;
+    NSMutableArray *transformList;  // first transform is the depth transform
     NSMutableArray *paramList;
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL enabled;   // if transform target is on-screen
+    BOOL depthLocked;   // if task is a depth button view, don't change it
 }
 
 @property (nonatomic, strong)   NSString *taskName;
@@ -36,9 +38,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
-@property (assign)              BOOL enabled;
+@property (assign)              BOOL enabled, depthLocked;
 
-- (id)initInGroup:(TaskGroup *) tg name:(NSString *) n;
+- (id)initTaskNamed:(NSString *) n
+            inGroup:(TaskGroup *) tg
+         usingDepth:(Transform *) dt;
 - (void) configureTaskForSize;
 - (void) configureTransformAtIndex:(size_t)ti;
 
@@ -46,16 +50,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) removeTransformAtIndex:(long) index;
 - (void) removeLastTransform;
 - (void) removeAllTransforms;
+- (void) useDepthTransform:(Transform *) transform;
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
-- (NSString *) infoForDepthProcessing;
-
-- (Transform *) currentTransform;
-
-- (void) useDepthTransform:(Transform * _Nullable) dt;
 
 @end
 

@@ -60,9 +60,13 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define EXECUTE_TEXT_FONT_SIZE  18
+#define EXECUTE_TEXT_FONT_SIZE  20
 #define EXECUTE_TEXT_MIN_LINES   3// 5   // number of total lines shown on screen (not yet)
 #define EXECUTE_H ((EXECUTE_TEXT_FONT_SIZE + 4) * EXECUTE_TEXT_MIN_LINES)
+
+#define EXECUTE_NAME_W  170
+#define EXECUTE_NUMBERS_W   80
+#define EXECUTE_BUTTON_W    60
 
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
@@ -91,6 +95,8 @@
 #define EXECUTE_STATS_TAG   1
 
 #define DEPTH_TABLE_SECTION     0
+
+#define DOING_3D    IS_3D_CAMERA(currentSource.sourceType)
 
 typedef enum {
     TransformTable,
@@ -132,10 +138,13 @@ typedef enum {
 @property (nonatomic, strong)   UIView *executeControlView;
 @property (nonatomic, strong)   UITableView *executingTable;
 @property (assign)              long selectedExecution;         // or NO_TRANSFORM
+@property (assign)              BOOL addTransformMode;
 
 // in sources view
-@property (nonatomic, strong)   UIButton *currentCameraButton;      // or nil if no camera is selected
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
+
+// in execute view
+@property (nonatomic, strong)   UIButton *undoButton, *addModeButton, *upButton, *downButton ;
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
@@ -157,7 +166,6 @@ typedef enum {
 
 @property (nonatomic, strong)   UIBarButtonItem *trashButton;
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
-@property (nonatomic, strong)   UIBarButtonItem *undoButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
@@ -200,8 +208,6 @@ typedef enum {
 
 @synthesize sourcesNavVC;
 
-@synthesize currentCameraButton;
-
 @synthesize inputSources, currentSource;
 @synthesize currentTransformIndex;
 @synthesize currentDepthTransformIndex;
@@ -211,17 +217,19 @@ typedef enum {
 
 @synthesize cameraController;
 
+@synthesize undoButton, addModeButton, upButton, downButton;
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize capturing, busy, needHires;
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
 @synthesize trashButton, hiresButton;
-@synthesize undoButton, snapButton;
+@synthesize snapButton;
 @synthesize stopCamera, startCamera;
 @synthesize imageOrientation;
 @synthesize displayMode;
 @synthesize uiMode;
+@synthesize addTransformMode;
 
 @synthesize rowIsCollapsed;
 @synthesize depthBuf;
@@ -260,10 +268,6 @@ typedef enum {
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
         //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
-        
-        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        screenTasks.defaultDepthTransform = depthTransform;
-        thumbTasks.defaultDepthTransform = depthTransform;
 
         transformTotalElapsed = 0;
         transformCount = 0;
@@ -271,10 +275,10 @@ typedef enum {
         thumbScrollView = nil;
         busy = NO;
         needHires = NO;
+        addTransformMode = NO;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
-        currentCameraButton = nil;
 
         inputSources = [[NSMutableArray alloc] init];
         
@@ -512,10 +516,6 @@ typedef enum {
                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
                    target:self
                    action:@selector(doRemoveAllTransforms:)];
-    undoButton = [[UIBarButtonItem alloc]
-                  initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                  target:self
-                  action:@selector(doRemoveLastTransform)];
     hiresButton = [[UIBarButtonItem alloc]
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
@@ -562,32 +562,57 @@ typedef enum {
     transformImageView.backgroundColor = NAVY_BLUE;
     [transformView addSubview:transformImageView];
     
-#ifdef OLD
-    executeControlView = [[UITextView alloc]
-                          initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
-    executeControlView.editable = NO;
-    executeControlView.allowsEditingTextAttributes = NO;
-    executeControlView.selectable = NO;
-    executeControlView.font = [UIFont boldSystemFontOfSize:EXECUTE_TEXT_FONT_SIZE];
-    executeControlView.layer.borderWidth = 0.5;
-    executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
-//    [transformView addSubview:executeControlView];
-#endif
-    
     executeControlView = [[UIView alloc] init];
-//    executeControlView.backgroundColor = [UIColor blackColor];
+    executeControlView.backgroundColor = [UIColor lightGrayColor];
     executeControlView.opaque = NO;
     executeControlView.layer.cornerRadius = 10.0;
     executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
     executeControlView.layer.borderWidth = 1.0;
     executeControlView.clipsToBounds = YES;
+    
+    undoButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    [undoButton setTitle:@"🗑"
+                       forState:UIControlStateNormal];
+    [undoButton addTarget:self
+                          action:@selector(doRemoveLastTransform)
+                forControlEvents:UIControlEventTouchUpInside];
+    [executeControlView addSubview:undoButton];
+
+    addModeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    addModeButton.titleLabel.font = [UIFont systemFontOfSize:50];
+    [addModeButton setTitle:@"–"
+                       forState:UIControlStateSelected];
+    [addModeButton setTitle:@"+"
+                       forState:UIControlStateNormal];
+    [addModeButton addTarget:self
+                          action:@selector(toggleAddMode:)
+                forControlEvents:UIControlEventTouchUpInside];
+    [executeControlView addSubview:addModeButton];
+
+    upButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    upButton.titleLabel.font = [UIFont systemFontOfSize:50];
+    [upButton setTitle:@"▲"
+                       forState:UIControlStateNormal];
+    [upButton addTarget:self
+                          action:@selector(doUp:)
+                forControlEvents:UIControlEventTouchUpInside];
+    [executeControlView addSubview:upButton];
+
+    downButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    downButton.titleLabel.font = [UIFont systemFontOfSize:50];
+    [downButton setTitle:@"▼"
+                       forState:UIControlStateNormal];
+    [downButton addTarget:self
+                          action:@selector(doDown:)
+                forControlEvents:UIControlEventTouchUpInside];
+    [executeControlView addSubview:downButton];
+    
     [transformView addSubview:executeControlView];
     
     executingTable = [[UITableView alloc]
                       initWithFrame:CGRectMake(0, LATER, LATER, LATER)
                       style:UITableViewStylePlain];
     executingTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
-    executingTable.separatorStyle = UITableViewCellSeparatorStyleNone;
     executingTable.delegate = self;
     executingTable.dataSource = self;
     executingTable.layer.borderWidth = 0.5;
@@ -619,6 +644,8 @@ typedef enum {
 }
 
 - (void) createThumbArray {
+//    NSLog(@"--- createThumbArray");
+
     UITapGestureRecognizer *touch;
     for (size_t i=0; i<transforms.depthTransformCount; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
@@ -641,14 +668,20 @@ typedef enum {
             NSLog(@"thumb image '%@' not found", file);
         }
 #endif
+        // a depth thumb always has only its own depth transform in the task transform list.
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
-        [task useDepthTransform:transform];
+        Task *task = [thumbTasks createTaskForTargetImageView:imageView
+                                                        named:transform.name
+                                               depthTransform:transform];
+        // these thumbs display their own transform of the depth input only, and don't
+        // change when they are used.
+        task.depthLocked = YES;
 
         thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
         [thumbArrayView addSubview:thumbView];
     }
     
+    Transform *depthTransform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
     for (size_t i=transforms.depthTransformCount; i<transforms.transforms.count; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
         UIView *thumbView = [self makeThumbForTransform:transform];
@@ -662,7 +695,9 @@ typedef enum {
         [thumbArrayView addSubview:thumbView];
         
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        Task *task = [thumbTasks createTaskForTargetImageView:imageView named:transform.name];
+        Task *task = [thumbTasks createTaskForTargetImageView:imageView
+                                                        named:transform.name
+                                               depthTransform:depthTransform];
         [task appendTransform:transform];
    }
 }
@@ -915,9 +950,9 @@ typedef enum {
         NSLog(@"        best size is %.0f x %.0f", captureSize.width, captureSize.height);
 #endif
     }
-    
-    // we now have the capture size.  Adjust the display size and thumb area size.
     assert(captureSize.height > 0);     // should never happen, of course
+
+    // we now have the capture size.  Adjust the display size and thumb area size.
 //    CGFloat aspectRatio = captureSize.width/captureSize.height;
     
     CGSize displaySize;     // compute our display size
@@ -961,21 +996,30 @@ typedef enum {
     f.size.width = transformImageView.frame.size.width - 2*INSET;
     executeControlView.frame = f;
     
-    f.origin.y = 0;
+    f.origin = CGPointMake(SEP, 0);
+    f.size.width = EXECUTE_BUTTON_W;
+    addModeButton.frame = f;
+    
+    f.origin.x = RIGHT(f) + SEP;
+    undoButton.frame = f;
+    
+    f.origin.x = executeControlView.frame.size.width - SEP - EXECUTE_BUTTON_W;
+    downButton.frame = f;
+    
+    f.origin.x -= SEP + f.size.width;
+    upButton.frame = f;
+    
+    f.origin.x = RIGHT(undoButton.frame) + SEP;
+    f.size.width = upButton.frame.origin.x - SEP - f.origin.x;
     executingTable.frame = CGRectInset(f, 2, 2);
-//    executingTable.backgroundColor = RETLO_GREEN;
-
-    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+    
     if (!screenTask) {
-        screenTask = [screenTasks createTaskForTargetImageView:transformImageView named:@"main"];
-        thumbTasks.defaultDepthTransform = depthTransform;
+        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+        screenTask = [screenTasks createTaskForTargetImageView:transformImageView
+                                                         named:@"main"
+                                                depthTransform:depthTransform];
     }
     [screenTasks configureGroupForSize: captureSize];
-    
-    if (IS_3D_CAMERA(currentSource.sourceType))
-        [screenTask useDepthTransform:depthTransform];
-    else
-        [screenTask useDepthTransform:nil];
 
     //    [externalTask configureForSize: processingSize];
 
@@ -1013,13 +1057,13 @@ typedef enum {
     } else {
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
     }
+    [executingTable setNeedsLayout];
 }
 
 - (void) adjustCameraButtons {
 //    NSLog(@"****** adjustButtons ******");
-    
-    trashButton.enabled = screenTask.transformList.count > 0;
-    undoButton.enabled = screenTask.transformList.count > 0;
+    trashButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
+    undoButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     stopCamera.enabled = capturing;
     startCamera.enabled = !stopCamera.enabled;
 }
@@ -1042,6 +1086,7 @@ CGFloat topOfNonDepthArray = 0;
 // scrolled off the top of the view.
 
 - (void) layoutThumbArray {
+    NSLog(@"--- layoutThumbArray");
     imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
     float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
@@ -1109,7 +1154,6 @@ CGFloat topOfNonDepthArray = 0;
                 [self adjustThumb:thumb selected:NO];
             }
         }
-
         
         thumb.frame = nextButtonFrame;
         thumb.hidden = NO;
@@ -1119,13 +1163,6 @@ CGFloat topOfNonDepthArray = 0;
         imageView.frame = imageRect;
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
-
-        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        if (is3D)
-            screenTasks.defaultDepthTransform = depthTransform;
-        else
-            screenTasks.defaultDepthTransform = nil;
-        thumbTasks.defaultDepthTransform = depthTransform;
 
         atStartOfRow = NO;
         thumbsH = BELOW(thumb.frame);
@@ -1185,25 +1222,22 @@ CGFloat topOfNonDepthArray = 0;
 // select a new depth visualization.
 - (IBAction) doSelectDepthVis:(UITapGestureRecognizer *)recognizer {
     UIView *newView = recognizer.view;
-    [self newDepthVizAtThumb:newView];
-}
-
-- (void) newDepthVizAtThumb:(UIView *) newView {
     long newTransformIndex = newView.tag - TRANSFORM_BASE_TAG;
     assert(newTransformIndex >= 0 && newTransformIndex < transforms.transforms.count);
     if (newTransformIndex == currentDepthTransformIndex)
         return;
-    
-    assert(currentDepthTransformIndex != NO_TRANSFORM);
-    UIView *oldSelectedDepthThumb = [thumbArrayView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
 
+    UIView *oldSelectedDepthThumb = [thumbArrayView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
     [self adjustThumb:oldSelectedDepthThumb selected:NO];
     [self adjustThumb:newView selected:YES];
-    
+
     currentDepthTransformIndex = newTransformIndex;
-    Transform *transform = [transforms transformAtIndex:currentDepthTransformIndex];
-    assert(transform.type == DepthVis);
-    [screenTask useDepthTransform:transform];
+    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+    assert(depthTransform.type == DepthVis);
+    
+    [screenTasks configureGroupWithNewDepthTransform:depthTransform];
+    [thumbTasks configureGroupWithNewDepthTransform:depthTransform];
+    
     [self saveDepthTransformName];
     [executingTable reloadData];
 }
@@ -1337,51 +1371,6 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustCameraButtons];
 }
 
-#ifdef notdef
-// sourcesScrollView contains the display size.  Layout the input source buttons
-// with the size and shape of this view in mind, and set the contentsize.
-// The buttonsview scrolls vertically only, so it doesn't confuse some
-// horizontal scrolling we do.  It must have one column, but may have more.
-
-#define THUMB_SEP   2
-
-- (void) layoutSourceButtonsViewInScrollView {
-    // remove previous buttons
-    [sourceButtonsView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    
-    CGRect f = sourcesScrollView.frame;
-    int thumbsPerRow = f.size.width / (SELECTION_THUMB_SIZE + THUMB_SEP);
-    if (thumbsPerRow < 1)
-        thumbsPerRow = 1;
-    
-    float thumbWidth = (f.size.width - (thumbsPerRow - 1)*THUMB_SEP)/thumbsPerRow;
-    f.size.width = thumbWidth;
-    f.size.height = thumbWidth;
-    f.origin = CGPointZero;
-    
-    CGFloat lastH = 0;
-    for (int i=0; i<inputSources.count; i++) {
-        InputSource *source = [inputSources objectAtIndex:i];
-        UIButton *but = source.button;
-        
-        BOOL newRow = (i % thumbsPerRow) == 0;
-        if (newRow) {
-            f.origin.x = 0;
-            if (i)
-                f.origin.y += f.size.height + THUMB_SEP;
-            lastH = f.origin.y + f.size.height;
-        } else
-            f.origin.x += f.size.width + THUMB_SEP;
-        but.frame = f;
-        [sourceButtonsView addSubview:but];
-    }
-    f.origin = CGPointZero;
-    f.size.width = thumbsPerRow * SELECTION_THUMB_SIZE + (thumbsPerRow - 1)*THUMB_SEP;
-    f.size.height = lastH;
-    sourcesScrollView.contentSize = f.size;
-}
-#endif
-
 - (void) updateStats: (float) fps
          depthPerSec:(float) depthps
        droppedPerSec:(float)dps
@@ -1402,6 +1391,9 @@ CGFloat topOfNonDepthArray = 0;
     BOOL isHidden = self.navigationController.navigationBarHidden;
     [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
     [self.navigationController setToolbarHidden:!isHidden animated:YES];
+}
+
+- (IBAction) didPanSceen:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
 }
 
 - (IBAction) doPauseCamera:(UIBarButtonItem *)recognizer {
@@ -1685,12 +1677,9 @@ UIImageOrientation lastOrientation;
     }
 }
 
-- (IBAction) doRemoveLastTransform {
-    [self removeScreenTransformAtIndex:screenTask.transformList.count - 1];
-    [screenTasks removeLastTransform];
-}
-
 - (void) removeScreenTransformAtIndex:(long) index {
+    if (index == 0)
+        return;
     [screenTask removeTransformAtIndex:index];
 }
 
@@ -1740,6 +1729,27 @@ UIImageOrientation lastOrientation;
     frameCount = depthCount = droppedCount = busyCount = 0;
     transformCount = transformTotalElapsed = 0;
 #endif
+}
+
+
+- (IBAction) doRemoveLastTransform {
+    [self removeScreenTransformAtIndex:screenTask.transformList.count - 1];
+    [screenTasks removeLastTransform];
+}
+
+- (IBAction) toggleAddMode:(UITapGestureRecognizer *)sender {
+    addTransformMode = !addTransformMode;
+    addModeButton.selected = addTransformMode;
+//    [executingTable setNeedsLayout];
+}
+
+- (IBAction) doUp:(UITapGestureRecognizer *)sender {
+    [executingTable setNeedsLayout];
+}
+
+- (IBAction) doDown:(UITapGestureRecognizer *)sender {
+    [executingTable setNeedsLayout];
+
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
@@ -1918,12 +1928,16 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 
 - (NSInteger)tableView:(UITableView *)tableView
  numberOfRowsInSection:(NSInteger)section {
-    size_t depthRow = IS_3D_CAMERA(currentSource.sourceType) ? 1: 0;
-    return screenTask.transformList.count + depthRow;
+    NSInteger rows = screenTask.transformList.count;
+    if (!IS_3D_CAMERA(currentSource.sourceType))    // don't show row zero
+        rows--;
+    return rows;
 }
 
 - (BOOL)tableView:(UITableView *)tableView
 canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (IS_3D_CAMERA(currentSource.sourceType) && indexPath.row == 0)
+        return NO;
     return YES;
 }
 
@@ -1947,40 +1961,35 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
 
     BOOL hasDepth = IS_3D_CAMERA(currentSource.sourceType);
-    NSString *info;
-    
-    if (hasDepth) {
-        if (indexPath.row == 0)
-            info = [screenTask infoForDepthProcessing];
-        else
-            info = [screenTask infoForScreenTransformAtIndex:indexPath.row - 1];
-    } else {
-        info = [screenTask infoForScreenTransformAtIndex:indexPath.row];
-    }
+    NSString *info = [screenTask infoForScreenTransformAtIndex:indexPath.row];
     NSArray *fields = [info componentsSeparatedByString:@";"];
     
     CGRect f = cell.contentView.frame;
-    f.size.width = f.size.width / 2.0;
+    f.size.width = EXECUTE_NAME_W;
+    f.origin.x = SEP;
     UILabel *name = [[UILabel alloc] initWithFrame:f];
     name.text = [fields objectAtIndex:0];
+    name.textAlignment = NSTextAlignmentLeft;
     [cell.contentView addSubview:name];
     
-    f.size.width = f.size.width / 2.0;
+    f.size.width = EXECUTE_NUMBERS_W;
     f.origin.x = RIGHT(name.frame);
     UILabel *param = [[UILabel alloc] initWithFrame:f];
     param.text = [fields objectAtIndex:1];
+    param.textAlignment = NSTextAlignmentRight;
     [cell.contentView addSubview:param];
     
-    f.size.width = f.size.width / 2.0;
+    f.size.width = EXECUTE_NUMBERS_W;
     f.origin.x = RIGHT(param.frame);
     UILabel *timing = [[UILabel alloc] initWithFrame:f];
-    timing.text = [fields objectAtIndex:1];
+    timing.text = [fields objectAtIndex:2];
+    timing.textAlignment = NSTextAlignmentRight;
+    [cell.contentView addSubview:timing];
     
     if (selectedExecution != NO_TRANSFORM && selectedExecution == indexPath.row) {
         cell.contentView.layer.borderColor = [UIColor blackColor].CGColor;
         cell.contentView.layer.borderWidth = 1.5;
     }
-    [cell.contentView addSubview:timing];
 
     return cell;
 }

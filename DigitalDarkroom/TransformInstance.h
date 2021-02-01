@@ -15,12 +15,14 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface TransformInstance : NSObject {
+    BOOL hasParams;
     int value;   // parameter setting and range for transform
     RemapBuf * __nullable __unsafe_unretained remapBuf;
     NSTimeInterval elapsedProcessingTime;
     size_t timesCalled;
 }
 
+@property (assign)              BOOL hasParams;
 @property (assign)              int value;
 @property (assign)              RemapBuf * __nullable __unsafe_unretained remapBuf;
 @property (assign)              NSTimeInterval elapsedProcessingTime;
