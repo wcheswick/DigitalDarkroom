@@ -143,6 +143,7 @@ typedef enum {
 @property (nonatomic, strong)   UITableView *executingTable;
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
 @property (assign)              BOOL plusMode;
+@property (assign)              BOOL executeDebug;
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
@@ -234,6 +235,7 @@ typedef enum {
 @synthesize displayMode;
 @synthesize uiMode;
 @synthesize plusMode;
+@synthesize executeDebug;
 
 @synthesize rowIsCollapsed;
 @synthesize depthBuf;
@@ -280,6 +282,7 @@ typedef enum {
         busy = NO;
         needHires = NO;
         plusMode = NO;
+        executeDebug = NO;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -573,6 +576,11 @@ typedef enum {
     executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
     executeControlView.layer.borderWidth = 1.0;
     executeControlView.clipsToBounds = YES;
+    
+    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc]
+                                               initWithTarget:self action:@selector(didLongPressExecute:)];
+    longPress.minimumPressDuration = 1.0;
+    [executeControlView addGestureRecognizer:longPress];
     
     undoButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     undoButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
@@ -1397,6 +1405,14 @@ CGFloat topOfNonDepthArray = 0;
     [self.navigationController setToolbarHidden:!isHidden animated:YES];
 }
 
+- (IBAction) didLongPressExecute:(UILongPressGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateBegan)
+        return;
+    executeDebug = !executeDebug;
+    NSLog(@" debugging execute: %d", executeDebug);
+    [self adjustExecuteDisplay];
+}
+
 - (IBAction) didPanSceen:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
 }
 
@@ -2003,12 +2019,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     param.textAlignment = NSTextAlignmentRight;
     [cell.contentView addSubview:param];
     
-    f.size.width = EXECUTE_NUMBERS_W;
-    f.origin.x = RIGHT(param.frame);
-    UILabel *timing = [[UILabel alloc] initWithFrame:f];
-    timing.text = [fields objectAtIndex:2];
-    timing.textAlignment = NSTextAlignmentRight;
-    [cell.contentView addSubview:timing];
+    if (executeDebug) {
+        f.size.width = EXECUTE_NUMBERS_W;
+        f.origin.x = RIGHT(param.frame);
+        UILabel *timing = [[UILabel alloc] initWithFrame:f];
+        timing.text = [fields objectAtIndex:2];
+        timing.textAlignment = NSTextAlignmentRight;
+        [cell.contentView addSubview:timing];
+    }
 
     if (selectedExecutionStep == taskTransformIndex) {
         cell.contentView.layer.borderWidth = EXECUTE_CELL_SELECTED_BORDER_W;

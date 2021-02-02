@@ -38,7 +38,7 @@
 
 - (NSString *) timeInfo {
     if (timesCalled == 0 || elapsedProcessingTime == 0)
-        return @" ";
+        return @"";
     else
         return [NSString stringWithFormat:@"%5.1f", 1000.0*elapsedProcessingTime/timesCalled];
 }
