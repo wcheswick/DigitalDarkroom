@@ -12,7 +12,7 @@
 
 // This is deprecated:
 typedef enum {
-    small,  // mostly for iPhones
+    small,  // mosly for iPhones
     medium,
     fullScreen,
     alternateScreen,

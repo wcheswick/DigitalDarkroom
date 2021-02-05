@@ -110,7 +110,9 @@
     captureDevice = [self captureDeviceForCamera:camera];
     assert(captureDevice);
     selectedCamera = camera;
+#ifdef DEBUG_CAMERA
     NSLog(@" -- camera selected: %d", selectedCamera);
+#endif
 }
 
 + (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
@@ -141,11 +143,12 @@
     deviceOrientation = [[UIDevice currentDevice] orientation];
     videoOrientation = [CameraController videoOrientationForDeviceOrientation];
     
+#ifdef DEBUG_ORIENTATION
     NSLog(@" +++ setupSessionForCurrentDeviceOrientation : %ld, %@",
           (long)[[UIDevice currentDevice] orientation],
           [CameraController dumpDeviceOrientationName:[[UIDevice currentDevice]
                                                         orientation]]);
-    
+#endif
     if (captureSession) {
         [captureSession stopRunning];
         captureSession = nil;
@@ -195,10 +198,12 @@
         }
         [depthConnection setVideoOrientation:videoOrientation];
         depthConnection.videoMirrored = (selectedCamera == Front3DCamera);
+#ifdef DEBUG_DEPTH
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
         NSLog(@"     activeDepthDataFormat: %@", captureDevice.activeDepthDataFormat.formatDescription);
-
+#endif
+        
         dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
         [depthOutput setDelegate:delegate callbackQueue:queue];
         depthOutput.filteringEnabled = YES;
@@ -214,8 +219,10 @@
         AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
         videoConnection.videoMirrored = (selectedCamera != FrontCamera);    // XXX this seems exactly backwards, but it works
+#ifdef DEBUG_ORIENTATION
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
+#endif
 
         dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
         dataOutput.videoSettings = @{
@@ -229,7 +236,7 @@
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
-    NSLog(@" *** video/depth sessions set up");
+//    NSLog(@" *** video/depth sessions set up");
 }
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format {
@@ -350,14 +357,18 @@
 }
 
 - (void) startCamera {
+#ifdef DEBUG_CAMERA
     NSLog(@">>>>> startCamera");
+#endif
     if (![self isCameraOn])
         [captureSession startRunning];
 }
 
 - (void) stopCamera {
     if ([self isCameraOn]) {
+#ifdef DEBUG_CAMERA
         NSLog(@"<<<<< stopCamera");
+#endif
         [captureSession stopRunning];
     }
 }

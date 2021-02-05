@@ -71,6 +71,8 @@
 #define EXECUTE_BUTTON_FONT_H    50
 #define EXECUTE_CELL_SELECTED_BORDER_W  3.0
 #define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5
+#define EXECUTE_STATUS_W    30
+#define EXECUTE_STATUS_FONT_SIZE    14
 
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
@@ -158,7 +160,6 @@ typedef enum {
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-@property (assign)              long currentTransformIndex;      // or NO_TRANSFORM
 @property (assign)              long currentDepthTransformIndex; // or NO_TRANSFORM
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
@@ -176,7 +177,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
 
-@property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
+@property (assign, atomic)      BOOL capturing, reticle;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
 @property (assign)              BOOL needHires;
 
@@ -214,7 +215,6 @@ typedef enum {
 @synthesize sourcesNavVC;
 
 @synthesize inputSources, currentSource;
-@synthesize currentTransformIndex;
 @synthesize currentDepthTransformIndex;
 
 @synthesize nextSource;
@@ -225,7 +225,7 @@ typedef enum {
 @synthesize undoButton, addModeButton, upButton, downButton;
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
-@synthesize capturing, busy, needHires;
+@synthesize capturing, reticle, busy, needHires;
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
 @synthesize trashButton, hiresButton;
@@ -252,7 +252,6 @@ typedef enum {
     if (self) {
         transforms = [[Transforms alloc] init];
         currentDepthTransformIndex = NO_TRANSFORM;
-        currentTransformIndex = NO_TRANSFORM;   // XXX this is going to be a list
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
@@ -283,6 +282,7 @@ typedef enum {
         needHires = NO;
         plusMode = NO;
         executeDebug = NO;
+        reticle = NO;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -337,7 +337,9 @@ typedef enum {
             for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
                 nextSource = [inputSources objectAtIndex:sourceIndex];
                 if ([lastSourceUsedLabel isEqual:nextSource.label]) {
+#ifdef DEBUG_SOURCE
                     NSLog(@"  - initializing source index %d", sourceIndex);
+#endif
                     break;
                 }
             }
@@ -347,7 +349,9 @@ typedef enum {
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
                     nextSource = [inputSources objectAtIndex:sourceIndex];
+#ifdef DEBUG_SOURCE
                     NSLog(@"  - no previous source, using %d, %@", sourceIndex, nextSource.label);
+#endif
                     break;
                 }
             }
@@ -505,20 +509,15 @@ typedef enum {
                                     initWithCustomView:sourceSelection];
     self.navigationItem.leftBarButtonItem = leftBarItem;
     
-    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
-                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                      target:nil action:nil];
-    
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
     fixedSpace.width = 20;
     
-#define SLIDER_OFF  (-1)
-    UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
-                                   target:self
-                                   action:@selector(doSave:)];
+//    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
+//                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+//                                      target:nil action:nil];
+
     trashButton = [[UIBarButtonItem alloc]
                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
                    target:self
@@ -526,13 +525,25 @@ typedef enum {
     hiresButton = [[UIBarButtonItem alloc]
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
+    UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
+                                   target:self
+                                   action:@selector(doSave:)];
+    UIBarButtonItem *undoBar = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                                   target:self
+                                   action:@selector(doSave:)];
     
-    stopCamera = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPause
-                                                               target:self
-                                                               action:@selector(doPauseCamera:)];
-    startCamera = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPlay
-                                                                target:self
-                                                                action:@selector(doResumeCamera:)];
+    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               saveButton,
+                                               hiresButton,
+                                               fixedSpace,
+                                               undoBar,
+                                               fixedSpace,
+                                               trashButton,
+                                               nil];
+
+#define SLIDER_OFF  (-1)
     
     //    UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
     //    [self displayValueSlider:SLIDER_OFF];     // XXX not displayed, for the moment
@@ -540,14 +551,7 @@ typedef enum {
     NSArray *toolBarItems = [[NSArray alloc] initWithObjects:
                              stopCamera,
                              startCamera,
-                             flexibleSpace,
-                             hiresButton,
-                             fixedSpace,
-                             trashButton,
-                             fixedSpace,
-                             undoButton,
-                             fixedSpace,
-                             saveButton, nil];
+                             nil];
     self.toolbarItems = toolBarItems;
     
     containerView = [[UIView alloc] init];
@@ -561,7 +565,13 @@ typedef enum {
     UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [touch setNumberOfTouchesRequired:1];
-    [transformImageView addGestureRecognizer:touch];
+    [transformView addGestureRecognizer:touch];
+    
+    UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didLongPressScreen:)];
+    longPressScreen.minimumPressDuration = 1.0;
+    [transformView addGestureRecognizer:longPressScreen];
+    
     [containerView addSubview:transformView];
     
     transformImageView = [[UIImageView alloc] init];
@@ -569,6 +579,11 @@ typedef enum {
     transformImageView.backgroundColor = NAVY_BLUE;
     [transformView addSubview:transformImageView];
     
+    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+    screenTask = [screenTasks createTaskForTargetImageView:transformImageView
+                                                     named:@"main"
+                                            depthTransform:depthTransform];
+
     executeControlView = [[UIView alloc] init];
     executeControlView.backgroundColor = [UIColor lightGrayColor];
     executeControlView.opaque = NO;
@@ -584,7 +599,7 @@ typedef enum {
     
     undoButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     undoButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
-    [undoButton setTitle:@"🗑"
+    [undoButton setTitle:@"⟲"
                        forState:UIControlStateNormal];
     [undoButton addTarget:self
                           action:@selector(doRemoveLastTransform)
@@ -669,19 +684,7 @@ typedef enum {
                  action:@selector(doTapDepthVis:)];
         [thumbView addGestureRecognizer:touch];
         
-#ifdef OLD
-        // no live updates for depth views for now
-        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        NSString *file = [@"images/" stringByAppendingPathComponent:transform.name];
-        NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@"jpeg"];
-        if (imagePath) {
-            imageView.contentMode = UIViewContentModeScaleAspectFit;
-            imageView.image = [UIImage imageWithContentsOfFile:imagePath];
-        } else {
-            NSLog(@"thumb image '%@' not found", file);
-        }
-#endif
-        // a depth thumb always has only its own depth transform in the task transform list.
+         // a depth thumb always has only its own depth transform in the task transform list.
         UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         Task *task = [thumbTasks createTaskForTargetImageView:imageView
                                                         named:transform.name
@@ -827,8 +830,7 @@ typedef enum {
     
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
-    self.navigationController.toolbarHidden = NO;
-    self.navigationController.toolbar.opaque = (uiMode == oliveUI);
+    self.navigationController.toolbarHidden = YES;
     
     // set up new source, if needed
     if (nextSource) {
@@ -882,10 +884,12 @@ typedef enum {
     imageOrientation = [self imageOrientationForDeviceOrientation];
     
     // not room for title in iphones in portrait mode
+#ifdef DEBUG_ORIENTATION
     NSLog(@"device idiom: %ld", (long)[UIDevice currentDevice].userInterfaceIdiom);
     NSLog(@"device is %@", [CameraController
                                      dumpDeviceOrientationName:currentDeviceOrientation]);
     NSLog(@" is portrait: %d", UIDeviceOrientationIsPortrait(currentDeviceOrientation));
+#endif
     if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone ||
         !UIDeviceOrientationIsPortrait(currentDeviceOrientation))
         self.title = @"Digital Darkroom";
@@ -1026,12 +1030,6 @@ typedef enum {
     f.size.width = upButton.frame.origin.x - SEP - f.origin.x;
     executingTable.frame = CGRectInset(f, 2, 2);
     
-    if (!screenTask) {
-        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        screenTask = [screenTasks createTaskForTargetImageView:transformImageView
-                                                         named:@"main"
-                                                depthTransform:depthTransform];
-    }
     [screenTasks configureGroupForSize: captureSize];
 
     //    [externalTask configureForSize: processingSize];
@@ -1099,7 +1097,9 @@ CGFloat topOfNonDepthArray = 0;
 // scrolled off the top of the view.
 
 - (void) layoutThumbArray {
+#ifdef DEBUG_LAYOUT
     NSLog(@"--- layoutThumbArray");
+#endif
     imageRect = CGRectZero;
     imageRect.size.width = OLIVE_W;
     float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
@@ -1140,7 +1140,7 @@ CGFloat topOfNonDepthArray = 0;
     // which are first.
     
     CGFloat thumbsH = 0;
-    BOOL is3D = IS_3D_CAMERA(currentSource.sourceType);
+    BOOL is3D = DOING_3D;
     
     for (size_t i=0; i<transforms.transforms.count; i++) {   // position depth transforms
         Transform *transform = [transforms.transforms objectAtIndex:i];
@@ -1161,11 +1161,7 @@ CGFloat topOfNonDepthArray = 0;
                 continue;
             }
         } else {    // regular transform
-            if (currentTransformIndex != NO_TRANSFORM && i == currentTransformIndex) {
-                [self adjustThumb:thumb selected:YES];
-            } else {
-                [self adjustThumb:thumb selected:NO];
-            }
+            [self adjustThumb:thumb selected:NO];
         }
         
         thumb.frame = nextButtonFrame;
@@ -1193,7 +1189,7 @@ CGFloat topOfNonDepthArray = 0;
     thumbScrollView.contentOffset = thumbArrayView.frame.origin;
     
     // adjust scroll depending on depth buttons
-    if (IS_3D_CAMERA(currentSource.sourceType))
+    if (DOING_3D)
         [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
     else
         [thumbScrollView setContentOffset:CGPointMake(0, topOfNonDepthArray) animated:YES];
@@ -1267,31 +1263,42 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) transformThumbTapped: (UIView *) tappedThumb {
-    [screenTasks removeAllTransforms];  // currently, no stacked transforms
-    // at present, only one view selectable
-    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
-    if (tappedTransformIndex == currentTransformIndex) {
-        // tapped the current one.  Deselect, and we are done.
-        [self adjustThumb:tappedThumb selected:NO];
-        currentTransformIndex = NO_TRANSFORM;
-        [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
-        [self adjustExecuteDisplay];
-        return;
+    [executingTable beginUpdates];
+    if (!plusMode) {
+        [self deleteLastScreenTransform];
     }
-    
-    // If there is an old one, deselect it
-    if (currentTransformIndex != NO_TRANSFORM) {
-        UIView *oldSelectedThumb = [thumbArrayView viewWithTag:currentTransformIndex + TRANSFORM_BASE_TAG];
-        assert(oldSelectedThumb);
-        [self adjustThumb:oldSelectedThumb selected:NO];
-    }
-    
-    [self adjustThumb:tappedThumb selected:YES];
-    currentTransformIndex = tappedTransformIndex;
 
-    Transform *tappedTransform = [transforms transformAtIndex:currentTransformIndex];
+    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
+    Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     [screenTask appendTransform:tappedTransform];
+    size_t rowToAppend = screenTask.transformList.count - 1;
+    if (!DOING_3D)
+        rowToAppend--;
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:
+                              rowToAppend inSection:0];
+    [executingTable insertRowsAtIndexPaths: [NSArray arrayWithObject: indexPath]
+                          withRowAnimation:UITableViewRowAnimationTop];
+    selectedExecutionStep = screenTask.transformList.count - 1;
     [self adjustExecuteDisplay];
+    [executingTable endUpdates];
+}
+
+- (void) deleteLastScreenTransform {
+    assert(screenTask.transformList.count);
+    if (screenTask.transformList.count == DEPTH_TRANSFORM+1)
+        return;
+    NSLog(@"  %lu", (unsigned long)screenTask.transformList.count);
+    [screenTasks removeLastTransform];
+
+    long rowToDelete = screenTask.transformList.count - 1;
+    NSLog(@"  %lu %ld", (unsigned long)screenTask.transformList.count, rowToDelete);
+    if (DOING_3D)
+        rowToDelete--;
+    NSLog(@"  %lu %ld", (unsigned long)screenTask.transformList.count, rowToDelete);
+
+    [executingTable deleteRowsAtIndexPaths:
+     [NSArray arrayWithObject:[NSIndexPath indexPathForRow: rowToDelete inSection:0]]
+                          withRowAnimation:UITableViewRowAnimationTop];
 }
 
 - (void) adjustThumb:(UIView *) thumb selected:(BOOL)selected {
@@ -1400,9 +1407,25 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
-    BOOL isHidden = self.navigationController.navigationBarHidden;
-    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
-    [self.navigationController setToolbarHidden:!isHidden animated:YES];
+//    BOOL isHidden = self.navigationController.navigationBarHidden;
+//    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
+//    [self.navigationController setToolbarHidden:!isHidden animated:YES];
+    capturing = !capturing;
+    if (capturing) {
+        if (![cameraController isCameraOn]) {
+            [cameraController startCamera];
+        }
+    } else {
+        if ([cameraController isCameraOn]) {
+            [cameraController stopCamera];
+        }
+    }
+}
+
+- (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateBegan)
+        return;
+    reticle = !reticle;
 }
 
 - (IBAction) didLongPressExecute:(UILongPressGestureRecognizer *)recognizer {
@@ -1414,22 +1437,6 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) didPanSceen:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
-}
-
-- (IBAction) doPauseCamera:(UIBarButtonItem *)recognizer {
-    if ([cameraController isCameraOn]) {
-        [cameraController stopCamera];
-    }
-    capturing = NO;
-    [self adjustCameraButtons];
-}
-
-- (IBAction) doResumeCamera:(UIBarButtonItem *)recognizer {
-    if (![cameraController isCameraOn]) {
-        [cameraController startCamera];
-    }
-    capturing = YES;
-    [self adjustCameraButtons];
 }
 
 - (IBAction) doSave:(UIBarButtonItem *)barButton {
@@ -1701,6 +1708,9 @@ UIImageOrientation lastOrientation;
     if (index == 0)
         return;
     [screenTask removeTransformAtIndex:index];
+    if (index == selectedExecutionStep)
+        selectedExecutionStep--;
+    [self adjustExecuteDisplay];
 }
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
@@ -1753,15 +1763,14 @@ UIImageOrientation lastOrientation;
 
 
 - (IBAction) doRemoveLastTransform {
-    [self removeScreenTransformAtIndex:screenTask.transformList.count - 1];
-    [screenTasks removeLastTransform];
+    [self removeScreenTransformAtIndex: screenTask.transformList.count - 1];
 }
 
 - (IBAction) togglePlusMode:(UITapGestureRecognizer *)sender {
     plusMode = !plusMode;
     NSLog(@" plusMode = %d", plusMode);
     addModeButton.selected = plusMode;
-//    [executingTable setNeedsLayout];
+    [self adjustExecuteDisplay];
 }
 
 - (IBAction) doUp:(UITapGestureRecognizer *)sender {
@@ -1776,12 +1785,16 @@ UIImageOrientation lastOrientation;
 
 - (void) adjustExecuteDisplay {
     size_t firstTrans = DOING_3D ? 0 : 1;
+    if (selectedExecutionStep < firstTrans)
+        selectedExecutionStep = firstTrans;
     if (selectedExecutionStep >= screenTask.transformList.count)
         selectedExecutionStep = screenTask.transformList.count - 1;
     upButton.enabled = selectedExecutionStep > firstTrans;
     downButton.enabled = selectedExecutionStep >= firstTrans &&
         selectedExecutionStep < screenTask.transformList.count - 1;
     [executingTable reloadData];
+    [executingTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
+                                                      animated:YES];
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
@@ -1961,14 +1974,18 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 - (NSInteger)tableView:(UITableView *)tableView
  numberOfRowsInSection:(NSInteger)section {
     NSInteger rows = screenTask.transformList.count;
-    if (!IS_3D_CAMERA(currentSource.sourceType))    // don't show row zero
+    assert(rows >= 1);
+    if (!DOING_3D)    // don't show row zero
         rows--;
+    if (plusMode)
+        rows++;
+    NSLog(@" **** rows in section: %ld, selected = %ld", (long)rows, selectedExecutionStep);
     return rows;
 }
 
 - (BOOL)tableView:(UITableView *)tableView
 canEditRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (IS_3D_CAMERA(currentSource.sourceType) && indexPath.row == 0)
+    if (DOING_3D && indexPath.row == 0)
         return NO;
     return YES;
 }
@@ -1989,7 +2006,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (UITableViewCell *)tableView:(UITableView *)tableView
          cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    static NSString *CellIdentifier = @"ExecuteCell";
+    static NSString *CellIdentifier = @"ExecuteTableCell";
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:CellIdentifier];
     if (cell == nil) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle
@@ -1998,26 +2015,49 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     
     SET_VIEW_HEIGHT(cell, tableView.rowHeight);
     [cell.contentView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-
-//    BOOL hasDepth = IS_3D_CAMERA(currentSource.sourceType);
     size_t taskTransformIndex = DOING_3D ? indexPath.row : indexPath.row+1;
+
+    UILabel *statusView = [[UILabel alloc]
+                           initWithFrame:CGRectMake(0, 0, EXECUTE_STATUS_W, cell.contentView.frame.size.height)];
+    statusView.textAlignment = NSTextAlignmentLeft;
+    [cell.contentView addSubview:statusView];
+    
+    if (plusMode) {
+        if (taskTransformIndex == screenTask.transformList.count) {
+            // off the bottom of the list
+            statusView.text = @" +";
+            return cell;
+        }
+    } else {
+        if (taskTransformIndex == screenTask.transformList.count - 1) {
+            // last displayed entry, don't show
+        }
+    }
+    statusView.text = selectedExecutionStep == taskTransformIndex ? @" ⇒" : @"";
+    
+    CGRect f = statusView.frame;
+    f.origin.x = RIGHT(f);
+    f.size.width -= f.origin.x;
+    UIView *infoView = [[UIView alloc] initWithFrame:f];
+    [cell.contentView addSubview:infoView];
+    
     NSString *info = [screenTask infoForScreenTransformAtIndex:taskTransformIndex];
     NSArray *fields = [info componentsSeparatedByString:@";"];
     
-    CGRect f = cell.contentView.frame;
+    f = infoView.frame;
     f.size.width = EXECUTE_NAME_W;
     f.origin.x = SEP;
     UILabel *name = [[UILabel alloc] initWithFrame:f];
     name.text = [fields objectAtIndex:0];
     name.textAlignment = NSTextAlignmentLeft;
-    [cell.contentView addSubview:name];
+    [infoView addSubview:name];
     
     f.size.width = EXECUTE_NUMBERS_W;
     f.origin.x = RIGHT(name.frame);
     UILabel *param = [[UILabel alloc] initWithFrame:f];
     param.text = [fields objectAtIndex:1];
     param.textAlignment = NSTextAlignmentRight;
-    [cell.contentView addSubview:param];
+    [infoView addSubview:param];
     
     if (executeDebug) {
         f.size.width = EXECUTE_NUMBERS_W;
@@ -2025,16 +2065,21 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         UILabel *timing = [[UILabel alloc] initWithFrame:f];
         timing.text = [fields objectAtIndex:2];
         timing.textAlignment = NSTextAlignmentRight;
-        [cell.contentView addSubview:timing];
+        [infoView addSubview:timing];
     }
+    
+    cell.selected = (selectedExecutionStep == taskTransformIndex);
 
+#ifdef NOTNEEDED
     if (selectedExecutionStep == taskTransformIndex) {
-        cell.contentView.layer.borderWidth = EXECUTE_CELL_SELECTED_BORDER_W;
-        cell.contentView.layer.cornerRadius = EXECUTE_CELL_SELECTED_CORNER_RADIUS;
+        infoView.layer.borderWidth = EXECUTE_CELL_SELECTED_BORDER_W;
+        infoView.layer.cornerRadius = EXECUTE_CELL_SELECTED_CORNER_RADIUS;
     } else {
-        cell.contentView.layer.borderWidth = 0;
-        cell.contentView.layer.cornerRadius = 0;
+        infoView.layer.borderWidth = 0;
+        infoView.layer.cornerRadius = 0;
     }
+#endif
+    
     return cell;
 }
 
