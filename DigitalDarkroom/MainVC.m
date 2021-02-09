@@ -12,6 +12,7 @@
 
 #import "Transforms.h"  // includes DepthImage.h
 #import "TaskCtrl.h"
+#import "OptionsVC.h"
 #import "Defines.h"
 
 // last settings
@@ -144,14 +145,12 @@ typedef enum {
 @property (nonatomic, strong)   UIView *executeControlView;
 @property (nonatomic, strong)   UITableView *executingTable;
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
-@property (assign)              BOOL plusMode;
-@property (assign)              BOOL executeDebug;
+@property (nonatomic, strong)   Options *options;
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
-// in execute view
-@property (nonatomic, strong)   UIButton *undoButton, *addModeButton, *upButton, *downButton ;
+@property (nonatomic, strong)   UIButton *addModeButton;
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
@@ -170,19 +169,18 @@ typedef enum {
 @property (assign)              int transformCount;
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 
-@property (nonatomic, strong)   UIBarButtonItem *trashButton;
+@property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
+@property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
 
-@property (assign, atomic)      BOOL capturing, reticle;         // camera is on and getting processed
+@property (assign, atomic)      BOOL capturing;         // camera is on and getting processed
 @property (assign)              BOOL busy;              // transforming is busy, don't start a new one
-@property (assign)              BOOL needHires;
 
 @property (assign)              UIImageOrientation imageOrientation;
-@property (assign)              DisplayMode_t displayMode;
 @property (assign)              UIMode_t uiMode;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
@@ -213,6 +211,7 @@ typedef enum {
 @synthesize thumbArrayView;
 
 @synthesize sourcesNavVC;
+@synthesize options;
 
 @synthesize inputSources, currentSource;
 @synthesize currentDepthTransformIndex;
@@ -222,20 +221,19 @@ typedef enum {
 
 @synthesize cameraController;
 
-@synthesize undoButton, addModeButton, upButton, downButton;
+@synthesize addModeButton;
+@synthesize undoBarButton;
+
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
-@synthesize capturing, reticle, busy, needHires;
+@synthesize capturing, busy;
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
-@synthesize trashButton, hiresButton;
+@synthesize trashBarButton, hiresButton;
 @synthesize snapButton;
 @synthesize stopCamera, startCamera;
 @synthesize imageOrientation;
-@synthesize displayMode;
 @synthesize uiMode;
-@synthesize plusMode;
-@synthesize executeDebug;
 
 @synthesize rowIsCollapsed;
 @synthesize depthBuf;
@@ -279,10 +277,7 @@ typedef enum {
         depthBuf = nil;
         thumbScrollView = nil;
         busy = NO;
-        needHires = NO;
-        plusMode = NO;
-        executeDebug = NO;
-        reticle = NO;
+        options = [[Options alloc] init];
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -326,8 +321,6 @@ typedef enum {
         }
 #endif
         
-        [self newDisplayMode:medium];
-        
         nextSource = nil;
         lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_FILE_SOURCE_KEY];
@@ -357,7 +350,7 @@ typedef enum {
             }
         }
         currentSource = nextSource;
-        selectedExecutionStep = 0;   // start at the first one
+        selectedExecutionStep = 0;  // depth is selected, even if not available
     }
     return self;
 }
@@ -411,6 +404,7 @@ typedef enum {
 }
 #endif
 
+#ifdef notdef
 - (void) newDisplayMode:(DisplayMode_t) newMode {
     switch (newMode) {
         case fullScreen:
@@ -435,6 +429,7 @@ typedef enum {
     }
     displayMode = newMode;
 }
+#endif
 
 - (void) addCameraSource:(Cameras)c label:(NSString *)l {
     InputSource *is = [[InputSource alloc] init];
@@ -494,9 +489,10 @@ typedef enum {
     }
     [sourceNames addObject:@"File"];
     
+    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
+    
     sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
-    sourceSelection.frame = CGRectMake(0, 0,
-                                       100, self.navigationController.navigationBar.frame.size.height);
+    sourceSelection.frame = CGRectMake(0, 0, 100, navBarH);
     [sourceSelection addTarget:self action:@selector(selectSource:)
               forControlEvents: UIControlEventValueChanged];
     sourceSelection.momentary = NO;
@@ -517,11 +513,22 @@ typedef enum {
 //    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
 //                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
 //                                      target:nil action:nil];
+    
+    UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
+                                        initWithTitle:@"⋯"
+                                        style:UIBarButtonItemStylePlain
+                                        target:self
+                                        action:@selector(goSelectOptions:)];
+    [otherMenuButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
+        //NSBaselineOffsetAttributeName: @-3
+    } forState:UIControlStateNormal];
 
-    trashButton = [[UIBarButtonItem alloc]
+    trashBarButton = [[UIBarButtonItem alloc]
                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
                    target:self
                    action:@selector(doRemoveAllTransforms:)];
+    
     hiresButton = [[UIBarButtonItem alloc]
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
@@ -529,18 +536,33 @@ typedef enum {
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                    target:self
                                    action:@selector(doSave:)];
+    
+#ifdef NOTDEF
     UIBarButtonItem *undoBar = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                                   target:self
-                                   action:@selector(doSave:)];
+                                initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                                target:self
+                                action:@selector(doRemoveLastTransform)];
+#endif
+    
+    undoBarButton = [[UIBarButtonItem alloc]
+                                       initWithTitle:@"⟲"
+                                       style:UIBarButtonItemStylePlain
+                                       target:self
+                                       action:@selector(doRemoveLastTransform)];
+    [undoBarButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont systemFontOfSize:navBarH],
+        // gives constraint notifications:
+        NSBaselineOffsetAttributeName: @3
+    } forState:UIControlStateNormal];
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               otherMenuButton,
+                                               fixedSpace,
                                                saveButton,
-                                               hiresButton,
                                                fixedSpace,
-                                               undoBar,
+                                               undoBarButton,
                                                fixedSpace,
-                                               trashButton,
+                                               trashBarButton,
                                                nil];
 
 #define SLIDER_OFF  (-1)
@@ -567,6 +589,19 @@ typedef enum {
     [touch setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:touch];
     
+    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                           action:@selector(doDown:)];
+    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
+    [transformView addGestureRecognizer:swipeDown];
+    
+    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                         action:@selector(doUp:)];
+    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
+    [transformView addGestureRecognizer:swipeUp];
+
+    
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didLongPressScreen:)];
     longPressScreen.minimumPressDuration = 1.0;
@@ -585,8 +620,8 @@ typedef enum {
                                             depthTransform:depthTransform];
 
     executeControlView = [[UIView alloc] init];
-    executeControlView.backgroundColor = [UIColor lightGrayColor];
-    executeControlView.opaque = NO;
+    executeControlView.backgroundColor = [UIColor clearColor];
+    executeControlView.opaque = YES;
     executeControlView.layer.cornerRadius = 10.0;
     executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
     executeControlView.layer.borderWidth = 1.0;
@@ -597,15 +632,18 @@ typedef enum {
     longPress.minimumPressDuration = 1.0;
     [executeControlView addGestureRecognizer:longPress];
     
-    undoButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    undoButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
-    [undoButton setTitle:@"⟲"
-                       forState:UIControlStateNormal];
-    [undoButton addTarget:self
-                          action:@selector(doRemoveLastTransform)
-                forControlEvents:UIControlEventTouchUpInside];
-    [executeControlView addSubview:undoButton];
+    executingTable = [[UITableView alloc]
+                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
+                      style:UITableViewStylePlain];
+    executingTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
+    executingTable.delegate = self;
+    executingTable.dataSource = self;
+    executingTable.layer.borderWidth = 0.5;
+    executingTable.backgroundColor = [UIColor clearColor];
+    executingTable.opaque = NO;
+    [executeControlView addSubview:executingTable];
 
+#ifdef NOTDERF
     addModeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     addModeButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
     [addModeButton setTitle:@"+"
@@ -616,50 +654,26 @@ typedef enum {
                           action:@selector(togglePlusMode:)
                 forControlEvents:UIControlEventTouchUpInside];
     [executeControlView addSubview:addModeButton];
-
-    upButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    upButton.titleLabel.font = [UIFont systemFontOfSize:50];
-    [upButton setTitle:@"▲"
-                       forState:UIControlStateNormal];
-    [upButton addTarget:self
-                          action:@selector(doUp:)
-                forControlEvents:UIControlEventTouchUpInside];
-    [executeControlView addSubview:upButton];
-
-    downButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    downButton.titleLabel.font = [UIFont systemFontOfSize:50];
-    [downButton setTitle:@"▼"
-                       forState:UIControlStateNormal];
-    [downButton addTarget:self
-                          action:@selector(doDown:)
-                forControlEvents:UIControlEventTouchUpInside];
-    [executeControlView addSubview:downButton];
+#endif
     
     [transformView addSubview:executeControlView];
-    
-    executingTable = [[UITableView alloc]
-                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
-                      style:UITableViewStylePlain];
-    executingTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
-    executingTable.delegate = self;
-    executingTable.dataSource = self;
-    executingTable.layer.borderWidth = 0.5;
-    [executeControlView addSubview:executingTable];
      
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
-    thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+    //thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
     thumbScrollView.showsVerticalScrollIndicator = YES;
     thumbScrollView.userInteractionEnabled = YES;
     thumbScrollView.exclusiveTouch = NO;
     thumbScrollView.bounces = NO;
     thumbScrollView.delaysContentTouches = YES;
     thumbScrollView.canCancelContentTouches = YES;
+    thumbScrollView.delegate = self;
+    thumbScrollView.scrollEnabled = YES;
     [containerView addSubview:thumbScrollView];
     
     thumbArrayView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
     [thumbScrollView addSubview:thumbArrayView];
-    [containerView addSubview:thumbArrayView];
+    [containerView addSubview:thumbScrollView];
 
     [self createThumbArray];    // animate to correct positions later
     
@@ -890,8 +904,7 @@ typedef enum {
                                      dumpDeviceOrientationName:currentDeviceOrientation]);
     NSLog(@" is portrait: %d", UIDeviceOrientationIsPortrait(currentDeviceOrientation));
 #endif
-    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone ||
-        !UIDeviceOrientationIsPortrait(currentDeviceOrientation))
+    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone)
         self.title = @"Digital Darkroom";
     else
         self.title = @"";
@@ -952,7 +965,7 @@ typedef enum {
         captureSize = currentSource.imageSize;
         NSLog(@"file size is %.0f x %.0f", captureSize.width, captureSize.height);
     } else {    // figure out camera configuration
-        if (needHires) {
+        if (options.needHires) {
             captureSize = CGSizeZero;   // largest available
         } else if (externalTasks) {
             captureSize = externalTasks.transformSize;  // assume they are the largest
@@ -1007,27 +1020,12 @@ typedef enum {
     f.size = displaySize;
     transformImageView.frame = f;
 
+    // for now, executing table transparently overlays the transform image
     f.origin.x = transformImageView.frame.origin.x + INSET;
-    f.origin.y = BELOW(transformImageView.frame) + SEP;
     f.size.height = EXECUTE_H;
+    f.origin.y = transformImageView.frame.size.height - f.size.height - SEP;
     f.size.width = transformImageView.frame.size.width - 2*INSET;
     executeControlView.frame = f;
-    
-    f.origin = CGPointMake(SEP, 0);
-    f.size.width = EXECUTE_BUTTON_W;
-    undoButton.frame = f;
-    
-    f.origin.x = RIGHT(f) + SEP;
-    addModeButton.frame = f;
-
-    f.origin.x = executeControlView.frame.size.width - SEP - EXECUTE_BUTTON_W;
-    downButton.frame = f;
-    
-    f.origin.x -= SEP + f.size.width;
-    upButton.frame = f;
-    
-    f.origin.x = RIGHT(addModeButton.frame) + SEP;
-    f.size.width = upButton.frame.origin.x - SEP - f.origin.x;
     executingTable.frame = CGRectInset(f, 2, 2);
     
     [screenTasks configureGroupForSize: captureSize];
@@ -1073,8 +1071,8 @@ typedef enum {
 
 - (void) adjustCameraButtons {
 //    NSLog(@"****** adjustButtons ******");
-    trashButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
-    undoButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
+    trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
+    undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     stopCamera.enabled = capturing;
     startCamera.enabled = !stopCamera.enabled;
 }
@@ -1124,6 +1122,7 @@ CGFloat topOfNonDepthArray = 0;
         nextButtonFrame.origin.y = BELOW(transformView.frame) + SEP;
     }
     
+#ifdef CENTER   // do not center
     if (!roomRightOftransformView || !roomUndertransformView) {
         CGRect f = transformView.frame;
         if (!roomRightOftransformView) {    // center the transform display
@@ -1133,6 +1132,7 @@ CGFloat topOfNonDepthArray = 0;
         }
         transformView.frame = f;
     }
+#endif
     atStartOfRow = YES;
 
     // Run through all the transforms, computing the corresponding thumb sizes and
@@ -1174,7 +1174,7 @@ CGFloat topOfNonDepthArray = 0;
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
 
         atStartOfRow = NO;
-        thumbsH = BELOW(thumb.frame);
+        thumbsH = BELOW(thumb.frame) + 2*SEP;
         
         // next thumb position.  On a new line, if this is the end of the depthvis
         if (is3D && i == transforms.depthTransformCount - 1) {  // end of depth transforms
@@ -1194,6 +1194,17 @@ CGFloat topOfNonDepthArray = 0;
     else
         [thumbScrollView setContentOffset:CGPointMake(0, topOfNonDepthArray) animated:YES];
 }
+
+#ifdef NOTDEF
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    NSLog(@"     scrollViewDidScroll content size: %.0f x %.0f",
+          scrollView.contentSize.width, scrollView.contentSize.height);
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    NSLog(@"     scrollViewWillBeginDragging");
+}
+#endif
 
 - (void) nextButtonPosition {
     CGRect f = nextButtonFrame;
@@ -1264,7 +1275,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     [executingTable beginUpdates];
-    if (!plusMode) {
+    if (!options.plusMode) {
         [self deleteLastScreenTransform];
     }
 
@@ -1425,14 +1436,16 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateBegan)
         return;
-    reticle = !reticle;
+    options.reticle = !options.reticle;
+    [options save];
 }
 
 - (IBAction) didLongPressExecute:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateBegan)
         return;
-    executeDebug = !executeDebug;
-    NSLog(@" debugging execute: %d", executeDebug);
+    options.executeDebug = !options.executeDebug;
+    [options save];
+    NSLog(@" debugging execute: %d", options.executeDebug);
     [self adjustExecuteDisplay];
 }
 
@@ -1708,7 +1721,7 @@ UIImageOrientation lastOrientation;
     if (index == 0)
         return;
     [screenTask removeTransformAtIndex:index];
-    if (index == selectedExecutionStep)
+    if (selectedExecutionStep > 0)
         selectedExecutionStep--;
     [self adjustExecuteDisplay];
 }
@@ -1719,9 +1732,10 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {
-    needHires = !needHires;
-    NSLog(@"high res now %d", needHires);
-    button.style = needHires ? UIBarButtonItemStyleDone : UIBarButtonItemStylePlain;
+    options.needHires = !options.needHires;
+    NSLog(@"high res now %d", options.needHires);
+    [options save];
+    button.style = options.needHires ? UIBarButtonItemStyleDone : UIBarButtonItemStylePlain;
 }
 
 - (void) doTick:(NSTimer *)sender {
@@ -1767,9 +1781,10 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) togglePlusMode:(UITapGestureRecognizer *)sender {
-    plusMode = !plusMode;
-    NSLog(@" plusMode = %d", plusMode);
-    addModeButton.selected = plusMode;
+    options.plusMode = !options.plusMode;
+    NSLog(@" plusMode = %d", options.plusMode);
+    addModeButton.selected = options.plusMode;
+    [options save];
     [self adjustExecuteDisplay];
 }
 
@@ -1789,9 +1804,6 @@ UIImageOrientation lastOrientation;
         selectedExecutionStep = firstTrans;
     if (selectedExecutionStep >= screenTask.transformList.count)
         selectedExecutionStep = screenTask.transformList.count - 1;
-    upButton.enabled = selectedExecutionStep > firstTrans;
-    downButton.enabled = selectedExecutionStep >= firstTrans &&
-        selectedExecutionStep < screenTask.transformList.count - 1;
     [executingTable reloadData];
     [executingTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
                                                       animated:YES];
@@ -1977,7 +1989,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     assert(rows >= 1);
     if (!DOING_3D)    // don't show row zero
         rows--;
-    if (plusMode)
+    if (options.plusMode)
         rows++;
     NSLog(@" **** rows in section: %ld, selected = %ld", (long)rows, selectedExecutionStep);
     return rows;
@@ -2022,7 +2034,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     statusView.textAlignment = NSTextAlignmentLeft;
     [cell.contentView addSubview:statusView];
     
-    if (plusMode) {
+    if (options.plusMode) {
         if (taskTransformIndex == screenTask.transformList.count) {
             // off the bottom of the list
             statusView.text = @" +";
@@ -2033,11 +2045,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
             // last displayed entry, don't show
         }
     }
+    
+    cell.selected = (selectedExecutionStep == taskTransformIndex);
     statusView.text = selectedExecutionStep == taskTransformIndex ? @" ⇒" : @"";
     
     CGRect f = statusView.frame;
-    f.origin.x = RIGHT(f);
-    f.size.width -= f.origin.x;
+    f.origin.x = RIGHT(f) + SEP;
+    f.size.width = cell.contentView.frame.size.width - f.origin.x;
     UIView *infoView = [[UIView alloc] initWithFrame:f];
     [cell.contentView addSubview:infoView];
     
@@ -2059,7 +2073,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     param.textAlignment = NSTextAlignmentRight;
     [infoView addSubview:param];
     
-    if (executeDebug) {
+    if (options.executeDebug) {
         f.size.width = EXECUTE_NUMBERS_W;
         f.origin.x = RIGHT(param.frame);
         UILabel *timing = [[UILabel alloc] initWithFrame:f];
@@ -2067,20 +2081,26 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         timing.textAlignment = NSTextAlignmentRight;
         [infoView addSubview:timing];
     }
-    
-    cell.selected = (selectedExecutionStep == taskTransformIndex);
 
-#ifdef NOTNEEDED
-    if (selectedExecutionStep == taskTransformIndex) {
-        infoView.layer.borderWidth = EXECUTE_CELL_SELECTED_BORDER_W;
-        infoView.layer.cornerRadius = EXECUTE_CELL_SELECTED_CORNER_RADIUS;
-    } else {
-        infoView.layer.borderWidth = 0;
-        infoView.layer.cornerRadius = 0;
-    }
-#endif
-    
+    tableView.backgroundColor = [UIColor yellowColor];
+    [cell.contentView addSubview:infoView];
     return cell;
 }
+
+#define CELL_H  44
+
+- (IBAction)goSelectOptions:(UIBarButtonItem *)barButton {
+    OptionsVC *oVC = [[OptionsVC alloc] initWithOptions:options];
+    CGRect f = oVC.view.frame;
+    f.origin.y = 44;
+    f.origin.x = containerView.frame.size.width - f.size.width;
+    f.size.height = 5*CELL_H;
+    oVC.view.frame = f;
+    
+    [self presentViewController:oVC animated:YES completion:^{
+        [self doLayout];
+    }];
+}
+
 
 @end

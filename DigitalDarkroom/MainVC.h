@@ -10,14 +10,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
 
-// This is deprecated:
-typedef enum {
-    small,  // mosly for iPhones
-    medium,
-    fullScreen,
-    alternateScreen,
-} DisplayMode_t;
-
 typedef enum {
 //    exhibitUI,
     oliveUI,

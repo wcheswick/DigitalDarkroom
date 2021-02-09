@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB20A72125D1791C0005CA53 /* Options.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A71F25D1791C0005CA53 /* Options.m */; };
+		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
 		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
@@ -48,6 +50,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FB20A71F25D1791C0005CA53 /* Options.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Options.m; sourceTree = "<group>"; };
+		FB20A72025D1791C0005CA53 /* Options.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Options.h; sourceTree = "<group>"; };
+		FB20A72325D17A760005CA53 /* OptionsVC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OptionsVC.h; sourceTree = "<group>"; };
+		FB20A72425D17A760005CA53 /* OptionsVC.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OptionsVC.m; sourceTree = "<group>"; };
 		FB3012BD250BA85C0062A1FA /* InputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InputSource.h; sourceTree = "<group>"; };
 		FB3012BE250BA85C0062A1FA /* InputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InputSource.m; sourceTree = "<group>"; };
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
@@ -209,6 +215,10 @@
 				FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FB20A72025D1791C0005CA53 /* Options.h */,
+				FB20A71F25D1791C0005CA53 /* Options.m */,
+				FB20A72325D17A760005CA53 /* OptionsVC.h */,
+				FB20A72425D17A760005CA53 /* OptionsVC.m */,
 				FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */,
 				FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */,
 				FB3012BD250BA85C0062A1FA /* InputSource.h */,
@@ -336,6 +346,7 @@
 				FBF5B3B9232E974000DDFC4E /* main.m in Sources */,
 				FBB1D9F5232FE56700845DF1 /* cb.c in Sources */,
 				FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */,
+				FB20A72125D1791C0005CA53 /* Options.m in Sources */,
 				FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */,
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
@@ -348,6 +359,7 @@
 				FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */,
 				FBB2C8B22586A9F800AB0B09 /* DepthBuf.m in Sources */,
 				FBB1D9E7232FE44400845DF1 /* etc.c in Sources */,
+				FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */,
 				FBB1D9E3232FE44400845DF1 /* geom.c in Sources */,
 				FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */,
 			);
@@ -408,7 +420,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -463,7 +475,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
