@@ -10,7 +10,7 @@
 
 #define kReticleOption     @"Heretical"
 #define kHiresOption        @"Hires"
-#define kPlusmodeOption     @"PlusMode"
+#define kmultipleModeOption     @"multipleMode"
 #define kExecuteDebugOption @"ExecuteDebug"
 
 @implementation Options
@@ -19,7 +19,7 @@
 
 @synthesize executeDebug;
 @synthesize needHires;
-@synthesize plusMode;
+@synthesize multipleMode;
 @synthesize reticle;
 
 - (id)init {
@@ -27,10 +27,11 @@
     if (self) {
         reticle = [[NSUserDefaults standardUserDefaults] valueForKey:kReticleOption];
         needHires = [[NSUserDefaults standardUserDefaults] valueForKey:kHiresOption];;
-        plusMode = [[NSUserDefaults standardUserDefaults] valueForKey:kPlusmodeOption];;
+        multipleMode = [[NSUserDefaults standardUserDefaults] valueForKey:kmultipleModeOption];;
         executeDebug = [[NSUserDefaults standardUserDefaults] valueForKey:kExecuteDebugOption];
         displayMode = medium;   // not in use
-        plusMode = NO;
+        multipleMode = NO;
+        needHires = NO;
         [self save];
     }
     return self;
@@ -39,7 +40,7 @@
 - (void) save {
     [[NSUserDefaults standardUserDefaults] setBool:reticle forKey:kReticleOption];
     [[NSUserDefaults standardUserDefaults] setBool:needHires forKey:kHiresOption];
-    [[NSUserDefaults standardUserDefaults] setBool:plusMode forKey:kPlusmodeOption];
+    [[NSUserDefaults standardUserDefaults] setBool:multipleMode forKey:kmultipleModeOption];
     [[NSUserDefaults standardUserDefaults] setBool:executeDebug forKey:kExecuteDebugOption];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }

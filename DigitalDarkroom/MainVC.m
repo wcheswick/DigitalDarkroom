@@ -144,13 +144,15 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
 @property (nonatomic, strong)   UIView *executeControlView;
 @property (nonatomic, strong)   UITableView *executingTable;
+@property (nonatomic, strong)   UIScrollView *executeScrollView;
+@property (nonatomic, strong)   UIView *executeView;
+@property (nonatomic, strong)   NSMutableArray *executeViews;
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
 @property (nonatomic, strong)   Options *options;
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
-@property (nonatomic, strong)   UIButton *addModeButton;
 
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
@@ -173,6 +175,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *multipleModeButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -209,6 +212,7 @@ typedef enum {
 @synthesize executingTable;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
+@synthesize executeScrollView, executeView, executeViews;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -221,7 +225,7 @@ typedef enum {
 
 @synthesize cameraController;
 
-@synthesize addModeButton;
+@synthesize multipleModeButton;
 @synthesize undoBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -283,6 +287,7 @@ typedef enum {
         cameraController.delegate = self;
 
         inputSources = [[NSMutableArray alloc] init];
+        executeViews = [[NSMutableArray alloc] init];
         
         availableCameraCount = 0;
         for (Cameras c=0; c<NCAMERA; c++) {
@@ -532,18 +537,18 @@ typedef enum {
     hiresButton = [[UIBarButtonItem alloc]
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
+
     UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                    target:self
                                    action:@selector(doSave:)];
     
-#ifdef NOTDEF
-    UIBarButtonItem *undoBar = [[UIBarButtonItem alloc]
+    UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
                                 initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                 target:self
                                 action:@selector(doRemoveLastTransform)];
-#endif
     
+#ifdef NOTDEF
     undoBarButton = [[UIBarButtonItem alloc]
                                        initWithTitle:@"⟲"
                                        style:UIBarButtonItemStylePlain
@@ -554,7 +559,26 @@ typedef enum {
         // gives constraint notifications:
         NSBaselineOffsetAttributeName: @3
     } forState:UIControlStateNormal];
-    
+
+    NSString *imagePath = [[NSBundle mainBundle] pathForResource:@"images/1sq" ofType:@"png"];
+    assert(imagePath);
+
+    UIImage *icon = [UIImage imageWithContentsOfFile:imagePath];
+    multipleModeButton =  [[UIBarButtonItem alloc] initWithImage:icon
+                                                           style:UIBarButtonItemStylePlain
+                                                          target:self
+                                                          action:@selector(togglemultipleMode:)];
+    UIBarButtonItem *multipleModeButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                   target:self
+                                   action:@selector(togglemultipleMode:)];
+    [multipleModeButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
+        // gives constraint notifications:
+        NSBaselineOffsetAttributeName: @-2
+    } forState:UIControlStateNormal];
+#endif
+
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                otherMenuButton,
                                                fixedSpace,
@@ -563,7 +587,9 @@ typedef enum {
                                                undoBarButton,
                                                fixedSpace,
                                                trashBarButton,
-                                               nil];
+                                               fixedSpace,
+                                               multipleModeButton,
+                                              nil];
 
 #define SLIDER_OFF  (-1)
     
@@ -643,18 +669,21 @@ typedef enum {
     executingTable.opaque = NO;
     [executeControlView addSubview:executingTable];
 
-#ifdef NOTDERF
-    addModeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    addModeButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
-    [addModeButton setTitle:@"+"
-                       forState:UIControlStateSelected];
-    [addModeButton setTitle:@"+"
-                       forState:UIControlStateNormal];
-    [addModeButton addTarget:self
-                          action:@selector(togglePlusMode:)
-                forControlEvents:UIControlEventTouchUpInside];
-    [executeControlView addSubview:addModeButton];
-#endif
+    executeScrollView = [[UIScrollView alloc] init];
+    executeScrollView.pagingEnabled = NO;
+    //executeScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+    executeScrollView.showsVerticalScrollIndicator = NO;
+    executeScrollView.userInteractionEnabled = NO;
+    executeScrollView.exclusiveTouch = NO;
+    executeScrollView.bounces = NO;
+    //executeScrollView.delaysContentTouches = YES;
+    executeScrollView.canCancelContentTouches = YES;
+    executeScrollView.delegate = self;
+    executeScrollView.scrollEnabled = YES;
+    [containerView addSubview:executeScrollView];
+    
+    executeView = [[UIView alloc] init];
+    [executeScrollView addSubview:executeView];
     
     [transformView addSubview:executeControlView];
      
@@ -923,7 +952,8 @@ typedef enum {
     
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
     CGFloat topPadding = window.safeAreaInsets.top;
-//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+    USED(bottomPadding);
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
@@ -953,7 +983,7 @@ typedef enum {
     // and orientation.  This is highly-constrained for iPhones and such.
     
     CGSize displaySizeLimit = containerView.frame.size;
-    displaySizeLimit.height -= EXECUTE_H;
+//    displaySizeLimit.height -= EXECUTE_H;
     displaySizeLimit.height = round(displaySizeLimit.height * 1.0);
     if (displaySizeLimit.width > 768)
         displaySizeLimit.width = 768;
@@ -1275,7 +1305,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     [executingTable beginUpdates];
-    if (!options.plusMode) {
+    if (!options.multipleMode) {
         [self deleteLastScreenTransform];
     }
 
@@ -1780,10 +1810,10 @@ UIImageOrientation lastOrientation;
     [self removeScreenTransformAtIndex: screenTask.transformList.count - 1];
 }
 
-- (IBAction) togglePlusMode:(UITapGestureRecognizer *)sender {
-    options.plusMode = !options.plusMode;
-    NSLog(@" plusMode = %d", options.plusMode);
-    addModeButton.selected = options.plusMode;
+- (IBAction) togglemultipleMode:(UITapGestureRecognizer *)sender {
+    options.multipleMode = !options.multipleMode;
+    NSLog(@" multipleMode = %d", options.multipleMode);
+//    multipleModeButton = options.multipleMode;
     [options save];
     [self adjustExecuteDisplay];
 }
@@ -1989,9 +2019,9 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     assert(rows >= 1);
     if (!DOING_3D)    // don't show row zero
         rows--;
-    if (options.plusMode)
+    if (options.multipleMode)
         rows++;
-    NSLog(@" **** rows in section: %ld, selected = %ld", (long)rows, selectedExecutionStep);
+//    NSLog(@" **** rows in section: %ld, selected = %ld", (long)rows, selectedExecutionStep);
     return rows;
 }
 
@@ -2034,7 +2064,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     statusView.textAlignment = NSTextAlignmentLeft;
     [cell.contentView addSubview:statusView];
     
-    if (options.plusMode) {
+    if (options.multipleMode) {
         if (taskTransformIndex == screenTask.transformList.count) {
             // off the bottom of the list
             statusView.text = @" +";
