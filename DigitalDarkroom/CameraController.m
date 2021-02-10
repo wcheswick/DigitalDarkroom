@@ -330,10 +330,14 @@
         }
         
         CGSize newSize = [self sizeForFormat:format];
-        if (![self isNewSize:newSize aBetterSizeThan:captureSize forTarget:availableSize])
+        if (![self isNewSize:newSize aBetterSizeThan:captureSize forTarget:availableSize]) {
             continue;
+        }
         captureSize = newSize;
         selectedFormat = format;
+#ifdef DEBUG_CAMERA_CAPTURE_SIZE
+            NSLog(@"YES");
+#endif
     }
     
     if (!selectedFormat) {

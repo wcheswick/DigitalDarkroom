@@ -342,7 +342,8 @@ typedef enum {
                 }
             }
         }
-
+        
+        nextSource = nil; // XXXXX debug
         if (!nextSource)  {   // no known default, pick the first camera
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
@@ -568,16 +569,17 @@ typedef enum {
                                                            style:UIBarButtonItemStylePlain
                                                           target:self
                                                           action:@selector(togglemultipleMode:)];
-    UIBarButtonItem *multipleModeButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-                                   target:self
-                                   action:@selector(togglemultipleMode:)];
     [multipleModeButton setTitleTextAttributes:@{
         NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
         // gives constraint notifications:
         NSBaselineOffsetAttributeName: @-2
     } forState:UIControlStateNormal];
 #endif
+    
+    UIBarButtonItem *multipleModeButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
+                                   target:self
+                                   action:@selector(togglemultipleMode:)];
 
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                otherMenuButton,
@@ -864,6 +866,9 @@ typedef enum {
 #define INSET 3 // from screen edges
 #define MIN_TRANS_TABLE_W 275
 
+BOOL roomRightOftransformView;
+BOOL roomUndertransformView;
+
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
     NSLog(@"****** doLayout self.view %0.f x %.0f",
@@ -925,7 +930,11 @@ typedef enum {
     }
     
     imageOrientation = [self imageOrientationForDeviceOrientation];
-    
+    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone)
+        self.title = @"Digital Darkroom";
+    else
+        self.title = @"";
+
     // not room for title in iphones in portrait mode
 #ifdef DEBUG_ORIENTATION
     NSLog(@"device idiom: %ld", (long)[UIDevice currentDevice].userInterfaceIdiom);
@@ -933,10 +942,6 @@ typedef enum {
                                      dumpDeviceOrientationName:currentDeviceOrientation]);
     NSLog(@" is portrait: %d", UIDeviceOrientationIsPortrait(currentDeviceOrientation));
 #endif
-    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone)
-        self.title = @"Digital Darkroom";
-    else
-        self.title = @"";
         
     CGRect f = self.view.frame;
 #ifdef DEBUG_LAYOUT
@@ -974,81 +979,63 @@ typedef enum {
     NSLog(@"    containerview frame:  %.0f x %.0f", f.size.width, f.size.height);
 #endif
     
-    // Compute the size available for the image on the screen.  We include various constraints
-    // for layout reasons. We also need room for the execute display, a few lines of text below
-    // the transformed image.
-    //
-    // the image display starts on the upper left of the screen.  The aspect ratio
-    // must match the image source. We try to come out with layouts that work based on device
-    // and orientation.  This is highly-constrained for iPhones and such.
-    
-    CGSize displaySizeLimit = containerView.frame.size;
-//    displaySizeLimit.height -= EXECUTE_H;
-    displaySizeLimit.height = round(displaySizeLimit.height * 1.0);
-    if (displaySizeLimit.width > 768)
-        displaySizeLimit.width = 768;
-    
-    // determine capture size based on various target sizes
-    CGSize captureSize;
-    
-    if (!ISCAMERA(currentSource.sourceType)) {
-        captureSize = currentSource.imageSize;
-        NSLog(@"file size is %.0f x %.0f", captureSize.width, captureSize.height);
-    } else {    // figure out camera configuration
-        if (options.needHires) {
-            captureSize = CGSizeZero;   // largest available
-        } else if (externalTasks) {
-            captureSize = externalTasks.transformSize;  // assume they are the largest
-        } else {
-            captureSize = displaySizeLimit;
-        }
-#ifdef DEBUG_CAMERA_CAPTURE_SIZE
-        NSLog(@"  cam target size is %.0f x %.0f", captureSize.width, captureSize.height);
-#endif
-        captureSize = [cameraController setupCameraForSize:captureSize];
-#ifdef DEBUG_CAMERA_CAPTURE_SIZE
-        NSLog(@"        best size is %.0f x %.0f", captureSize.width, captureSize.height);
-#endif
-    }
-    assert(captureSize.height > 0);     // should never happen, of course
+    UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
+    BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
+    CGSize availableSize = containerView.frame.size;
 
-    // we now have the capture size.  Adjust the display size and thumb area size.
-//    CGFloat aspectRatio = captureSize.width/captureSize.height;
+    switch ([UIDevice currentDevice].userInterfaceIdiom) {
+        case UIUserInterfaceIdiomPhone:
+            roomUndertransformView = isPortrait;
+            roomRightOftransformView = !roomUndertransformView;
+            if (isPortrait) {   // thumbs underneath, not on the right
+                availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
+            } else {
+                availableSize.width -= 2*(SOURCE_THUMB_W + SEP);
+            }
+            break;
+        case UIUserInterfaceIdiomPad:
+        case UIUserInterfaceIdiomTV:
+        case UIUserInterfaceIdiomCarPlay:
+        case UIUserInterfaceIdiomMac:
+        case UIUserInterfaceIdiomUnspecified:
+            roomUndertransformView = !isPortrait;
+            roomRightOftransformView = roomUndertransformView;
+            if (isPortrait) {   // thumbs underneath, not on the right
+                availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
+            } else {
+                availableSize.width -= 2*(SOURCE_THUMB_W + SEP);
+            }
+            break;
+    }
     
-    CGSize displaySize;     // compute our display size
-    
-    if (captureSize.width > displaySizeLimit.width) {
-        // Taskgroup will scale down. Adjust the display size based on aspect ratio,
-        // so there may be more room for thumbs
-        CGFloat xScale = displaySizeLimit.width / captureSize.width;
-        if (captureSize.height * xScale > displaySizeLimit.height) {
-            // even squeezed horizontally, the image is too tall.  Squeeze so
-            // that both fit.
-            CGFloat yScale = displaySizeLimit.height / captureSize.height;
-            assert(yScale < xScale);        // make sure the code is right
-            displaySize = CGSizeMake(captureSize.width * yScale, captureSize.height * yScale);
-        } else {
-            displaySize = CGSizeMake(captureSize.width * xScale, captureSize.height * xScale);
-        }
-        assert(displaySize.height <= displaySizeLimit.height);
-        assert(displaySize.width <= displaySizeLimit.width);
-    } else if (captureSize.height > displaySizeLimit.height) {
-        CGFloat yScale = displaySizeLimit.height / captureSize.height;
-        displaySize = CGSizeMake(captureSize.width * yScale, captureSize.height * yScale);
-    } else
-        displaySize = captureSize;
+#ifdef DEBUG_CAMERA_CAPTURE_SIZE
+        NSLog(@"  availableSize target size is %.0f x %.0f", availableSize.width, availableSize.height);
+#endif
+
+    CGSize displaySize;
+    if (ISCAMERA(currentSource.sourceType)) {   // select camera setting for available area
+        displaySize = [cameraController setupCameraForSize:availableSize];
+    } else {    // scale image into available area
+        CGFloat xScale = currentSource.imageSize.width / availableSize.width;
+        CGFloat yScale = currentSource.imageSize.height / availableSize.height;
+        CGFloat scale = (xScale < yScale) ? xScale : yScale;
+        displaySize = CGSizeMake(availableSize.width*scale, availableSize.height*scale);
+    }
+
 #ifdef DEBUG_LAYOUT
     NSLog(@"     display size is %.0f x %.0f", displaySize.width, displaySize.height);
 #endif
     
-    f.origin = CGPointZero;
-    f.size = displaySize;
-    f.size.height += EXECUTE_H;
-    transformView.frame = f;
+    assert(displaySize.height > 0);     // should never happen, of course
 
     f.origin = CGPointZero;
     f.size = displaySize;
     transformImageView.frame = f;
+    
+    if (!roomRightOftransformView) { // then center the image displaySize
+        f.origin.x = (containerView.frame.size.width - f.size.width)/2;
+    }
+    transformView.frame = f;
 
     // for now, executing table transparently overlays the transform image
     f.origin.x = transformImageView.frame.origin.x + INSET;
@@ -1058,7 +1045,7 @@ typedef enum {
     executeControlView.frame = f;
     executingTable.frame = CGRectInset(f, 2, 2);
     
-    [screenTasks configureGroupForSize: captureSize];
+    [screenTasks configureGroupForSize: displaySize];
 
     //    [externalTask configureForSize: processingSize];
 
@@ -1116,8 +1103,6 @@ typedef enum {
 
 CGRect imageRect;
 CGRect nextButtonFrame;
-BOOL roomRightOftransformView;
-BOOL roomUndertransformView;
 BOOL atStartOfRow;
 CGFloat topOfNonDepthArray = 0;
 
@@ -1152,17 +1137,6 @@ CGFloat topOfNonDepthArray = 0;
         nextButtonFrame.origin.y = BELOW(transformView.frame) + SEP;
     }
     
-#ifdef CENTER   // do not center
-    if (!roomRightOftransformView || !roomUndertransformView) {
-        CGRect f = transformView.frame;
-        if (!roomRightOftransformView) {    // center the transform display
-            f.origin.x = (containerView.frame.size.width - f.size.width)/2;
-        } else {
-            f.origin.y = (containerView.frame.size.height - f.size.height)/2;
-        }
-        transformView.frame = f;
-    }
-#endif
     atStartOfRow = YES;
 
     // Run through all the transforms, computing the corresponding thumb sizes and
@@ -1185,7 +1159,7 @@ CGFloat topOfNonDepthArray = 0;
             if (!is3D) {
                 // just push them off to where they are not visible
                 CGRect f = nextButtonFrame;
-                f.origin = CGPointZero;
+                f.origin = transformView.frame.origin; // hide it
                 thumb.frame = f;
 //              thumb.hidden = YES;
                 continue;
