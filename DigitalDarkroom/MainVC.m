@@ -75,6 +75,11 @@
 #define EXECUTE_STATUS_W    30
 #define EXECUTE_STATUS_FONT_SIZE    14
 
+#define EXECUTE_ROW_H       18
+#define EXECUTE_BELOW_ROWS  2
+#define EXECUTE_MAX_ROWS    6
+#define EXECUTE_BELOW_SPACE (EXECUTE_BELOW_ROWS * EXECUTE_ROW_H)
+
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
 #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
@@ -142,10 +147,8 @@ typedef enum {
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UIView *executeControlView;
-@property (nonatomic, strong)   UITableView *executingTable;
+@property (nonatomic, strong)   UITableView *executeTable;
 @property (nonatomic, strong)   UIScrollView *executeScrollView;
-@property (nonatomic, strong)   UIView *executeView;
 @property (nonatomic, strong)   NSMutableArray *executeViews;
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
 @property (nonatomic, strong)   Options *options;
@@ -209,11 +212,10 @@ typedef enum {
 @synthesize containerView;
 @synthesize transformView;
 @synthesize transformImageView;
-@synthesize executeControlView;
-@synthesize executingTable;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
-@synthesize executeScrollView, executeView, executeViews;
+@synthesize executeScrollView;
+@synthesize executeTable, executeViews;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -664,33 +666,8 @@ typedef enum {
                                                      named:@"main"
                                             depthTransform:depthTransform];
 
-    executeControlView = [[UIView alloc] init];
-    executeControlView.backgroundColor = [UIColor clearColor];
-    executeControlView.opaque = YES;
-    executeControlView.layer.cornerRadius = 10.0;
-    executeControlView.layer.borderColor = [UIColor blackColor].CGColor;
-    executeControlView.layer.borderWidth = 1.0;
-    executeControlView.clipsToBounds = YES;
-    
-    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc]
-                                               initWithTarget:self action:@selector(didLongPressExecute:)];
-    longPress.minimumPressDuration = 1.0;
-    [executeControlView addGestureRecognizer:longPress];
-    
-    executingTable = [[UITableView alloc]
-                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
-                      style:UITableViewStylePlain];
-    executingTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
-    executingTable.delegate = self;
-    executingTable.dataSource = self;
-    executingTable.layer.borderWidth = 0.5;
-    executingTable.backgroundColor = [UIColor clearColor];
-    executingTable.opaque = NO;
-    [executeControlView addSubview:executingTable];
-
     executeScrollView = [[UIScrollView alloc] init];
     executeScrollView.pagingEnabled = NO;
-    //executeScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
     executeScrollView.showsVerticalScrollIndicator = NO;
     executeScrollView.userInteractionEnabled = NO;
     executeScrollView.exclusiveTouch = NO;
@@ -699,12 +676,23 @@ typedef enum {
     executeScrollView.canCancelContentTouches = YES;
     executeScrollView.delegate = self;
     executeScrollView.scrollEnabled = YES;
-    [containerView addSubview:executeScrollView];
-    
-    executeView = [[UIView alloc] init];
-    [executeScrollView addSubview:executeView];
-    
-    [transformView addSubview:executeControlView];
+    executeScrollView.backgroundColor = [UIColor clearColor];
+    executeScrollView.opaque = NO;
+
+    executeScrollView.layer.borderWidth = 0.5;
+    executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
+    [transformView addSubview:executeScrollView];
+
+    executeTable = [[UITableView alloc]
+                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
+                      style:UITableViewStylePlain];
+    executeTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
+    executeTable.delegate = self;
+    executeTable.dataSource = self;
+    executeTable.layer.borderWidth = 0.5;
+    executeTable.backgroundColor = [UIColor clearColor];
+    executeTable.opaque = NO;
+    [executeScrollView addSubview:executeTable];
      
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -1002,6 +990,7 @@ BOOL roomUndertransformView;
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
     BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
     CGSize availableSize = containerView.frame.size;
+    availableSize.height -= EXECUTE_BELOW_SPACE;
 
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
@@ -1055,15 +1044,13 @@ BOOL roomUndertransformView;
     if (!roomRightOftransformView) { // then center the image displaySize
         f.origin.x = (containerView.frame.size.width - f.size.width)/2;
     }
+    f.size.height += EXECUTE_BELOW_SPACE;   // transformView has some lines under it
     transformView.frame = f;
-
-    // for now, executing table transparently overlays the transform image
-    f.origin.x = transformImageView.frame.origin.x + INSET;
-    f.size.height = EXECUTE_H;
-    f.origin.y = transformImageView.frame.size.height - f.size.height - SEP;
-    f.size.width = transformImageView.frame.size.width - 2*INSET;
-    executeControlView.frame = f;
-    executingTable.frame = CGRectInset(f, 2, 2);
+    
+    f.origin.x = 0;
+    f.size.height = EXECUTE_MAX_ROWS * EXECUTE_ROW_H;
+    f.origin.y = BELOW(transformView.frame) - f.size.height;
+    executeScrollView.frame = f;
     
     [screenTasks configureGroupForSize: displaySize];
 
@@ -1085,7 +1072,7 @@ BOOL roomUndertransformView;
         self->thumbScrollView.frame = f;
         // move views to where they need to be now.
         [self layoutThumbArray];
-        [self->executingTable reloadData];
+        [self->executeTable reloadData];
     }];
     
     [containerView bringSubviewToFront:transformView];
@@ -1298,7 +1285,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) transformThumbTapped: (UIView *) tappedThumb {
-    [executingTable beginUpdates];
+    [executeTable beginUpdates];
     if (!options.multipleMode) {
         [self deleteLastScreenTransform];
     }
@@ -1311,11 +1298,11 @@ CGFloat topOfNonDepthArray = 0;
         rowToAppend--;
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:
                               rowToAppend inSection:0];
-    [executingTable insertRowsAtIndexPaths: [NSArray arrayWithObject: indexPath]
+    [executeTable insertRowsAtIndexPaths: [NSArray arrayWithObject: indexPath]
                           withRowAnimation:UITableViewRowAnimationTop];
     selectedExecutionStep = screenTask.transformList.count - 1;
     [self adjustExecuteDisplay];
-    [executingTable endUpdates];
+    [executeTable endUpdates];
 }
 
 - (void) deleteLastScreenTransform {
@@ -1331,7 +1318,7 @@ CGFloat topOfNonDepthArray = 0;
         rowToDelete--;
     NSLog(@"  %lu %ld", (unsigned long)screenTask.transformList.count, rowToDelete);
 
-    [executingTable deleteRowsAtIndexPaths:
+    [executeTable deleteRowsAtIndexPaths:
      [NSArray arrayWithObject:[NSIndexPath indexPathForRow: rowToDelete inSection:0]]
                           withRowAnimation:UITableViewRowAnimationTop];
 }
@@ -1828,8 +1815,8 @@ UIImageOrientation lastOrientation;
         selectedExecutionStep = firstTrans;
     if (selectedExecutionStep >= screenTask.transformList.count)
         selectedExecutionStep = screenTask.transformList.count - 1;
-    [executingTable reloadData];
-    [executingTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
+    [executeTable reloadData];
+    [executeTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
                                                       animated:YES];
     CGFloat h = multipleModeBarButton.customView.frame.size.height;
     if (options.multipleMode) {
