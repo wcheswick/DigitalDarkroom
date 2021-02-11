@@ -175,7 +175,8 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *multipleModeButton;
+@property (nonatomic, strong)   UIBarButtonItem *multipleModeBarButton;
+@property (nonatomic, strong)   UILabel *multipleViewLabel;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -225,7 +226,7 @@ typedef enum {
 
 @synthesize cameraController;
 
-@synthesize multipleModeButton;
+@synthesize multipleModeBarButton, multipleViewLabel;
 @synthesize undoBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -574,12 +575,28 @@ typedef enum {
         // gives constraint notifications:
         NSBaselineOffsetAttributeName: @-2
     } forState:UIControlStateNormal];
-#endif
     
     UIBarButtonItem *multipleModeButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
                                    target:self
                                    action:@selector(togglemultipleMode:)];
+#endif
+
+    multipleViewLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 100, 30)];
+    multipleViewLabel.textAlignment = NSTextAlignmentCenter;
+    multipleViewLabel.adjustsFontSizeToFitWidth = YES;
+    multipleViewLabel.text = @"Multi";
+    multipleViewLabel.textAlignment = NSTextAlignmentLeft;
+    multipleViewLabel.textColor = [UIColor blackColor];
+    multipleViewLabel.userInteractionEnabled = YES;
+    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self
+                                          action:@selector(togglemultipleMode:)];
+    [multipleViewLabel addGestureRecognizer:tapGesture];
+
+    multipleModeBarButton = [[UIBarButtonItem alloc] initWithCustomView:multipleViewLabel];
+//    multipleModeBarButton.target = self;
+//    multipleModeBarButton.action = @selector(togglemultipleMode:);
 
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                otherMenuButton,
@@ -590,7 +607,7 @@ typedef enum {
                                                fixedSpace,
                                                trashBarButton,
                                                fixedSpace,
-                                               multipleModeButton,
+                                               multipleModeBarButton,
                                               nil];
 
 #define SLIDER_OFF  (-1)
@@ -877,8 +894,10 @@ BOOL roomUndertransformView;
     BOOL adjustSourceInfo = (nextSource != nil);
     
     self.navigationController.navigationBarHidden = NO;
-    self.navigationController.navigationBar.opaque = (uiMode == oliveUI);
+    self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
     self.navigationController.toolbarHidden = YES;
+    
+//    multipleViewLabel.frame = multipleModeBarButton.customView.frame;
     
     // set up new source, if needed
     if (nextSource) {
@@ -930,12 +949,13 @@ BOOL roomUndertransformView;
     }
     
     imageOrientation = [self imageOrientationForDeviceOrientation];
+    
+    // not room for title in iphones in portrait mode
     if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone)
         self.title = @"Digital Darkroom";
     else
         self.title = @"";
-
-    // not room for title in iphones in portrait mode
+    
 #ifdef DEBUG_ORIENTATION
     NSLog(@"device idiom: %ld", (long)[UIDevice currentDevice].userInterfaceIdiom);
     NSLog(@"device is %@", [CameraController
@@ -1811,6 +1831,15 @@ UIImageOrientation lastOrientation;
     [executingTable reloadData];
     [executingTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
                                                       animated:YES];
+    CGFloat h = multipleModeBarButton.customView.frame.size.height;
+    if (options.multipleMode) {
+        multipleViewLabel.font = [UIFont systemFontOfSize:h
+                                                       weight:UIFontWeightBold];
+    } else {
+        multipleViewLabel.font = [UIFont systemFontOfSize:h
+                                                   weight:UIFontWeightLight];
+    }
+    [multipleViewLabel setNeedsDisplay];
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
