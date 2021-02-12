@@ -76,6 +76,14 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (UIView *) executeViewForStep:(int) step {
+    Transform *transform = [transformList objectAtIndex:step];
+    TransformInstance *instance = [paramList objectAtIndex:step];
+    UIView *rowView = [[ExecuteRowView alloc]
+                       initWithName:transform.name param:instance];
+    return rowView;
+}
+
 // we may not reveal it, but it is always there
 
 - (void) useDepthTransform:(Transform *) transform {

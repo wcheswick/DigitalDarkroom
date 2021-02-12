@@ -13,6 +13,7 @@
 #import "Transforms.h"  // includes DepthImage.h
 #import "TaskCtrl.h"
 #import "OptionsVC.h"
+#import "ExecuteRowView.h"
 #import "Defines.h"
 
 // last settings
@@ -65,20 +66,6 @@
 #define EXECUTE_TEXT_FONT_SIZE  20
 #define EXECUTE_TEXT_MIN_LINES   3// 5   // number of total lines shown on screen (not yet)
 #define EXECUTE_H ((EXECUTE_TEXT_FONT_SIZE + 4) * EXECUTE_TEXT_MIN_LINES)
-
-#define EXECUTE_NAME_W  170
-#define EXECUTE_NUMBERS_W   80
-#define EXECUTE_BUTTON_W    60
-#define EXECUTE_BUTTON_FONT_H    50
-#define EXECUTE_CELL_SELECTED_BORDER_W  3.0
-#define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5
-#define EXECUTE_STATUS_W    30
-#define EXECUTE_STATUS_FONT_SIZE    14
-
-#define EXECUTE_ROW_H       18
-#define EXECUTE_BELOW_ROWS  2
-#define EXECUTE_MAX_ROWS    6
-#define EXECUTE_BELOW_SPACE (EXECUTE_BELOW_ROWS * EXECUTE_ROW_H)
 
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
@@ -142,14 +129,14 @@ typedef enum {
 @property (nonatomic, strong)   Task *externalTask;
 
 // in containerview:
-@property (nonatomic, strong)   UIView *transformView;              // area reserved for transform display and related
+@property (nonatomic, strong)   UIView *transformView;  // area reserved for transform display and related
 @property (nonatomic, strong)   UIView *thumbArrayView;
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UITableView *executeTable;
 @property (nonatomic, strong)   UIScrollView *executeScrollView;
-@property (nonatomic, strong)   NSMutableArray *executeViews;
+@property (nonatomic, strong)   UIView *executeView;
+@property (nonatomic, strong)   NSMutableArray *executeViews;   // array of views in executeView
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
 @property (nonatomic, strong)   Options *options;
 
@@ -215,7 +202,8 @@ typedef enum {
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
 @synthesize executeScrollView;
-@synthesize executeTable, executeViews;
+@synthesize executeView;
+@synthesize executeViews;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -678,22 +666,17 @@ typedef enum {
     executeScrollView.scrollEnabled = YES;
     executeScrollView.backgroundColor = [UIColor clearColor];
     executeScrollView.opaque = NO;
-
+    executeScrollView.scrollEnabled = YES;
+    executeScrollView.contentOffset = CGPointZero;
     executeScrollView.layer.borderWidth = 0.5;
     executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
-    [transformView addSubview:executeScrollView];
 
-    executeTable = [[UITableView alloc]
-                      initWithFrame:CGRectMake(0, LATER, LATER, LATER)
-                      style:UITableViewStylePlain];
-    executeTable.rowHeight = EXECUTE_TEXT_FONT_SIZE + 4;
-    executeTable.delegate = self;
-    executeTable.dataSource = self;
-    executeTable.layer.borderWidth = 0.5;
-    executeTable.backgroundColor = [UIColor clearColor];
-    executeTable.opaque = NO;
-    [executeScrollView addSubview:executeTable];
-     
+    executeView =  [[UIView alloc]
+                    initWithFrame:CGRectMake(0, 0, EXECUTE_VIEW_W, EXECUTE_ROW_H)];
+    [executeScrollView addSubview:executeView];
+    
+    [transformView addSubview:executeScrollView];
+    
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
     //thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
@@ -1045,11 +1028,16 @@ BOOL roomUndertransformView;
         f.origin.x = (containerView.frame.size.width - f.size.width)/2;
     }
     f.size.height += EXECUTE_BELOW_SPACE;   // transformView has some lines under it
+    CGFloat below = containerView.frame.size.height - BELOW(f);
+    if (below < SOURCE_THUMB_H) {   // no room for underneath thumbs, use it
+        f.size.height += below;
+    }
     transformView.frame = f;
     
-    f.origin.x = 0;
-    f.size.height = EXECUTE_MAX_ROWS * EXECUTE_ROW_H;
-    f.origin.y = BELOW(transformView.frame) - f.size.height;
+    f.size.width = executeView.frame.size.width;
+    f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;    // center
+    f.origin.y = BELOW(transformImageView.frame);
+    f.size.height = BELOW(transformView.frame) - f.origin.y;
     executeScrollView.frame = f;
     
     [screenTasks configureGroupForSize: displaySize];
@@ -1072,7 +1060,6 @@ BOOL roomUndertransformView;
         self->thumbScrollView.frame = f;
         // move views to where they need to be now.
         [self layoutThumbArray];
-        [self->executeTable reloadData];
     }];
     
     [containerView bringSubviewToFront:transformView];
@@ -1285,42 +1272,24 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) transformThumbTapped: (UIView *) tappedThumb {
-    [executeTable beginUpdates];
+    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
+    Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
+
     if (!options.multipleMode) {
         [self deleteLastScreenTransform];
     }
-
-    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
-    Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     [screenTask appendTransform:tappedTransform];
-    size_t rowToAppend = screenTask.transformList.count - 1;
-    if (!DOING_3D)
-        rowToAppend--;
-    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:
-                              rowToAppend inSection:0];
-    [executeTable insertRowsAtIndexPaths: [NSArray arrayWithObject: indexPath]
-                          withRowAnimation:UITableViewRowAnimationTop];
-    selectedExecutionStep = screenTask.transformList.count - 1;
     [self adjustExecuteDisplay];
-    [executeTable endUpdates];
 }
 
 - (void) deleteLastScreenTransform {
     assert(screenTask.transformList.count);
     if (screenTask.transformList.count == DEPTH_TRANSFORM+1)
+        // We don't delete the depth transform
         return;
+    
     NSLog(@"  %lu", (unsigned long)screenTask.transformList.count);
     [screenTasks removeLastTransform];
-
-    long rowToDelete = screenTask.transformList.count - 1;
-    NSLog(@"  %lu %ld", (unsigned long)screenTask.transformList.count, rowToDelete);
-    if (DOING_3D)
-        rowToDelete--;
-    NSLog(@"  %lu %ld", (unsigned long)screenTask.transformList.count, rowToDelete);
-
-    [executeTable deleteRowsAtIndexPaths:
-     [NSArray arrayWithObject:[NSIndexPath indexPathForRow: rowToDelete inSection:0]]
-                          withRowAnimation:UITableViewRowAnimationTop];
 }
 
 - (void) adjustThumb:(UIView *) thumb selected:(BOOL)selected {
@@ -1809,15 +1778,7 @@ UIImageOrientation lastOrientation;
     [self adjustExecuteDisplay];
 }
 
-- (void) adjustExecuteDisplay {
-    size_t firstTrans = DOING_3D ? 0 : 1;
-    if (selectedExecutionStep < firstTrans)
-        selectedExecutionStep = firstTrans;
-    if (selectedExecutionStep >= screenTask.transformList.count)
-        selectedExecutionStep = screenTask.transformList.count - 1;
-    [executeTable reloadData];
-    [executeTable scrollToNearestSelectedRowAtScrollPosition:UITableViewScrollPositionTop
-                                                      animated:YES];
+- (void) adjustExecuteDisplay { // for the moment, build it from scratch every time
     CGFloat h = multipleModeBarButton.customView.frame.size.height;
     if (options.multipleMode) {
         multipleViewLabel.font = [UIFont systemFontOfSize:h
@@ -1827,6 +1788,28 @@ UIImageOrientation lastOrientation;
                                                    weight:UIFontWeightLight];
     }
     [multipleViewLabel setNeedsDisplay];
+    
+    int start = DOING_3D ? 0 : 1;
+    [executeViews removeAllObjects];
+    for (int i=start; i<screenTask.transformList.count; i++) {
+        ExecuteRowView *executeRowView = [screenTask executeViewForStep:i];
+        [executeViews addObject:executeRowView];
+    }
+    // clear out the old rows
+    [executeView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+
+    SET_VIEW_HEIGHT(executeView, (executeViews.count+1) * EXECUTE_ROW_H);
+    ExecuteRowView *rowView;
+    for (int i=0; i<executeViews.count; i++) {
+        rowView = [executeViews objectAtIndex:i];
+        SET_VIEW_Y(rowView, i*EXECUTE_ROW_H);
+        [executeView addSubview:rowView];
+    }
+    SET_VIEW_HEIGHT(executeView, BELOW(rowView.frame));
+    executeScrollView.backgroundColor = [UIColor lightGrayColor];
+    executeView.backgroundColor = [UIColor yellowColor];
+    executeScrollView.contentSize = executeView.frame.size;
+    [executeScrollView setNeedsLayout];
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {
