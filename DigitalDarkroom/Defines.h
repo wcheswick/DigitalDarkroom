@@ -9,7 +9,7 @@
 #ifndef Defines_h
 #define Defines_h
 
-// #define DEBUG_CAMERA_CAPTURE_SIZE   1
+//#define DEBUG_CAMERA_CAPTURE_SIZE   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_LAYOUT    1
 //#define DEBUG_DEPTH  1
@@ -46,26 +46,31 @@ typedef long PixelIndex_t;
         _f.origin.x = ((v).frame.size.width - _f.size.width)/2.0; \
         (cv).frame = _f;}
 
+#define SEP 5  // between views
+#define INSET 3 // from screen edges
+
 #define SECTION_HEADER_FONT_SIZE    24
-#define TABLE_ENTRY_FONT_SIZE       18
 
 #define EXECUTE_NAME_W  130
 #define EXECUTE_NUMBERS_W   45
-#define EXECUTE_BUTTON_W    60
-#define EXECUTE_BUTTON_FONT_H    50
+#define EXECUTE_BUTTON_W    70
+#define EXECUTE_BUTTON_H    30
+#define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 4)
 #define EXECUTE_CELL_SELECTED_BORDER_W  3.0
 #define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5
 #define EXECUTE_STATUS_W    30
 
-#define EXECUTE_ROW_H       20
-#define EXECUTE_BELOW_ROWS  2
+#define EXECUTE_ROW_H       24
+#define EXECUTE_MIN_ROWS_SHOWN  2
 #define EXECUTE_MAX_ROWS_SHOWN    4
+#define EXECUTE_MIN_BELOW_SPACE (EXECUTE_MIN_ROWS_SHOWN * EXECUTE_ROW_H)
 #define EXECUTE_BELOW_SPACE (EXECUTE_MAX_ROWS_SHOWN * EXECUTE_ROW_H)
 
 #define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-4)
 #define EXECUTE_CHAR_W  15
 
-#define EXECUTE_VIEW_W  (2*EXECUTE_CHAR_W + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W)
+#define EXECUTE_LIST_W  EXECUTE_CHAR_W + 2*EXECUTE_CHAR_W + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W
+#define EXECUTE_VIEW_W  (EXECUTE_BUTTON_W + SEP + EXECUTE_LIST_W)
 
 #define USED(x) ((void)(x))
 

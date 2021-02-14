@@ -28,7 +28,6 @@
 #define LABEL_W 100
 #define LABEL_FONT_SIZE 20
 
-#define SEP     10
 #define SWITCH_W    30
 #define SWITCH_H    SWITCH_W
 #define VSEP    10

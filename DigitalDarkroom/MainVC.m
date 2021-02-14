@@ -117,7 +117,7 @@ typedef enum {
 @interface MainVC ()
 
 @property (nonatomic, strong)   CameraController *cameraController;
-@property (nonatomic, strong)   UIView *containerView;
+@property (nonatomic, strong)   Options *options;
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   TaskGroup *screenTasks; // only one task in this group
@@ -128,17 +128,21 @@ typedef enum {
 @property (nonatomic, strong)   Task *screenTask;
 @property (nonatomic, strong)   Task *externalTask;
 
+@property (nonatomic, strong)   UIView *containerView;
+
 // in containerview:
 @property (nonatomic, strong)   UIView *transformView;  // area reserved for transform display and related
 @property (nonatomic, strong)   UIView *thumbArrayView;
 
 // in transformview
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
+
+@property (nonatomic, strong)   UIView *executeView;                 // the whole execute list area
+@property (nonatomic, strong)   UIButton *multiButton;
 @property (nonatomic, strong)   UIScrollView *executeScrollView;
-@property (nonatomic, strong)   UIView *executeView;
-@property (nonatomic, strong)   NSMutableArray *executeViews;   // array of views in executeView
+@property (nonatomic, strong)   UIView *executeListView;
+@property (nonatomic, strong)   NSMutableArray *executeListViews;   // array of views in executeListView
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
-@property (nonatomic, strong)   Options *options;
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
@@ -165,7 +169,6 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *multipleModeBarButton;
 @property (nonatomic, strong)   UILabel *multipleViewLabel;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
@@ -201,9 +204,12 @@ typedef enum {
 @synthesize transformImageView;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
-@synthesize executeScrollView;
+
 @synthesize executeView;
-@synthesize executeViews;
+@synthesize multiButton;
+@synthesize executeScrollView;
+@synthesize executeListView;
+@synthesize executeListViews;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -216,7 +222,6 @@ typedef enum {
 
 @synthesize cameraController;
 
-@synthesize multipleModeBarButton, multipleViewLabel;
 @synthesize undoBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -278,7 +283,7 @@ typedef enum {
         cameraController.delegate = self;
 
         inputSources = [[NSMutableArray alloc] init];
-        executeViews = [[NSMutableArray alloc] init];
+        executeListViews = [[NSMutableArray alloc] init];
         
         availableCameraCount = 0;
         for (Cameras c=0; c<NCAMERA; c++) {
@@ -533,60 +538,12 @@ typedef enum {
     UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                    target:self
-                                   action:@selector(doSave:)];
+                                   action:@selector(doSave)];
     
     UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
                                 initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                 target:self
                                 action:@selector(doRemoveLastTransform)];
-    
-#ifdef NOTDEF
-    undoBarButton = [[UIBarButtonItem alloc]
-                                       initWithTitle:@"⟲"
-                                       style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(doRemoveLastTransform)];
-    [undoBarButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont systemFontOfSize:navBarH],
-        // gives constraint notifications:
-        NSBaselineOffsetAttributeName: @3
-    } forState:UIControlStateNormal];
-
-    NSString *imagePath = [[NSBundle mainBundle] pathForResource:@"images/1sq" ofType:@"png"];
-    assert(imagePath);
-
-    UIImage *icon = [UIImage imageWithContentsOfFile:imagePath];
-    multipleModeButton =  [[UIBarButtonItem alloc] initWithImage:icon
-                                                           style:UIBarButtonItemStylePlain
-                                                          target:self
-                                                          action:@selector(togglemultipleMode:)];
-    [multipleModeButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
-        // gives constraint notifications:
-        NSBaselineOffsetAttributeName: @-2
-    } forState:UIControlStateNormal];
-    
-    UIBarButtonItem *multipleModeButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemAdd
-                                   target:self
-                                   action:@selector(togglemultipleMode:)];
-#endif
-
-    multipleViewLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 100, 30)];
-    multipleViewLabel.textAlignment = NSTextAlignmentCenter;
-    multipleViewLabel.adjustsFontSizeToFitWidth = YES;
-    multipleViewLabel.text = @"Multi";
-    multipleViewLabel.textAlignment = NSTextAlignmentLeft;
-    multipleViewLabel.textColor = [UIColor blackColor];
-    multipleViewLabel.userInteractionEnabled = YES;
-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc]
-                                     initWithTarget:self
-                                          action:@selector(togglemultipleMode:)];
-    [multipleViewLabel addGestureRecognizer:tapGesture];
-
-    multipleModeBarButton = [[UIBarButtonItem alloc] initWithCustomView:multipleViewLabel];
-//    multipleModeBarButton.target = self;
-//    multipleModeBarButton.action = @selector(togglemultipleMode:);
 
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                otherMenuButton,
@@ -596,9 +553,7 @@ typedef enum {
                                                undoBarButton,
                                                fixedSpace,
                                                trashBarButton,
-                                               fixedSpace,
-                                               multipleModeBarButton,
-                                              nil];
+                                               nil];
 
 #define SLIDER_OFF  (-1)
     
@@ -614,39 +569,51 @@ typedef enum {
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.layer.borderWidth = 1.0;
+    containerView.userInteractionEnabled = YES;
 #ifdef DEBUG_LAYOUT
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
     
     transformView = [[UIView alloc] init];
-    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
-                                     initWithTarget:self action:@selector(didTapSceen:)];
-    [touch setNumberOfTouchesRequired:1];
-    [transformView addGestureRecognizer:touch];
-    
-    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                           action:@selector(doDown:)];
-    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
-    [transformView addGestureRecognizer:swipeDown];
-    
-    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                         action:@selector(doUp:)];
-    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
-    [transformView addGestureRecognizer:swipeUp];
-
-    
-    UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
-                                     initWithTarget:self action:@selector(didLongPressScreen:)];
-    longPressScreen.minimumPressDuration = 1.0;
-    [transformView addGestureRecognizer:longPressScreen];
     
     [containerView addSubview:transformView];
     
     transformImageView = [[UIImageView alloc] init];
     transformImageView.userInteractionEnabled = YES;
     transformImageView.backgroundColor = NAVY_BLUE;
+    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didTapSceen:)];
+    [touch setNumberOfTouchesRequired:1];
+    [transformImageView addGestureRecognizer:touch];
+    UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didLongPressScreen:)];
+    longPressScreen.minimumPressDuration = 1.0;
+    [transformImageView addGestureRecognizer:longPressScreen];
+    
+    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                           action:@selector(doDown:)];
+    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
+    [transformImageView addGestureRecognizer:swipeDown];
+    
+    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                         action:@selector(doUp:)];
+    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
+    [transformImageView addGestureRecognizer:swipeUp];
+    
+    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                         action:@selector(doRight:)];
+    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
+    [transformImageView addGestureRecognizer:swipeRight];
+    
+    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
+                                           initWithTarget:self
+                                         action:@selector(doLeft:)];
+    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
+    [transformImageView addGestureRecognizer:swipeLeft];
+
     [transformView addSubview:transformImageView];
     
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
@@ -654,6 +621,22 @@ typedef enum {
                                                      named:@"main"
                                             depthTransform:depthTransform];
 
+    executeView = [[UIView alloc] initWithFrame: CGRectMake(0, LATER, EXECUTE_VIEW_W, LATER)];
+    executeView.userInteractionEnabled = YES;
+
+    multiButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    multiButton.frame = CGRectMake(0, 2, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
+    multiButton.autoresizingMask = UIViewAutoresizingNone;
+    [multiButton setTitle:@"Multi" forState:UIControlStateNormal];
+    [multiButton addTarget:self
+                    action:@selector(togglemultipleMode:)
+          forControlEvents:UIControlEventTouchUpInside];
+    multiButton.selected = options.multipleMode;
+    multiButton.layer.borderColor = [UIColor blueColor].CGColor;
+    multiButton.layer.cornerRadius = 5.0;
+    multiButton.titleLabel.adjustsFontSizeToFitWidth = YES;
+    [executeView addSubview:multiButton];
+    
     executeScrollView = [[UIScrollView alloc] init];
     executeScrollView.pagingEnabled = NO;
     executeScrollView.showsVerticalScrollIndicator = NO;
@@ -671,11 +654,12 @@ typedef enum {
     executeScrollView.layer.borderWidth = 0.5;
     executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
 
-    executeView =  [[UIView alloc]
-                    initWithFrame:CGRectMake(0, 0, EXECUTE_VIEW_W, EXECUTE_ROW_H)];
-    [executeScrollView addSubview:executeView];
+    executeListView =  [[UIView alloc]
+                    initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, EXECUTE_ROW_H)];
+    [executeScrollView addSubview:executeListView];
     
-    [transformView addSubview:executeScrollView];
+    [executeView addSubview:executeScrollView];
+    [containerView addSubview:executeView];
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -850,8 +834,6 @@ typedef enum {
 
 // this is called when we know the transforms are all Stopped.
 
-#define SEP 5  // between views
-#define INSET 3 // from screen edges
 #define MIN_TRANS_TABLE_W 275
 
 BOOL roomRightOftransformView;
@@ -973,7 +955,7 @@ BOOL roomUndertransformView;
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
     BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
     CGSize availableSize = containerView.frame.size;
-    availableSize.height -= EXECUTE_BELOW_SPACE;
+    availableSize.height -= EXECUTE_MIN_ROWS_SHOWN;
 
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
@@ -1034,12 +1016,19 @@ BOOL roomUndertransformView;
     }
     transformView.frame = f;
     
-    f.size.width = executeView.frame.size.width;
-    f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;    // center
     f.origin.y = BELOW(transformImageView.frame);
+    f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;   // center
     f.size.height = BELOW(transformView.frame) - f.origin.y;
-    executeScrollView.frame = f;
+    executeView.frame = f;
+
+    // button is already on the left
     
+    f.origin.y = 0;
+    f.origin.x = RIGHT(multiButton.frame) + SEP;
+    f.size.width = executeListView.frame.size.width;
+    executeScrollView.frame = f;
+    executeScrollView.backgroundColor = [UIColor yellowColor];
+
     [screenTasks configureGroupForSize: displaySize];
 
     //    [externalTask configureForSize: processingSize];
@@ -1081,7 +1070,7 @@ BOOL roomUndertransformView;
 }
 
 - (void) adjustCameraButtons {
-//    NSLog(@"****** adjustButtons ******");
+//    NSLog(@"****** adjustCameraButtons ******");
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     stopCamera.enabled = capturing;
@@ -1275,21 +1264,24 @@ CGFloat topOfNonDepthArray = 0;
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
 
-    if (!options.multipleMode) {
-        [self deleteLastScreenTransform];
-    }
-    [screenTask appendTransform:tappedTransform];
+    if (!options.multipleMode && [self deleteLastScreenTransform]) {
+        // XXXXXX if it is the same one,delete and exit
+        // retapped active transform, deleting it.  We are done
+    } else
+        [screenTask appendTransform:tappedTransform];
     [self adjustExecuteDisplay];
 }
 
-- (void) deleteLastScreenTransform {
+// return YES if we deleted something
+- (BOOL) deleteLastScreenTransform {
     assert(screenTask.transformList.count);
     if (screenTask.transformList.count == DEPTH_TRANSFORM+1)
         // We don't delete the depth transform
-        return;
+        return NO;
     
     NSLog(@"  %lu", (unsigned long)screenTask.transformList.count);
     [screenTasks removeLastTransform];
+    return YES;
 }
 
 - (void) adjustThumb:(UIView *) thumb selected:(BOOL)selected {
@@ -1432,7 +1424,7 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) didPanSceen:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
 }
 
-- (IBAction) doSave:(UIBarButtonItem *)barButton {
+- (IBAction) doSave {
     NSLog(@"saving");   // XXX need full image for a save
     UIImageWriteToSavedPhotosAlbum(transformImageView.image, nil, nil, nil);
     
@@ -1455,16 +1447,11 @@ CGFloat topOfNonDepthArray = 0;
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
-- (IBAction) didSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
-    NSLog(@"did swipe video left, save output to photos");
+- (IBAction) doLeft:(UISwipeGestureRecognizer *)recognizer {
+    [self doSave];
 }
 
-- (IBAction) didTwoSwipeVideoLeft:(UISwipeGestureRecognizer *)recognizer {
-    NSLog(@"did two swipe video right, save screen to photos");
-}
-
-
-- (IBAction) didSwipeVideoRight:(UISwipeGestureRecognizer *)recognizer {
+- (IBAction) doRight:(UISwipeGestureRecognizer *)recognizer {
     NSLog(@"did swipe video right");
     [self doRemoveLastTransform];
 }
@@ -1760,7 +1747,7 @@ UIImageOrientation lastOrientation;
     [self removeScreenTransformAtIndex: screenTask.transformList.count - 1];
 }
 
-- (IBAction) togglemultipleMode:(UITapGestureRecognizer *)sender {
+- (IBAction) togglemultipleMode:(UIButton *)sender {
     options.multipleMode = !options.multipleMode;
     NSLog(@" multipleMode = %d", options.multipleMode);
 //    multipleModeButton = options.multipleMode;
@@ -1768,47 +1755,47 @@ UIImageOrientation lastOrientation;
     [self adjustExecuteDisplay];
 }
 
-- (IBAction) doUp:(UITapGestureRecognizer *)sender {
+- (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doUp");
     selectedExecutionStep--;
     [self adjustExecuteDisplay];
 }
 
-- (IBAction) doDown:(UITapGestureRecognizer *)sender {
+- (IBAction) doDown:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doDown");
     selectedExecutionStep++;
     [self adjustExecuteDisplay];
 }
 
 - (void) adjustExecuteDisplay { // for the moment, build it from scratch every time
-    CGFloat h = multipleModeBarButton.customView.frame.size.height;
     if (options.multipleMode) {
-        multipleViewLabel.font = [UIFont systemFontOfSize:h
-                                                       weight:UIFontWeightBold];
+        multiButton.titleLabel.font = [UIFont boldSystemFontOfSize:EXECUTE_BUTTON_FONT_H];
+        multiButton.layer.borderWidth = 4.0;
     } else {
-        multipleViewLabel.font = [UIFont systemFontOfSize:h
-                                                   weight:UIFontWeightLight];
+        multiButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
+        multiButton.layer.borderWidth = 1.0;
     }
-    [multipleViewLabel setNeedsDisplay];
+    [multiButton setNeedsDisplay];
     
     int start = DOING_3D ? 0 : 1;
-    [executeViews removeAllObjects];
+    [executeListViews removeAllObjects];
     for (int i=start; i<screenTask.transformList.count; i++) {
-        ExecuteRowView *executeRowView = [screenTask executeViewForStep:i];
-        [executeViews addObject:executeRowView];
+        ExecuteRowView *executeRowView = [screenTask executeListViewForStep:i];
+        [executeListViews addObject:executeRowView];
     }
     // clear out the old rows
-    [executeView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    [executeListView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
 
-    SET_VIEW_HEIGHT(executeView, (executeViews.count+1) * EXECUTE_ROW_H);
+    SET_VIEW_HEIGHT(executeListView, (executeListViews.count+1) * EXECUTE_ROW_H);
     ExecuteRowView *rowView;
-    for (int i=0; i<executeViews.count; i++) {
-        rowView = [executeViews objectAtIndex:i];
+    for (int i=0; i<executeListViews.count; i++) {
+        rowView = [executeListViews objectAtIndex:i];
         SET_VIEW_Y(rowView, i*EXECUTE_ROW_H);
-        [executeView addSubview:rowView];
+        [executeListView addSubview:rowView];
     }
-    SET_VIEW_HEIGHT(executeView, BELOW(rowView.frame));
-    executeScrollView.backgroundColor = [UIColor lightGrayColor];
-    executeView.backgroundColor = [UIColor yellowColor];
-    executeScrollView.contentSize = executeView.frame.size;
+    SET_VIEW_HEIGHT(executeListView, BELOW(rowView.frame));
+    executeListView.backgroundColor = [UIColor yellowColor];
+    executeScrollView.contentSize = executeListView.frame.size;
     [executeScrollView setNeedsLayout];
 }
 

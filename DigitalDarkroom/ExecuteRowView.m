@@ -25,6 +25,7 @@
         [self addSubview:selectedChar];
 
         f.origin.x = RIGHT(f);
+        f.size.width = 2*EXECUTE_CHAR_W;
         statusChar = [[UILabel alloc] initWithFrame:f];
         statusChar.text = @"";
         statusChar.textAlignment = NSTextAlignmentRight;
@@ -56,6 +57,7 @@
         [self addSubview:timing];
         
         f.size.width = RIGHT(f);
+        assert(f.size.width == EXECUTE_LIST_W);
         f.origin.x = 0;
         self.frame = f;
     }
