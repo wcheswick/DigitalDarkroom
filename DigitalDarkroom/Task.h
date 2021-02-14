@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureTaskForSize;
 - (void) configureTransformAtIndex:(size_t)ti;
 
-- (void) appendTransform:(Transform *) transform;
+- (long) appendTransform:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;
 - (void) removeLastTransform;
 - (void) removeAllTransforms;

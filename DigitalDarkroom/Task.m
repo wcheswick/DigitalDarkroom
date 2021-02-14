@@ -102,7 +102,7 @@ static PixelIndex_t dPI(int x, int y) {
     }
 }
 
-- (void) appendTransform:(Transform *) transform {
+- (long) appendTransform:(Transform *) transform {
     assert(transformList.count > 0);    // depth has to be there already
     assert(transform.type != DepthVis); // we have depth, don't add another one
 //    if (taskGroup.taskCtrl.layoutNeeded)
@@ -111,7 +111,9 @@ static PixelIndex_t dPI(int x, int y) {
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
     [paramList addObject:instance];
-    [self configureTransformAtIndex:transformList.count - 1];
+    long newIndex = transformList.count - 1;
+    [self configureTransformAtIndex:newIndex];
+    return newIndex;
 }
 
 - (void) removeLastTransform {

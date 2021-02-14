@@ -95,6 +95,7 @@
 
 #define DEPTH_TABLE_SECTION     0
 
+#define NO_STEP_SELECTED    -1
 #define DOING_3D    IS_3D_CAMERA(currentSource.sourceType)
 
 typedef enum {
@@ -352,7 +353,10 @@ typedef enum {
             }
         }
         currentSource = nextSource;
-        selectedExecutionStep = 0;  // depth is selected, even if not available
+        if (DOING_3D)
+            selectedExecutionStep = 0;  // depth is selected, even if not available
+        else
+            selectedExecutionStep = NO_STEP_SELECTED;
     }
     return self;
 }
@@ -1263,13 +1267,24 @@ CGFloat topOfNonDepthArray = 0;
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
-
-    if (!options.multipleMode && [self deleteLastScreenTransform]) {
-        // XXXXXX if it is the same one,delete and exit
-        // retapped active transform, deleting it.  We are done
-    } else
-        [screenTask appendTransform:tappedTransform];
-    [self adjustExecuteDisplay];
+    
+    if (options.multipleMode || selectedExecutionStep == NO_STEP_SELECTED) {
+        selectedExecutionStep = [screenTask appendTransform:tappedTransform];
+        [self adjustExecuteDisplay];
+    } else {
+        assert(screenTask.transformList.count > 1);
+        Transform *currentTransform = [screenTask.transformList objectAtIndex:1];
+        if ([currentTransform.name isEqual:tappedTransform.name]) {
+            // retapped current transform.  Get rid of it, and we are done
+            [self deleteLastScreenTransform];
+            selectedExecutionStep = NO_STEP_SELECTED;
+            [self adjustExecuteDisplay];
+        } else {    // switched to a new one
+            [self deleteLastScreenTransform];
+            [screenTask appendTransform:tappedTransform];
+            [self adjustExecuteDisplay];
+        }
+    }
 }
 
 // return YES if we deleted something
