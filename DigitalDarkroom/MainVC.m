@@ -139,7 +139,6 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
 
 @property (nonatomic, strong)   UIView *executeView;                 // the whole execute list area
-@property (nonatomic, strong)   UIButton *stackButton;
 @property (nonatomic, strong)   UIScrollView *executeScrollView;
 @property (nonatomic, strong)   UIView *executeListView;
 @property (nonatomic, strong)   NSMutableArray *executeListViews;   // array of views in executeListView
@@ -629,7 +628,7 @@ typedef enum {
     executeView.userInteractionEnabled = YES;
 
     stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    stackingButton.frame = CGRectMake(0, 2, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
+    stackingButton.frame = CGRectMake(0, LATER, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
     stackingButton.autoresizingMask = UIViewAutoresizingNone;
     [stackingButton setTitle:@"Stacking" forState:UIControlStateNormal];
     [stackingButton addTarget:self
@@ -652,7 +651,7 @@ typedef enum {
     executeScrollView.delegate = self;
     executeScrollView.scrollEnabled = YES;
     executeScrollView.backgroundColor = [UIColor clearColor];
-    executeScrollView.opaque = NO;
+    executeScrollView.opaque = YES;
     executeScrollView.scrollEnabled = YES;
     executeScrollView.contentOffset = CGPointZero;
     executeScrollView.layer.borderWidth = 0.5;
@@ -660,10 +659,12 @@ typedef enum {
 
     executeListView =  [[UIView alloc]
                     initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, EXECUTE_ROW_H)];
+    executeListView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    executeListView.opaque = NO;
     [executeScrollView addSubview:executeListView];
     
     [executeView addSubview:executeScrollView];
-    [containerView addSubview:executeView];
+    [transformView addSubview:executeView];
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -957,7 +958,7 @@ BOOL roomUndertransformView;
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
     BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
     CGSize availableSize = containerView.frame.size;
-    availableSize.height -= EXECUTE_BELOW_SPACE;
+    availableSize.height -= EXECUTE_MIN_BELOW_SPACE;
 
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
@@ -1007,27 +1008,28 @@ BOOL roomUndertransformView;
     f.origin = CGPointZero;
     f.size = displaySize;
     transformImageView.frame = f;
-    
-    f.origin.y = BELOW(transformImageView.frame);
-    f.origin.x = (transformImageView.frame.size.width - f.size.width)/2.0;   // center
-    f.size.height = EXECUTE_BELOW_SPACE;
-    executeView.frame = f;
 
-    f.origin = CGPointZero;
-    f.size.height += EXECUTE_BELOW_SPACE;   // transformView has some lines under it
-    if (!roomRightOftransformView) {
-        // if no room at the right, then center the image displaySize
-        f.origin.x = (containerView.frame.size.width - f.size.width)/2;
+    CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
+    assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
+    if (roomUndertransformView) {
+        execSpace = EXECUTE_MIN_ROWS_BELOW;
+        // XXX maybe we don't need to squeeze here so hard sometimes.
     }
-    if (!roomUndertransformView) {
-        // if no room for thumbs underneath, increase the execute space
-        CGFloat h = containerView.frame.size.height - executeView.frame.origin.y;
-        assert(h >= EXECUTE_BELOW_SPACE);
-        SET_VIEW_HEIGHT(executeView, h);
+    
+    executeView.frame = CGRectMake(0, BELOW(transformImageView.frame),
+                                   displaySize.width, execSpace);
+    transformView.frame = CGRectMake(0, 0, displaySize.width, BELOW(executeView.frame));
+    [transformView bringSubviewToFront:executeView];
+    executeView.layer.borderWidth = 2.0;
+    
+    // now, overlap exec view on image, if needed, on small devices
+    if (execSpace < EXECUTE_VIEW_H) {
+        SET_VIEW_Y(executeView, BELOW(executeView.frame) - EXECUTE_VIEW_H);
+        SET_VIEW_HEIGHT(executeView, EXECUTE_VIEW_H)
     }
-    transformView.frame = f;
 
     // lay out execute view
+    SET_VIEW_Y(stackingButton, executeView.frame.size.height - stackingButton.frame.size.height);
     // stack button is already on the left
     f.origin.y = 0;
     f.origin.x = RIGHT(stackingButton.frame) + SEP;

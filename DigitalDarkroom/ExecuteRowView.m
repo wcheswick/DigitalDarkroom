@@ -37,7 +37,7 @@
         name.text = tn;
         name.font = [UIFont systemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         name.textAlignment = NSTextAlignmentLeft;
-        name.adjustsFontSizeToFitWidth = YES;
+//        name.adjustsFontSizeToFitWidth = YES;
         [self addSubview:name];
         
         f.origin.x = RIGHT(f);
