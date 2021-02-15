@@ -68,7 +68,7 @@
     plusLabel.text = @"+";
     [self.view addSubview:plusLabel];
     UISwitch *plusSwitch = [[UISwitch alloc] initWithFrame:sr];
-    plusSwitch.on = options.multipleMode;
+    plusSwitch.on = options.stackingMode;
     [self.view addSubview:plusSwitch];
     
     lr.origin.y = sr.origin.y = BELOW(lr) + VSEP;
@@ -120,7 +120,7 @@
         switch (indexPath.row) {
             case 0:
                 cell.largeContentTitle = @"Build mode";
-                cell.accessoryType = options.multipleMode ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+                cell.accessoryType = options.stackingMode ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
             case 1:
                 cell.largeContentTitle = @"Debug exec";
@@ -154,7 +154,7 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.row < OPTION_COUNT) {
         switch (indexPath.row) {
             case 0:
-                options.multipleMode = !options.multipleMode;
+                options.stackingMode = !options.stackingMode;
                 break;
             case 1:
                 options.executeDebug = !options.executeDebug;

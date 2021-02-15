@@ -139,7 +139,7 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
 
 @property (nonatomic, strong)   UIView *executeView;                 // the whole execute list area
-@property (nonatomic, strong)   UIButton *multiButton;
+@property (nonatomic, strong)   UIButton *stackButton;
 @property (nonatomic, strong)   UIScrollView *executeScrollView;
 @property (nonatomic, strong)   UIView *executeListView;
 @property (nonatomic, strong)   NSMutableArray *executeListViews;   // array of views in executeListView
@@ -170,7 +170,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UILabel *multipleViewLabel;
+@property (nonatomic, strong)   UIButton *stackingButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -207,7 +207,7 @@ typedef enum {
 @synthesize thumbArrayView;
 
 @synthesize executeView;
-@synthesize multiButton;
+@synthesize stackingButton;
 @synthesize executeScrollView;
 @synthesize executeListView;
 @synthesize executeListViews;
@@ -573,11 +573,11 @@ typedef enum {
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.layer.borderWidth = 1.0;
+    containerView.layer.borderColor = [UIColor redColor].CGColor;
     containerView.userInteractionEnabled = YES;
 #ifdef DEBUG_LAYOUT
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
-    
     transformView = [[UIView alloc] init];
     
     [containerView addSubview:transformView];
@@ -628,18 +628,18 @@ typedef enum {
     executeView = [[UIView alloc] initWithFrame: CGRectMake(0, LATER, EXECUTE_VIEW_W, LATER)];
     executeView.userInteractionEnabled = YES;
 
-    multiButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    multiButton.frame = CGRectMake(0, 2, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
-    multiButton.autoresizingMask = UIViewAutoresizingNone;
-    [multiButton setTitle:@"Multi" forState:UIControlStateNormal];
-    [multiButton addTarget:self
-                    action:@selector(togglemultipleMode:)
+    stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    stackingButton.frame = CGRectMake(0, 2, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
+    stackingButton.autoresizingMask = UIViewAutoresizingNone;
+    [stackingButton setTitle:@"Stacking" forState:UIControlStateNormal];
+    [stackingButton addTarget:self
+                       action:@selector(toggleStackingMode:)
           forControlEvents:UIControlEventTouchUpInside];
-    multiButton.selected = options.multipleMode;
-    multiButton.layer.borderColor = [UIColor blueColor].CGColor;
-    multiButton.layer.cornerRadius = 5.0;
-    multiButton.titleLabel.adjustsFontSizeToFitWidth = YES;
-    [executeView addSubview:multiButton];
+    stackingButton.selected = options.stackingMode;
+    stackingButton.layer.borderColor = [UIColor blueColor].CGColor;
+    stackingButton.layer.cornerRadius = 5.0;
+    stackingButton.titleLabel.adjustsFontSizeToFitWidth = YES;
+    [executeView addSubview:stackingButton];
     
     executeScrollView = [[UIScrollView alloc] init];
     executeScrollView.pagingEnabled = NO;
@@ -854,7 +854,7 @@ BOOL roomUndertransformView;
     self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
     self.navigationController.toolbarHidden = YES;
     
-//    multipleViewLabel.frame = multipleModeBarButton.customView.frame;
+//    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
     
     // set up new source, if needed
     if (nextSource) {
@@ -935,7 +935,6 @@ BOOL roomUndertransformView;
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
     CGFloat topPadding = window.safeAreaInsets.top;
     CGFloat bottomPadding = window.safeAreaInsets.bottom;
-    USED(bottomPadding);
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
@@ -944,22 +943,21 @@ BOOL roomUndertransformView;
           leftPadding, rightPadding, topPadding, bottomPadding);
 #endif
     
-    UIStatusBarManager *manager = [UIApplication sharedApplication].windows.firstObject.windowScene.statusBarManager;
-    CGFloat height = manager.statusBarFrame.size.height;
-    // not needed, apparently height += topPadding;
-    f.origin.y = height + self.navigationController.navigationBar.frame.size.height + topPadding + SEP;
-    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y; //  - bottomPadding;
+    f = self.view.frame;
     f.origin.x = leftPadding + SEP;
-    f.size.width -= rightPadding + f.origin.x;
+    f.origin.y = topPadding + BELOW(self.navigationController.navigationBar.frame) + SEP;
+    f.size.height = f.size.height - bottomPadding - f.origin.y;
+    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
-    NSLog(@"    containerview frame:  %.0f x %.0f", f.size.width, f.size.height);
+    NSLog(@"    containerview frame: %.0f,%.0f  %.0f x %.0f",
+          f.origin.x, f.origin.y, f.size.width, f.size.height);
 #endif
     
     UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
     BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
     CGSize availableSize = containerView.frame.size;
-    availableSize.height -= EXECUTE_MIN_ROWS_SHOWN;
+    availableSize.height -= EXECUTE_BELOW_SPACE;
 
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
@@ -1005,58 +1003,72 @@ BOOL roomUndertransformView;
 #endif
     
     assert(displaySize.height > 0);     // should never happen, of course
-
+    
     f.origin = CGPointZero;
     f.size = displaySize;
     transformImageView.frame = f;
     
-    if (!roomRightOftransformView) { // then center the image displaySize
-        f.origin.x = (containerView.frame.size.width - f.size.width)/2;
-    }
-    f.size.height += EXECUTE_BELOW_SPACE;   // transformView has some lines under it
-    CGFloat below = containerView.frame.size.height - BELOW(f);
-    if (below < SOURCE_THUMB_H) {   // no room for underneath thumbs, use it
-        f.size.height += below;
-    }
-    transformView.frame = f;
-    
     f.origin.y = BELOW(transformImageView.frame);
-    f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;   // center
-    f.size.height = BELOW(transformView.frame) - f.origin.y;
+    f.origin.x = (transformImageView.frame.size.width - f.size.width)/2.0;   // center
+    f.size.height = EXECUTE_BELOW_SPACE;
     executeView.frame = f;
 
-    // button is already on the left
-    
+    f.origin = CGPointZero;
+    f.size.height += EXECUTE_BELOW_SPACE;   // transformView has some lines under it
+    if (!roomRightOftransformView) {
+        // if no room at the right, then center the image displaySize
+        f.origin.x = (containerView.frame.size.width - f.size.width)/2;
+    }
+    if (!roomUndertransformView) {
+        // if no room for thumbs underneath, increase the execute space
+        CGFloat h = containerView.frame.size.height - executeView.frame.origin.y;
+        assert(h >= EXECUTE_BELOW_SPACE);
+        SET_VIEW_HEIGHT(executeView, h);
+    }
+    transformView.frame = f;
+
+    // lay out execute view
+    // stack button is already on the left
     f.origin.y = 0;
-    f.origin.x = RIGHT(multiButton.frame) + SEP;
+    f.origin.x = RIGHT(stackingButton.frame) + SEP;
     f.size.width = executeListView.frame.size.width;
+    f.size.height = executeView.frame.size.height;
     executeScrollView.frame = f;
-    executeScrollView.backgroundColor = [UIColor yellowColor];
 
     [screenTasks configureGroupForSize: displaySize];
 
     //    [externalTask configureForSize: processingSize];
-
-    // for a start, these fit in the container, though we may
-    // adjust them later.
     
     f = containerView.frame;
     f.origin = CGPointMake(0, transformView.frame.origin.y);
     f.size.height -= f.origin.y;
+    if (!roomRightOftransformView) {
+        // all thumbs underneath
+        f.origin.x = 0;
+        f.origin.y = BELOW(executeView.frame);
+        f.size.width = containerView.frame.size.width;
+        f.size.height = containerView.frame.size.height - f.origin.y;
+    } else if (!roomUndertransformView) {
+        // all thumbs to the right
+        f.origin.x = RIGHT(transformView.frame) + SEP;
+        f.origin.y = transformView.frame.origin.y;
+        f.size.width = containerView.frame.size.width - f.origin.x;
+        f.size.height = containerView.frame.size.height - f.origin.y;
+    } else {
+        // both places, let the layout figure the available areas
+        CGRect f = self->containerView.frame;
+        f.origin = CGPointZero;
+    }
     thumbScrollView.frame = f;
     f.origin = CGPointZero;
     thumbArrayView.frame = f;   // the final may be higher
 
     [UIView animateWithDuration:0.5 animations:^(void) {
-        CGRect f = self->containerView.frame;
-        f.origin = CGPointZero;
-        self->thumbScrollView.frame = f;
         // move views to where they need to be now.
         [self layoutThumbArray];
     }];
     
     [containerView bringSubviewToFront:transformView];
-//    transformView.hidden = YES;
     
     if (adjustSourceInfo) {
         [self adjustCameraButtons];
@@ -1109,20 +1121,11 @@ CGFloat topOfNonDepthArray = 0;
     
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
                                    imageRect.size.height + OLIVE_LABEL_H);
-    
-    roomRightOftransformView = RIGHT(transformView.frame) +
-        SEP + nextButtonFrame.size.width <= containerView.frame.size.width;
-    roomUndertransformView = BELOW(transformView.frame) +
-        SEP + nextButtonFrame.size.height <= containerView.frame.size.height;
-    assert(roomUndertransformView || roomRightOftransformView); // we need space somewhere...
-
-    if (roomRightOftransformView) {
+    if (roomRightOftransformView && roomUndertransformView) {
         nextButtonFrame.origin.x = RIGHT(transformView.frame) + SEP;
         nextButtonFrame.origin.y = transformView.frame.origin.y;
-    } else {
-        nextButtonFrame.origin.x = transformView.frame.origin.x;
-        nextButtonFrame.origin.y = BELOW(transformView.frame) + SEP;
-    }
+    } else
+        nextButtonFrame.origin = CGPointMake(0, 0);
     
     atStartOfRow = YES;
 
@@ -1213,18 +1216,11 @@ CGFloat topOfNonDepthArray = 0;
         return;
     CGRect f = nextButtonFrame;
     f.origin.y = BELOW(f) + SEP;
-    if (roomRightOftransformView) {
-        if (f.origin.y < BELOW(transformView.frame)) {   // we are still on the right
-            f.origin.x = RIGHT(transformView.frame) + SEP;
-        } else {    // below transformView. Space underneath?
-            if (roomUndertransformView)
-                f.origin.x = 0;
-            else
-                f.origin.x = RIGHT(transformView.frame) + SEP;
-        }
-    } else {    // room only under transform view
-        assert(roomUndertransformView);
-        f.origin.x = transformView.frame.origin.x;
+    if (roomRightOftransformView && roomUndertransformView &&
+            f.origin.y < BELOW(transformView.frame)) {  // we are still on the right
+        f.origin.x = RIGHT(transformView.frame) + SEP;
+    } else {
+        f.origin.x = 0;
     }
     nextButtonFrame = f;
     atStartOfRow = YES;
@@ -1268,12 +1264,14 @@ CGFloat topOfNonDepthArray = 0;
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     
-    if (options.multipleMode || selectedExecutionStep == NO_STEP_SELECTED) {
+    if (options.stackingMode || selectedExecutionStep == NO_STEP_SELECTED) {
         selectedExecutionStep = [screenTask appendTransform:tappedTransform];
         [self adjustExecuteDisplay];
     } else {
         assert(screenTask.transformList.count > 1);
-        Transform *currentTransform = [screenTask.transformList objectAtIndex:1];
+        Transform *currentTransform = [screenTask.transformList objectAtIndex:1
+                                       
+                                       ];
         if ([currentTransform.name isEqual:tappedTransform.name]) {
             // retapped current transform.  Get rid of it, and we are done
             [self deleteLastScreenTransform];
@@ -1762,10 +1760,10 @@ UIImageOrientation lastOrientation;
     [self removeScreenTransformAtIndex: screenTask.transformList.count - 1];
 }
 
-- (IBAction) togglemultipleMode:(UIButton *)sender {
-    options.multipleMode = !options.multipleMode;
-    NSLog(@" multipleMode = %d", options.multipleMode);
-//    multipleModeButton = options.multipleMode;
+- (IBAction) toggleStackingMode:(UIButton *)sender {
+    options.stackingMode = !options.stackingMode;
+    NSLog(@" stackingMode = %d", options.stackingMode);
+//    stackingModeButton = options.stackingMode;
     [options save];
     [self adjustExecuteDisplay];
 }
@@ -1783,14 +1781,16 @@ UIImageOrientation lastOrientation;
 }
 
 - (void) adjustExecuteDisplay { // for the moment, build it from scratch every time
-    if (options.multipleMode) {
-        multiButton.titleLabel.font = [UIFont boldSystemFontOfSize:EXECUTE_BUTTON_FONT_H];
-        multiButton.layer.borderWidth = 4.0;
+    if (options.stackingMode) {
+        stackingButton.titleLabel.text = @"Single";
+        stackingButton.titleLabel.font = [UIFont boldSystemFontOfSize:EXECUTE_BUTTON_FONT_H];
+        stackingButton.layer.borderWidth = 4.0;
     } else {
-        multiButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
-        multiButton.layer.borderWidth = 1.0;
+        stackingButton.titleLabel.text = @"Stacking";
+        stackingButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
+        stackingButton.layer.borderWidth = 1.0;
     }
-    [multiButton setNeedsDisplay];
+    [stackingButton setNeedsDisplay];
     
     int start = DOING_3D ? 0 : 1;
     [executeListViews removeAllObjects];
@@ -1809,7 +1809,6 @@ UIImageOrientation lastOrientation;
         [executeListView addSubview:rowView];
     }
     SET_VIEW_HEIGHT(executeListView, BELOW(rowView.frame));
-    executeListView.backgroundColor = [UIColor yellowColor];
     executeScrollView.contentSize = executeListView.frame.size;
     [executeScrollView setNeedsLayout];
 }
