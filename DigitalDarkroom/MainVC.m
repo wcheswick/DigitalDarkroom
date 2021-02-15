@@ -659,7 +659,7 @@ typedef enum {
 
     executeListView =  [[UIView alloc]
                     initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, EXECUTE_ROW_H)];
-    executeListView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    executeListView.backgroundColor = [UIColor clearColor];
     executeListView.opaque = NO;
     [executeScrollView addSubview:executeListView];
     
@@ -1336,7 +1336,6 @@ CGFloat topOfNonDepthArray = 0;
         label.adjustsFontSizeToFitWidth = YES;
         label.font = [UIFont systemFontOfSize:EXECUTE_LABEL_FONT];
         label.opaque = YES;
-        //label.backgroundColor = [UIColor clearColor];
         [executeControlView addSubview:label];
         f.origin.y -= f.size.height;
     }
@@ -1710,7 +1709,6 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
     [screenTasks removeAllTransforms];
-    [thumbTasks removeAllTransforms];
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {
@@ -1796,18 +1794,22 @@ UIImageOrientation lastOrientation;
     
     int start = DOING_3D ? 0 : 1;
     [executeListViews removeAllObjects];
-    for (int i=start; i<screenTask.transformList.count; i++) {
-        ExecuteRowView *executeRowView = [screenTask executeListViewForStep:i];
+    for (int step=start; step<screenTask.transformList.count; step++) {
+        ExecuteRowView *executeRowView = [screenTask executeListViewForStep:step];
+        executeRowView.backgroundColor = [UIColor whiteColor];
+        executeRowView.opaque = YES;
         [executeListViews addObject:executeRowView];
     }
     // clear out the old rows
     [executeListView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
 
     SET_VIEW_HEIGHT(executeListView, (executeListViews.count+1) * EXECUTE_ROW_H);
+    // XXX needs to move up properly, like a scroll view
     ExecuteRowView *rowView;
     for (int i=0; i<executeListViews.count; i++) {
         rowView = [executeListViews objectAtIndex:i];
-        SET_VIEW_Y(rowView, i*EXECUTE_ROW_H);
+        CGFloat y = executeListView.frame.size.height - (i+1) * EXECUTE_ROW_H;
+        SET_VIEW_Y(rowView, y);
         [executeListView addSubview:rowView];
     }
     SET_VIEW_HEIGHT(executeListView, BELOW(rowView.frame));

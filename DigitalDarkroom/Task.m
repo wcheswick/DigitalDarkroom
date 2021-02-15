@@ -80,7 +80,8 @@ static PixelIndex_t dPI(int x, int y) {
     Transform *transform = [transformList objectAtIndex:step];
     TransformInstance *instance = [paramList objectAtIndex:step];
     UIView *rowView = [[ExecuteRowView alloc]
-                       initWithName:transform.name param:instance];
+                       initWithName:transform.name
+                       param:instance step:step];
     return rowView;
 }
 

@@ -11,38 +11,46 @@
 
 @implementation ExecuteRowView
 
-@synthesize selectedChar;
 @synthesize statusChar;
+@synthesize stepNumber;
 @synthesize name, param, timing;
 
-- (id)initWithName:(NSString *)tn param:(TransformInstance *)instance {
+- (id)initWithName:(NSString *)tn param:(TransformInstance *)instance step:(int)step {
     self = [super init];
     if (self) {
         CGRect f = CGRectMake(0, 0, EXECUTE_CHAR_W, EXECUTE_ROW_H);
-        selectedChar = [[UILabel alloc] initWithFrame:f];
-        selectedChar.text = @"";
-        selectedChar.textAlignment = NSTextAlignmentRight;
-        [self addSubview:selectedChar];
-
-        f.origin.x = RIGHT(f);
-        f.size.width = 2*EXECUTE_CHAR_W;
         statusChar = [[UILabel alloc] initWithFrame:f];
+        statusChar.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         statusChar.text = @"";
         statusChar.textAlignment = NSTextAlignmentRight;
+//        statusChar.backgroundColor = [UIColor yellowColor];
         [self addSubview:statusChar];
         
         f.origin.x = RIGHT(f);
+        f.size.width = STEP_W;
+        stepNumber = [[UILabel alloc] initWithFrame:f];
+        stepNumber.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
+        if (step == NO_DEPTH_TRANSFORM)
+            stepNumber.text = @"d";
+        else
+            stepNumber.text = [NSString stringWithFormat:@"%2d ", step];
+        stepNumber.textAlignment = NSTextAlignmentRight;
+//        stepNumber.backgroundColor = [UIColor orangeColor];
+        [self addSubview:stepNumber];
+        
+        f.origin.x = RIGHT(f) + SEP;
         f.size.width = EXECUTE_NAME_W;
         name = [[UILabel alloc] initWithFrame:f];
         name.text = tn;
-        name.font = [UIFont systemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
+        name.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         name.textAlignment = NSTextAlignmentLeft;
-//        name.adjustsFontSizeToFitWidth = YES;
+//        name.backgroundColor = [UIColor redColor];
         [self addSubview:name];
         
         f.origin.x = RIGHT(f);
         f.size.width = EXECUTE_NUMBERS_W;
         param = [[UILabel alloc] initWithFrame:f];
+        param.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         param.text = [instance valueInfo];
         param.textAlignment = NSTextAlignmentRight;
         param.adjustsFontSizeToFitWidth = YES;
@@ -51,6 +59,7 @@
         f.origin.x = RIGHT(f);
         f.size.width = EXECUTE_NUMBERS_W;
         timing = [[UILabel alloc] initWithFrame:f];
+        timing.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         timing.text = [instance timeInfo];
         timing.textAlignment = NSTextAlignmentRight;
         param.adjustsFontSizeToFitWidth = YES;
