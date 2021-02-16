@@ -636,7 +636,7 @@ typedef enum {
     stackingButton.frame = CGRectMake(0, EXECUTE_VIEW_MAX_H - EXECUTE_BUTTON_H,
                                       EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
     stackingButton.autoresizingMask = UIViewAutoresizingNone;
-    [stackingButton setTitle:@"Stacking" forState:UIControlStateNormal];
+    [stackingButton setTitle:@"Stack" forState:UIControlStateNormal];
     [stackingButton addTarget:self
                        action:@selector(toggleStackingMode:)
           forControlEvents:UIControlEventTouchUpInside];
@@ -662,8 +662,8 @@ typedef enum {
     executeScrollView.opaque = YES;
     executeScrollView.scrollEnabled = YES;
     executeScrollView.contentOffset = CGPointZero;
-    executeScrollView.layer.borderWidth = 0.5;
-    executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
+//    executeScrollView.layer.borderWidth = 0.5;
+//    executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
 
     executeListView =  [[UIView alloc]
                     initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, LATER)];
@@ -1801,13 +1801,13 @@ UIImageOrientation lastOrientation;
         stackingButton.titleLabel.font = [UIFont boldSystemFontOfSize:EXECUTE_BUTTON_FONT_H];
         stackingButton.layer.borderWidth = 4.0;
     } else {
-        stackingButton.titleLabel.text = @"Stacking";
+        stackingButton.titleLabel.text = @"Stack";
         stackingButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
         stackingButton.layer.borderWidth = 1.0;
     }
     [stackingButton setNeedsDisplay];
     
-    int start = DOING_3D ? 0 : 1;
+    long start = DOING_3D ? 0 : 1;
     [executeListViews removeAllObjects];
     for (int step=start; step<screenTask.transformList.count; step++) {
         ExecuteRowView *executeRowView = [screenTask executeListViewForStep:step];
@@ -1818,17 +1818,40 @@ UIImageOrientation lastOrientation;
     // clear out the old rows
     [executeListView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
 
-    SET_VIEW_HEIGHT(executeListView, (executeListViews.count+1) * EXECUTE_ROW_H);
-    // XXX needs to move up properly, like a scroll view
+#define LIST_BORDER_W   3
     ExecuteRowView *rowView;
-    for (int i=0; i<executeListViews.count; i++) {
+    start = 0;
+    long finish = executeListViews.count;
+    if (finish > EXECUTE_MAX_ROWS)
+        start = finish - EXECUTE_MAX_ROWS;
+    for (long i=start; i<finish; i++) {
         rowView = [executeListViews objectAtIndex:i];
-        CGFloat y = executeListView.frame.size.height - (i+1) * EXECUTE_ROW_H;
+        CGFloat y = executeListView.frame.size.height -
+            (i - start + 1)*EXECUTE_ROW_H - LIST_BORDER_W;
+        y = (finish - i - 1)*EXECUTE_ROW_H + LIST_BORDER_W;
         SET_VIEW_Y(rowView, y);
         [executeListView addSubview:rowView];
     }
+    SET_VIEW_HEIGHT(executeListView, EXECUTE_VIEW_MAX_H + LIST_BORDER_W);
+    executeListView.layer.borderWidth = LIST_BORDER_W;
+    SET_VIEW_HEIGHT(executeScrollView, EXECUTE_VIEW_MAX_H);
+    executeScrollView.contentSize = executeListView.frame.size;
+    long shown = finish - start;
+    CGFloat yOffset = (shown - EXECUTE_MAX_ROWS)*EXECUTE_ROW_H + LIST_BORDER_W;
+    if (yOffset > 0)
+        yOffset = 0;
+    executeScrollView.contentOffset = CGPointMake(0, yOffset);
+//    NSLog(@" y contentoffset %.0f %ld", executeScrollView.contentOffset.y, shown);
+
+    executeListView.layer.cornerRadius = 5;
+    executeListView.layer.borderWidth = (shown > 1) ? LIST_BORDER_W : 0;
+
+#ifdef NOTYET
     SET_VIEW_HEIGHT(executeListView, BELOW(rowView.frame));
     executeScrollView.contentSize = executeListView.frame.size;
+    CGPoint offset = CGPointMake(0, executeListViews.count*EXECUTE_ROW_H);
+    executeScrollView.contentOffset = offset;
+#endif
     [executeScrollView setNeedsLayout];
 }
 

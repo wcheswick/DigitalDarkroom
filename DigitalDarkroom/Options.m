@@ -30,7 +30,6 @@
         stackingMode = [[NSUserDefaults standardUserDefaults] valueForKey:kstackingModeOption];;
         executeDebug = [[NSUserDefaults standardUserDefaults] valueForKey:kExecuteDebugOption];
         displayMode = medium;   // not in use
-        stackingMode = NO;
         needHires = NO;
         [self save];
     }
