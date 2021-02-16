@@ -571,8 +571,6 @@ typedef enum {
     
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
-    containerView.layer.borderWidth = 1.0;
-    containerView.layer.borderColor = [UIColor redColor].CGColor;
     containerView.userInteractionEnabled = YES;
 #ifdef DEBUG_LAYOUT
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
@@ -624,11 +622,19 @@ typedef enum {
                                                      named:@"main"
                                             depthTransform:depthTransform];
 
-    executeView = [[UIView alloc] initWithFrame: CGRectMake(0, LATER, EXECUTE_VIEW_W, LATER)];
+    executeView = [[UIView alloc]
+                   initWithFrame: CGRectMake(0, LATER,
+                                             EXECUTE_VIEW_W,
+                                             EXECUTE_VIEW_MAX_H)];
+    executeView.opaque = NO;
+    executeView.backgroundColor = [UIColor clearColor];
+    executeScrollView.layer.borderWidth = 0.5;
+    executeScrollView.layer.borderColor = [UIColor greenColor].CGColor;
     executeView.userInteractionEnabled = YES;
 
     stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    stackingButton.frame = CGRectMake(0, LATER, EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
+    stackingButton.frame = CGRectMake(0, EXECUTE_VIEW_MAX_H - EXECUTE_BUTTON_H,
+                                      EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
     stackingButton.autoresizingMask = UIViewAutoresizingNone;
     [stackingButton setTitle:@"Stacking" forState:UIControlStateNormal];
     [stackingButton addTarget:self
@@ -640,7 +646,9 @@ typedef enum {
     stackingButton.titleLabel.adjustsFontSizeToFitWidth = YES;
     [executeView addSubview:stackingButton];
     
-    executeScrollView = [[UIScrollView alloc] init];
+    executeScrollView = [[UIScrollView alloc]
+                         initWithFrame:CGRectMake(RIGHT(stackingButton.frame), 0,
+                                                  EXECUTE_LIST_W, EXECUTE_LIST_W)];
     executeScrollView.pagingEnabled = NO;
     executeScrollView.showsVerticalScrollIndicator = NO;
     executeScrollView.userInteractionEnabled = NO;
@@ -658,7 +666,7 @@ typedef enum {
     executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
 
     executeListView =  [[UIView alloc]
-                    initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, EXECUTE_ROW_H)];
+                    initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, LATER)];
     executeListView.backgroundColor = [UIColor clearColor];
     executeListView.opaque = NO;
     [executeScrollView addSubview:executeListView];
@@ -841,8 +849,8 @@ typedef enum {
 
 #define MIN_TRANS_TABLE_W 275
 
-BOOL roomRightOftransformView;
-BOOL roomUndertransformView;
+BOOL roomForThumbsRightTransformView;
+BOOL roomForThumbsUnderTransformView;
 
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
@@ -962,8 +970,8 @@ BOOL roomUndertransformView;
 
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
-            roomUndertransformView = isPortrait;
-            roomRightOftransformView = !roomUndertransformView;
+            roomForThumbsUnderTransformView = isPortrait;
+            roomForThumbsRightTransformView = !roomForThumbsUnderTransformView;
             if (isPortrait) {   // thumbs underneath, not on the right
                 availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
             } else {
@@ -975,8 +983,8 @@ BOOL roomUndertransformView;
         case UIUserInterfaceIdiomCarPlay:
         case UIUserInterfaceIdiomMac:
         case UIUserInterfaceIdiomUnspecified:
-            roomUndertransformView = !isPortrait;
-            roomRightOftransformView = roomUndertransformView;
+            roomForThumbsUnderTransformView = !isPortrait;
+            roomForThumbsRightTransformView = roomForThumbsUnderTransformView;
             if (isPortrait) {   // thumbs underneath, not on the right
                 availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
             } else {
@@ -988,7 +996,6 @@ BOOL roomUndertransformView;
 #ifdef DEBUG_CAMERA_CAPTURE_SIZE
         NSLog(@"  availableSize target size is %.0f x %.0f", availableSize.width, availableSize.height);
 #endif
-
     CGSize displaySize;
     if (ISCAMERA(currentSource.sourceType)) {   // select camera setting for available area
         displaySize = [cameraController setupCameraForSize:availableSize];
@@ -997,6 +1004,10 @@ BOOL roomUndertransformView;
         CGFloat yScale = currentSource.imageSize.height / availableSize.height;
         CGFloat scale = (xScale < yScale) ? xScale : yScale;
         displaySize = CGSizeMake(availableSize.width*scale, availableSize.height*scale);
+    }
+    if (displaySize.height < 288) {
+        NSLog(@" *** size %.0f x %.0f  needs minimum height of 288 for iPhone ***", availableSize.width, availableSize.height);
+        NSLog(@" ***  got %.0f x %.0f ***", displaySize.width, displaySize.height);
     }
 
 #ifdef DEBUG_LAYOUT
@@ -1011,32 +1022,35 @@ BOOL roomUndertransformView;
 
     CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
     assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
-    if (roomUndertransformView) {
+    if (roomForThumbsUnderTransformView) {
         execSpace = EXECUTE_MIN_ROWS_BELOW;
         // XXX maybe we don't need to squeeze here so hard sometimes.
     }
     
-    executeView.frame = CGRectMake(0, BELOW(transformImageView.frame),
-                                   displaySize.width, execSpace);
+    transformView.frame = CGRectMake(0, 0, transformImageView.frame.size.width, BELOW(transformImageView.frame) + execSpace);
+    
+    SET_VIEW_Y(executeView, transformView.frame.size.height - EXECUTE_VIEW_MAX_H);
+    assert(BELOW(executeView.frame) <= BELOW(transformView.frame));
+#ifdef DEBUG_LAYOUT
+    executeView.layer.borderWidth = 2.0;
+#endif
     transformView.frame = CGRectMake(0, 0, displaySize.width, BELOW(executeView.frame));
     [transformView bringSubviewToFront:executeView];
-    executeView.layer.borderWidth = 2.0;
+    transformView.clipsToBounds = YES;
     
+#ifdef NOTDEF
     // now, overlap exec view on image, if needed, on small devices
-    if (execSpace < EXECUTE_VIEW_H) {
-        SET_VIEW_Y(executeView, BELOW(executeView.frame) - EXECUTE_VIEW_H);
-        SET_VIEW_HEIGHT(executeView, EXECUTE_VIEW_H)
+    if (execSpace < EXECUTE_MIN_BELOW_SPACE) {
+        SET_VIEW_Y(executeView, BELOW(executeView.frame) - EXECUTE_MIN_BELOW_SPACE);
+        SET_VIEW_HEIGHT(executeView, EXECUTE_MIN_BELOW_SPACE)
     }
 
     // lay out execute view
     SET_VIEW_Y(stackingButton, executeView.frame.size.height - stackingButton.frame.size.height);
-    // stack button is already on the left
-    f.origin.y = 0;
-    f.origin.x = RIGHT(stackingButton.frame) + SEP;
-    f.size.width = executeListView.frame.size.width;
-    f.size.height = executeView.frame.size.height;
-    executeScrollView.frame = f;
+#endif
 
+    executeScrollView.contentSize = CGSizeMake(EXECUTE_LIST_W, 0);
+    executeScrollView.contentOffset = CGPointMake(0, executeScrollView.frame.size.height);
     [screenTasks configureGroupForSize: displaySize];
 
     //    [externalTask configureForSize: processingSize];
@@ -1044,13 +1058,13 @@ BOOL roomUndertransformView;
     f = containerView.frame;
     f.origin = CGPointMake(0, transformView.frame.origin.y);
     f.size.height -= f.origin.y;
-    if (!roomRightOftransformView) {
+    if (!roomForThumbsRightTransformView) {
         // all thumbs underneath
         f.origin.x = 0;
         f.origin.y = BELOW(executeView.frame);
         f.size.width = containerView.frame.size.width;
         f.size.height = containerView.frame.size.height - f.origin.y;
-    } else if (!roomUndertransformView) {
+    } else if (!roomForThumbsUnderTransformView) {
         // all thumbs to the right
         f.origin.x = RIGHT(transformView.frame) + SEP;
         f.origin.y = transformView.frame.origin.y;
@@ -1123,7 +1137,7 @@ CGFloat topOfNonDepthArray = 0;
     
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
                                    imageRect.size.height + OLIVE_LABEL_H);
-    if (roomRightOftransformView && roomUndertransformView) {
+    if (roomForThumbsRightTransformView && roomForThumbsUnderTransformView) {
         nextButtonFrame.origin.x = RIGHT(transformView.frame) + SEP;
         nextButtonFrame.origin.y = transformView.frame.origin.y;
     } else
@@ -1218,7 +1232,7 @@ CGFloat topOfNonDepthArray = 0;
         return;
     CGRect f = nextButtonFrame;
     f.origin.y = BELOW(f) + SEP;
-    if (roomRightOftransformView && roomUndertransformView &&
+    if (roomForThumbsRightTransformView && roomForThumbsUnderTransformView &&
             f.origin.y < BELOW(transformView.frame)) {  // we are still on the right
         f.origin.x = RIGHT(transformView.frame) + SEP;
     } else {
@@ -1709,6 +1723,7 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveAllTransforms:(UIBarButtonItem *)button {
     [screenTasks removeAllTransforms];
+    [self adjustExecuteDisplay];
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {

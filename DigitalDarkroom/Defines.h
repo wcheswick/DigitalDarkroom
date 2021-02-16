@@ -9,13 +9,15 @@
 #ifndef Defines_h
 #define Defines_h
 
-//#define DEBUG_LAYOUT    1
+#define DEBUG_LAYOUT    1
 //#define DEBUG_CAMERA_CAPTURE_SIZE   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
+
+#define USED(x) ((void)(x)) // to suppress "variable unused" messages
 
 typedef u_char channel;
 
@@ -51,31 +53,29 @@ typedef long PixelIndex_t;
 
 #define SECTION_HEADER_FONT_SIZE    24
 
+#define EXECUTE_ROW_H       20
+#define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
+
+#define EXECUTE_MIN_ROWS_BELOW  1.4     // a squeeze for iphones, more for others
+#define EXECUTE_MIN_BELOW_SPACE (EXECUTE_MIN_ROWS_BELOW * EXECUTE_ROW_H)
+
+#define EXECUTE_MAX_ROWS   6
+#define EXECUTE_VIEW_MAX_H      (EXECUTE_MAX_ROWS*EXECUTE_ROW_H)
+
+#define EXECUTE_BUTTON_H    EXECUTE_MIN_BELOW_SPACE
+#define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 4)
+
 #define EXECUTE_NAME_W  130
 #define EXECUTE_NUMBERS_W   45
 #define EXECUTE_BUTTON_W    70
-#define EXECUTE_BUTTON_H    30
-#define EXECUTE_ROW_H       20
-#define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 4)
 #define EXECUTE_CELL_SELECTED_BORDER_W  3.0
 #define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5
+
 #define EXECUTE_STATUS_W    30
-
-#define EXECUTE_VIEW_ROWS   2
-#define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
-#define EXECUTE_MIN_ROWS_BELOW  1
-//#define EXECUTE_MAX_ROWS_SHOWN    3
-#define EXECUTE_MIN_BELOW_SPACE (EXECUTE_MIN_ROWS_BELOW * EXECUTE_ROW_H)
-#define EXECUTE_MIN_ROWS_SHOWN  3
-#define EXECUTE_VIEW_H      (EXECUTE_VIEW_ROWS*EXECUTE_ROW_H)
-
-
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
 #define EXECUTE_LIST_W  EXECUTE_CHAR_W + STEP_W + SEP + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W
 #define EXECUTE_VIEW_W  (EXECUTE_BUTTON_W + SEP + EXECUTE_LIST_W)
-
-#define USED(x) ((void)(x))
 
 #endif /* Defines_h */
