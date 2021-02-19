@@ -262,9 +262,12 @@
    aBetterSizeThan:(CGSize)bestSize
          forTarget:(CGSize)targetSize {
 #ifdef DEBUG_CAMERA_CAPTURE_SIZE
-    NSLog(@"       checking size %.0f x %.0f for %.0f x %.0f",
+    CGSize room = CGSizeMake(targetSize.width-newSize.width,
+                             targetSize.height - newSize.height);
+    NSLog(@"       checking size %.0f x %.0f for %.0f x %.0f  => %.0f %.0f",
           newSize.width, newSize.height,
-          targetSize.width, targetSize.height);
+          targetSize.width, targetSize.height,
+          room.width, room.height);
 #endif
     if (targetSize.width == 0) { // just find the largest size we have
         if (newSize.width < bestSize.width && newSize.height < bestSize.height)

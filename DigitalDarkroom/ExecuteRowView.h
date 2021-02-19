@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   UILabel *param;
 @property (nonatomic, strong)   UILabel *timing;
 
-- (id)initWithName:(NSString *)n param:(TransformInstance *)instance step:(int)step;
+- (id)initWithName:(NSString *)n param:(TransformInstance *)instance step:(long)step;
 
 @end
 

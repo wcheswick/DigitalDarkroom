@@ -76,7 +76,7 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-- (UIView *) executeListViewForStep:(int) step {
+- (UIView *) executeListViewForStep:(long) step {
     Transform *transform = [transformList objectAtIndex:step];
     TransformInstance *instance = [paramList objectAtIndex:step];
     UIView *rowView = [[ExecuteRowView alloc]

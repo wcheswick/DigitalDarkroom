@@ -15,7 +15,7 @@
 @synthesize stepNumber;
 @synthesize name, param, timing;
 
-- (id)initWithName:(NSString *)tn param:(TransformInstance *)instance step:(int)step {
+- (id)initWithName:(NSString *)tn param:(TransformInstance *)instance step:(long)step {
     self = [super init];
     if (self) {
         CGRect f = CGRectMake(0, 0, EXECUTE_CHAR_W, EXECUTE_ROW_H);
@@ -33,7 +33,7 @@
         if (step == NO_DEPTH_TRANSFORM)
             stepNumber.text = @"d";
         else
-            stepNumber.text = [NSString stringWithFormat:@"%2d ", step];
+            stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
         stepNumber.textAlignment = NSTextAlignmentRight;
 //        stepNumber.backgroundColor = [UIColor orangeColor];
         [self addSubview:stepNumber];

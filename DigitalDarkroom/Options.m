@@ -25,10 +25,10 @@
 - (id)init {
     self = [super init];
     if (self) {
-        reticle = [[NSUserDefaults standardUserDefaults] valueForKey:kReticleOption];
-        needHires = [[NSUserDefaults standardUserDefaults] valueForKey:kHiresOption];;
-        stackingMode = [[NSUserDefaults standardUserDefaults] valueForKey:kstackingModeOption];;
-        executeDebug = [[NSUserDefaults standardUserDefaults] valueForKey:kExecuteDebugOption];
+        reticle = [[NSUserDefaults standardUserDefaults] boolForKey:kReticleOption];
+        needHires = [[NSUserDefaults standardUserDefaults] boolForKey:kHiresOption];;
+        stackingMode = [[NSUserDefaults standardUserDefaults] boolForKey:kstackingModeOption];;
+        executeDebug = [[NSUserDefaults standardUserDefaults] boolForKey:kExecuteDebugOption];
         displayMode = medium;   // not in use
         needHires = NO;
         [self save];

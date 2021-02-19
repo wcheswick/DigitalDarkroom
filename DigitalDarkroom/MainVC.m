@@ -63,10 +63,6 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define EXECUTE_TEXT_FONT_SIZE  20
-#define EXECUTE_TEXT_MIN_LINES   3// 5   // number of total lines shown on screen (not yet)
-#define EXECUTE_H ((EXECUTE_TEXT_FONT_SIZE + 4) * EXECUTE_TEXT_MIN_LINES)
-
 #define OLIVE_W     80
 #define OLIVE_FONT_SIZE 14
 #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
@@ -139,7 +135,6 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
 
 @property (nonatomic, strong)   UIView *executeView;                 // the whole execute list area
-@property (nonatomic, strong)   UIScrollView *executeScrollView;
 @property (nonatomic, strong)   UIView *executeListView;
 @property (nonatomic, strong)   NSMutableArray *executeListViews;   // array of views in executeListView
 @property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
@@ -207,7 +202,6 @@ typedef enum {
 
 @synthesize executeView;
 @synthesize stackingButton;
-@synthesize executeScrollView;
 @synthesize executeListView;
 @synthesize executeListViews;
 
@@ -573,6 +567,7 @@ typedef enum {
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.userInteractionEnabled = YES;
 #ifdef DEBUG_LAYOUT
+    containerView.layer.borderWidth = 3.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
     transformView = [[UIView alloc] init];
@@ -614,6 +609,16 @@ typedef enum {
                                          action:@selector(doLeft:)];
     swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
     [transformImageView addGestureRecognizer:swipeLeft];
+    
+    UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
+                                       initWithTarget:self
+                                       action:@selector(doPinch:)];
+    [transformImageView addGestureRecognizer:pinch];
+    
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
+                                       initWithTarget:self
+                                       action:@selector(doPan:)];
+    [transformImageView addGestureRecognizer:pan];
 
     [transformView addSubview:transformImageView];
     
@@ -623,32 +628,38 @@ typedef enum {
                                             depthTransform:depthTransform];
 
     executeView = [[UIView alloc]
-                   initWithFrame: CGRectMake(0, LATER,
+                   initWithFrame: CGRectMake(LATER, LATER,
                                              EXECUTE_VIEW_W,
-                                             EXECUTE_VIEW_MAX_H)];
+                                             EXECUTE_MAX_VISIBLE_VIEW_H)];
     executeView.opaque = NO;
     executeView.backgroundColor = [UIColor clearColor];
-    executeScrollView.layer.borderWidth = 0.5;
-    executeScrollView.layer.borderColor = [UIColor greenColor].CGColor;
     executeView.userInteractionEnabled = YES;
-
-    stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    stackingButton.frame = CGRectMake(0, EXECUTE_VIEW_MAX_H - EXECUTE_BUTTON_H,
+    
+    stackingButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    stackingButton.frame = CGRectMake(0, 0,
                                       EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
-    stackingButton.autoresizingMask = UIViewAutoresizingNone;
-    [stackingButton setTitle:@"Stack" forState:UIControlStateNormal];
+    UIImage *oneFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
+                                                               pathForResource:@"images/1sq.png"
+                                                               ofType:@""]];
+    UIImage *threeFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
+                                                                 pathForResource:@"images/3sq.png"
+                                                                 ofType:@""]];
+    stackingButton.userInteractionEnabled = YES;
+    [stackingButton setImage:oneFrameImage forState:UIControlStateNormal];
+    [stackingButton setImage:threeFrameImage forState:UIControlStateSelected];
     [stackingButton addTarget:self
                        action:@selector(toggleStackingMode:)
-          forControlEvents:UIControlEventTouchUpInside];
+             forControlEvents:UIControlEventTouchUpInside];
     stackingButton.selected = options.stackingMode;
     stackingButton.layer.borderColor = [UIColor blueColor].CGColor;
+    stackingButton.opaque = YES;
     stackingButton.layer.cornerRadius = 5.0;
-    stackingButton.titleLabel.adjustsFontSizeToFitWidth = YES;
     [executeView addSubview:stackingButton];
     
+#ifdef OLD
     executeScrollView = [[UIScrollView alloc]
                          initWithFrame:CGRectMake(RIGHT(stackingButton.frame), 0,
-                                                  EXECUTE_LIST_W, EXECUTE_LIST_W)];
+                                                  EXECUTE_LIST_W, EXECUTE_MAX_VISIBLE_VIEW_H)];
     executeScrollView.pagingEnabled = NO;
     executeScrollView.showsVerticalScrollIndicator = NO;
     executeScrollView.userInteractionEnabled = NO;
@@ -664,14 +675,23 @@ typedef enum {
     executeScrollView.contentOffset = CGPointZero;
 //    executeScrollView.layer.borderWidth = 0.5;
 //    executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
-
+#endif
+    
     executeListView =  [[UIView alloc]
-                    initWithFrame:CGRectMake(0, 0, EXECUTE_LIST_W, LATER)];
+                    initWithFrame:CGRectMake(RIGHT(stackingButton.frame) + SEP, 0,
+                                             EXECUTE_LIST_W, EXECUTE_MAX_VISIBLE_VIEW_H)];
     executeListView.backgroundColor = [UIColor clearColor];
     executeListView.opaque = NO;
-    [executeScrollView addSubview:executeListView];
+    executeListView.layer.borderWidth = EXECUTE_BORDER_W;
+    executeListView.layer.cornerRadius = 10;
+    executeListView.layer.borderColor = [UIColor lightGrayColor].CGColor;
+    [executeView addSubview:executeListView];
     
+#ifdef OLD
+    [executeScrollView addSubview:executeListView];
     [executeView addSubview:executeScrollView];
+#endif
+    
     [transformView addSubview:executeView];
     
     thumbScrollView = [[UIScrollView alloc] init];
@@ -849,8 +869,7 @@ typedef enum {
 
 #define MIN_TRANS_TABLE_W 275
 
-BOOL roomForThumbsRightTransformView;
-BOOL roomForThumbsUnderTransformView;
+BOOL thumbsUnderneath;
 
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
@@ -878,6 +897,7 @@ BOOL roomForThumbsUnderTransformView;
         [self saveCurrentSource];
     }
     assert(currentSource);
+    
     
     // We have several image sizes to consider and process:
     //
@@ -914,14 +934,21 @@ BOOL roomForThumbsUnderTransformView;
               currentSource.imageSize.width, currentSource.imageSize.height);
     }
     
+    UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
+    BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
+    
     imageOrientation = [self imageOrientationForDeviceOrientation];
-    
-    // not room for title in iphones in portrait mode
-    if ([UIDevice currentDevice].userInterfaceIdiom != UIUserInterfaceIdiomPhone)
-        self.title = @"Digital Darkroom";
-    else
+    BOOL isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
+    BOOL tightLayout = isiPhone;
+
+    if (tightLayout) {
         self.title = @"";
-    
+        thumbsUnderneath = isPortrait;
+    } else {
+        self.title = @"Digital Darkroom";
+        thumbsUnderneath = isiPhone && !isPortrait;
+    }
+
 #ifdef DEBUG_ORIENTATION
     NSLog(@"device idiom: %ld", (long)[UIDevice currentDevice].userInterfaceIdiom);
     NSLog(@"device is %@", [CameraController
@@ -931,7 +958,8 @@ BOOL roomForThumbsUnderTransformView;
         
     CGRect f = self.view.frame;
 #ifdef DEBUG_LAYOUT
-    NSLog(@" **** device view frame:  %.0f x %.0f", f.size.width, f.size.height);
+    NSLog(@" **** device view frame:  %.0f x %.0f   %@", f.size.width, f.size.height,
+          tightLayout ? @"tight" : @"lots of room");
 #endif
 
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -953,7 +981,7 @@ BOOL roomForThumbsUnderTransformView;
 #endif
     
     f = self.view.frame;
-    f.origin.x = leftPadding + SEP;
+    f.origin.x = leftPadding; // + SEP;
     f.origin.y = topPadding + BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height = f.size.height - bottomPadding - f.origin.y;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
@@ -963,15 +991,26 @@ BOOL roomForThumbsUnderTransformView;
           f.origin.x, f.origin.y, f.size.width, f.size.height);
 #endif
     
-    UIDeviceOrientation devo = [[UIDevice currentDevice] orientation];
-    BOOL isPortrait = UIDeviceOrientationIsPortrait(devo);
     CGSize availableSize = containerView.frame.size;
-    availableSize.height -= EXECUTE_MIN_BELOW_SPACE;
+    if (tightLayout)
+        availableSize.height -= EXECUTE_MIN_BELOW_SPACE;
+    else
+        availableSize.height -= EXECUTE_VIEW_H;
 
+#define MIN_THUMB_COLS  2
+#define MIN_THUMB_ROWS  2
+    
+    if (thumbsUnderneath) {
+        // underneath: minimum of two rows
+        availableSize.height -= MIN_THUMB_ROWS*(SOURCE_THUMB_H + SEP);
+    } else {
+        // to the right, minimum of three columns
+        CGFloat forThumbs = MIN_THUMB_COLS*(SOURCE_THUMB_W + SEP);
+        availableSize.width -= forThumbs;
+    }
+#ifdef notdef
     switch ([UIDevice currentDevice].userInterfaceIdiom) {
         case UIUserInterfaceIdiomPhone:
-            roomForThumbsUnderTransformView = isPortrait;
-            roomForThumbsRightTransformView = !roomForThumbsUnderTransformView;
             if (isPortrait) {   // thumbs underneath, not on the right
                 availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
             } else {
@@ -983,8 +1022,6 @@ BOOL roomForThumbsUnderTransformView;
         case UIUserInterfaceIdiomCarPlay:
         case UIUserInterfaceIdiomMac:
         case UIUserInterfaceIdiomUnspecified:
-            roomForThumbsUnderTransformView = !isPortrait;
-            roomForThumbsRightTransformView = roomForThumbsUnderTransformView;
             if (isPortrait) {   // thumbs underneath, not on the right
                 availableSize.height -= 2*(SOURCE_THUMB_H + SEP);
             } else {
@@ -992,7 +1029,12 @@ BOOL roomForThumbsUnderTransformView;
             }
             break;
     }
+#endif
     
+    if (availableSize.width < EXECUTE_VIEW_W) {
+        NSLog(@"*** execute view is too wide to fit by %.0f",
+              EXECUTE_VIEW_W - availableSize.width);
+    }
 #ifdef DEBUG_CAMERA_CAPTURE_SIZE
         NSLog(@"  availableSize target size is %.0f x %.0f", availableSize.width, availableSize.height);
 #endif
@@ -1015,29 +1057,38 @@ BOOL roomForThumbsUnderTransformView;
 #endif
     
     assert(displaySize.height > 0);     // should never happen, of course
-    
+    if (displaySize.width < EXECUTE_VIEW_W) {
+        NSLog(@"!!! execute view is too wide to fit by %.0f",
+              EXECUTE_VIEW_W - displaySize.width);
+    }
+
     f.origin = CGPointZero;
     f.size = displaySize;
     transformImageView.frame = f;
 
+#ifdef FORIPHONENOTYET
     CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
     assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
-    if (roomForThumbsUnderTransformView) {
+    if (thumbsUnderneath) {
         execSpace = EXECUTE_MIN_ROWS_BELOW;
         // XXX maybe we don't need to squeeze here so hard sometimes.
     }
+#endif
     
-    transformView.frame = CGRectMake(0, 0, transformImageView.frame.size.width, BELOW(transformImageView.frame) + execSpace);
-    
-    SET_VIEW_Y(executeView, transformView.frame.size.height - EXECUTE_VIEW_MAX_H);
-    assert(BELOW(executeView.frame) <= BELOW(transformView.frame));
+    f = executeView.frame;
+    f.origin.y = BELOW(transformImageView.frame) + SEP;
+    f.origin.x = (transformImageView.frame.size.width - executeView.frame.size.width)/2;
+    executeView.frame = f;
 #ifdef DEBUG_LAYOUT
-    executeView.layer.borderWidth = 2.0;
+//    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
+//    executeView.layer.borderWidth = 2.0;
 #endif
     transformView.frame = CGRectMake(0, 0, displaySize.width, BELOW(executeView.frame));
     [transformView bringSubviewToFront:executeView];
     transformView.clipsToBounds = YES;
     
+    [screenTasks configureGroupForSize: displaySize];
+
 #ifdef NOTDEF
     // now, overlap exec view on image, if needed, on small devices
     if (execSpace < EXECUTE_MIN_BELOW_SPACE) {
@@ -1047,33 +1098,27 @@ BOOL roomForThumbsUnderTransformView;
 
     // lay out execute view
     SET_VIEW_Y(stackingButton, executeView.frame.size.height - stackingButton.frame.size.height);
-#endif
 
-    executeScrollView.contentSize = CGSizeMake(EXECUTE_LIST_W, 0);
-    executeScrollView.contentOffset = CGPointMake(0, executeScrollView.frame.size.height);
-    [screenTasks configureGroupForSize: displaySize];
+    executeScrollView.contentSize = executeListView.frame.size;
+    executeScrollView.contentOffset = CGPointZero;
+#endif
 
     //    [externalTask configureForSize: processingSize];
     
     f = containerView.frame;
     f.origin = CGPointMake(0, transformView.frame.origin.y);
     f.size.height -= f.origin.y;
-    if (!roomForThumbsRightTransformView) {
-        // all thumbs underneath
+    if (thumbsUnderneath) {
         f.origin.x = 0;
         f.origin.y = BELOW(executeView.frame);
         f.size.width = containerView.frame.size.width;
         f.size.height = containerView.frame.size.height - f.origin.y;
-    } else if (!roomForThumbsUnderTransformView) {
+    } else {
         // all thumbs to the right
         f.origin.x = RIGHT(transformView.frame) + SEP;
         f.origin.y = transformView.frame.origin.y;
         f.size.width = containerView.frame.size.width - f.origin.x;
         f.size.height = containerView.frame.size.height - f.origin.y;
-    } else {
-        // both places, let the layout figure the available areas
-        CGRect f = self->containerView.frame;
-        f.origin = CGPointZero;
     }
     thumbScrollView.frame = f;
     f.origin = CGPointZero;
@@ -1137,11 +1182,7 @@ CGFloat topOfNonDepthArray = 0;
     
     nextButtonFrame.size = CGSizeMake(imageRect.size.width,
                                    imageRect.size.height + OLIVE_LABEL_H);
-    if (roomForThumbsRightTransformView && roomForThumbsUnderTransformView) {
-        nextButtonFrame.origin.x = RIGHT(transformView.frame) + SEP;
-        nextButtonFrame.origin.y = transformView.frame.origin.y;
-    } else
-        nextButtonFrame.origin = CGPointMake(0, 0);
+    nextButtonFrame.origin = CGPointMake(0, 0);
     
     atStartOfRow = YES;
 
@@ -1232,12 +1273,7 @@ CGFloat topOfNonDepthArray = 0;
         return;
     CGRect f = nextButtonFrame;
     f.origin.y = BELOW(f) + SEP;
-    if (roomForThumbsRightTransformView && roomForThumbsUnderTransformView &&
-            f.origin.y < BELOW(transformView.frame)) {  // we are still on the right
-        f.origin.x = RIGHT(transformView.frame) + SEP;
-    } else {
         f.origin.x = 0;
-    }
     nextButtonFrame = f;
     atStartOfRow = YES;
 }
@@ -1449,7 +1485,8 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustExecuteDisplay];
 }
 
-- (IBAction) didPanSceen:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
+- (IBAction) doPan:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
+    NSLog(@" panning");
 }
 
 - (IBAction) doSave {
@@ -1473,6 +1510,13 @@ CGFloat topOfNonDepthArray = 0;
     UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
+}
+
+- (IBAction) doPinch:(UIPinchGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded)
+        return;
+    NSLog(@"did pinch: %.1f", recognizer.scale);
+    // if scale > 1.0, go to full screen, else down to normal
 }
 
 - (IBAction) doLeft:(UISwipeGestureRecognizer *)recognizer {
@@ -1776,10 +1820,11 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) toggleStackingMode:(UIButton *)sender {
-    options.stackingMode = !options.stackingMode;
-    NSLog(@" stackingMode = %d", options.stackingMode);
-//    stackingModeButton = options.stackingMode;
+    stackingButton.selected = !stackingButton.selected;
+    options.stackingMode = options.stackingMode;
     [options save];
+    if (!options.stackingMode)
+        [screenTasks removeAllTransforms];
     [self adjustExecuteDisplay];
 }
 
@@ -1796,20 +1841,19 @@ UIImageOrientation lastOrientation;
 }
 
 - (void) adjustExecuteDisplay { // for the moment, build it from scratch every time
+    options.stackingMode = stackingButton.selected;
     if (options.stackingMode) {
-        stackingButton.titleLabel.text = @"Single";
-        stackingButton.titleLabel.font = [UIFont boldSystemFontOfSize:EXECUTE_BUTTON_FONT_H];
         stackingButton.layer.borderWidth = 4.0;
+        stackingButton.selected = YES;
     } else {
-        stackingButton.titleLabel.text = @"Stack";
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:EXECUTE_BUTTON_FONT_H];
         stackingButton.layer.borderWidth = 1.0;
+        stackingButton.selected = NO;
     }
     [stackingButton setNeedsDisplay];
     
     long start = DOING_3D ? 0 : 1;
     [executeListViews removeAllObjects];
-    for (int step=start; step<screenTask.transformList.count; step++) {
+    for (long step=start; step<screenTask.transformList.count; step++) {
         ExecuteRowView *executeRowView = [screenTask executeListViewForStep:step];
         executeRowView.backgroundColor = [UIColor whiteColor];
         executeRowView.opaque = YES;
@@ -1822,8 +1866,8 @@ UIImageOrientation lastOrientation;
     ExecuteRowView *rowView;
     start = 0;
     long finish = executeListViews.count;
-    if (finish > EXECUTE_MAX_ROWS)
-        start = finish - EXECUTE_MAX_ROWS;
+    if (finish > EXECUTE_MAX_VISIBLE_ROWS)
+        start = finish - EXECUTE_MAX_VISIBLE_ROWS;
     for (long i=start; i<finish; i++) {
         rowView = [executeListViews objectAtIndex:i];
         CGFloat y = executeListView.frame.size.height -
@@ -1832,10 +1876,9 @@ UIImageOrientation lastOrientation;
         SET_VIEW_Y(rowView, y);
         [executeListView addSubview:rowView];
     }
-    SET_VIEW_HEIGHT(executeListView, EXECUTE_VIEW_MAX_H + LIST_BORDER_W);
-    executeListView.layer.borderWidth = LIST_BORDER_W;
-    SET_VIEW_HEIGHT(executeScrollView, EXECUTE_VIEW_MAX_H);
-    executeScrollView.contentSize = executeListView.frame.size;
+#ifdef notdef
+    //    SET_VIEW_HEIGHT(executeListView, EXECUTE_VIEW_MAX_H + LIST_BORDER_W);
+        executeScrollView.contentSize = executeListView.frame.size;
     long shown = finish - start;
     CGFloat yOffset = (shown - EXECUTE_MAX_ROWS)*EXECUTE_ROW_H + LIST_BORDER_W;
     if (yOffset > 0)
@@ -1843,16 +1886,12 @@ UIImageOrientation lastOrientation;
     executeScrollView.contentOffset = CGPointMake(0, yOffset);
 //    NSLog(@" y contentoffset %.0f %ld", executeScrollView.contentOffset.y, shown);
 
-    executeListView.layer.cornerRadius = 5;
-    executeListView.layer.borderWidth = (shown > 1) ? LIST_BORDER_W : 0;
-
-#ifdef NOTYET
     SET_VIEW_HEIGHT(executeListView, BELOW(rowView.frame));
     executeScrollView.contentSize = executeListView.frame.size;
     CGPoint offset = CGPointMake(0, executeListViews.count*EXECUTE_ROW_H);
     executeScrollView.contentOffset = offset;
-#endif
     [executeScrollView setNeedsLayout];
+#endif
 }
 
 - (IBAction) selectSource:(UISegmentedControl *)sender {

@@ -56,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
 
-- (ExecuteRowView *) executeListViewForStep:(int) step;
+- (ExecuteRowView *) executeListViewForStep:(long) step;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 

@@ -48,26 +48,29 @@ typedef long PixelIndex_t;
         _f.origin.x = ((v).frame.size.width - _f.size.width)/2.0; \
         (cv).frame = _f;}
 
-#define SEP 5  // between views
+#define SEP 4  // between views
 #define INSET 3 // from screen edges
 
 #define SECTION_HEADER_FONT_SIZE    24
 
 #define EXECUTE_ROW_H       20
-#define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
 
 #define EXECUTE_MIN_ROWS_BELOW  1.4     // a squeeze for iphones, more for others
 #define EXECUTE_MIN_BELOW_SPACE (EXECUTE_MIN_ROWS_BELOW * EXECUTE_ROW_H)
 
-#define EXECUTE_MAX_ROWS   4
-#define EXECUTE_VIEW_MAX_H      (EXECUTE_MAX_ROWS*EXECUTE_ROW_H)
+#define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
 
-#define EXECUTE_BUTTON_H    EXECUTE_MIN_BELOW_SPACE
-#define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 4)
+#define EXECUTE_BORDER_W    4
+#define EXECUTE_MAX_VISIBLE_ROWS   4
+#define EXECUTE_MAX_VISIBLE_VIEW_H      (2*EXECUTE_BORDER_W + EXECUTE_MAX_VISIBLE_ROWS*EXECUTE_ROW_H)
+
+#define EXECUTE_BUTTON_H    (2*EXECUTE_ROW_H)
+#define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 2)
+#define EXECUTE_BUTTON_FONT_W    (EXECUTE_BUTTON_FONT_H)
 
 #define EXECUTE_NAME_W  140
 #define EXECUTE_NUMBERS_W   45
-#define EXECUTE_BUTTON_W    80
+#define EXECUTE_BUTTON_W    (EXECUTE_BUTTON_FONT_W)
 #define EXECUTE_CELL_SELECTED_BORDER_W  3.0
 #define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5
 
@@ -75,7 +78,8 @@ typedef long PixelIndex_t;
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
-#define EXECUTE_LIST_W  EXECUTE_CHAR_W + STEP_W + SEP + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W
+#define EXECUTE_LIST_W  (EXECUTE_CHAR_W + STEP_W + SEP + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W)
 #define EXECUTE_VIEW_W  (EXECUTE_BUTTON_W + SEP + EXECUTE_LIST_W)
+#define EXECUTE_VIEW_H  EXECUTE_MAX_VISIBLE_VIEW_H
 
 #endif /* Defines_h */
