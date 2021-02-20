@@ -332,7 +332,7 @@ typedef enum {
             }
         }
         
-        nextSource = nil; // XXXXX debug
+//        nextSource = nil; // XXXXX debug
         if (!nextSource)  {   // no known default, pick the first camera
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
