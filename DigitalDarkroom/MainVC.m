@@ -277,7 +277,6 @@ typedef enum {
         cameraController.delegate = self;
 
         inputSources = [[NSMutableArray alloc] init];
-        executeListViews = [[NSMutableArray alloc] init];
         
         availableCameraCount = 0;
         for (Cameras c=0; c<NCAMERA; c++) {
@@ -346,10 +345,6 @@ typedef enum {
             }
         }
         currentSource = nextSource;
-        if (DOING_3D)
-            selectedExecutionStep = 0;  // depth is selected, even if not available
-        else
-            selectedExecutionStep = NO_STEP_SELECTED;
     }
     return self;
 }
@@ -566,6 +561,7 @@ typedef enum {
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.userInteractionEnabled = YES;
+    containerView.clipsToBounds = YES;  // this shouldn't be needed
 #ifdef DEBUG_LAYOUT
     containerView.layer.borderWidth = 3.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
@@ -679,13 +675,15 @@ typedef enum {
     
     executeListView =  [[UIView alloc]
                     initWithFrame:CGRectMake(RIGHT(stackingButton.frame) + SEP, 0,
-                                             EXECUTE_LIST_W, EXECUTE_MAX_VISIBLE_VIEW_H)];
+                                             EXECUTE_LIST_W, LATER)];
     executeListView.backgroundColor = [UIColor clearColor];
     executeListView.opaque = NO;
     executeListView.layer.borderWidth = EXECUTE_BORDER_W;
     executeListView.layer.cornerRadius = 10;
     executeListView.layer.borderColor = [UIColor lightGrayColor].CGColor;
     [executeView addSubview:executeListView];
+    
+    [self initExecList];
     
 #ifdef OLD
     [executeScrollView addSubview:executeListView];
@@ -1840,6 +1838,41 @@ UIImageOrientation lastOrientation;
     [self adjustExecuteDisplay];
 }
 
+#define LIST_BORDER_W   3
+
+- (void) initExecList {
+    executeListViews = [[NSMutableArray alloc] init];
+    long start = 0;
+    if (DOING_3D) {
+        ExecuteRowView *executeRowView = [screenTask executeListViewForStep:DEPTH_STEP];
+        executeRowView.tag = TASK_STEP_TAG_OFFSET + DEPTH_STEP;
+        [executeListViews addObject:executeRowView];
+        selectedExecutionStep = DOING_3D ? 0 : 1;
+    }
+    
+    ExecuteRowView *emptyRow = [screenTask executeListViewForStep:EMPTY_STEP];
+    emptyRow.tag = 0;
+    [executeListViews addObject:emptyRow];
+    
+    long finish = executeListViews.count;
+    selectedExecutionStep = start;
+    
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        SET_VIEW_HEIGHT(self->executeListView,
+                        self->executeListViews.count * EXECUTE_ROW_H + 2*EXECUTE_BORDER_W);
+        for (long i=start; i<finish; i++) {
+            ExecuteRowView *rowView = [self->executeListViews objectAtIndex:i];
+            if (i == self->selectedExecutionStep)
+                rowView.statusChar.text = POINTING_HAND_CHAR;
+            CGFloat y = LIST_BORDER_W + i*EXECUTE_ROW_H;
+            SET_VIEW_Y(rowView, y);
+            [self->executeListView addSubview:rowView];
+        }
+    }];
+}
+
+
+
 - (void) adjustExecuteDisplay { // for the moment, build it from scratch every time
     options.stackingMode = stackingButton.selected;
     if (options.stackingMode) {
@@ -1851,18 +1884,14 @@ UIImageOrientation lastOrientation;
     }
     [stackingButton setNeedsDisplay];
     
-    long start = DOING_3D ? 0 : 1;
-    [executeListViews removeAllObjects];
+#ifdef NOMORE
     for (long step=start; step<screenTask.transformList.count; step++) {
         ExecuteRowView *executeRowView = [screenTask executeListViewForStep:step];
-        executeRowView.backgroundColor = [UIColor whiteColor];
-        executeRowView.opaque = YES;
-        [executeListViews addObject:executeRowView];
+       [executeListViews addObject:executeRowView];
     }
     // clear out the old rows
     [executeListView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-
-#define LIST_BORDER_W   3
+    
     ExecuteRowView *rowView;
     start = 0;
     long finish = executeListViews.count;
@@ -1891,6 +1920,7 @@ UIImageOrientation lastOrientation;
     CGPoint offset = CGPointMake(0, executeListViews.count*EXECUTE_ROW_H);
     executeScrollView.contentOffset = offset;
     [executeScrollView setNeedsLayout];
+#endif
 #endif
 }
 

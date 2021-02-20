@@ -77,12 +77,16 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (UIView *) executeListViewForStep:(long) step {
+    if (step == EMPTY_STEP) {
+        return [[ExecuteRowView alloc]
+                initWithName:nil
+                param:nil step:step];
+    }
     Transform *transform = [transformList objectAtIndex:step];
     TransformInstance *instance = [paramList objectAtIndex:step];
-    UIView *rowView = [[ExecuteRowView alloc]
-                       initWithName:transform.name
-                       param:instance step:step];
-    return rowView;
+    return [[ExecuteRowView alloc]
+            initWithName:transform.name
+            param:instance step:step];;
 }
 
 // we may not reveal it, but it is always there

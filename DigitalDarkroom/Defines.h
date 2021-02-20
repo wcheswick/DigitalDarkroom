@@ -9,13 +9,15 @@
 #ifndef Defines_h
 #define Defines_h
 
-//#define DEBUG_LAYOUT    1
+#define DEBUG_LAYOUT    1
 //#define DEBUG_CAMERA_CAPTURE_SIZE   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
+
+#define POINTING_HAND_CHAR  @"☞"
 
 #define USED(x) ((void)(x)) // to suppress "variable unused" messages
 
@@ -78,7 +80,7 @@ typedef long PixelIndex_t;
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
-#define EXECUTE_LIST_W  (EXECUTE_CHAR_W + STEP_W + SEP + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W)
+#define EXECUTE_LIST_W  (EXECUTE_BORDER_W + EXECUTE_CHAR_W + STEP_W + SEP + EXECUTE_NAME_W + 2*EXECUTE_NUMBERS_W + EXECUTE_BORDER_W)
 #define EXECUTE_VIEW_W  (EXECUTE_BUTTON_W + SEP + EXECUTE_LIST_W)
 #define EXECUTE_VIEW_H  EXECUTE_MAX_VISIBLE_VIEW_H
 
