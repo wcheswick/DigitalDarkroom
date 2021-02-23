@@ -11,12 +11,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define EMPTY_STEP  (-1)
 #define DEPTH_STEP  DEPTH_TRANSFORM
 
 #define TASK_STEP_TAG_OFFSET    10
 
 @interface ExecuteRowView : UIView {
+    long step;
     UILabel *statusChar;
     UILabel *stepNumber;
     UILabel *name;
@@ -24,15 +24,18 @@ NS_ASSUME_NONNULL_BEGIN
     UILabel *timing;
 }
 
+@property (assign)              long step;
 @property (nonatomic, strong)   UILabel *statusChar;
 @property (nonatomic, strong)   UILabel *stepNumber;
 @property (nonatomic, strong)   UILabel *name;
 @property (nonatomic, strong)   UILabel *param;
 @property (nonatomic, strong)   UILabel *timing;
 
-- (id)initWithName:(NSString *__nullable)n
+- (id)initForStep:(long)s;
+- (void) updateWithName:(NSString *__nullable)tn
              param:(TransformInstance *__nullable)instance
-              step:(long)step;
+             color:(UIColor *) textColor;
+- (void) makeRowEmpty;
 
 @end
 

@@ -11,17 +11,19 @@
 
 @implementation ExecuteRowView
 
+@synthesize step;
 @synthesize statusChar;
 @synthesize stepNumber;
 @synthesize name, param, timing;
 
-// step = EMPTY_STEP means not filled in yet
 
-- (id)initWithName:(NSString *__nullable)tn
-             param:(TransformInstance * __nullable)instance
-              step:(long)step {
+- (id)initForStep:(long)s {
     self = [super init];
     if (self) {
+        step = s;
+        assert(step >= 0);
+        self.tag = TASK_STEP_TAG_OFFSET + step;
+        
         CGRect f = CGRectMake(EXECUTE_BORDER_W, 0, EXECUTE_CHAR_W, EXECUTE_ROW_H);
         statusChar = [[UILabel alloc] initWithFrame:f];
         statusChar.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
@@ -29,26 +31,17 @@
         statusChar.textAlignment = NSTextAlignmentRight;
 //        statusChar.backgroundColor = [UIColor yellowColor];
         [self addSubview:statusChar];
-        
+
         f.origin.x = RIGHT(f);
         f.size.width = STEP_W;
         stepNumber = [[UILabel alloc] initWithFrame:f];
         stepNumber.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
-        if (step == EMPTY_STEP)
-            stepNumber.text = @"";
-        else
-            stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
         stepNumber.textAlignment = NSTextAlignmentRight;
-//        stepNumber.backgroundColor = [UIColor orangeColor];
         [self addSubview:stepNumber];
-        
+
         f.origin.x = RIGHT(f) + SEP;
         f.size.width = EXECUTE_NAME_W;
         name = [[UILabel alloc] initWithFrame:f];
-        if (step == EMPTY_STEP)
-            name.text = @"";
-        else
-            name.text = tn;
         name.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
         name.textAlignment = NSTextAlignmentLeft;
         [self addSubview:name];
@@ -57,10 +50,6 @@
         f.size.width = EXECUTE_NUMBERS_W;
         param = [[UILabel alloc] initWithFrame:f];
         param.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
-        if (step == EMPTY_STEP)
-            param.text = @"";
-        else
-            param.text = [instance valueInfo];
         param.textAlignment = NSTextAlignmentRight;
         param.adjustsFontSizeToFitWidth = YES;
         [self addSubview:param];
@@ -69,23 +58,49 @@
         f.size.width = EXECUTE_NUMBERS_W;
         timing = [[UILabel alloc] initWithFrame:f];
         timing.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
-        if (step == EMPTY_STEP)
-            timing.text = @"";
-        else
-            timing.text = [instance timeInfo];
         timing.textAlignment = NSTextAlignmentRight;
         timing.adjustsFontSizeToFitWidth = YES;
         [self addSubview:timing];
-        
-        self.backgroundColor = [UIColor whiteColor];
-        self.opaque = YES;
- 
+
         f.size.width = RIGHT(f) + EXECUTE_BORDER_W;
         assert(f.size.width == EXECUTE_LIST_W);
         f.origin.x = 0;
         self.frame = f;
+        
+        self.backgroundColor = [UIColor whiteColor];
+        self.opaque = YES;
     }
     return self;
+}
+
+- (void) updateWithName:(NSString *__nullable)tn
+                  param:(TransformInstance *__nullable)instance
+                  color:(UIColor *) textColor {
+    NSLog(@"      %2ld: updateWithName: %@", step, tn);
+    stepNumber.textColor = textColor;
+    if (!tn) {
+        stepNumber.text = @"";
+        name.text = @"";
+        param.text = @"";
+        timing.text = @"";
+    } else {
+        stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
+        name.text = tn;
+        param.text = [instance valueInfo];
+        timing.text = [instance timeInfo];
+    }
+
+    stepNumber.textColor = textColor;
+    name.textColor = textColor;
+    param.textColor = textColor;
+    timing.textColor = textColor;
+
+    [self setNeedsDisplay];
+}
+
+- (void) makeRowEmpty {
+    [self updateWithName:nil param:nil
+                   color:[UIColor blackColor]];
 }
 
 @end

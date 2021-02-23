@@ -76,17 +76,37 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-- (UIView *) executeListViewForStep:(long) step {
-    if (step == EMPTY_STEP) {
-        return [[ExecuteRowView alloc]
-                initWithName:nil
-                param:nil step:step];
+
+- (ExecuteRowView *) emptyListViewForStep:(long) step {
+    ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
+    [rowView makeRowEmpty];
+    return rowView;
+}
+
+- (ExecuteRowView *) listViewForStep:(long) step depthActive:(BOOL)doingDepth {
+    ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
+    [self updateRowView:rowView forStep:step depthActive:doingDepth];
+    return rowView;
+}
+
+- (void) updateRowView:(ExecuteRowView *)rowView
+               forStep:(long)step
+           depthActive:(BOOL)doingDepth {
+    Transform *transform = nil;
+    TransformInstance *instance = nil;
+    UIColor *textColor;
+    if (!doingDepth && step == DEPTH_STEP)
+        textColor = [UIColor lightGrayColor];
+    else
+        textColor = [UIColor blackColor];
+
+    if (step < transformList.count) {  // non-empty step
+        transform = [transformList objectAtIndex:step];
+        instance = [paramList objectAtIndex:step];
     }
-    Transform *transform = [transformList objectAtIndex:step];
-    TransformInstance *instance = [paramList objectAtIndex:step];
-    return [[ExecuteRowView alloc]
-            initWithName:transform.name
-            param:instance step:step];;
+    [rowView updateWithName:transform.name
+            param:instance
+            color:textColor];
 }
 
 // we may not reveal it, but it is always there
@@ -107,7 +127,7 @@ static PixelIndex_t dPI(int x, int y) {
     }
 }
 
-- (long) appendTransform:(Transform *) transform {
+- (long) appendTransformToTask:(Transform *) transform {
     assert(transformList.count > 0);    // depth has to be there already
     assert(transform.type != DepthVis); // we have depth, don't add another one
 //    if (taskGroup.taskCtrl.layoutNeeded)
@@ -121,11 +141,12 @@ static PixelIndex_t dPI(int x, int y) {
     return newIndex;
 }
 
-- (void) removeLastTransform {
-    if (transformList.count == 1)
-        return;     // do not return manditory depth viz
+- (long) removeLastTransform {
+    long step = transformList.count;
+    assert(step > DEPTH_TRANSFORM + 1);    // should never try to delete the depth transform
     [transformList removeLastObject];
     [paramList removeLastObject];
+    return step;
 }
 
 - (void) removeAllTransforms {

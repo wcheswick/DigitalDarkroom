@@ -245,10 +245,10 @@
     if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
         // cheap scaling
         float yScale = (float)depthBuf.h/(float)rawDepthBuf.h;
-        float xScale =(float)depthBuf.h/(float)rawDepthBuf.h;
+        float xScale = (float)depthBuf.h/(float)rawDepthBuf.h;
         for (int x=0; x<depthBuf.w; x++) {
             int sx = round(x/xScale);
-            assert(sx < rawDepthBuf.w);
+            assert(sx <= rawDepthBuf.w);
             for (int y=0; y<depthBuf.h; y++) {
                 int sy = trunc(y/yScale);
                 assert(sy < rawDepthBuf.h);

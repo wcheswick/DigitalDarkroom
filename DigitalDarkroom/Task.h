@@ -47,16 +47,21 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureTaskForSize;
 - (void) configureTransformAtIndex:(size_t)ti;
 
-- (long) appendTransform:(Transform *) transform;
+- (long) appendTransformToTask:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;
-- (void) removeLastTransform;
+- (long) removeLastTransform;
 - (void) removeAllTransforms;
 - (void) useDepthTransform:(Transform *) transform;
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
 
-- (ExecuteRowView *) executeListViewForStep:(long) step;
+- (ExecuteRowView *) listViewForStep:(long) step
+                         depthActive:(BOOL)doingDepth;
+- (ExecuteRowView *) emptyListViewForStep:(long) step;
+
+- (void) updateRowView:(ExecuteRowView *) rowView forStep:(long)step
+           depthActive:(BOOL)doingDepth;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 
