@@ -10,7 +10,7 @@
 #define Defines_h
 
 #define DEBUG_LAYOUT    1
-//#define DEBUG_CAMERA_CAPTURE_SIZE   1
+#define DEBUG_CAMERA_CAPTURE_SIZE   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
@@ -58,7 +58,6 @@ typedef long PixelIndex_t;
 #define EXECUTE_ROW_H       20
 
 #define EXECUTE_MIN_ROWS_BELOW  1.4     // a squeeze for iphones, more for others
-#define EXECUTE_MIN_BELOW_SPACE (EXECUTE_MIN_ROWS_BELOW * EXECUTE_ROW_H)
 
 #define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
 
@@ -69,6 +68,8 @@ typedef long PixelIndex_t;
 #define EXECUTE_BUTTON_H    (2*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W)
 #define EXECUTE_BUTTON_FONT_H    (EXECUTE_BUTTON_H - 2)
 #define EXECUTE_BUTTON_FONT_W    (EXECUTE_BUTTON_FONT_H)
+
+#define EXECUTE_MIN_BELOW_SPACE (EXECUTE_BUTTON_H + SEP)
 
 #define EXECUTE_NAME_W  140
 #define EXECUTE_NUMBERS_W   45

@@ -990,7 +990,7 @@ BOOL thumbsUnderneath;
     f = self.view.frame;
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = topPadding + BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.size.height = f.size.height - bottomPadding - f.origin.y;
+    f.size.height -= f.origin.y + bottomPadding;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
@@ -1009,10 +1009,10 @@ BOOL thumbsUnderneath;
     
     if (thumbsUnderneath) {
         // underneath: minimum of two rows
-        availableSize.height -= MIN_THUMB_ROWS*(SOURCE_THUMB_H + SEP);
+        availableSize.height -= EXECUTE_MIN_BELOW_SPACE;
     } else {
         // to the right, minimum of three columns
-        CGFloat forThumbs = MIN_THUMB_COLS*(SOURCE_THUMB_W + SEP);
+        CGFloat forThumbs = MIN_THUMB_COLS*(SOURCE_THUMB_W + SEP) - SEP;
         availableSize.width -= forThumbs;
     }
 #ifdef notdef
@@ -1043,33 +1043,68 @@ BOOL thumbsUnderneath;
               EXECUTE_VIEW_W - availableSize.width);
     }
 #ifdef DEBUG_CAMERA_CAPTURE_SIZE
-        NSLog(@"  availableSize target size is %.0f x %.0f", availableSize.width, availableSize.height);
+    NSLog(@"  availableSize target size is %.0f x %.0f  AR %4.2f",
+          availableSize.width, availableSize.height,
+          availableSize.width/availableSize.height);
 #endif
-    CGSize displaySize;
+    CGSize captureSize;
     if (ISCAMERA(currentSource.sourceType)) {   // select camera setting for available area
-#ifdef TRYBIG
+        CGSize trySize = availableSize;
+#define TRYBIGGER
+#ifdef TRYBIGGER
         if (!isiPhone)
-            availableSize = isPortrait ? CGSizeMake(720, 1280) : CGSizeMake(1280, 720);
+            trySize = isPortrait ? CGSizeMake(720, 1280) : CGSizeMake(1280, 720);
 #endif
-        displaySize = [cameraController setupCameraForSize:availableSize];
-    } else {    // scale image into available area
-        CGFloat xScale = currentSource.imageSize.width / availableSize.width;
-        CGFloat yScale = currentSource.imageSize.height / availableSize.height;
-        CGFloat scale = (xScale < yScale) ? xScale : yScale;
-        displaySize = CGSizeMake(availableSize.width*scale, availableSize.height*scale);
+//        if (isiPhone && !isPortrait)
+//            trySize = CGSizeMake(availableSize.width*0.8, availableSize.height);
+#if DEBUG_LAYOUT
+        NSLog(@"  trying for size %.0f x %.0f  AR %4.2f",
+              trySize.width, trySize.height,
+              trySize.width/trySize.height);
+#endif
+        captureSize = [cameraController setupCameraForSize:trySize];
+    } else {
+        captureSize = currentSource.imageSize;
     }
+    
+    // The chosen capture size may be bigger than the display size. Figure out
+    // the final display size.  The transform stuff will have to scale the
+    // incoming stuff, hopefully efficiently, if needed.
+    // At present, we don't expand small captures, just use them.
+#ifdef DEBUG_LAYOUT
+    NSLog(@"     capture size %.0f x %.0f  AR %4.2f",
+          captureSize.width, captureSize.height,
+          captureSize.width/captureSize.height);
+#endif
+    
+    CGSize displaySize;
+    if (captureSize.width <= availableSize.width && captureSize.height <= availableSize.height)
+        displaySize = captureSize;
+    else {
+        double captureAR = captureSize.width/captureSize.height;
+        double finalAR = availableSize.width/availableSize.height;
+        CGFloat scale;
+        if (finalAR > captureAR)
+            scale = availableSize.height / captureSize.height;
+        else
+            scale = availableSize.width / captureSize.width;
+        displaySize = CGSizeMake(round(captureSize.width*scale), round(captureSize.height*scale));
+    }
+
     if (displaySize.height < 288) {
-        NSLog(@" *** size %.0f x %.0f  needs minimum height of 288 for iPhone ***", availableSize.width, availableSize.height);
-        NSLog(@" ***  got %.0f x %.0f ***", displaySize.width, displaySize.height);
+        NSLog(@" *** size %.1f x %.1f  needs minimum height of 288 for iPhone ***", availableSize.width, availableSize.height);
+        NSLog(@" >>>  got %.1f x %.1f ***", displaySize.width, displaySize.height);
     }
 
 #ifdef DEBUG_LAYOUT
-    NSLog(@"     display size is %.0f x %.0f", displaySize.width, displaySize.height);
+    NSLog(@"     display size %.0f x %.0f  AR %4.2f",
+          displaySize.width, displaySize.height,
+          displaySize.width/displaySize.height);
 #endif
     
     assert(displaySize.height > 0);     // should never happen, of course
     if (displaySize.width < EXECUTE_VIEW_W) {
-        NSLog(@"!!! execute view is too wide to fit by %.0f",
+        NSLog(@"!!! execute view will not fit by %.0f",
               EXECUTE_VIEW_W - displaySize.width);
     }
 
@@ -1099,21 +1134,6 @@ BOOL thumbsUnderneath;
     transformView.clipsToBounds = YES;
     
     [screenTasks configureGroupForSize: displaySize];
-
-#ifdef NOTDEF
-    // now, overlap exec view on image, if needed, on small devices
-    if (execSpace < EXECUTE_MIN_BELOW_SPACE) {
-        SET_VIEW_Y(executeView, BELOW(executeView.frame) - EXECUTE_MIN_BELOW_SPACE);
-        SET_VIEW_HEIGHT(executeView, EXECUTE_MIN_BELOW_SPACE)
-    }
-
-    // lay out execute view
-    SET_VIEW_Y(stackingButton, executeView.frame.size.height - stackingButton.frame.size.height);
-
-    executeScrollView.contentSize = executeListView.frame.size;
-    executeScrollView.contentOffset = CGPointZero;
-#endif
-
     //    [externalTask configureForSize: processingSize];
     
     f = containerView.frame;
@@ -1147,6 +1167,7 @@ BOOL thumbsUnderneath;
     }
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
+    
     [taskCtrl layoutCompleted];
 
     if (ISCAMERA(currentSource.sourceType)) {
