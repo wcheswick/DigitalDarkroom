@@ -80,7 +80,7 @@
     stepNumber.textColor = textColor;
     if (!tn) {
         stepNumber.text = @"";
-        name.text = @"";
+        name.text = nil;
         param.text = @"";
         timing.text = @"";
     } else {

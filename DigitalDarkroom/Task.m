@@ -85,24 +85,23 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (ExecuteRowView *) listViewForStep:(long) step depthActive:(BOOL)doingDepth {
     ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
-    [self updateRowView:rowView forStep:step depthActive:doingDepth];
+    [self updateRowView:rowView depthActive:doingDepth];
     return rowView;
 }
 
 - (void) updateRowView:(ExecuteRowView *)rowView
-               forStep:(long)step
            depthActive:(BOOL)doingDepth {
     Transform *transform = nil;
     TransformInstance *instance = nil;
     UIColor *textColor;
-    if (!doingDepth && step == DEPTH_STEP)
+    if (!doingDepth && rowView.step == DEPTH_STEP)
         textColor = [UIColor lightGrayColor];
     else
         textColor = [UIColor blackColor];
 
-    if (step < transformList.count) {  // non-empty step
-        transform = [transformList objectAtIndex:step];
-        instance = [paramList objectAtIndex:step];
+    if (rowView.step < transformList.count) {  // non-empty step
+        transform = [transformList objectAtIndex:rowView.step];
+        instance = [paramList objectAtIndex:rowView.step];
     }
     [rowView updateWithName:transform.name
             param:instance

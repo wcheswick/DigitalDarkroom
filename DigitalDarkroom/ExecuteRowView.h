@@ -13,13 +13,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define DEPTH_STEP  DEPTH_TRANSFORM
 
-#define TASK_STEP_TAG_OFFSET    10
+#define IS_EMPTY_ROW(v) ((v).name.text == nil)
+#define NO_INPUT_ROW    (-1)
 
 @interface ExecuteRowView : UIView {
     long step;
     UILabel *statusChar;
     UILabel *stepNumber;
-    UILabel *name;
+    UILabel * __nullable name;    // if this is an empty row
     UILabel *param;
     UILabel *timing;
 }
@@ -27,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              long step;
 @property (nonatomic, strong)   UILabel *statusChar;
 @property (nonatomic, strong)   UILabel *stepNumber;
-@property (nonatomic, strong)   UILabel *name;
+@property (nonatomic, strong)   UILabel * __nullable name;
 @property (nonatomic, strong)   UILabel *param;
 @property (nonatomic, strong)   UILabel *timing;
 

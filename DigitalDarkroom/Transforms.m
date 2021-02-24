@@ -94,6 +94,11 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
 }
 
+- (void) addTransform:(Transform *)transform {
+    transform.arrayIndex = transforms.count;
+    [transforms addObject:transform];
+}
+
 // transform at given index, or nil if NO_TRANSFORM
 
 - (Transform * __nullable) transformAtIndex:(long) index {
@@ -227,7 +232,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Flip"
                                   description: @"vertical reflection"
@@ -238,7 +243,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Mirror"
                                   description: @"Reflect the image"
@@ -249,8 +254,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
-    
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Pixelate"
                                   description: @"Giant pixels"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -265,7 +270,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.value = 6;
     lastTransform.high = 200;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
@@ -296,7 +301,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
              }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
@@ -325,7 +330,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     // this should be a general kernel convolution
     lastTransform = [Transform areaTransform: @"Old blur"
@@ -354,8 +359,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
-    
+    [self addTransform:lastTransform];
+
      lastTransform = [Transform areaTransform: @"Wavy shower"
                                   description: @"Through wavy glass"
                       remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -375,8 +380,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
      lastTransform.low = 4;
      lastTransform.value = 23;
      lastTransform.high = 30;
-     lastTransform.hasParameters = YES;
-     [transforms addObject:lastTransform];
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
 
      // this destroys src
      lastTransform = [Transform areaTransform: @"Old AT&T logo"
@@ -418,8 +423,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
      }];
      lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
      lastTransform.hasParameters = YES;
-     [transforms addObject:lastTransform];
-    
+    [self addTransform:lastTransform];
+
 #ifdef NOTYET   // channel-based
     lastTransform = [Transform areaTransform: @"Color Sobel"
                                           description: @"Edge detection"
@@ -450,7 +455,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     ADD_TO_OLIVE(lastTransform);
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
@@ -477,7 +482,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.low = 1;
     lastTransform.high = 2;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Shear"
                                                   description: @"Shear"
@@ -507,7 +512,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Brownian"
                                   description: @""
@@ -536,7 +541,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.value = 5;
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
 
     lastTransform = [Transform areaTransform: @"Matisse"
@@ -582,7 +587,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     /* timings for oil on digitalis:
      *
@@ -800,7 +805,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     lastTransform.low = 2;
     lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                           description: @"Edge detection"
@@ -818,7 +823,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Surreal"
                                           description: @"Negative of Sobel filter"
@@ -849,7 +854,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     extern  transform_t do_fs1;
     extern  transform_t do_fs2;
@@ -908,7 +913,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
 #define DIST(x,y)  [depthBuf distAtX:(x) Y:(y)]
@@ -930,7 +935,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             pixBuf.pb[i] = p;
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
     
     lastTransform = [Transform depthVis: @"Mono log dist"
@@ -954,7 +959,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             pixBuf.pb[i] = p;
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
@@ -991,7 +996,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
 #ifdef NEW
     lastTransform = [Transform depthVis: @"3D level visualization"
@@ -1021,7 +1026,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
 #ifdef broken
@@ -1137,7 +1142,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
     }];
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
 // plywood?
@@ -1173,7 +1178,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             buf[i] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
@@ -1185,7 +1190,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                    p.b < Z/2 ? p.b : Z-p.r);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Red"
                                   description:@""
@@ -1196,7 +1201,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Green"
                                   description:@""
@@ -1207,7 +1212,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Blue"
                                   description:@""
@@ -1218,7 +1223,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     
     lastTransform = [Transform colorTransform:@"No blue"
@@ -1230,7 +1235,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform:@"No green"
                                   description:@""
@@ -1241,7 +1246,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform:@"No red"
                                   description:@""
@@ -1252,7 +1257,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
         return ;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"No color"
                                  description: @"Convert to brightness"
@@ -1262,7 +1267,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
            buf[i] = SETRGB(c,c,c);
        }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"Colorize"
                                  description: @""
@@ -1273,7 +1278,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
            buf[i] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
        }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"Truncate colors"
                                  description: @""
@@ -1286,7 +1291,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     lastTransform.low = 1; lastTransform.value = 2; lastTransform.high = 7;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Brighten"
                                   description: @""
@@ -1298,7 +1303,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                             p.b+(Z-p.b)/8);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"High contrast"
                                   description: @""
@@ -1310,7 +1315,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                             CLIP((p.b-HALF_Z)*2+HALF_Z));
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"Swap colors"
                                   description: @"r→g, g→b, b→r"
@@ -1320,7 +1325,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             buf[i] = SETRGB(p.g, p.b, p.r);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     // BROKEN: too blue
     lastTransform = [Transform colorTransform: @"Auto contrast"
@@ -1353,7 +1358,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             buf[i] = CRGB(r,g,b);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 }
 
 channel
@@ -1430,7 +1435,7 @@ irand(int i) {
     lastTransform.value = 16;
     lastTransform.high = 40;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Old blur"
                                   description: @""
@@ -1456,7 +1461,7 @@ irand(int i) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
 #ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Focus"
@@ -1488,7 +1493,7 @@ irand(int i) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
     
     lastTransform = [Transform areaTransform: @"Mean (slow and invisible)"   // area
@@ -1520,7 +1525,7 @@ irand(int i) {
     lastTransform.value = 3;
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
     
 }
@@ -1531,31 +1536,31 @@ irand(int i) {
         channel c = (max3(p) + min3(p))/2;
         return SETRGB(c,c,c);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Max decomposition" description:@"" pointTransform:^Pixel(Pixel p) {
         channel c = max3(p);
         return SETRGB(c,c,c);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Min decomposition" description:@"" pointTransform:^Pixel(Pixel p) {
         channel c = min3(p);
         return SETRGB(c,c,c);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"Ave" description:@"" pointTransform:^Pixel(Pixel p) {
         channel c = (p.r + p.g + p.b)/3;
         return SETRGB(c,c,c);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform:@"NTSC monochrome" description:@"" pointTransform:^Pixel(Pixel p) {
         channel c = (299*p.r + 587*p.g + 114*p.b)/1000;
         return SETRGB(c,c,c);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     // move image
 #endif //NEEW
@@ -1634,7 +1639,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.value = 2;
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
 #ifdef NEW
     lastTransform = [Transform areaTransform: @"Shower stall"
@@ -1666,7 +1671,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.value = 10;
     lastTransform.high = 20;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Horizontal shift"
                                   description: @""
@@ -1686,7 +1691,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.value = 0;
     lastTransform.high = +200;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Vertical shift"
                                   description: @""
@@ -1706,7 +1711,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.value = 0;
     lastTransform.high = +200;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Through a cylinder"
                                   description: @""
@@ -1719,7 +1724,7 @@ void convolution(const Pixel *in, Pixel *out,
                 table[PI(W-1-x,y)] = PI(W-1-fromx, y);
             }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Tin Type"
                                  description: @"Edge detection"
@@ -1747,7 +1752,7 @@ void convolution(const Pixel *in, Pixel *out,
             dest[PI(x+1,y)] = Grey;
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
 #ifdef NOTYET
     /*
@@ -1802,7 +1807,7 @@ void convolution(const Pixel *in, Pixel *out,
     lastTransform.value = 10;
     lastTransform.high = 30;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"convolution sobel filter "
                                 description: @"Edge detection"
@@ -1827,7 +1832,7 @@ void convolution(const Pixel *in, Pixel *out,
             dest[i] = SETRGB(src[i].a, src[i].a, src[i].a);
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
     lastTransform = [Transform areaTransform: @"Cone projection"
@@ -1846,7 +1851,7 @@ void convolution(const Pixel *in, Pixel *out,
             x = (int)W - 1;
         return PI(x, y);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Andrew's projection"
                                   description: @""
@@ -1860,7 +1865,7 @@ void convolution(const Pixel *in, Pixel *out,
             return PI(&currentFormat,CENTER_X + r*cos(a), CENTER_X + r*sin(a));
 #endif
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Fish eye"
                                  description: @""
@@ -1871,7 +1876,7 @@ void convolution(const Pixel *in, Pixel *out,
         int y = (int)CENTER_Y + (int)(r1*sin(a));
         return PI(x,y);
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif  // NEW
 }
 
@@ -1941,7 +1946,7 @@ void convolution(const Pixel *in, Pixel *out,
          *s = 4*tw;
          return ht;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
 #ifdef NOTYET
@@ -2137,7 +2142,7 @@ void convolution(const Pixel *in, Pixel *out,
             dest[PI(x+1,y)] = Grey;
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
 #ifdef notdef
@@ -2287,7 +2292,7 @@ make_block(Pt origin, struct block *b) {
             buf[i] = p;
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Escher"
                                  description: @""
@@ -2378,7 +2383,7 @@ make_block(Pt origin, struct block *b) {
     lastTransform.value = 170;
     lastTransform.high = 250;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
     
 #ifdef NEW
     lastTransform = [Transform areaTransform: @"Edward Munch #1"
@@ -2392,7 +2397,7 @@ make_block(Pt origin, struct block *b) {
         else
             return Remap_White;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Edward Munch #2"
                                   description: @"Ken's twist"
@@ -2404,7 +2409,7 @@ make_block(Pt origin, struct block *b) {
         else
             return Remap_White;
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Dali"
                                   description: @""
@@ -2421,7 +2426,7 @@ make_block(Pt origin, struct block *b) {
     lastTransform.value = 4*lastTransform.low;
     lastTransform.high = 10*lastTransform.low;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Seurat"
                                  description: @""
@@ -2466,7 +2471,7 @@ make_block(Pt origin, struct block *b) {
     lastTransform.value = 1;
     lastTransform.high = 5;
     lastTransform.hasParameters = YES;
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Mondrian"
                                  description: @""
@@ -2493,7 +2498,7 @@ make_block(Pt origin, struct block *b) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
 #ifdef NOTYET
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
@@ -2547,7 +2552,7 @@ make_block(Pt origin, struct block *b) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif
 
     lastTransform = [Transform areaTransform: @"Picasso"
@@ -2586,7 +2591,7 @@ make_block(Pt origin, struct block *b) {
                     table[PI(x,y)] = PI(dx,dy);
             }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Monet (broken)"
                                  description: @""
@@ -2619,7 +2624,7 @@ make_block(Pt origin, struct block *b) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 
 #define CX    ((int)W/4)
 #define CY    ((int)H*3/4)
@@ -2639,7 +2644,7 @@ make_block(Pt origin, struct block *b) {
             }
         }
     }];
-    [transforms addObject:lastTransform];
+    [self addTransform:lastTransform];
 #endif  // NEW
 }
 

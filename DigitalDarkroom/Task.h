@@ -60,8 +60,7 @@ NS_ASSUME_NONNULL_BEGIN
                          depthActive:(BOOL)doingDepth;
 - (ExecuteRowView *) emptyListViewForStep:(long) step;
 
-- (void) updateRowView:(ExecuteRowView *) rowView forStep:(long)step
-           depthActive:(BOOL)doingDepth;
+- (void) updateRowView:(ExecuteRowView *) rowView depthActive:(BOOL)doingDepth;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 

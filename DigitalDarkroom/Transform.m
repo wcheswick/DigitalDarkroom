@@ -11,6 +11,7 @@
 @implementation Transform
 
 @synthesize name, description;
+@synthesize arrayIndex;
 @synthesize type;
 @synthesize hasParameters;
 @synthesize ipPointF;
@@ -25,6 +26,7 @@
 - (id)init {
     self = [super init];
     if (self) {
+        arrayIndex = -1;    // assigned in transforms
         ipPointF = nil;
 //        pointF = nil;
         areaF = nil;

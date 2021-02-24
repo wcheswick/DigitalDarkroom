@@ -86,6 +86,9 @@ typedef long PixelIndex_t;
 
 #define EXECUTE_VIEW_ANIMATION_TIME 0.4
 
+
+#define TASK_STEP_TAG_OFFSET    10
+
 #define STACKING_BUTTON_FONT_SIZE   (EXECUTE_BUTTON_H-6)
 
 #endif /* Defines_h */
