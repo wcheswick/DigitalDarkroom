@@ -54,11 +54,12 @@
 
 // Must be called before any tasks are added.  May be called afterwords to
 // change size.
-- (void) configureGroupForSize:(CGSize) s {
+- (void) configureGroupForSize:(CGSize) s orientation:(UIImageOrientation) io {
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
 #endif
 
+    imageOrientation = io;
     transformSize = s;
     
     if (!srcPix || srcPix.w != transformSize.width ||
@@ -197,11 +198,16 @@
     }
     tasksStatus = Running;
     
-    UIGraphicsBeginImageContext(CGSizeMake(srcPix.w, srcPix.h));
-    [srcImage drawInRect:CGRectMake(0, 0, srcPix.w, srcPix.h)];
-    UIImage *scaledImage = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    
+    UIImage *scaledImage;
+    if (srcPix.h != srcImage.size.height || srcPix.w != srcImage.size.width) {  // scale
+        UIGraphicsBeginImageContext(CGSizeMake(srcPix.w, srcPix.h));
+        [srcImage drawInRect:CGRectMake(0, 0, srcPix.w, srcPix.h)];
+        scaledImage = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+    } else
+        scaledImage = srcImage;
+
+//#define SKIPTRANSFORMS  1
 #ifdef SKIPTRANSFORMS   // for debugging
     dispatch_async(dispatch_get_main_queue(), ^{
         for (Task *task in self->tasks) {
@@ -211,12 +217,14 @@
             [task.targetImageView setNeedsDisplay];
         }
      });
+    return;
 #endif
 
     CGImageRef imageRef = [scaledImage CGImage];
     NSUInteger width = CGImageGetWidth(imageRef);
     NSUInteger height = CGImageGetHeight(imageRef);
     NSUInteger bytesPerRow = CGImageGetBytesPerRow(imageRef);
+    bytesPerRow = width * sizeof(Pixel);    // previous value has un
     NSUInteger bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     assert(srcPix.w == width);

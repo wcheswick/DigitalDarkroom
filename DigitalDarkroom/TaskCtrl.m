@@ -69,9 +69,6 @@
 }
 
 - (void) layoutCompleted {
-#ifdef DEBUG_LAYOUT
-    NSLog(@" --- layout completed");
-#endif
     layoutNeeded = NO;
     layingOut = NO;
     reconfiguring--;
@@ -89,6 +86,7 @@
 - (void) configureForImage:(UIImage *) image {
 }
 
+// not used, taskStatus needs to be right
 - (void) executeTasksWithImage:(UIImage *)image {
     for (TaskGroup *taskGroup in taskGroups) {
         if (taskGroup.tasksStatus != Ready)

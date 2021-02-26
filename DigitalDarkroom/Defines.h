@@ -14,7 +14,7 @@
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
-//#define DEBUG_ORIENTATION 1
+#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
 
 #define POINTING_HAND_CHAR  @"☞"

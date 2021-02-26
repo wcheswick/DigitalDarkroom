@@ -20,11 +20,9 @@
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
-@property (assign)              UIDeviceOrientation deviceOrientation;
-
 @property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
-
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
+@property (assign)              UIDeviceOrientation deviceOrientation;
 
 @end
 
@@ -115,19 +113,18 @@
 #endif
 }
 
-+ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
-    UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+- (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
     switch (deviceOrientation) {
         case UIDeviceOrientationPortrait:
+        case UIDeviceOrientationFaceUp:
             return AVCaptureVideoOrientationPortrait;
         case UIDeviceOrientationPortraitUpsideDown:
             return AVCaptureVideoOrientationPortraitUpsideDown;
         case UIDeviceOrientationLandscapeRight:
-            return AVCaptureVideoOrientationLandscapeRight;  // fine
+            return AVCaptureVideoOrientationLandscapeLeft;    // fine, but needs mirroring
         case UIDeviceOrientationLandscapeLeft:
-            return AVCaptureVideoOrientationLandscapeLeft;    // fine
+            return AVCaptureVideoOrientationLandscapeRight;  // fine, but needs mirroring
         case UIDeviceOrientationUnknown:
-        case UIDeviceOrientationFaceUp:
         case UIDeviceOrientationFaceDown:
         default:
             NSLog(@"************* Inconceivable video orientation: %ld",
@@ -136,18 +133,21 @@
     }
 }
 
-- (void) setupSessionForCurrentDeviceOrientation {
+// need an up-to-date deviceorientation
+- (void) setupSessionForOrientation: (UIDeviceOrientation) devo {
     NSError *error;
     assert(captureDevice);
     
-    deviceOrientation = [[UIDevice currentDevice] orientation];
-    videoOrientation = [CameraController videoOrientationForDeviceOrientation];
+    deviceOrientation = devo;
+    videoOrientation = [self videoOrientationForDeviceOrientation];
     
 #ifdef DEBUG_ORIENTATION
-    NSLog(@" +++ setupSessionForCurrentDeviceOrientation : %ld, %@",
-          (long)[[UIDevice currentDevice] orientation],
-          [CameraController dumpDeviceOrientationName:[[UIDevice currentDevice]
-                                                        orientation]]);
+    NSLog(@" +++ setupSession: device orientation (%ld): %@",
+          (long)deviceOrientation,
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+    NSLog(@"                     video orientaion (%ld): %@",
+          videoOrientation,
+          captureOrientationNames[videoOrientation]);
 #endif
     if (captureSession) {
         [captureSession stopRunning];
@@ -185,17 +185,6 @@
         }
         AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(depthConnection);
-        // not sure why this is needed:
-        switch (videoOrientation) {
-            case AVCaptureVideoOrientationLandscapeRight:
-                videoOrientation = AVCaptureVideoOrientationLandscapeLeft;
-                break;
-            case AVCaptureVideoOrientationLandscapeLeft:
-                videoOrientation = AVCaptureVideoOrientationLandscapeRight;
-                break;
-            default:
-                ;
-        }
         [depthConnection setVideoOrientation:videoOrientation];
         depthConnection.videoMirrored = (selectedCamera == Front3DCamera);
 #ifdef DEBUG_DEPTH
@@ -218,7 +207,7 @@
         // depthDataByApplyingExifOrientation
         AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        videoConnection.videoMirrored = (selectedCamera != FrontCamera);    // XXX this seems exactly backwards, but it works
+        videoConnection.videoMirrored = (selectedCamera == FrontCamera);
 #ifdef DEBUG_ORIENTATION
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
@@ -246,14 +235,17 @@
     CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
     CGFloat w, h;
     
-    if (UIDeviceOrientationIsPortrait(deviceOrientation)) {
-        w = dimensions.height;
-        h = dimensions.width;
-        //NSLog(@" ***********         dimensions: %.0f x %.0f", w, h);
-    } else {
-        w = dimensions.width;
-        h = dimensions.height;
-        //NSLog(@" ***********   adj   dimensions: %.0f x %.0f", w, h);
+    switch (videoOrientation) {
+        case AVCaptureVideoOrientationPortrait:
+        case AVCaptureVideoOrientationPortraitUpsideDown:
+            w = dimensions.height;
+            h = dimensions.width;
+            break;
+        case AVCaptureVideoOrientationLandscapeLeft:
+        case AVCaptureVideoOrientationLandscapeRight:
+            w = dimensions.width;
+            h = dimensions.height;
+            break;
     }
     return CGSizeMake(w, h);
 }
@@ -264,8 +256,9 @@
 #ifdef DEBUG_CAMERA_CAPTURE_SIZE
     CGSize room = CGSizeMake(targetSize.width-newSize.width,
                              targetSize.height - newSize.height);
-    NSLog(@"       checking size %.0f x %.0f for %.0f x %.0f  => %.0f %.0f",
+    NSLog(@"       checking size %.0f x %.0f (%4.2f)   for %.0f x %.0f  => %.0f %.0f",
           newSize.width, newSize.height,
+          newSize.width/newSize.height,
           targetSize.width, targetSize.height,
           room.width, room.height);
 #endif
@@ -334,6 +327,7 @@
         
         CGSize newSize = [self sizeForFormat:format];
         if (![self isNewSize:newSize aBetterSizeThan:captureSize forTarget:availableSize]) {
+            //break;  // stop trying, which seems to be right. It's not
             continue;
         }
         captureSize = newSize;

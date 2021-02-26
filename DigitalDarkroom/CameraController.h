@@ -27,14 +27,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL) isCameraAvailable:(Cameras) camera;
 - (void) selectCamera:(Cameras) camera;
-- (void) setupSessionForCurrentDeviceOrientation;
+- (void) setupSessionForOrientation: (UIDeviceOrientation) deviceOrientation;
 - (CGSize) setupCameraForSize:(CGSize) availableSize;
 
 - (void) startCamera;
 - (void) stopCamera;
 - (BOOL) isCameraOn;
 
-+ (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation;
 + (NSString *) dumpDeviceOrientationName: (UIDeviceOrientation) o;
 
 - (NSString *) dumpFormatType:(OSType) t;

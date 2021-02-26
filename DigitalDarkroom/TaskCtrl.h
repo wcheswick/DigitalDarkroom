@@ -46,9 +46,7 @@ typedef enum {
 
 - (void) needLayout;
 - (void) layoutCompleted;
-
-- (void) executeTasksWithImage:(UIImage *) image;
-
+//- (void) executeTasksWithImage:(UIImage *) image;
 - (void) layoutIfReady;
 
 @end

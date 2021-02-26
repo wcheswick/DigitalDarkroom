@@ -52,7 +52,7 @@ typedef enum {
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn
                          depthTransform:(Transform *)dt;
-- (void) configureGroupForSize:(CGSize) s;
+- (void) configureGroupForSize:(CGSize) s orientation:(UIImageOrientation) io;
 - (void) executeTasksWithImage:(UIImage *) image;
 - (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf;
 - (void) configureGroupWithNewDepthTransform:(Transform *) dt;
