@@ -113,6 +113,9 @@
 #endif
 }
 
+// I really have no idea what is going on here.  Values were determined by
+// experimentation.
+
 - (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
     switch (deviceOrientation) {
         case UIDeviceOrientationPortrait:
@@ -147,7 +150,7 @@
           [CameraController dumpDeviceOrientationName:deviceOrientation]);
     NSLog(@"                     video orientaion (%ld): %@",
           videoOrientation,
-          captureOrientationNames[videoOrientation]);
+          deviceOrientationNames[videoOrientation]);
 #endif
     if (captureSession) {
         [captureSession stopRunning];
@@ -210,7 +213,7 @@
         videoConnection.videoMirrored = (selectedCamera == FrontCamera);
 #ifdef DEBUG_ORIENTATION
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
-              captureOrientationNames[videoOrientation]);
+              deviceOrientationNames[videoOrientation]);
 #endif
 
         dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
@@ -281,6 +284,48 @@
     return YES;
 }
 
+- (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D {
+    NSMutableArray *formatList = [[NSMutableArray alloc] init];
+    for (AVCaptureDeviceFormat *format in captureDevice.formats) {
+        CMFormatDescriptionRef ref = format.formatDescription;
+        CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
+        if (mediaType != kCMMediaType_Video)
+            continue;
+        if (need3D) {
+            if (!format.supportedDepthDataFormats || !format.supportedDepthDataFormats.count)
+                continue;
+        }
+        FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+        //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
+        switch (mediaSubType) {
+            case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+                continue;
+            case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
+                break;
+            default:
+                NSLog(@"??? Unknown media subtype encountered in format: %@", format);
+                break;
+        }
+        [formatList addObject:format];
+    }
+    return [NSArray arrayWithArray:formatList];
+}
+
+- (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format {
+    NSError *error;
+    
+    [captureDevice lockForConfiguration:&error];
+    captureDevice.activeFormat = selectedFormat;
+    
+    // these must be after the activeFormat is set.  there are other conditions, see
+    // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
+    
+    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    //NSLog(@"-- format selected: %@", selectedFormat.description);
+    [captureDevice unlockForConfiguration];
+}
+
 // find and return the largest size that fits into the given size. Return
 // Zero size if none works.  This should never happen.
 
@@ -289,13 +334,10 @@
 // width are non-zero, make it fit there.
 
 - (CGSize) setupCameraForSize:(CGSize) availableSize {
-    NSError *error;
-
     assert(captureDevice);
     NSArray *availableFormats = captureDevice.formats;
     CGSize captureSize = CGSizeZero;
     selectedFormat = nil;
-//    AVCaptureDeviceFormat *depthFormat = nil;
     
     // XX [availableFormats filteredArrayUsingPredicate:<#(nonnull NSPredicate *)#>]
     // to optimize this search for the right depth format, and try to get
@@ -344,16 +386,7 @@
     }
 //    NSLog(@"SSSSS  format:  %@", selectedFormat);
 
-    [captureDevice lockForConfiguration:&error];
-    captureDevice.activeFormat = selectedFormat;
-    
-    // these must be after the activeFormat is set.  there are other conditions, see
-    // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
-    
-    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    //NSLog(@"-- format selected: %@", selectedFormat.description);
-    [captureDevice unlockForConfiguration];
+    [self setupCameraWithFormat:selectedFormat];
     return captureSize;
 }
 
@@ -387,14 +420,6 @@ static NSString * const sectionTitles[] = {
         [2] = @"    From library",
     };
 #endif
-
-static NSString * const captureOrientationNames[] = {
-    @"(zero)",
-    @"Portrait",
-    @"PortraitUpsideDown",
-    @"LandscapeRight",
-    @"LandscapeLeft",
-};
 
 static NSString * const deviceOrientationNames[] = {
     @"Unknown",

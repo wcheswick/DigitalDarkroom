@@ -300,7 +300,7 @@ static PixelIndex_t dPI(int x, int y) {
 
     UIImage *transformed = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
-                                   orientation:taskGroup.imageOrientation];
+                                   orientation:UIImageOrientationUp];
     CGImageRelease(quartzImage);
     
     dispatch_async(dispatch_get_main_queue(), ^{

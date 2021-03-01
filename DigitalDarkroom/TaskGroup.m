@@ -33,7 +33,6 @@
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
 @synthesize transformSize;
-@synthesize imageOrientation;
 @synthesize groupName;
 
 - (id)initWithController:(TaskCtrl *) caller {
@@ -54,12 +53,11 @@
 
 // Must be called before any tasks are added.  May be called afterwords to
 // change size.
-- (void) configureGroupForSize:(CGSize) s orientation:(UIImageOrientation) io {
+- (void) configureGroupForSize:(CGSize) s {
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
 #endif
 
-    imageOrientation = io;
     transformSize = s;
     
     if (!srcPix || srcPix.w != transformSize.width ||

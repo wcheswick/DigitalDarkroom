@@ -34,7 +34,6 @@ typedef enum {
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
     size_t bytesInImage;
     size_t bitsPerComponent;
-    UIImageOrientation imageOrientation;
     NSString *groupName;        // for debug display purposes
 }
 
@@ -45,14 +44,13 @@ typedef enum {
 @property (assign)          size_t bytesPerRow, pixelsInImage, pixelsPerRow;
 @property (assign)          size_t bitsPerComponent;
 @property (assign)          size_t bytesInImage;
-@property (assign)          UIImageOrientation imageOrientation;
 @property (nonatomic, strong)   NSString *groupName;
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn
                          depthTransform:(Transform *)dt;
-- (void) configureGroupForSize:(CGSize) s orientation:(UIImageOrientation) io;
+- (void) configureGroupForSize:(CGSize) s;
 - (void) executeTasksWithImage:(UIImage *) image;
 - (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf;
 - (void) configureGroupWithNewDepthTransform:(Transform *) dt;
