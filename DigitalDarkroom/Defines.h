@@ -14,8 +14,9 @@
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
-#define DEBUG_ORIENTATION 1
+//#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
+//#define DEBUG_EXECUTE 1
 
 #define POINTING_HAND_CHAR  @"☞"
 
@@ -53,6 +54,13 @@ typedef long PixelIndex_t;
 #define SEP 4  // between views
 #define INSET 3 // from screen edges
 
+#define CHECKMARK   @"✓"
+
+#define MIN_THUMB_COLS  4
+#define MIN_THUMB_ROWS  3
+#define MIN_IPHONE_THUMB_COLS  3
+#define MIN_IPHONE_THUMB_ROWS  2
+
 #define SECTION_HEADER_FONT_SIZE    24
 
 #define EXECUTE_ROW_H       17
@@ -69,9 +77,9 @@ typedef long PixelIndex_t;
 #define EXECUTE_BUTTON_FONT_H   (EXECUTE_BUTTON_H - 2)
 #define EXECUTE_BUTTON_FONT_W   (EXECUTE_BUTTON_FONT_H)
 
-#define EXECUTE_MIN_BELOW_H     (EXECUTE_BUTTON_H + SEP)
+#define EXECUTE_MIN_BELOW_H     (EXECUTE_BUTTON_H)
 #define EXECUTE_BEST_BELOW_H    (EXECUTE_MAX_VISIBLE_ROWS * \
-                    (EXECUTE_BUTTON_H + SEP) * 2*EXECUTE_BORDER_W)
+                    (EXECUTE_BUTTON_H + SEP) + 2*EXECUTE_BORDER_W)
 #define EXECUTE_NAME_W  140
 #define EXECUTE_NUMBERS_W   45
 #define EXECUTE_BUTTON_W    (EXECUTE_BUTTON_FONT_W)

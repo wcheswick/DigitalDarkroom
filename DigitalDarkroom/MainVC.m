@@ -177,6 +177,8 @@ typedef enum {
 @property (assign)              UIDeviceOrientation deviceOrientation;
 @property (assign)              BOOL isPortrait;
 @property (assign)              BOOL isiPhone;
+@property (assign)    int minThumbCols, minThumbRows;
+@property (assign)    BOOL execOverlapsImage;
 
 @property (assign)              UIMode_t uiMode;    // XXX not in use
 
@@ -212,6 +214,9 @@ typedef enum {
 @synthesize deviceOrientation;
 @synthesize isPortrait;
 @synthesize isiPhone;
+
+@synthesize minThumbCols, minThumbRows;
+@synthesize execOverlapsImage;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -282,9 +287,12 @@ typedef enum {
         depthBuf = nil;
         thumbScrollView = nil;
         busy = NO;
-        isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-
         options = [[Options alloc] init];
+        
+        isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
+        execOverlapsImage = isiPhone;
+        minThumbCols = isiPhone ? MIN_IPHONE_THUMB_COLS : MIN_THUMB_COLS;
+        minThumbRows = isiPhone ? MIN_IPHONE_THUMB_ROWS : MIN_THUMB_ROWS;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -470,7 +478,7 @@ typedef enum {
     deviceOrientation = [[UIDevice currentDevice] orientation];
 //    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) || UIDeviceOrientationIsFlat(deviceOrientation);
-#ifdef DEBUG_LAYOUT
+#ifdef DEBUG_ORIENTATION
     NSLog(@"       is iPhone: %d", isiPhone);
     NSLog(@"     is portrait: %d", isPortrait);
     NSLog(@"device rotated to %@", [CameraController
@@ -893,73 +901,94 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-// this is called when we know the transforms are all Stopped.
+// These are determined by format choice:
 
-#define MIN_TRANS_TABLE_W 275
-
+AVCaptureDeviceFormat *selectedFormat;
 BOOL thumbsUnderneath;
+BOOL thumbsOnRight;
+float scaled;
+
+- (void) analyzeSize:(CGSize) captureSize in:(CGSize)availableSize
+            label: (NSString *) label {
+    double captureAR = captureSize.width/captureSize.height;
+    float captureArea = captureSize.width * captureSize.height;
+    float totalArea = availableSize.width * availableSize.height;
+    float capturePct = 100.0*captureArea/totalArea;
+    
+    CGSize right, bottom;
+    right.width = availableSize.width - captureSize.width;
+    right.height = containerView.frame.size.height;
+    float rightThumbs = right.width / (THUMB_W + SEP);
+    float rightArea = right.width * right.height;
+    float rightPct = 100.0*rightArea/totalArea;
+
+    bottom.height = availableSize.height - captureSize.height;
+    bottom.width = containerView.frame.size.width;
+    float bottomThumbs = bottom.height / (THUMB_W/captureAR + SEP);
+    float bottomArea = bottom.width * bottom.height;
+    float bottomPct = 100.0*bottomArea/totalArea;
+    
+    BOOL wfits = captureSize.width <= availableSize.width;
+    BOOL hfits = captureSize.height <= availableSize.height;
+    BOOL rightThumbsOK = rightThumbs >= minThumbCols;
+    BOOL bottomThumbsOK = bottomThumbs >= minThumbRows;
+    
+    NSString *status = [NSString stringWithFormat:@"%@%@ %@",
+                        rightThumbsOK ? CHECKMARK : @".",
+                        bottomThumbsOK ? CHECKMARK : @".",
+                        (wfits & hfits) ? CHECKMARK : @"." ];
+
+    NSLog(@"%@%4.0f x %4.0f  %4.2f  %4.0f%%\t%5.1f,%2.0f%%\t%5.1f,%2.0f%%\t%@",
+          label,
+          captureSize.width, captureSize.height, captureSize.width/captureSize.height,
+          capturePct,
+          rightThumbs, rightPct,
+          bottomThumbs, bottomPct,
+          status);
+
+#ifdef NOPE
+    NSString *fits;
+    if (size.width <= availableSize.width && size.height <= availableSize.height)
+        fits = @"fits";
+    else {
+        double availableAR = availableSize.width/availableSize.height;
+        CGFloat arscale;
+        if (captureAR > availableAR)
+            arscale = size.height / availableSize.height;
+        else
+            arscale = size.width / availableSize.width;
+        CGSize arscaled = CGSizeMake(availableSize.width*arscale, availableSize.height*arscale);
+        fits = [NSString stringWithFormat:@"X %.2f:  %4.0f x %4.0f  %4.2f", arscale,
+                arscaled.width, arscaled.height, arscale];
+        
+    }
+    NSLog(@"  %4.0f x %4.0f  %4.2f   %@", size.width, size.height, size.width/size.height,
+          fits);
+#endif
+}
 
 - (CGSize) chooseFormatForSize:(CGSize) availableSize {
-    CGSize size, selectedSize;
+    CGSize captureSize, selectedSize;
 
     NSLog(@"  %4.0f x %4.0f   ar %4.2f   available", availableSize.width, availableSize.height,
           availableSize.width/availableSize.height);
-    float totalArea = availableSize.width * availableSize.height;
     NSLog(@"  ----");
     NSArray *availableFormats = [cameraController formatsForSelectedCameraNeeding3D:DOING_3D];
     for (AVCaptureDeviceFormat *format in availableFormats) {
         CMFormatDescriptionRef ref = format.formatDescription;
         CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
         if (isPortrait) {
-            size = CGSizeMake(dimensions.height, dimensions.width);
+            captureSize = CGSizeMake(dimensions.height, dimensions.width);
         } else {
-            size = CGSizeMake(dimensions.width, dimensions.height);
+            captureSize = CGSizeMake(dimensions.width, dimensions.height);
         }
-        double captureAR = size.width/size.height;
-        float captureArea = size.width * size.height;
-        float capturePct = 100.0*captureArea/totalArea;
-        
-        CGSize right, bottom;
-        right.width = availableSize.width - size.width;
-        right.height = containerView.frame.size.height;
-        float rightThumbs = right.width / (THUMB_W + SEP);
-        float rightArea = right.width * right.height;
-        float rightPct = 100.0*rightArea/totalArea;
-
-        bottom.height = availableSize.height - size.height;
-        bottom.width = containerView.frame.size.width;
-        float bottomThumbs = bottom.height / (THUMB_W/captureAR + SEP);
-        float bottomArea = bottom.width * bottom.height;
-        float bottomPct = 100.0*bottomArea/totalArea;
-
-        NSLog(@"%4.0f x %4.0f  %4.2f  %4.0f%%  %5.1f,%2.0f%%  %5.1f,%2.0f%%",
-              size.width, size.height, size.width/size.height,
-              capturePct,
-              rightThumbs, rightPct,
-              bottomThumbs, bottomPct);
-
-#ifdef NOPE
-        NSString *fits;
-        if (size.width <= availableSize.width && size.height <= availableSize.height)
-            fits = @"fits";
-        else {
-            double availableAR = availableSize.width/availableSize.height;
-            CGFloat arscale;
-            if (captureAR > availableAR)
-                arscale = size.height / availableSize.height;
-            else
-                arscale = size.width / availableSize.width;
-            CGSize arscaled = CGSizeMake(availableSize.width*arscale, availableSize.height*arscale);
-            fits = [NSString stringWithFormat:@"X %.2f:  %4.0f x %4.0f  %4.2f", arscale,
-                    arscaled.width, arscaled.height, arscale];
-            
-        }
-        NSLog(@"  %4.0f x %4.0f  %4.2f   %@", size.width, size.height, size.width/size.height,
-              fits);
-#endif
+        [self analyzeSize:captureSize in:availableSize label:@">> "];
     }
     return selectedSize = CGSizeZero;
 }
+
+
+// this is called when we know the transforms are all Stopped.
 
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
@@ -1047,7 +1076,7 @@ BOOL thumbsUnderneath;
     
     f = self.view.frame;
     f.origin.x = leftPadding; // + SEP;
-    f.origin.y = topPadding + BELOW(self.navigationController.navigationBar.frame) + SEP;
+    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height -= f.origin.y + bottomPadding;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
@@ -1060,18 +1089,16 @@ BOOL thumbsUnderneath;
     
     CGSize availableSize = containerView.frame.size;
     CGSize bestSize = availableSize;
- 
-#define MIN_THUMB_COLS  3
-#define MIN_THUMB_ROWS  2
     
     if (isiPhone) {
         self.title = @"";
         thumbsUnderneath = isPortrait;
         if (isPortrait) {
-            bestSize.height -= EXECUTE_MIN_BELOW_H;
+            float thumbh = THUMB_W*1.90;    // XXXXX stupid fudge
+            bestSize.height -= minThumbRows*(thumbh + SEP);
         } else {
             bestSize.height -= EXECUTE_MIN_BELOW_H;
-            bestSize.width -= 2*(MIN_THUMB_ROWS*THUMB_W + SEP);
+            bestSize.width -= minThumbCols*THUMB_W + SEP;
         }
         if (bestSize.width < EXECUTE_VIEW_W)
             bestSize.width = EXECUTE_VIEW_W;
@@ -1081,7 +1108,7 @@ BOOL thumbsUnderneath;
         self.title = @"Digital Darkroom";
         thumbsUnderneath = NO;
         bestSize.height  -= EXECUTE_BEST_BELOW_H;
-        bestSize.width -= 4*(THUMB_W + SEP);
+        bestSize.width -= minThumbCols*(THUMB_W + SEP);
     }
     
 #ifdef NOTDEF
@@ -1460,13 +1487,13 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) initExecList {
-    [self dumpRows:@"0"];
+//    [self dumpRows:@"0"];
     ExecuteRowView *rowView = [screenTask listViewForStep:DEPTH_STEP
                                                       depthActive:DOING_3D];
     [executeListView addSubview:rowView];   // the depth transform
-    [self dumpRows:@"1"];
+//    [self dumpRows:@"1"];
     [self configureStackMode];
-    [self dumpRows:@"2"];
+//    [self dumpRows:@"2"];
 
     nextInputRow = 1;
     [self adjustExecuteDisplay];
@@ -1503,12 +1530,14 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) dumpRows:(NSString *)label {
+#ifdef DEBUG_EXECUTE
     NSLog(@" -- dumpRows  %@, %ld", label, EXECUTE_ROW_COUNT);
     for (long step=0; step<EXECUTE_ROW_COUNT; step++) {
         ExecuteRowView *rowView = [executeListView viewWithTag:TASK_STEP_TAG_OFFSET + step];
         NSLog(@"    %2ld  tag:%2ld @ %2.0f  %@", step, (long)rowView.tag,
               rowView.frame.origin.y, rowView.name.text);
     }
+#endif
 }
 
 - (CGFloat) yForStep:(long)step {

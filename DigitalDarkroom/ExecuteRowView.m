@@ -76,7 +76,9 @@
 - (void) updateWithName:(NSString *__nullable)tn
                   param:(TransformInstance *__nullable)instance
                   color:(UIColor *) textColor {
+#ifdef DEBUG_EXECUTE
     NSLog(@"      %2ld: updateWithName: %@", step, tn);
+#endif
     stepNumber.textColor = textColor;
     if (!tn) {
         stepNumber.text = @"";
