@@ -9,11 +9,7 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
-
-typedef enum {
-//    exhibitUI,
-    oliveUI,
-} UIMode_t;
+#import "Layout.h"
 
 @interface MainVC : UIViewController
 <UICollectionViewDelegate,

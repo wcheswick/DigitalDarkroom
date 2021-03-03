@@ -20,7 +20,6 @@
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
-@property (nonatomic, strong)   AVCaptureDeviceFormat *selectedFormat;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
 
@@ -34,7 +33,6 @@
 @synthesize captureDevice, selectedCamera;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
-@synthesize selectedFormat;
 @synthesize videoOrientation;
 
 
@@ -42,7 +40,6 @@
     self = [super init];
     if (self) {
         captureVideoPreviewLayer = nil;
-        selectedFormat = nil;
         selectedCamera = NotACamera;
         delegate = nil;
         captureDevice = nil;
@@ -302,6 +299,15 @@
                 continue;
             case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
                 break;
+            case kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange: // 'x420'
+                /* 2 plane YCbCr10 4:2:0, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+                continue;
+            case kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange:  //'x422'
+                /* 2 plane YCbCr10 4:2:2, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+                continue;
+            case kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange: // 'x444'
+                /* 2 plane YCbCr10 4:4:4, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+                continue;
             default:
                 NSLog(@"??? Unknown media subtype encountered in format: %@", format);
                 break;
@@ -315,79 +321,14 @@
     NSError *error;
     
     [captureDevice lockForConfiguration:&error];
-    captureDevice.activeFormat = selectedFormat;
+    captureDevice.activeFormat = format;
     
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
     
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    //NSLog(@"-- format selected: %@", selectedFormat.description);
     [captureDevice unlockForConfiguration];
-}
-
-// find and return the largest size that fits into the given size. Return
-// Zero size if none works.  This should never happen.
-
-// Determine the capture image size. If availableSize is zero, return the largest
-// size we have. If the height is zero, fit the largest to the width.  If both height and
-// width are non-zero, make it fit there.
-
-- (CGSize) setupCameraForSize:(CGSize) availableSize {
-    assert(captureDevice);
-    NSArray *availableFormats = captureDevice.formats;
-    CGSize captureSize = CGSizeZero;
-    selectedFormat = nil;
-    
-    // XX [availableFormats filteredArrayUsingPredicate:<#(nonnull NSPredicate *)#>]
-    // to optimize this search for the right depth format, and try to get
-    // native delivery of kCVPixelFormatType_DepthFloat32 without having
-    // to translate every frame in the input stream ourselves.
-    
-    for (AVCaptureDeviceFormat *format in availableFormats) {
-        CMFormatDescriptionRef ref = format.formatDescription;
-        CMMediaType mediaType = CMFormatDescriptionGetMediaType(ref);
-        if (mediaType != kCMMediaType_Video)
-            continue;
-        if (IS_3D_CAMERA(selectedCamera)) { // if we need depth-capable formats only
-            if (!format.supportedDepthDataFormats)
-                continue;
-            if (format.supportedDepthDataFormats.count == 0)
-                continue;
-        }
-//        NSLog(@"format:  %@", format);
-        FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-        //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
-        switch (mediaSubType) {
-            case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-                continue;
-            case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
-            default:
-//                NSLog(@"Unknown media subtype encountered in format: %@", format);
-                break;
-        }
-        
-        CGSize newSize = [self sizeForFormat:format];
-        if (![self isNewSize:newSize aBetterSizeThan:captureSize forTarget:availableSize]) {
-            //break;  // stop trying, which seems to be right. It's not
-            continue;
-        }
-        captureSize = newSize;
-        selectedFormat = format;
-#ifdef DEBUG_CAMERA_CAPTURE_SIZE
-            NSLog(@"YES");
-#endif
-    }
-    
-    if (!selectedFormat) {
-        NSLog(@"******* inconceivable: no suitable video found for %.0f x %.0f",
-              availableSize.width, availableSize.height);
-        return CGSizeZero;
-    }
-//    NSLog(@"SSSSS  format:  %@", selectedFormat);
-
-    [self setupCameraWithFormat:selectedFormat];
-    return captureSize;
 }
 
 - (void) startCamera {
