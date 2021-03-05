@@ -32,7 +32,6 @@ typedef enum {
     CGRect thumbArrayRect, executeRect;
     CGRect firstThumbRect;
     CGRect thumbImageRect;      // within the thumb
-    CGSize thumbArraySize;
     
     size_t thumbsUnderneath, thumbsOnRight;
     float scale, aspectRatio;

@@ -63,7 +63,12 @@
     score = 0;
     scale = 1;
     aspectRatio = captureSize.width / captureSize.height;
+    firstThumbRect = thumbImageRect = CGRectZero;
+    thumbArrayRect = CGRectZero;
+    
     CGSize availableSize = containerView.frame.size;
+    CGSize right, bottom;
+
     float capturePct = 0;
     
     BOOL wfits = captureSize.width <= availableSize.width;
@@ -100,24 +105,57 @@
         f.size = CGSizeMake(EXECUTE_VIEW_W, EXECUTE_VIEW_H);
         f.origin.y = BELOW(displayRect);
         f.origin.x = (availableSize.width - f.size.width)/2.0;
-        CGFloat bottom = BELOW(f);
-        if (bottom > availableSize.height) {
+        CGFloat spaceBelow = BELOW(f);
+        if (spaceBelow > availableSize.height) {
             // doesn't fit underneath, ok to overlap transform image
-            f.origin.y -= bottom - availableSize.height;
+            f.origin.y -= spaceBelow - availableSize.height;
             score -= 3;
         }
         executeRect = f;
         
+        // At this point, we have taken a pretty good shot at a near-full screen image.
+        // Even so, is there room for some thumbs?
+        bottom = CGSizeMake(availableSize.width, availableSize.height - BELOW(executeRect));
+        
+        // the image and execute are centered, but see what it looks like if we left-adjust it
+        // and put thumbs on the right.
+        right = CGSizeMake(availableSize.width - RIGHT(displayRect), availableSize.height);
+        
+        firstThumbRect = thumbImageRect = CGRectZero;
+        firstThumbRect.size.width = thumbImageRect.size.width = THUMB_W;
+        thumbImageRect.size.height = thumbImageRect.size.width / aspectRatio;
+        firstThumbRect.size.height = thumbImageRect.size.height + OLIVE_LABEL_H;
+
+        int rightThumbCount = [self thumbsInArea:right];
+        int bottomThumbCount = [self thumbsInArea:bottom];
+        
+        if (rightThumbCount > 0 && rightThumbCount > bottomThumbCount ) {   // free thumbs on the right
+            thumbArrayRect.size = right;
+            thumbArrayRect.origin = CGPointMake(RIGHT(displayRect), 0);
+            // shift main stuff to the left
+            executeRect.origin.x -= displayRect.origin.x;
+            displayRect.origin.x = 0;
+        } else if (bottomThumbCount > 0) {
+            thumbArrayRect.size = bottom;
+            thumbArrayRect.origin = CGPointMake(0, BELOW(executeRect));
+        } else
+            thumbArrayRect = CGRectZero;    // no thumbs
+
         capturePct = 100.0*captureArea/totalArea;
         if (scale == 1.0)
             score += (capturePct - 50.0)/10;
         else {
             score = 1.00 - captureArea/totalArea;
         }
-        return score;
+    } else {
+        
     }
     
-    CGSize right, bottom;
+#ifdef NOTYET
+    // displayRect and executeRect are computed. Place thumbs, even for "fullscreen",
+    // if there is room.
+    
+    
     right.width = availableSize.width - captureSize.width;
     right.height = availableSize.height;
     bottom.height = availableSize.height - captureSize.height;
@@ -139,11 +177,7 @@
     thumbImageRect.size.height = thumbImageRect.size.width / aspectRatio;
     firstThumbRect.size.height = thumbImageRect.size.height + OLIVE_LABEL_H;
     
-    int rightThumbCount = [self thumbsInArea:right];
-    int bottomThumbCount = [self thumbsInArea:bottom];
-    
-    thumbsUnderneath = bottomThumbCount > rightThumbCount;
-    thumbArraySize = thumbsUnderneath ? bottom : right;
+    int thumbsUnderneath = bottomThumbCount > rightThumbCount;
     
     float rightThumbs = right.width / (firstThumbRect.size.width + SEP);
     float rightArea = right.width * right.height;
@@ -174,8 +208,6 @@
           rightThumbs, rightPct,
           bottomThumbs, bottomPct,
           status, score);
-
-#ifdef NOPE
 #endif
     
     return score;
@@ -190,6 +222,7 @@
 - (int) thumbsInArea:(CGSize) area {
     int ncols = area.width / firstThumbRect.size.width;
     int nrows = area.height / firstThumbRect.size.height;
+    NSLog(@" thumbs in area %4.0f x %4.0f:  %d x %d", area.width, area.height, ncols, nrows);
     return ncols * nrows;
 }
 

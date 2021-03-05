@@ -10,7 +10,7 @@
 #define Defines_h
 
 #define DEBUG_LAYOUT    1
-#define DEBUG_CAMERA_CAPTURE_SIZE   1
+//#define DEBUG_CAMERA_CAPTURE_SIZE   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
