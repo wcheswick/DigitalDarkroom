@@ -25,13 +25,18 @@ typedef enum {
     BOOL isPortrait;
     DisplayOptions displayOption;
     
-    CGSize availableSize;
-    CGSize captureSize, displaySize;
-    CGSize thumbSize, thumbImageSize;
+    UIView *containerView;  // copied from the caller
+    
+    CGSize captureSize;
+    CGSize transformSize;
+    CGRect thumbArrayRect, executeRect;
+    CGRect firstThumbRect;
+    CGRect thumbImageRect;      // within the thumb
     CGSize thumbArraySize;
     
     size_t thumbsUnderneath, thumbsOnRight;
-    float scale;
+    float scale, aspectRatio;
+    NSString *status;
     
     float score;
 }
@@ -39,15 +44,21 @@ typedef enum {
 @property (nonatomic, strong)   AVCaptureDeviceFormat *format;
 @property (assign)              DisplayOptions displayOption;
 @property (assign)              BOOL isPortrait;
-@property (assign)              CGSize availableSize;
-@property (assign)              CGSize captureSize, displaySize;
-@property (assign)              CGSize thumbSize, thumbImageSize, thumbArraySize;
-@property (assign)              size_t thumbsUnderneath, thumbsOnRight;
-@property (assign)              float scale, score;
+@property (nonatomic, strong)   UIView *containerView;  // the screen real estate we lay out in
 
-- (id)initForSize:(CGSize) as
-            portrait:(BOOL) port
-    displayOption:(DisplayOptions) dopt;
+@property (assign)              CGSize captureSize;     // what we get from the camera or file
+@property (assign)              CGSize transformSize;   // what we give to the transform chain
+@property (assign)              CGRect displayRect;     // where the chain puts the (possibly scaled) result
+@property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
+@property (assign)              CGRect executeRect;     // where the execution details go
+
+@property (assign)              CGRect firstThumbRect, thumbImageRect;
+
+@property (assign)              float scale, score, aspectRatio;
+@property (nonatomic, strong)   NSString *status;
+
+- (id)initForPortrait:(BOOL) port
+              displayOption:(DisplayOptions) dopt;
 
 - (int) layoutForFormat:(AVCaptureDeviceFormat *) f scaleOK:(BOOL) scaleOK;
 - (int) layoutForSize:(CGSize) s scaleOK:(BOOL) scaleOK;

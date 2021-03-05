@@ -9,7 +9,6 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
-#import "Layout.h"
 
 @interface MainVC : UIViewController
 <UICollectionViewDelegate,

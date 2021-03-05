@@ -14,6 +14,7 @@
 #import "TaskCtrl.h"
 #import "OptionsVC.h"
 #import "ExecuteRowView.h"
+#import "Layout.h"
 #import "Defines.h"
 
 // last settings
@@ -63,9 +64,6 @@
 #define TRANS_CELL_W   120
 #define TRANS_CELL_H   80 // + SOURCE_LABEL_H)
 
-#define OLIVE_FONT_SIZE 14
-#define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
-
 #define SECTION_HEADER_ARROW_W  55
 
 #define MIN_SLIDER_W    100
@@ -92,6 +90,7 @@
 
 #define NO_STEP_SELECTED    -1
 #define DOING_3D    IS_3D_CAMERA(self->currentSource.sourceType)
+#define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 typedef enum {
     TransformTable,
@@ -127,12 +126,9 @@ typedef enum {
 @property (nonatomic, strong)   UIView *containerView;
 
 // in containerview:
-@property (nonatomic, strong)   UIView *transformView;  // area reserved for transform display and related
-@property (nonatomic, strong)   UIView *thumbArrayView;
-
-// in transformview
-@property (nonatomic, strong)   UIImageView *transformImageView;    // transformed image
-@property (nonatomic, strong)   UIView *executeView;                // the whole execute list area
+@property (nonatomic, strong)   UIImageView *transformView; // transformed image
+@property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
+@property (nonatomic, strong)   UIView *executeView;        // active transform list and details
 
 // in executeView
 @property (nonatomic, strong)   UIView *executeListView;
@@ -178,6 +174,7 @@ typedef enum {
 @property (assign)              BOOL isiPhone;
 @property (assign)    BOOL execOverlapsImage;
 @property (assign)      CGFloat minThumbWidth;
+@property (assign)              Layout *layout;
 
 @property (assign)              DisplayOptions displayOption;
 
@@ -202,7 +199,6 @@ typedef enum {
 
 @synthesize containerView;
 @synthesize transformView;
-@synthesize transformImageView;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
 
@@ -259,7 +255,7 @@ typedef enum {
         currentTransformIndex = NO_TRANSFORM;
         nextInputRow = NO_INPUT_ROW;
         
-        displayOption = BestDisplay;
+        displayOption = FullScreenDisplay;
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
@@ -604,60 +600,58 @@ static NSString * const imageOrientationName[] = {
     containerView.layer.borderWidth = 3.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
-    transformView = [[UIView alloc] init];
     
-    [containerView addSubview:transformView];
+    transformView = [[UIImageView alloc] init];
+    transformView.userInteractionEnabled = YES;
+    transformView.backgroundColor = NAVY_BLUE;
     
-    transformImageView = [[UIImageView alloc] init];
-    transformImageView.userInteractionEnabled = YES;
-    transformImageView.backgroundColor = NAVY_BLUE;
     UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [touch setNumberOfTouchesRequired:1];
-    [transformImageView addGestureRecognizer:touch];
+    [transformView addGestureRecognizer:touch];
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didLongPressScreen:)];
     longPressScreen.minimumPressDuration = 1.0;
-    [transformImageView addGestureRecognizer:longPressScreen];
+    [transformView addGestureRecognizer:longPressScreen];
     
     UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                            action:@selector(doDown:)];
     swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
-    [transformImageView addGestureRecognizer:swipeDown];
+    [transformView addGestureRecognizer:swipeDown];
     
     UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doUp:)];
     swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
-    [transformImageView addGestureRecognizer:swipeUp];
+    [transformView addGestureRecognizer:swipeUp];
     
     UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-    [transformImageView addGestureRecognizer:swipeRight];
+    [transformView addGestureRecognizer:swipeRight];
     
     UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doLeft:)];
     swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    [transformImageView addGestureRecognizer:swipeLeft];
+    [transformView addGestureRecognizer:swipeLeft];
     
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPinch:)];
-    [transformImageView addGestureRecognizer:pinch];
+    [transformView addGestureRecognizer:pinch];
     
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPan:)];
-    [transformImageView addGestureRecognizer:pan];
+    [transformView addGestureRecognizer:pan];
 
-    [transformView addSubview:transformImageView];
+    [containerView addSubview:transformView];
     
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-    screenTask = [screenTasks createTaskForTargetImageView:transformImageView
+    screenTask = [screenTasks createTaskForTargetImageView:transformView
                                                      named:@"main"
                                             depthTransform:depthTransform];
 
@@ -899,19 +893,20 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-- (Layout *) chooseLayoutFrom:(NSArray *)availableFormats forSize:(CGSize) availableSize scaleOK:(BOOL)scaleOK {
-    NSLog(@"  %4.0f x %4.0f   ar %4.2f   chooseFormatForSize",
-          availableSize.width, availableSize.height,
-          availableSize.width/availableSize.height);
-    NSLog(@"  ----");
+- (Layout *) chooseLayoutFrom:(NSArray *)availableFormats scaleOK:(BOOL)scaleOK {
+//    NSLog(@"  %4.0f x %4.0f   ar %4.2f   chooseFormatForSize",
+//          availableSize.width, availableSize.height,
+//          availableSize.width/availableSize.height);
+//    NSLog(@"  ----");
     
     int bestScore = REJECT_SCORE;
     Layout *bestLayout = nil;
     
     for (AVCaptureDeviceFormat *format in availableFormats) {
-        Layout *layout = [[Layout alloc] initForSize:availableSize
-                                            portrait: isPortrait
-                                       displayOption:displayOption];
+        Layout *layout = [[Layout alloc] initForPortrait:isPortrait
+                                           displayOption:displayOption];
+        layout.containerView = containerView;
+        
         int score = [layout layoutForFormat:format scaleOK:scaleOK];
         if (score > bestScore) {
             bestScore = score;
@@ -986,8 +981,6 @@ static NSString * const imageOrientationName[] = {
         NSLog(@"    file source size: %.0f x %.0f",
               currentSource.imageSize.width, currentSource.imageSize.height);
     }
-        
-    CGRect f = self.view.frame;
 
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
@@ -1007,7 +1000,7 @@ static NSString * const imageOrientationName[] = {
           leftPadding, rightPadding, topPadding, bottomPadding);
 #endif
     
-    f = self.view.frame;
+    CGRect f = self.view.frame;
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height -= f.origin.y + bottomPadding;
@@ -1029,20 +1022,22 @@ static NSString * const imageOrientationName[] = {
     if (ISCAMERA(currentSource.sourceType)) {   // select camera setting for available area
         NSArray *availableFormats = [cameraController formatsForSelectedCameraNeeding3D:DOING_3D];
         layout = [self chooseLayoutFrom:availableFormats
-                                forSize:containerView.frame.size
                                 scaleOK:NO];
-        if (!layout)
+        NSLog(@" score for best unscaled layout: %.1f", layout.score);
+        if (!layout || layout.score < 0) {
             layout = [self chooseLayoutFrom:availableFormats
-                                    forSize:containerView.frame.size
                                     scaleOK:YES];
+            NSLog(@"   score for best scaled layout: %.1f", layout.score);
+        }
         if (!layout)
             NSLog(@"!!! could not layout camera image");
         else
             [cameraController setupCameraWithFormat:layout.format];
     } else {
-        layout = [[Layout alloc] initForSize:containerView.frame.size
-                                    portrait:isPortrait
-                               displayOption:displayOption];
+        layout = [[Layout alloc] initForPortrait:isPortrait
+                                   displayOption:displayOption];
+        layout.containerView = containerView;
+        
         int score = [layout layoutForSize:currentSource.imageSize scaleOK:NO];
         if (score == REJECT_SCORE)
             score = [layout layoutForSize:currentSource.imageSize scaleOK:YES];
@@ -1050,126 +1045,66 @@ static NSString * const imageOrientationName[] = {
             NSLog(@"!!! could not layout image");
     }
 
-#ifdef NOTDEF
-    // The chosen capture size may be bigger than the display size. Figure out
-    // the final display size.  The transform stuff will have to scale the
-    // incoming stuff, hopefully efficiently, if needed.
-    // At present, we don't expand small captures, just use them.
+    transformView.frame = layout.displayRect;
+    executeView.frame = layout.executeRect;
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbArrayView.frame = CGRectMake(0, 0,
+                                      thumbScrollView.frame.size.width,
+                                      thumbScrollView.frame.size.height);
 
 #ifdef DEBUG_LAYOUT
-    NSLog(@" >>> captureSize %.0f x %.0f  AR %4.2f",
-          captureSize.width, captureSize.height,
-          captureSize.width/captureSize.height);
-#endif
+    NSLog(@"layout selected:");
 
-    CGSize displaySize;
-    if (captureSize.width <= bestSize.width && captureSize.height <= bestSize.height)
-        displaySize = captureSize;
-    else {
-        double captureAR = captureSize.width/captureSize.height;
-        double finalAR = bestSize.width/bestSize.height;
-        CGFloat scale;
-        if (finalAR > captureAR)
-            scale = bestSize.height / captureSize.height;
-        else
-            scale = bestSize.width / captureSize.width;
-        NSLog(@"  ** scaling by %.2f", scale);
-        displaySize = CGSizeMake(round(captureSize.width*scale), round(captureSize.height*scale));
-    }
-#endif
-    
-    if (layout.displaySize.height < 288) {
-        NSLog(@"  ** needs minimum height of 288 for iPhone ***");
-        NSLog(@" >>>  got %.1f x %.1f ***", layout.displaySize.width, layout.displaySize.height);
-    }
-    
-    assert(layout.displaySize.height > 0);
-    if (layout.displaySize.width < EXECUTE_VIEW_W) {
-        NSLog(@"!!! execute view will not fit by %.0f",
-              EXECUTE_VIEW_W - layout.displaySize.width);
-    }
-    
-    f.origin.y = 0;
-    if (layout.thumbsUnderneath) { // transform view spans the width of the screen
-        f.size.width = containerView.frame.size.width;
-        f.size.height = layout.displaySize.height + LATER;
-    } else {
-        f.size.height = containerView.frame.size.height;
-        f.size.width = layout.displaySize.width;
-    }
-    transformView.frame = f;
-    
-    if (layout.thumbsUnderneath) { // center view in container view
-        f.origin.x = (transformView.frame.size.width - layout.displaySize.width)/2.0;
-        f.origin.y = 0;
-    } else      // upper left hand corner
-        f.origin = CGPointZero;
-    f.size = layout.displaySize;
-    transformImageView.frame = f;
+    NSLog(@"        capture:               %4.0f x %4.0f\tscale=%.1f score=%.0f",
+          layout.captureSize.width, layout.captureSize.height,
+          layout.scale, layout.score);
 
-#ifdef DEBUG_LAYOUT
-    NSLog(@" >>> displaySize %.0f x %.0f  AR %4.2f",
-          layout.displaySize.width, layout.displaySize.height,
-          layout.displaySize.width/layout.displaySize.height);
-#endif
+    NSLog(@"      container:               %4.0f x %4.0f",
+          containerView.frame.size.width,
+          containerView.frame.size.height);
 
-#ifdef FORIPHONENOTYET
-    CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
-    assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
-    if (thumbsUnderneath) {
-        execSpace = EXECUTE_MIN_ROWS_BELOW;
-        // XXX maybe we don't need to squeeze here so hard sometimes.
-    }
+    NSLog(@" transform size:               %4.0f x %4.0f",
+          layout.transformSize.width,
+          layout.transformSize.height);
+
+    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f",
+          transformView.frame.origin.x,
+          transformView.frame.origin.y,
+          transformView.frame.size.width,
+          transformView.frame.size.height);
+
+    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
+          executeView.frame.origin.x,
+          executeView.frame.origin.y,
+          executeView.frame.size.width,
+          executeView.frame.size.height);
+
+    NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
+          thumbScrollView.frame.origin.x,
+          thumbScrollView.frame.origin.y,
+          thumbScrollView.frame.size.width,
+          thumbScrollView.frame.size.height);
+
+    transformView.layer.borderColor = [UIColor redColor].CGColor;
+    transformView.layer.borderWidth = 1.0;
+    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
+    executeView.layer.borderWidth = 1.0;
+    thumbScrollView.layer.borderColor = [UIColor blueColor].CGColor;
+    thumbScrollView.layer.borderWidth = 1.0;
 #endif
     
-    f = executeView.frame;
-    f.origin.y = BELOW(transformImageView.frame);
-    if (layout.thumbsUnderneath) { // center in the whole container width
-        f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;
-        f.size.width = transformView.frame.size.width;
-        if (isiPhone) { // not much room below image
-            f.size.height = EXECUTE_MIN_BELOW_H;
-        } else {
-            f.size.height = EXECUTE_BEST_BELOW_H;
-        }
-    } else {    // thumbs on the right, center this under the image
-        f.origin.x = (transformImageView.frame.size.width - executeView.frame.size.width)/2.0;
-    }
-    executeView.frame = f;
-#ifdef DEBUG_LAYOUT
-//    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
-//    executeView.layer.borderWidth = 2.0;
-#endif
+    // layout.transformSize is what the tasks get to run.  They
+    // then display (possibly scaled) onto transformView.
     
-    SET_VIEW_HEIGHT(transformView, BELOW(executeView.frame));
-    [transformView bringSubviewToFront:executeView];
-    transformView.clipsToBounds = YES;
-    
-    [screenTasks configureGroupForSize: layout.displaySize];
+    [screenTasks configureGroupForSize: layout.transformSize];
     //    [externalTask configureForSize: processingSize];
-    
-    f = containerView.frame;
-    f.origin = CGPointMake(0, transformView.frame.origin.y);
-    f.size.height -= f.origin.y;
-    if (layout.thumbsUnderneath) {
-        f.origin.x = 0;
-        f.origin.y = BELOW(transformView.frame);
-        f.size = layout.thumbArraySize;
-    } else {
-        f.origin.x = RIGHT(transformView.frame) + SEP;
-        f.origin.y = transformView.frame.origin.y;
-    }
-    f.size = layout.thumbArraySize;
-    thumbScrollView.frame = f;
-    f.origin = CGPointZero;
-    thumbArrayView.frame = f;   // the final may be higher
 
-    [UIView animateWithDuration:0.5 animations:^(void) {
-        // move views to where they need to be now.
-        [self layoutThumbArray];
-    }];
-    
-    [containerView bringSubviewToFront:transformView];
+    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            // move views to where they need to be now.
+            [self placeThumbsForLayout: layout];
+        }];
+    }
     
     if (adjustSourceInfo) {
         [self adjustCameraButtons];
@@ -1210,18 +1145,10 @@ CGFloat topOfNonDepthArray = 0;
 // layout the 3d transforms.  If the input isn't a 3D source, these will always be
 // scrolled off the top of the view.
 
-- (void) layoutThumbArray {
-    imageRect = CGRectZero;
-    imageRect.size.width = THUMB_W;
-    float aspectRatio = transformImageView.frame.size.width/transformImageView.frame.size.height;
-    imageRect.size.height = round(imageRect.size.width / aspectRatio);
+- (void) placeThumbsForLayout:(Layout *)layout {
+    nextButtonFrame = layout.firstThumbRect;
+    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
-    [thumbTasks configureGroupForSize:imageRect.size];
-    
-    nextButtonFrame.size = CGSizeMake(imageRect.size.width,
-                                   imageRect.size.height + OLIVE_LABEL_H);
-    nextButtonFrame.origin = CGPointMake(0, 0);
-    
     atStartOfRow = YES;
 
     // Run through all the transforms, computing the corresponding thumb sizes and
@@ -1254,7 +1181,7 @@ CGFloat topOfNonDepthArray = 0;
         thumb.userInteractionEnabled = YES;
 
         UIImageView *imageView = [thumb viewWithTag:THUMB_IMAGE_TAG];
-        imageView.frame = imageRect;
+        imageView.frame = layout.thumbImageRect;
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
 
@@ -1319,7 +1246,8 @@ CGFloat topOfNonDepthArray = 0;
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
-    [thumbTasks configureGroupWithNewDepthTransform:depthTransform];
+    if (DISPLAYING_THUMBS)
+        [thumbTasks configureGroupWithNewDepthTransform:depthTransform];
     
     [self changeStepInExecuteList:DEPTH_STEP];
 }
@@ -1590,7 +1518,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction) doSave {
     NSLog(@"saving");   // XXX need full image for a save
-    UIImageWriteToSavedPhotosAlbum(transformImageView.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
     UIWindow* keyWindow = nil;
@@ -1760,14 +1688,17 @@ if captureDevice.position == AVCaptureDevicePosition.front {
     
     dispatch_async(dispatch_get_main_queue(), ^{
         [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
-        [self->thumbTasks executeTasksWithDepthBuf:self->depthBuf];
+        if (DISPLAYING_THUMBS)
+            [self->thumbTasks executeTasksWithDepthBuf:self->depthBuf];
         self->busy = NO;
     });
 }
 
 - (void) doTransformsOn:(UIImage *)sourceImage {
     [screenTasks executeTasksWithImage:sourceImage];
-    [thumbTasks executeTasksWithImage:sourceImage];
+
+    if (DISPLAYING_THUMBS)
+        [thumbTasks executeTasksWithImage:sourceImage];
 }
     
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
@@ -2167,5 +2098,122 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     }];
 }
 
+#ifdef OLD
+
+#ifdef NOTDEF
+    // The chosen capture size may be bigger than the display size. Figure out
+    // the final display size.  The transform stuff will have to scale the
+    // incoming stuff, hopefully efficiently, if needed.
+    // At present, we don't expand small captures, just use them.
+
+#ifdef DEBUG_LAYOUT
+    NSLog(@" >>> captureSize %.0f x %.0f  AR %4.2f",
+          captureSize.width, captureSize.height,
+          captureSize.width/captureSize.height);
+#endif
+
+    CGSize displaySize;
+    if (captureSize.width <= bestSize.width && captureSize.height <= bestSize.height)
+        displaySize = captureSize;
+    else {
+        double captureAR = captureSize.width/captureSize.height;
+        double finalAR = bestSize.width/bestSize.height;
+        CGFloat scale;
+        if (finalAR > captureAR)
+            scale = bestSize.height / captureSize.height;
+        else
+            scale = bestSize.width / captureSize.width;
+        NSLog(@"  ** scaling by %.2f", scale);
+        displaySize = CGSizeMake(round(captureSize.width*scale), round(captureSize.height*scale));
+    }
+#endif
+    
+    if (layout.displaySize.height < 288) {
+        NSLog(@"  ** needs minimum height of 288 for iPhone ***");
+        NSLog(@" >>>  got %.1f x %.1f ***", layout.displaySize.width, layout.displaySize.height);
+    }
+    
+    assert(layout.displaySize.height > 0);
+    if (layout.displaySize.width < EXECUTE_VIEW_W) {
+        NSLog(@"!!! execute view will not fit by %.0f",
+              EXECUTE_VIEW_W - layout.displaySize.width);
+    }
+    
+#ifdef NOTDEF
+    f.origin.y = 0;
+    if (layout.thumbsUnderneath) { // transform view spans the width of the screen
+        f.size.width = containerView.frame.size.width;
+        f.size.height = layout.displaySize.height + LATER;
+    } else {
+        f.size.height = containerView.frame.size.height;
+        f.size.width = layout.displaySize.width;
+    }
+    transformView.frame = layout.displayRect;
+    
+    if (layout.thumbsUnderneath) { // center view in container view
+        f.origin.x = (transformView.frame.size.width - layout.displaySize.width)/2.0;
+        f.origin.y = 0;
+    } else      // upper left hand corner
+        f.origin = CGPointZero;
+    f.size = layout.displaySize;
+#endif
+
+#ifdef DEBUG_LAYOUT
+    NSLog(@" >>> displaySize %.0f x %.0f  AR %4.2f",
+          layout.displaySize.width, layout.displaySize.height,
+          layout.displaySize.width/layout.displaySize.height);
+#endif
+
+#ifdef FORIPHONENOTYET
+    CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
+    assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
+    if (thumbsUnderneath) {
+        execSpace = EXECUTE_MIN_ROWS_BELOW;
+        // XXX maybe we don't need to squeeze here so hard sometimes.
+    }
+    
+    f = executeView.frame;
+    f.origin.y = BELOW(transformImageView.frame);
+    if (layout.thumbsUnderneath) { // center in the whole container width
+        f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;
+        f.size.width = transformView.frame.size.width;
+        if (isiPhone) { // not much room below image
+            f.size.height = EXECUTE_MIN_BELOW_H;
+        } else {
+            f.size.height = EXECUTE_BEST_BELOW_H;
+        }
+    } else {    // thumbs on the right, center this under the image
+        f.origin.x = (transformImageView.frame.size.width - executeView.frame.size.width)/2.0;
+    }
+#endif
+#ifdef DEBUG_LAYOUT
+//    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
+//    executeView.layer.borderWidth = 2.0;
+#endif
+    
+    SET_VIEW_HEIGHT(transformView, BELOW(executeView.frame));
+    [transformView bringSubviewToFront:executeView];
+    transformView.clipsToBounds = YES;
+    
+
+
+
+f = containerView.frame;
+f.origin = CGPointMake(0, transformView.frame.origin.y);
+f.size.height -= f.origin.y;
+if (layout.thumbsUnderneath) {
+    f.origin.x = 0;
+    f.origin.y = BELOW(transformView.frame);
+    f.size = layout.thumbArraySize;
+} else {
+    f.origin.x = RIGHT(transformView.frame) + SEP;
+    f.origin.y = transformView.frame.origin.y;
+}
+f.size = layout.thumbArraySize;
+thumbScrollView.frame = f;
+f.origin = CGPointZero;
+thumbArrayView.frame = f;   // the final may be higher
+
+#endif
 
 @end

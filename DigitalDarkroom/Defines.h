@@ -64,11 +64,14 @@ typedef long PixelIndex_t;
 #define SMALL_THUMB_W   60
 #define THUMB_W         80
 
+#define OLIVE_FONT_SIZE 14
+#define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
+
 #define SECTION_HEADER_FONT_SIZE    24
 
 #define EXECUTE_ROW_H       17
 
-#define EXECUTE_MIN_ROWS_BELOW  1.4     // a squeeze for iphones, more for others
+#define EXECUTE_MIN_ROWS_BELOW  2     // a squeeze for iphones, more for others
 
 #define EXECUTE_STATUS_FONT_SIZE    (EXECUTE_ROW_H-2)
 
