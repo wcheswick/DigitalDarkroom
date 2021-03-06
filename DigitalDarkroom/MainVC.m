@@ -906,6 +906,7 @@ static NSString * const imageOrientationName[] = {
         Layout *layout = [[Layout alloc] initForPortrait:isPortrait
                                            displayOption:displayOption];
         layout.containerView = containerView;
+        layout.isiPhone = isiPhone;
         
         int score = [layout layoutForFormat:format scaleOK:scaleOK];
         if (score > bestScore) {
@@ -1037,7 +1038,8 @@ static NSString * const imageOrientationName[] = {
         layout = [[Layout alloc] initForPortrait:isPortrait
                                    displayOption:displayOption];
         layout.containerView = containerView;
-        
+        layout.isiPhone = isiPhone;
+
         int score = [layout layoutForSize:currentSource.imageSize scaleOK:NO];
         if (score == REJECT_SCORE)
             score = [layout layoutForSize:currentSource.imageSize scaleOK:YES];
@@ -1086,11 +1088,11 @@ static NSString * const imageOrientationName[] = {
           thumbScrollView.frame.size.height);
 
     transformView.layer.borderColor = [UIColor redColor].CGColor;
-    transformView.layer.borderWidth = 1.0;
+//    transformView.layer.borderWidth = 5.0;
     executeView.layer.borderColor = [UIColor orangeColor].CGColor;
-    executeView.layer.borderWidth = 1.0;
+//    executeView.layer.borderWidth = 5.0;
     thumbScrollView.layer.borderColor = [UIColor blueColor].CGColor;
-    thumbScrollView.layer.borderWidth = 1.0;
+//    thumbScrollView.layer.borderWidth = 5.0;
 #endif
     
     // layout.transformSize is what the tasks get to run.  They

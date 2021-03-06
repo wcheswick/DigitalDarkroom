@@ -61,7 +61,7 @@ typedef long PixelIndex_t;
 #define MIN_IPHONE_THUMB_COLS  3
 #define MIN_IPHONE_THUMB_ROWS  2
 
-#define SMALL_THUMB_W   60
+#define SMALL_THUMB_W   65
 #define THUMB_W         80
 
 #define OLIVE_FONT_SIZE 14

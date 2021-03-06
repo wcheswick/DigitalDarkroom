@@ -22,7 +22,7 @@ typedef enum {
 
 @interface Layout : NSObject {
     AVCaptureDeviceFormat *format;
-    BOOL isPortrait;
+    BOOL isPortrait, isiPhone;
     DisplayOptions displayOption;
     
     UIView *containerView;  // copied from the caller
@@ -42,7 +42,7 @@ typedef enum {
 
 @property (nonatomic, strong)   AVCaptureDeviceFormat *format;
 @property (assign)              DisplayOptions displayOption;
-@property (assign)              BOOL isPortrait;
+@property (assign)              BOOL isPortrait, isiPhone;
 @property (nonatomic, strong)   UIView *containerView;  // the screen real estate we lay out in
 
 @property (assign)              CGSize captureSize;     // what we get from the camera or file
