@@ -559,7 +559,7 @@ typedef enum {
     assert(cameraIconPath);
     
     cameraSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    cameraSelectButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    cameraSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
     [cameraSelectButton setImage: cameraIcon forState:UIControlStateNormal];
     [cameraSelectButton addTarget:self
                            action:@selector(chooseCamera:)
@@ -575,7 +575,7 @@ typedef enum {
                                        orientation:UIImageOrientationUp];
     
     flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    flipCameraButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
     [flipCameraButton setImage:flipIcon forState:UIControlStateNormal];
 //    [flipCameraButton setBackgroundImage:flipIcon forState:UIControlStateNormal];
     [flipCameraButton addTarget:self
@@ -592,7 +592,7 @@ typedef enum {
                                        orientation:UIImageOrientationUp];
     
     photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    photoStackButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
     [photoStackButton setImage:photoIcon forState:UIControlStateNormal];
     [photoStackButton addTarget:self
                            action:@selector(selectPhoto:)
@@ -605,18 +605,18 @@ typedef enum {
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
-    fixedSpace.width = 60;
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
 
+#ifdef TESTING
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
                                                cameraBarButton,
                                                flipBarButton,
                                                photoBarButton,
                                               flexibleSpace,
                                                nil];
-
+#endif
 #ifdef NOTDEF
     
     NSArray *selectionBarItems = [self selectionBarItems];
@@ -660,17 +660,24 @@ typedef enum {
                                 initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                 target:self
                                 action:@selector(doRemoveLastTransform)];
-
+    
+    fixedSpace.width = 60;
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                otherMenuButton,
-                                               fixedSpace,
+                                               flexibleSpace,
                                                saveButton,
-                                               fixedSpace,
+                                               flexibleSpace,
                                                undoBarButton,
-                                               fixedSpace,
+                                               flexibleSpace,
                                                trashBarButton,
+                                               flexibleSpace,
+                                               photoBarButton,
+                                               flexibleSpace,
+                                               flipBarButton,
+                                               flexibleSpace,
+                                               cameraBarButton,
                                                nil];
-
+    
 #define SLIDER_OFF  (-1)
     
     //    UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
