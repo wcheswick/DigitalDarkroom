@@ -125,7 +125,7 @@ typedef enum {
 
 @property (nonatomic, strong)   UIView *containerView;
 
-@property (nonatomic, strong)   UIButton *cameraSelectButton;
+@property (nonatomic, strong)   UIButton *depthSelectButton;
 @property (nonatomic, strong)   UIButton *flipCameraButton;
 @property (nonatomic, strong)   UIButton *photoStackButton;
 
@@ -202,7 +202,7 @@ typedef enum {
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize cameraSelectButton, flipCameraButton, photoStackButton;
+@synthesize depthSelectButton, flipCameraButton, photoStackButton;
 @synthesize transformView;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
@@ -509,19 +509,6 @@ typedef enum {
 
 #define SOURCE_TYPE_TAG_OFFSET  30
 
-- (NSArray *) selectionBarItems {
-    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
-    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
-    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
-    
-    NSString *flipCameraIconPath = [[NSBundle mainBundle] pathForResource:@"images/flipcamera.png" ofType:@""];
-    UIImage *flipIconView = [UIImage imageNamed:flipCameraIconPath];
-    NSString *photoStackIconPath = [[NSBundle mainBundle] pathForResource:@"images/photostack.png" ofType:@""];
-    UIImage *photoIconView = [UIImage imageNamed:photoStackIconPath];
-
-    return [NSArray arrayWithObjects:cameraIconView, flipIconView, photoIconView, nil];
-}
-
 - (void) adjustSourceSelectionView {
     NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
     NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
@@ -533,6 +520,18 @@ typedef enum {
     [sourceSelectionView setNeedsDisplay];
 }
 
+- (UIImage *) barIconFrom:(NSString *) fileName {
+    NSString *fullName = [[@"images" stringByAppendingPathComponent:fileName] stringByAppendingPathExtension:@"png"];
+    NSString *imagePath = [[NSBundle mainBundle] pathForResource:fullName ofType:@""];
+    assert(imagePath);
+    UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
+    assert(image);
+    float scale = image.size.width / self.navigationController.navigationBar.frame.size.height;
+    return [UIImage imageWithCGImage:image.CGImage
+                               scale:scale
+                         orientation:UIImageOrientationUp];
+}
+
 - (void) viewDidLoad {
     [super viewDidLoad];
     
@@ -542,65 +541,37 @@ typedef enum {
     
     CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
 
-    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
-    NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
-    for (Cameras c=0; c<NCAMERA; c++) {
-        NSString *name = [InputSource cameraNameFor:c];
-        [cameraNames addObject:name];
-    }
+//    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     
-    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
-    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
-    UIImage *cameraImage = [UIImage imageWithContentsOfFile:cameraIconPath];
-    assert(cameraImage);
-    UIImage *cameraIcon = [UIImage imageWithCGImage:cameraImage.CGImage
-                                            scale:cameraImage.size.width/navBarH
-                                       orientation:UIImageOrientationUp];
-    assert(cameraIconPath);
-    
-    cameraSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    cameraSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [cameraSelectButton setImage: cameraIcon forState:UIControlStateNormal];
-    [cameraSelectButton addTarget:self
-                           action:@selector(chooseCamera:)
+    depthSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    depthSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
+    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateNormal];
+    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateSelected];
+    [depthSelectButton addTarget:self
+                           action:@selector(chooseDepth:)
                  forControlEvents:UIControlEventTouchUpInside];
-    
     UIBarButtonItem *cameraBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:cameraSelectButton];
-
-    NSString *flipCameraIconPath = [[NSBundle mainBundle] pathForResource:@"images/flipcamera copy.png" ofType:@""];
-    UIImage *flipImage = [UIImage imageWithContentsOfFile:flipCameraIconPath];
-    UIImage *flipIcon = [UIImage imageWithCGImage:flipImage.CGImage
-                                            scale:flipImage.size.width/navBarH
-                                       orientation:UIImageOrientationUp];
+                                        initWithCustomView:depthSelectButton];
     
     flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
     flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [flipCameraButton setImage:flipIcon forState:UIControlStateNormal];
-//    [flipCameraButton setBackgroundImage:flipIcon forState:UIControlStateNormal];
+    [flipCameraButton setImage:[self barIconFrom:@"flipcamera copy"] forState:UIControlStateNormal];
     [flipCameraButton addTarget:self
                            action:@selector(flipCamera:)
                  forControlEvents:UIControlEventTouchUpInside];
-    
     UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
                                         initWithCustomView:flipCameraButton];
 
-    NSString *photoStackIconPath = [[NSBundle mainBundle] pathForResource:@"images/photostack.png" ofType:@""];
-    UIImage *photoImage = [UIImage imageWithContentsOfFile:photoStackIconPath];
-    UIImage *photoIcon = [UIImage imageWithCGImage:photoImage.CGImage
-                                            scale:photoImage.size.width/navBarH
-                                       orientation:UIImageOrientationUp];
-    
     photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
     photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [photoStackButton setImage:photoIcon forState:UIControlStateNormal];
+    [photoStackButton setImage:[self barIconFrom:@"photostack"]
+                      forState:UIControlStateNormal];
     [photoStackButton addTarget:self
                            action:@selector(selectPhoto:)
                  forControlEvents:UIControlEventTouchUpInside];
 
     UIBarButtonItem *photoBarButton = [[UIBarButtonItem alloc]
                                         initWithCustomView:photoStackButton];
-
     
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
@@ -608,29 +579,6 @@ typedef enum {
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
-
-#ifdef TESTING
-    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               cameraBarButton,
-                                               flipBarButton,
-                                               photoBarButton,
-                                              flexibleSpace,
-                                               nil];
-#endif
-#ifdef NOTDEF
-    
-    NSArray *selectionBarItems = [self selectionBarItems];
-    sourceSelectionView = [[UISegmentedControl alloc] initWithItems:selectionBarItems];
-    sourceSelectionView.frame = CGRectMake(0, 0,
-                                           navBarH*sourceSelectionView.numberOfSegments,
-                                           navBarH);
-    [sourceSelectionView addTarget:self action:@selector(selectSource:)
-              forControlEvents: UIControlEventValueChanged];
-    sourceSelectionView.momentary = NO;
-    [self adjustSourceSelectionView];
-#endif
-//    self.navigationItem.leftBarButtonItem = leftBarItem;
-    
 
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithTitle:@"⋯"
@@ -662,21 +610,21 @@ typedef enum {
                                 action:@selector(doRemoveLastTransform)];
     
     fixedSpace.width = 60;
-    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               otherMenuButton,
-                                               flexibleSpace,
-                                               saveButton,
-                                               flexibleSpace,
-                                               undoBarButton,
-                                               flexibleSpace,
-                                               trashBarButton,
-                                               flexibleSpace,
-                                               photoBarButton,
-                                               flexibleSpace,
-                                               flipBarButton,
-                                               flexibleSpace,
-                                               cameraBarButton,
-                                               nil];
+    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                              cameraBarButton,
+                                              flexibleSpace,
+                                              flipBarButton,
+                                              flexibleSpace,
+                                              photoBarButton,
+                                              flexibleSpace,
+                                              trashBarButton,
+                                              flexibleSpace,
+                                              undoBarButton,
+                                              flexibleSpace,
+                                              saveButton,
+                                              flexibleSpace,
+                                              otherMenuButton,
+                                              nil];
     
 #define SLIDER_OFF  (-1)
     
@@ -2010,14 +1958,22 @@ UIImageOrientation lastOrientation;
     [self adjustExecuteDisplay];
 }
 
-- (IBAction) chooseCamera:(UIButton *)button {
+- (IBAction) chooseDepth:(UIButton *)button {
+    // if they tapped the camera button and we aren't doing
+    // camera, just go to 2D
     if (!ISCAMERA(currentSource.sourceType)) { // selecting camera.
         nextSource = [inputSources objectAtIndex:FrontCamera];
         button.selected = YES;
-        [self reconfigure];
-        return;
+    } else {
+        if (DOING_3D) { // switch to 2d
+            nextSource = [inputSources objectAtIndex: FrontCamera];
+            button.selected = NO;
+        } else {
+            nextSource = [inputSources objectAtIndex: Front3DCamera];
+            button.selected = YES;
+        }
     }
-    [self flipCamera:nil];
+    [self reconfigure];
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
@@ -2031,6 +1987,7 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) selectPhoto:(UIButton *)button {
+    depthSelectButton.selected = NO;
     [self doSelecFileSource];
     [self reconfigure];
 }
