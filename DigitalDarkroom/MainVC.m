@@ -125,6 +125,10 @@ typedef enum {
 
 @property (nonatomic, strong)   UIView *containerView;
 
+@property (nonatomic, strong)   UIButton *cameraSelectButton;
+@property (nonatomic, strong)   UIButton *flipCameraButton;
+@property (nonatomic, strong)   UIButton *photoStackButton;
+
 // in containerview:
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
@@ -182,7 +186,7 @@ typedef enum {
 @property (nonatomic, strong)   DepthBuf *depthBuf;
 @property (assign)              CGSize transformDisplaySize;
 
-@property (nonatomic, strong)   UISegmentedControl *sourceSelection;
+@property (nonatomic, strong)   UISegmentedControl *sourceSelectionView;
 @property (nonatomic, strong)   NSString *lastFileSourceUsed;
 
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
@@ -198,6 +202,7 @@ typedef enum {
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
+@synthesize cameraSelectButton, flipCameraButton, photoStackButton;
 @synthesize transformView;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
@@ -242,7 +247,7 @@ typedef enum {
 @synthesize depthBuf;
 
 @synthesize transformDisplaySize;
-@synthesize sourceSelection;
+@synthesize sourceSelectionView;
 @synthesize lastFileSourceUsed;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
@@ -496,6 +501,38 @@ static NSString * const imageOrientationName[] = {
 };
 #endif
 
+typedef enum {
+    CameraTypeSelect,
+    CameraFlip,
+    ChooseFile,
+} SourceSelectOptions;
+
+#define SOURCE_TYPE_TAG_OFFSET  30
+
+- (NSArray *) selectionBarItems {
+    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
+    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
+    
+    NSString *flipCameraIconPath = [[NSBundle mainBundle] pathForResource:@"images/flipcamera.png" ofType:@""];
+    UIImage *flipIconView = [UIImage imageNamed:flipCameraIconPath];
+    NSString *photoStackIconPath = [[NSBundle mainBundle] pathForResource:@"images/photostack.png" ofType:@""];
+    UIImage *photoIconView = [UIImage imageNamed:photoStackIconPath];
+
+    return [NSArray arrayWithObjects:cameraIconView, flipIconView, photoIconView, nil];
+}
+
+- (void) adjustSourceSelectionView {
+    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
+    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
+    
+    [sourceSelectionView setImage:cameraIconView forSegmentAtIndex:CameraTypeSelect];
+    
+    sourceSelectionView.selectedSegmentIndex = ISCAMERA(currentSource.sourceType) ? CameraTypeSelect : ChooseFile;
+    [sourceSelectionView setNeedsDisplay];
+}
+
 - (void) viewDidLoad {
     [super viewDidLoad];
     
@@ -503,45 +540,98 @@ static NSString * const imageOrientationName[] = {
     NSLog(@" ========= viewDidLoad =========");
 #endif
     
+    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
+
     [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     NSMutableArray *cameraNames = [[NSMutableArray alloc] init];
     for (Cameras c=0; c<NCAMERA; c++) {
         NSString *name = [InputSource cameraNameFor:c];
         [cameraNames addObject:name];
     }
-
-    NSMutableArray *sourceNames = [[NSMutableArray alloc] init];
-    for (int cam=0; cam<availableCameraCount; cam++) {
-        InputSource *s = [inputSources objectAtIndex:cam];
-        [sourceNames addObject:s.label];
-    }
-    [sourceNames addObject:@"File"];
     
-    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
+    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
+    UIImage *cameraImage = [UIImage imageWithContentsOfFile:cameraIconPath];
+    assert(cameraImage);
+    UIImage *cameraIcon = [UIImage imageWithCGImage:cameraImage.CGImage
+                                            scale:cameraImage.size.width/navBarH
+                                       orientation:UIImageOrientationUp];
+    assert(cameraIconPath);
     
-    sourceSelection = [[UISegmentedControl alloc] initWithItems:sourceNames];
-    sourceSelection.frame = CGRectMake(0, 0, 100, navBarH);
-    [sourceSelection addTarget:self action:@selector(selectSource:)
-              forControlEvents: UIControlEventValueChanged];
-    sourceSelection.momentary = NO;
-    if (ISCAMERA(currentSource.sourceType))
-        sourceSelection.selectedSegmentIndex = currentSource.sourceType;
-    else
-        sourceSelection.selectedSegmentIndex = sourceSelection.numberOfSegments - 1;    // file segment
+    cameraSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    cameraSelectButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    [cameraSelectButton setImage: cameraIcon forState:UIControlStateNormal];
+    [cameraSelectButton addTarget:self
+                           action:@selector(chooseCamera:)
+                 forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *cameraBarButton = [[UIBarButtonItem alloc]
+                                        initWithCustomView:cameraSelectButton];
 
-    UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc]
-                                    initWithCustomView:sourceSelection];
-    self.navigationItem.leftBarButtonItem = leftBarItem;
+    NSString *flipCameraIconPath = [[NSBundle mainBundle] pathForResource:@"images/flipcamera copy.png" ofType:@""];
+    UIImage *flipImage = [UIImage imageWithContentsOfFile:flipCameraIconPath];
+    UIImage *flipIcon = [UIImage imageWithCGImage:flipImage.CGImage
+                                            scale:flipImage.size.width/navBarH
+                                       orientation:UIImageOrientationUp];
+    
+    flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    flipCameraButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    [flipCameraButton setImage:flipIcon forState:UIControlStateNormal];
+//    [flipCameraButton setBackgroundImage:flipIcon forState:UIControlStateNormal];
+    [flipCameraButton addTarget:self
+                           action:@selector(flipCamera:)
+                 forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
+                                        initWithCustomView:flipCameraButton];
+
+    NSString *photoStackIconPath = [[NSBundle mainBundle] pathForResource:@"images/photostack.png" ofType:@""];
+    UIImage *photoImage = [UIImage imageWithContentsOfFile:photoStackIconPath];
+    UIImage *photoIcon = [UIImage imageWithCGImage:photoImage.CGImage
+                                            scale:photoImage.size.width/navBarH
+                                       orientation:UIImageOrientationUp];
+    
+    photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    photoStackButton.frame = CGRectMake(0, 0, navBarH, navBarH);
+    [photoStackButton setImage:photoIcon forState:UIControlStateNormal];
+    [photoStackButton addTarget:self
+                           action:@selector(selectPhoto:)
+                 forControlEvents:UIControlEventTouchUpInside];
+
+    UIBarButtonItem *photoBarButton = [[UIBarButtonItem alloc]
+                                        initWithCustomView:photoStackButton];
+
     
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
-    fixedSpace.width = 20;
+    fixedSpace.width = 60;
+    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                      target:nil action:nil];
+
+    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               cameraBarButton,
+                                               flipBarButton,
+                                               photoBarButton,
+                                              flexibleSpace,
+                                               nil];
+
+#ifdef NOTDEF
     
-//    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
-//                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-//                                      target:nil action:nil];
+    NSArray *selectionBarItems = [self selectionBarItems];
+    sourceSelectionView = [[UISegmentedControl alloc] initWithItems:selectionBarItems];
+    sourceSelectionView.frame = CGRectMake(0, 0,
+                                           navBarH*sourceSelectionView.numberOfSegments,
+                                           navBarH);
+    [sourceSelectionView addTarget:self action:@selector(selectSource:)
+              forControlEvents: UIControlEventValueChanged];
+    sourceSelectionView.momentary = NO;
+    [self adjustSourceSelectionView];
+#endif
+//    self.navigationItem.leftBarButtonItem = leftBarItem;
     
+
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithTitle:@"⋯"
                                         style:UIBarButtonItemStylePlain
@@ -1913,16 +2003,60 @@ UIImageOrientation lastOrientation;
     [self adjustExecuteDisplay];
 }
 
-- (IBAction) selectSource:(UISegmentedControl *)sender {
-    int segment = (Cameras)sender.selectedSegmentIndex;
-    if (segment == sender.numberOfSegments - 1) {   // file selection
-        sender.selectedSegmentIndex = segment;
-        [self doSelecFileSource];
+- (IBAction) chooseCamera:(UIButton *)button {
+    if (!ISCAMERA(currentSource.sourceType)) { // selecting camera.
+        nextSource = [inputSources objectAtIndex:FrontCamera];
+        button.selected = YES;
+        [self reconfigure];
         return;
     }
-    nextSource = [inputSources objectAtIndex:segment];
+    [self flipCamera:nil];
+}
+
+- (IBAction) flipCamera:(UIButton *)button {
+    if (!ISCAMERA(currentSource.sourceType))    // XXXX should be disabled
+        return;
+    if (currentSource.sourceType == FrontCamera)
+        nextSource = [inputSources objectAtIndex:RearCamera];
+    else
+        nextSource = [inputSources objectAtIndex:FrontCamera];
     [self reconfigure];
 }
+
+- (IBAction) selectPhoto:(UIButton *)button {
+    [self doSelecFileSource];
+    [self reconfigure];
+}
+
+#ifdef OLD
+- (IBAction) selectSource:(UISegmentedControl *)sender {
+    SourceSelectOptions option = (SourceSelectOptions)sender.selectedSegmentIndex;
+    Cameras source = currentSource.sourceType;
+    switch (option) {
+        case CameraTypeSelect:
+            if (!ISCAMERA(source)) { // selecting camera.
+                nextSource = [inputSources objectAtIndex:FrontCamera];
+                [sourceSelectionView setSelectedSegmentIndex:CameraTypeSelect];
+                break;
+            }
+            // FALLTHROUGH
+        case CameraFlip:
+            if (!ISCAMERA(source))
+                return;
+            if (source == FrontCamera)
+                nextSource = [inputSources objectAtIndex:RearCamera];
+            else
+                nextSource = [inputSources objectAtIndex:FrontCamera];
+            break;
+        case ChooseFile:
+            // not yet available
+            [self doSelecFileSource];
+            [sourceSelectionView setSelectedSegmentIndex:ChooseFile]
+            ;;
+    }
+    [self reconfigure];
+}
+#endif
 
 #ifdef OLD
 - (IBAction) selectUI:(UISegmentedControl *)sender {

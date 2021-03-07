@@ -54,6 +54,8 @@ typedef long PixelIndex_t;
 #define SEP 4  // between views
 #define INSET 3 // from screen edges
 
+#define SOURCE_SELECT_BUTTON_W  40
+
 #define CHECKMARK   @"✓"
 
 #define MIN_THUMB_COLS  4
