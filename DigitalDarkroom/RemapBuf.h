@@ -32,7 +32,9 @@ enum SpecialRemaps {
 
 typedef int BufferIndex;      // index into a buffer at x,y
 
-#define RBI(x,y)                ((x) + remapBuf.w*(y))  // buffer index as function of x,y
+#define CLIPX(x)      (((x) < 0) ? 0 : (((x) >= remapBuf.w) ? remapBuf.w - 1 : (x)))
+
+#define RBI(x,y)                ((CLIPX(x)) + remapBuf.w*(y))  // buffer index as function of x,y
 #define REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI(fx,fy)
 #define REMAP_COLOR(tx, ty, rc) remapBuf.rb[RBI((tx),(ty))] = rc
 #define IS_IN_REMAP(x,y)    ((x) >= 0 && (x) < remapBuf.w && (y) >= 0 && (y) < remapBuf.h)

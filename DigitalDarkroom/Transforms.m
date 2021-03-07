@@ -360,26 +360,27 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
         }
     }];
     [self addTransform:lastTransform];
-
-     lastTransform = [Transform areaTransform: @"Wavy shower"
-                                  description: @"Through wavy glass"
-                      remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
- #define CPP    20    /*cycles/picture*/
-         int D = instance.value;
-         for (int y=0; y<remapBuf.h; y++) {
-             for (int x=0; x<remapBuf.w; x++) {
-                 REMAP_TO(x,y, x,y);
-             }
-         }
-         for (int y=0; y<remapBuf.h; y++) {
-             for (int x=0+D; x<remapBuf.w-D; x++) {
-                 REMAP_TO(x,y, x+(int)(D*sin(CPP*x*2*M_PI/remapBuf.w)),y);
-             }
-         }
-     }];
-     lastTransform.low = 4;
-     lastTransform.value = 23;
-     lastTransform.high = 30;
+    
+    lastTransform = [Transform areaTransform: @"Wavy shower"
+                                 description: @"Through wavy glass"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        int cpp = instance.value;   // pixels per cycle
+        int ncyc = (int)remapBuf.w / cpp;
+        for (int y=0; y<remapBuf.h; y++) { // why is this loop needed?
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x,y, x,y);
+            }
+        }
+        for (int y=0; y<remapBuf.h; y++) {  // XX thumbnail not very wavy
+            for (int x=0; x<remapBuf.w; x++) {
+                int dx = (int)(ncyc*sin(cpp*x*2*M_PI/remapBuf.w));
+                    REMAP_TO(x,y, x+dx,y);
+            }
+        }
+    }];
+    lastTransform.low = 10;
+    lastTransform.value = 18;
+    lastTransform.high = 50;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
