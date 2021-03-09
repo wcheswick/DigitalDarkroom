@@ -610,21 +610,41 @@ typedef enum {
                                 action:@selector(doRemoveLastTransform)];
     
     fixedSpace.width = 60;
-    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                              cameraBarButton,
-                                              flexibleSpace,
-                                              flipBarButton,
-                                              flexibleSpace,
-                                              photoBarButton,
-                                              flexibleSpace,
-                                              trashBarButton,
-                                              flexibleSpace,
-                                              undoBarButton,
-                                              flexibleSpace,
-                                              saveButton,
-                                              flexibleSpace,
-                                              otherMenuButton,
-                                              nil];
+    if (isiPhone  && isPortrait) {
+        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                  cameraBarButton,
+                                                  flexibleSpace,
+                                                  flipBarButton,
+                                                  flexibleSpace,
+                                                  photoBarButton,
+                                                  flexibleSpace,
+                                                  trashBarButton,
+                                                  flexibleSpace,
+                                                  undoBarButton,
+                                                  flexibleSpace,
+                                                  saveButton,
+                                                  flexibleSpace,
+                                                  otherMenuButton,
+                                                  nil];
+    } else {
+        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                  cameraBarButton,
+                                                  flexibleSpace,
+                                                  flipBarButton,
+                                                  flexibleSpace,
+                                                  photoBarButton,
+                                                  nil];
+        self.title = @"Digital Darkroom";
+        self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                   otherMenuButton,
+                                                   flexibleSpace,
+                                                   saveButton,
+                                                   flexibleSpace,
+                                                   undoBarButton,
+                                                   flexibleSpace,
+                                                   trashBarButton,
+                                                   nil];
+    }
     
 #define SLIDER_OFF  (-1)
     
