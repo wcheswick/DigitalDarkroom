@@ -16,7 +16,7 @@
 //#define DEBUG_SOURCE  1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
-//#define DEBUG_EXECUTE 1
+#define DEBUG_EXECUTE 1
 
 #define POINTING_HAND_CHAR  @"☞"
 
@@ -57,6 +57,7 @@ typedef long PixelIndex_t;
 #define SOURCE_SELECT_BUTTON_W  40
 
 #define CHECKMARK   @"✓"
+#define BIGPLUS     @"＋"
 
 #define MIN_THUMB_COLS  4
 #define MIN_THUMB_ROWS  3
@@ -105,7 +106,7 @@ typedef long PixelIndex_t;
 #define EXECUTE_VIEW_ANIMATION_TIME 0.4
 
 
-#define TASK_STEP_TAG_OFFSET    10
+#define EXECUTE_STEP_TAG    10
 
 #define STACKING_BUTTON_FONT_SIZE   (EXECUTE_BUTTON_H-6)
 

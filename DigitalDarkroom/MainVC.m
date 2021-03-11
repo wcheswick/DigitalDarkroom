@@ -527,9 +527,10 @@ typedef enum {
     UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
     assert(image);
     float scale = image.size.width / self.navigationController.navigationBar.frame.size.height;
-    return [UIImage imageWithCGImage:image.CGImage
-                               scale:scale
-                         orientation:UIImageOrientationUp];
+    UIImage *iconImage = [UIImage imageWithCGImage:image.CGImage
+                                             scale:scale
+                                       orientation:UIImageOrientationUp];
+    return iconImage;
 }
 
 - (void) viewDidLoad {
@@ -545,22 +546,22 @@ typedef enum {
     
     depthSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
     depthSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateNormal];
-    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateSelected];
+    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateNormal];
+    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateSelected];
     [depthSelectButton addTarget:self
                            action:@selector(chooseDepth:)
                  forControlEvents:UIControlEventTouchUpInside];
-    UIBarButtonItem *cameraBarButton = [[UIBarButtonItem alloc]
+    UIBarButtonItem *depthBarButton = [[UIBarButtonItem alloc]
                                         initWithCustomView:depthSelectButton];
     
     flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
     flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [flipCameraButton setImage:[self barIconFrom:@"flipcamera copy"] forState:UIControlStateNormal];
+    [flipCameraButton setImage:[self barIconFrom:@"flipcamera"] forState:UIControlStateNormal];
     [flipCameraButton addTarget:self
                            action:@selector(flipCamera:)
                  forControlEvents:UIControlEventTouchUpInside];
     UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:flipCameraButton];
+                                      initWithCustomView:flipCameraButton];
 
     photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
     photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
@@ -599,7 +600,7 @@ typedef enum {
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
 
-    UIBarButtonItem *saveButton = [[UIBarButtonItem alloc]
+    UIBarButtonItem *saveBarButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                    target:self
                                    action:@selector(doSave)];
@@ -612,7 +613,7 @@ typedef enum {
     fixedSpace.width = 60;
     if (isiPhone  && isPortrait) {
         self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  cameraBarButton,
+                                                  depthBarButton,
                                                   flexibleSpace,
                                                   flipBarButton,
                                                   flexibleSpace,
@@ -622,13 +623,13 @@ typedef enum {
                                                   flexibleSpace,
                                                   undoBarButton,
                                                   flexibleSpace,
-                                                  saveButton,
+                                                  saveBarButton,
                                                   flexibleSpace,
                                                   otherMenuButton,
                                                   nil];
     } else {
         self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  cameraBarButton,
+                                                  depthBarButton,
                                                   flexibleSpace,
                                                   flipBarButton,
                                                   flexibleSpace,
@@ -638,7 +639,7 @@ typedef enum {
         self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                    otherMenuButton,
                                                    flexibleSpace,
-                                                   saveButton,
+                                                   saveBarButton,
                                                    flexibleSpace,
                                                    undoBarButton,
                                                    flexibleSpace,
@@ -731,6 +732,7 @@ typedef enum {
     stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     stackingButton.frame = CGRectMake(0, 0,
                                       EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
+#ifdef NOTDEF
     UIImage *oneFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
                                                                pathForResource:@"images/1sq.png"
                                                                ofType:@""]];
@@ -738,42 +740,26 @@ typedef enum {
                                                                  pathForResource:@"images/3sq.png"
                                                                  ofType:@""]];
     stackingButton.userInteractionEnabled = YES;
+    // maybe not so clear using these
     [stackingButton setBackgroundImage:oneFrameImage forState:UIControlStateNormal];
     [stackingButton setBackgroundImage:threeFrameImage forState:UIControlStateSelected];
+#endif
+    stackingButton.userInteractionEnabled = YES;
+    stackingButton.backgroundColor = [UIColor whiteColor];
+
     [stackingButton addTarget:self
                        action:@selector(toggleStackingMode:)
              forControlEvents:UIControlEventTouchUpInside];
-    [stackingButton setTitle:@"+" forState:UIControlStateNormal];
-    [stackingButton setTitle:@"+" forState:UIControlStateSelected];
+    [stackingButton setTitle:BIGPLUS forState:UIControlStateNormal];
+    [stackingButton setTitle:BIGPLUS forState:UIControlStateSelected];
     [stackingButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-    [stackingButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
+//    [stackingButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
     stackingButton.layer.borderColor = [UIColor blueColor].CGColor;
     stackingButton.opaque = YES;
     stackingButton.layer.cornerRadius = 5.0;
     stackingButton.titleLabel.adjustsFontSizeToFitWidth = YES;
     [self configureStackButton];
     [executeView addSubview:stackingButton];
-    
-#ifdef OLD
-    executeScrollView = [[UIScrollView alloc]
-                         initWithFrame:CGRectMake(RIGHT(stackingButton.frame), 0,
-                                                  EXECUTE_LIST_W, EXECUTE_MAX_VISIBLE_VIEW_H)];
-    executeScrollView.pagingEnabled = NO;
-    executeScrollView.showsVerticalScrollIndicator = NO;
-    executeScrollView.userInteractionEnabled = NO;
-    executeScrollView.exclusiveTouch = NO;
-    executeScrollView.bounces = NO;
-    //executeScrollView.delaysContentTouches = YES;
-    executeScrollView.canCancelContentTouches = YES;
-    executeScrollView.delegate = self;
-    executeScrollView.scrollEnabled = YES;
-    executeScrollView.backgroundColor = [UIColor clearColor];
-    executeScrollView.opaque = YES;
-    executeScrollView.scrollEnabled = YES;
-    executeScrollView.contentOffset = CGPointZero;
-//    executeScrollView.layer.borderWidth = 0.5;
-//    executeScrollView.layer.borderColor = [UIColor blueColor].CGColor;
-#endif
     
     executeListView =  [[UIView alloc]
                     initWithFrame:CGRectMake(RIGHT(stackingButton.frame) + SEP, 0,
@@ -1333,37 +1319,38 @@ CGFloat topOfNonDepthArray = 0;
 
 #define EXECUTE_ROW_COUNT   (self->executeListView.subviews.count)
 
+size_t nextExecuteAppendStep;
+size_t topExecuteStepDisplayed;
+
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     NSLog(@" === transformThumbTapped, transform index %ld, %@", tappedTransformIndex, tappedTransform.name);
 
-    // we are changing the transform at nextTransformListIndex. It is either an
-    // empty row, or the last transform in the task list.
-    assert(nextInputRow > DEPTH_STEP);    // it must be something
-    ExecuteRowView *changingRowView = [executeListView viewWithTag:nextInputRow + TASK_STEP_TAG_OFFSET];
-
+    ExecuteRowView *changingRowView = [executeListView
+                                       viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
+    assert(changingRowView);
+    
     if (IS_EMPTY_ROW(changingRowView)) {
-        // for empty row, append transform, and let configureStackMode add new empty row, if needed
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask updateRowView:changingRowView depthActive:DOING_3D];
-        [self adjustThumbView:tappedThumb selected:YES];
+        if (options.stackingMode) { // append an empty cell for next transform
+            [self appendEmptyRow];
+        }
     } else {
-        // current choice is not empty.  If the tap the transform that is already there,
-        // delete it.  If it is different, change the transform to the new one
-        Transform *currentTransform = [screenTask.transformList objectAtIndex:nextInputRow];
-        if ([tappedTransform.name isEqual:currentTransform.name]) {
-            [screenTask removeLastTransform];
+        // this can only be in non-stacking mode, where we are clearing
+        // or replacing the current transform
+        assert(!options.stackingMode);
+        Transform *lastTransform = [screenTask.transformList lastObject];
+        UIView *oldThumb = [self thumbViewForTransform:lastTransform];
+        [self adjustThumbView:oldThumb selected:NO];
+        [screenTask removeLastTransform];
+        if ([tappedTransform.name isEqual:lastTransform.name]) {
+            // current transform just retapped.  Empty it, and done
             [changingRowView makeRowEmpty];
-            [self adjustThumbView:tappedThumb selected:NO];
         } else {
-            Transform *lastTransform = [screenTask.transformList lastObject];
-            UIView *oldThumb = [self thumbViewForTransform:lastTransform];
-            [self adjustThumbView:oldThumb selected:NO];
-            [screenTask removeLastTransform];
             [screenTask appendTransformToTask:tappedTransform];
             [screenTask updateRowView:changingRowView depthActive:DOING_3D];
-            [self adjustThumbView:tappedThumb selected:YES];
         }
     }
     [self adjustExecuteDisplay];
@@ -1374,32 +1361,65 @@ CGFloat topOfNonDepthArray = 0;
     return [thumbArrayView viewWithTag:transformIndex + TRANSFORM_BASE_TAG];
 }
 
-- (void) initExecList {
-//    [self dumpRows:@"0"];
-    ExecuteRowView *rowView = [screenTask listViewForStep:DEPTH_STEP
-                                                      depthActive:DOING_3D];
-    [executeListView addSubview:rowView];   // the depth transform
-//    [self dumpRows:@"1"];
-    [self configureStackMode];
-//    [self dumpRows:@"2"];
-
-    nextInputRow = 1;
-    [self adjustExecuteDisplay];
+- (CGFloat) rowViewYForStep:(size_t) step {
+    CGFloat y = EXECUTE_BORDER_W + (screenTask.transformList.count - 1 - step)*EXECUTE_ROW_H;
+    NSLog(@"-------->  yForStep %ld:  %.0f of %.0f", step, y, executeListView.frame.size.height);
+    return y;
 }
 
+- (size_t) appendRowView:(ExecuteRowView *) rowView {
+    size_t step = rowView.step;
+    assert(step == executeListView.subviews.count);
+    [executeListView addSubview:rowView];
+    [rowView setNeedsDisplay];
+    [executeListView setNeedsDisplay];
+//XXXXX    [self changeExecuteLengthBy: 1];
+    SET_VIEW_Y(rowView, [self rowViewYForStep:step]);
+    return step;
+}
+
+- (size_t) appendEmptyRow {
+    ExecuteRowView *emptyRow = [[ExecuteRowView alloc]
+                                initForStep:executeListView.subviews.count];
+    [emptyRow makeRowEmpty];
+    return [self appendRowView:emptyRow];
+}
+
+- (void) initExecList {
+    ExecuteRowView *rowView = [screenTask listViewForStep:DEPTH_STEP
+                                                      depthActive:DOING_3D];
+    [self appendRowView: rowView];
+    nextExecuteAppendStep = [self appendEmptyRow];
+}
+
+// change the size and position of the execute list as needed
 - (void) adjustExecuteDisplay {
+    [self dumpRows:@"adjustExecuteDisplay"];
     long rows = EXECUTE_ROW_COUNT;
-    assert(nextInputRow != DEPTH_STEP);
+    NSLog(@"adjustExecuteDisplay, rows=%ld oldheight=%.0f",
+          rows, executeListView.frame.size.height);
+
     [UIView animateWithDuration:0.5 animations:^(void) {
+        // Adjust the row positions
         CGFloat y = EXECUTE_BORDER_W;
-        for (long step = rows - 1; step >= 0; step--){
-            ExecuteRowView *rowView = [self->executeListView viewWithTag:TASK_STEP_TAG_OFFSET + step];
+        for (int step = 0; step < rows; step++) {
+            ExecuteRowView *rowView = [self->executeListView viewWithTag:step + EXECUTE_STEP_TAG];
+            rowView.hidden = step == DEPTH_STEP && !DOING_3D;
+            if (rowView.hidden) {
+                continue;
+            }
             SET_VIEW_Y(rowView, y);
-            rowView.statusChar.text = (self->nextInputRow == step) ? @"+" : @"";
+            if (step == nextExecuteAppendStep)
+                rowView.statusChar.text = BIGPLUS;
+            else
+                rowView.statusChar.text = @"";
+            rowView.backgroundColor= [UIColor greenColor];
+            [rowView setNeedsDisplay];
             y += EXECUTE_ROW_H;
         }
-        SET_VIEW_HEIGHT(self->executeListView, y+EXECUTE_BORDER_W);
-        [self dumpRows:@"adjustexecute"];
+        SET_VIEW_HEIGHT(self->executeListView, y + EXECUTE_BORDER_W);
+        self->executeListView.backgroundColor = [UIColor yellowColor];
+        [self->executeListView setNeedsDisplay];
     }];
 }
 
@@ -1411,7 +1431,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) changeStepInExecuteList:(long) step {
-    ExecuteRowView *rowView = [executeListView viewWithTag:TASK_STEP_TAG_OFFSET + step];
+    ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
     assert(rowView);
     [screenTask updateRowView:rowView depthActive:DOING_3D];
     [self adjustExecuteDisplay];
@@ -1421,25 +1441,12 @@ CGFloat topOfNonDepthArray = 0;
 #ifdef DEBUG_EXECUTE
     NSLog(@" -- dumpRows  %@, %ld", label, EXECUTE_ROW_COUNT);
     for (long step=0; step<EXECUTE_ROW_COUNT; step++) {
-        ExecuteRowView *rowView = [executeListView viewWithTag:TASK_STEP_TAG_OFFSET + step];
+        ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
         NSLog(@"    %2ld  tag:%2ld @ %2.0f  %@", step, (long)rowView.tag,
-              rowView.frame.origin.y, rowView.name.text);
+              rowView.frame.origin.y,
+              IS_EMPTY_ROW(rowView) ? @"*empty*": rowView.name.text );
     }
 #endif
-}
-
-- (CGFloat) yForStep:(long)step {
-    CGFloat y = EXECUTE_BORDER_W + (screenTask.transformList.count - 1 - step)*EXECUTE_ROW_H;
-    NSLog(@"-------->  yForStep %ld:  %.0f of %.0f", step, y, executeListView.frame.size.height);
-    return y;
-}
-
-- (void) showViewRowAtStep:(long) step {
-    ExecuteRowView *rowView = [screenTask
-                                      listViewForStep:step
-                                      depthActive:DOING_3D];
-    SET_VIEW_Y(rowView, [self yForStep:step]);
-    [self->executeListView addSubview:rowView];
 }
 
 - (void) adjustThumbView:(UIView *) thumb selected:(BOOL)selected {
@@ -1908,7 +1915,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveLastTransform {
     NSLog(@" === doRemoveLastTransform");
     long step = [screenTask removeLastTransform];
-    ExecuteRowView *rowView = [executeListView viewWithTag:TASK_STEP_TAG_OFFSET + step];
+    ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
     [rowView removeFromSuperview];
     [self adjustExecuteDisplay];
 }
@@ -1926,7 +1933,8 @@ UIImageOrientation lastOrientation;
     if (options.stackingMode) {
         stackingButton.layer.borderWidth = 4.0;
         stackingButton.selected = YES;
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightMedium];
+        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightBold];
+        stackingButton.backgroundColor = [UIColor whiteColor];
     } else {
         stackingButton.layer.borderWidth = 1.0;
         stackingButton.selected = NO;
@@ -1948,7 +1956,7 @@ UIImageOrientation lastOrientation;
         } else {
             // to turn off stacking, remove the empty cell at the end, unless it is
             // DEPTH_STEP + 1, in which case just clear the row.
-            ExecuteRowView *lastRowView = [self->executeListView viewWithTag:lastStep + TASK_STEP_TAG_OFFSET];
+            ExecuteRowView *lastRowView = [self->executeListView viewWithTag:lastStep + EXECUTE_STEP_TAG];
             if (lastStep == DEPTH_STEP + 1) {   // clear the entry
                 [lastRowView makeRowEmpty];
             } else {    // remove the clear entry
@@ -1979,30 +1987,46 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) chooseDepth:(UIButton *)button {
-    // if they tapped the camera button and we aren't doing
-    // camera, just go to 2D
-    if (!ISCAMERA(currentSource.sourceType)) { // selecting camera.
-        nextSource = [inputSources objectAtIndex:FrontCamera];
-        button.selected = YES;
-    } else {
-        if (DOING_3D) { // switch to 2d
-            nextSource = [inputSources objectAtIndex: FrontCamera];
-            button.selected = NO;
-        } else {
-            nextSource = [inputSources objectAtIndex: Front3DCamera];
-            button.selected = YES;
-        }
+    InputSource *newSource;
+    switch (currentSource.sourceType) {
+        case FrontCamera:
+            newSource = [inputSources objectAtIndex:Front3DCamera];
+            break;
+        case Front3DCamera:
+            newSource = [inputSources objectAtIndex:FrontCamera];
+            break;
+        case RearCamera:
+            newSource = [inputSources objectAtIndex:Rear3DCamera];
+            break;
+       case Rear3DCamera:
+            newSource = [inputSources objectAtIndex:RearCamera];
+            break;
+       default:
+            newSource = [inputSources objectAtIndex:FrontCamera];
     }
+    if (![cameraController isCameraAvailable:newSource.sourceType])
+        return;
+    nextSource = newSource;
     [self reconfigure];
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
-    if (!ISCAMERA(currentSource.sourceType))    // XXXX should be disabled
-        return;
-    if (currentSource.sourceType == FrontCamera)
-        nextSource = [inputSources objectAtIndex:RearCamera];
-    else
-        nextSource = [inputSources objectAtIndex:FrontCamera];
+    switch (currentSource.sourceType) {
+        case FrontCamera:
+            nextSource = [inputSources objectAtIndex:RearCamera];
+            break;
+        case RearCamera:
+            nextSource = [inputSources objectAtIndex:FrontCamera];
+            break;
+        case Front3DCamera:
+            nextSource = [inputSources objectAtIndex:Rear3DCamera];
+            break;
+       case Rear3DCamera:
+            nextSource = [inputSources objectAtIndex:Front3DCamera];
+            break;
+       default:
+            return;
+    }
     [self reconfigure];
 }
 

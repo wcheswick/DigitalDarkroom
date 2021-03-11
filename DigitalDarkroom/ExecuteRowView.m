@@ -22,7 +22,7 @@
     if (self) {
         step = s;
         assert(step >= 0);
-        self.tag = TASK_STEP_TAG_OFFSET + step;
+        self.tag = EXECUTE_STEP_TAG + step;
         
         CGRect f = CGRectMake(EXECUTE_BORDER_W, 0, EXECUTE_CHAR_W, EXECUTE_ROW_H);
         statusChar = [[UILabel alloc] initWithFrame:f];
@@ -80,13 +80,12 @@
     NSLog(@"      %2ld: updateWithName: %@", step, tn);
 #endif
     stepNumber.textColor = textColor;
+    stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
     if (!tn) {
-        stepNumber.text = @"";
         name.text = nil;
         param.text = @"";
         timing.text = @"";
     } else {
-        stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
         name.text = tn;
         param.text = [instance valueInfo];
         timing.text = [instance timeInfo];

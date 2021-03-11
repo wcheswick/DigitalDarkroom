@@ -85,6 +85,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (ExecuteRowView *) listViewForStep:(long) step depthActive:(BOOL)doingDepth {
     ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
+    rowView.hidden = (step == DEPTH_STEP) && !doingDepth;
     [self updateRowView:rowView depthActive:doingDepth];
     return rowView;
 }
