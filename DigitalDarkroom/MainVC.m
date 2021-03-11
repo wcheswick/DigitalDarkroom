@@ -1327,15 +1327,15 @@ size_t topExecuteStepDisplayed;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     NSLog(@" === transformThumbTapped, transform index %ld, %@", tappedTransformIndex, tappedTransform.name);
 
-    ExecuteRowView *changingRowView = [executeListView
+    ExecuteRowView *nextAppendRowView = [executeListView
                                        viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
-    assert(changingRowView);
+    assert(nextAppendRowView);
     
-    if (IS_EMPTY_ROW(changingRowView)) {
+    if (IS_EMPTY_ROW(nextAppendRowView)) {
         [screenTask appendTransformToTask:tappedTransform];
-        [screenTask updateRowView:changingRowView depthActive:DOING_3D];
+        [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
         if (options.stackingMode) { // append an empty cell for next transform
-            [self appendEmptyRow];
+            nextExecuteAppendStep = [self appendEmptyRow];
         }
     } else {
         // this can only be in non-stacking mode, where we are clearing
@@ -1347,10 +1347,10 @@ size_t topExecuteStepDisplayed;
         [screenTask removeLastTransform];
         if ([tappedTransform.name isEqual:lastTransform.name]) {
             // current transform just retapped.  Empty it, and done
-            [changingRowView makeRowEmpty];
+            [nextAppendRowView makeRowEmpty];
         } else {
             [screenTask appendTransformToTask:tappedTransform];
-            [screenTask updateRowView:changingRowView depthActive:DOING_3D];
+            [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
         }
     }
     [self adjustExecuteDisplay];
@@ -1447,6 +1447,29 @@ size_t topExecuteStepDisplayed;
               IS_EMPTY_ROW(rowView) ? @"*empty*": rowView.name.text );
     }
 #endif
+}
+
+- (IBAction) toggleStackingMode:(UIButton *)sender {
+    options.stackingMode = !options.stackingMode;
+    NSLog(@" === stacking mode now %d", options.stackingMode);
+    [options save];
+    [self configureStackButton];
+    [self configureStackMode];
+}
+
+- (void) configureStackButton {
+    stackingButton.selected = options.stackingMode;
+    if (options.stackingMode) {
+        stackingButton.layer.borderWidth = 4.0;
+        stackingButton.selected = YES;
+        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightBold];
+        stackingButton.backgroundColor = [UIColor whiteColor];
+    } else {
+        stackingButton.layer.borderWidth = 1.0;
+        stackingButton.selected = NO;
+        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightUltraLight];
+    }
+    [stackingButton setNeedsDisplay];
 }
 
 - (void) adjustThumbView:(UIView *) thumb selected:(BOOL)selected {
@@ -1914,64 +1937,46 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveLastTransform {
     NSLog(@" === doRemoveLastTransform");
-    long step = [screenTask removeLastTransform];
-    ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
+    ExecuteRowView *rowView = [executeListView viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
+    if (rowView.step == DEPTH_STEP && IS_EMPTY_ROW(rowView))
+        return;
+    [screenTask removeLastTransform];
     [rowView removeFromSuperview];
+    nextExecuteAppendStep--;
     [self adjustExecuteDisplay];
-}
-
-- (IBAction) toggleStackingMode:(UIButton *)sender {
-    options.stackingMode = !options.stackingMode;
-    NSLog(@" === stacking mode now %d", options.stackingMode);
-    [options save];
-    [self configureStackButton];
-    [self configureStackMode];
-}
-
-- (void) configureStackButton {
-    stackingButton.selected = options.stackingMode;
-    if (options.stackingMode) {
-        stackingButton.layer.borderWidth = 4.0;
-        stackingButton.selected = YES;
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightBold];
-        stackingButton.backgroundColor = [UIColor whiteColor];
-    } else {
-        stackingButton.layer.borderWidth = 1.0;
-        stackingButton.selected = NO;
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightUltraLight];
-    }
-    [stackingButton setNeedsDisplay];
+// XXXXX    [self adjustBarButtons];    // disable undo if input = 1 and row is empty
 }
 
 - (void) configureStackMode {
+    ExecuteRowView *inputRowView = [self->executeListView
+                                       viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
+    assert(inputRowView);
+    
+    if (options.stackingMode) { // initiate stacking mode
+        [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
+                         animations:^(void) {
+            // if the current input row view is empty, do nothing, else append an empty row
+            // and point to it
+            if (!IS_EMPTY_ROW(inputRowView)) {
+                nextExecuteAppendStep = [self appendEmptyRow];
+            }
+            [self adjustExecuteDisplay];
+        }];
+        return;
+    }
+    
+    // to turn off stacking, remove the empty cell at the end, unless it is
+    // DEPTH_STEP + 1, in which case just clear the row.
     [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
                      animations:^(void) {
-        long lastStep = EXECUTE_ROW_COUNT - 1;
-        if (self->options.stackingMode || EXECUTE_ROW_COUNT == DEPTH_STEP + 1) {
-            // install an empty cell at the end of the list, and set the + pointer to it
-            lastStep++;
-            ExecuteRowView *emptyRow = [[ExecuteRowView alloc] initForStep:lastStep];
-            [emptyRow makeRowEmpty];
-            [self->executeListView addSubview:emptyRow];   // the depth transform
-        } else {
-            // to turn off stacking, remove the empty cell at the end, unless it is
-            // DEPTH_STEP + 1, in which case just clear the row.
-            ExecuteRowView *lastRowView = [self->executeListView viewWithTag:lastStep + EXECUTE_STEP_TAG];
-            if (lastStep == DEPTH_STEP + 1) {   // clear the entry
-                [lastRowView makeRowEmpty];
-            } else {    // remove the clear entry
-                assert(IS_EMPTY_ROW(lastRowView));
-                [lastRowView removeFromSuperview];
-                lastStep = EXECUTE_ROW_COUNT-1;
+        if (IS_EMPTY_ROW(inputRowView)) {
+            if (inputRowView.step > DEPTH_STEP + 1) {
+                [inputRowView removeFromSuperview];
+                nextExecuteAppendStep--;
             }
         }
-        self->nextInputRow = lastStep;
         [self adjustExecuteDisplay];
     }];
-}
-
-- (void) updateStackingButton {
-    NSLog(@" === updateStackingButton");
 }
 
 - (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
@@ -2338,9 +2343,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     SET_VIEW_HEIGHT(transformView, BELOW(executeView.frame));
     [transformView bringSubviewToFront:executeView];
     transformView.clipsToBounds = YES;
-    
-
-
 
 f = containerView.frame;
 f.origin = CGPointMake(0, transformView.frame.origin.y);
