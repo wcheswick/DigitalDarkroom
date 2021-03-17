@@ -2005,6 +2005,12 @@ UIImageOrientation lastOrientation;
 - (void) doTick:(NSTimer *)sender {
     if (taskCtrl.layoutNeeded)
         [taskCtrl layoutIfReady];
+    
+    for (ExecuteRowView *rowView in executeListView.subviews) {
+        [screenTask updateRowView:rowView depthActive:DOING_3D];
+    }
+
+    
 #ifdef NOTYET
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];

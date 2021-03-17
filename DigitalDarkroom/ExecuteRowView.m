@@ -62,7 +62,7 @@
         timing.adjustsFontSizeToFitWidth = YES;
         [self addSubview:timing];
 
-        f.size.width = RIGHT(f) + EXECUTE_BORDER_W;
+        f.size.width = RIGHT(f) + SEP + EXECUTE_BORDER_W;
         assert(f.size.width == EXECUTE_LIST_W);
         f.origin.x = 0;
         self.frame = f;
@@ -77,7 +77,7 @@
                   param:(TransformInstance *__nullable)instance
                   color:(UIColor *) textColor {
 #ifdef DEBUG_EXECUTE
-    NSLog(@"      %2ld: updateWithName: %@", step, tn);
+//    NSLog(@"      %2ld: updateWithName: %@", step, tn);
 #endif
     stepNumber.textColor = textColor;
     stepNumber.text = [NSString stringWithFormat:@"%2ld", step];

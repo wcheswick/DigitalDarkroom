@@ -238,11 +238,6 @@ static PixelIndex_t dPI(int x, int y) {
     if (!enabled)   // not onscreen
         return;
     taskStatus = Running;
-
-    if (transformList.count == 0) { // just display the input
-        [self updateTargetWith:srcBuf];
-        return;
-    }
     
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
@@ -257,10 +252,10 @@ static PixelIndex_t dPI(int x, int y) {
         return;
     }
     
+    NSDate *startTime = [NSDate now];
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
 
-    NSDate *startTime = [NSDate now];
     for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.layoutNeeded) {  // abort our processing
             taskStatus = Stopped;
@@ -275,6 +270,7 @@ static PixelIndex_t dPI(int x, int y) {
         sourceIndex = destIndex;
         NSDate *transformEnd = [NSDate now];
         instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
+        instance.timesCalled++;
         startTime = transformEnd;
     }
 
