@@ -163,7 +163,10 @@ NSString * __nullable displayOptionNames[] = {
             minThumbCols = MIN_IPHONE_THUMB_COLS;
             minThumbRows = MIN_IPHONE_THUMB_ROWS;
             if (isiPhone) {
-                thumbsPlacement = ThumbsUnderneath;
+                if (isPortrait)
+                    thumbsPlacement = ThumbsUnderneath;
+                else
+                    thumbsPlacement = ThumbsOnRight;
             } else {
                 thumbsPlacement = ThumbsUndecided;
             }
