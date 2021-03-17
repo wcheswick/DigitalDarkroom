@@ -107,6 +107,13 @@ typedef enum {
     librarySource,
 } FixedSources;
 
+typedef enum {
+    overlayClear,
+    overlayShowing,
+    overlayShowingDebug,
+} OverlayState;
+#define OVERLAY_STATES  (overlayShowingDebug+1)
+
 #define N_FIXED_SOURCES 2
 
 @interface MainVC ()
@@ -130,6 +137,9 @@ typedef enum {
 @property (nonatomic, strong)   UIButton *photoStackButton;
 
 // in containerview:
+@property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
+@property (assign)              OverlayState overlayState;
+@property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
 @property (nonatomic, strong)   UIView *executeView;        // active transform list and details
@@ -176,8 +186,6 @@ typedef enum {
 @property (assign)              UIDeviceOrientation deviceOrientation;
 @property (assign)              BOOL isPortrait;
 @property (assign)              BOOL isiPhone;
-@property (assign)    BOOL execOverlapsImage;
-@property (assign)      CGFloat minThumbWidth;
 @property (assign)              Layout *layout;
 
 @property (assign)              DisplayOptions displayOption;
@@ -203,7 +211,8 @@ typedef enum {
 
 @synthesize containerView;
 @synthesize depthSelectButton, flipCameraButton, photoStackButton;
-@synthesize transformView;
+@synthesize transformView, overlayView, overlayState;
+@synthesize overlayDebugStatus;
 @synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
 
@@ -214,9 +223,6 @@ typedef enum {
 @synthesize deviceOrientation;
 @synthesize isPortrait;
 @synthesize isiPhone;
-
-@synthesize minThumbWidth;
-@synthesize execOverlapsImage;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -260,8 +266,6 @@ typedef enum {
         currentTransformIndex = NO_TRANSFORM;
         nextInputRow = NO_INPUT_ROW;
         
-        displayOption = FullScreenDisplay;
-        
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
         assert(transforms.depthTransformCount > 0);
@@ -290,9 +294,13 @@ typedef enum {
         busy = NO;
         options = [[Options alloc] init];
         
+        overlayState = overlayShowingDebug;
+        overlayDebugStatus = nil;
+        
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-        execOverlapsImage = isiPhone;
-        minThumbWidth = isiPhone? 0.8*THUMB_W : THUMB_W;
+        
+        // set some device defauls
+        displayOption = isiPhone ? TightDisplay : BestDisplay;
         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
@@ -478,10 +486,7 @@ typedef enum {
 - (void) deviceRotated {
     deviceOrientation = [[UIDevice currentDevice] orientation];
 //    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
-    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) || UIDeviceOrientationIsFlat(deviceOrientation);
 #ifdef DEBUG_ORIENTATION
-    NSLog(@"       is iPhone: %d", isiPhone);
-    NSLog(@"     is portrait: %d", isPortrait);
     NSLog(@"device rotated to %@", [CameraController
                                      dumpDeviceOrientationName:deviceOrientation]);
 //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
@@ -540,112 +545,7 @@ typedef enum {
     NSLog(@" ========= viewDidLoad =========");
 #endif
     
-    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
-
-//    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
-    
-    depthSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    depthSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateNormal];
-    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateSelected];
-    [depthSelectButton addTarget:self
-                           action:@selector(chooseDepth:)
-                 forControlEvents:UIControlEventTouchUpInside];
-    UIBarButtonItem *depthBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:depthSelectButton];
-    
-    flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [flipCameraButton setImage:[self barIconFrom:@"flipcamera"] forState:UIControlStateNormal];
-    [flipCameraButton addTarget:self
-                           action:@selector(flipCamera:)
-                 forControlEvents:UIControlEventTouchUpInside];
-    UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:flipCameraButton];
-
-    photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [photoStackButton setImage:[self barIconFrom:@"photostack"]
-                      forState:UIControlStateNormal];
-    [photoStackButton addTarget:self
-                           action:@selector(selectPhoto:)
-                 forControlEvents:UIControlEventTouchUpInside];
-
-    UIBarButtonItem *photoBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:photoStackButton];
-    
-    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
-                                   target:nil action:nil];
-    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
-                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                      target:nil action:nil];
-
-    UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
-                                        initWithTitle:@"⋯"
-                                        style:UIBarButtonItemStylePlain
-                                        target:self
-                                        action:@selector(goSelectOptions:)];
-    [otherMenuButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
-        //NSBaselineOffsetAttributeName: @-3
-    } forState:UIControlStateNormal];
-
-    trashBarButton = [[UIBarButtonItem alloc]
-                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
-                   target:self
-                   action:@selector(doRemoveAllTransforms)];
-    
-    hiresButton = [[UIBarButtonItem alloc]
-                   initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
-                   target:self action:@selector(doToggleHires:)];
-
-    UIBarButtonItem *saveBarButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
-                                   target:self
-                                   action:@selector(doSave)];
-    
-    UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
-                                initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                                target:self
-                                action:@selector(doRemoveLastTransform)];
-    
-    fixedSpace.width = 60;
-    if (isiPhone  && isPortrait) {
-        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  depthBarButton,
-                                                  flexibleSpace,
-                                                  flipBarButton,
-                                                  flexibleSpace,
-                                                  photoBarButton,
-                                                  flexibleSpace,
-                                                  trashBarButton,
-                                                  flexibleSpace,
-                                                  undoBarButton,
-                                                  flexibleSpace,
-                                                  saveBarButton,
-                                                  flexibleSpace,
-                                                  otherMenuButton,
-                                                  nil];
-    } else {
-        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  depthBarButton,
-                                                  flexibleSpace,
-                                                  flipBarButton,
-                                                  flexibleSpace,
-                                                  photoBarButton,
-                                                  nil];
-        self.title = @"Digital Darkroom";
-        self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                   otherMenuButton,
-                                                   flexibleSpace,
-                                                   saveBarButton,
-                                                   flexibleSpace,
-                                                   undoBarButton,
-                                                   flexibleSpace,
-                                                   trashBarButton,
-                                                   nil];
-    }
+    [self configureNavBar];
     
 #define SLIDER_OFF  (-1)
     
@@ -668,53 +568,61 @@ typedef enum {
 #endif
     
     transformView = [[UIImageView alloc] init];
-    transformView.userInteractionEnabled = YES;
     transformView.backgroundColor = NAVY_BLUE;
-    
-    UITapGestureRecognizer *touch = [[UITapGestureRecognizer alloc]
+
+    overlayView = [[UIView alloc] init];
+    overlayView.opaque = NO;
+    overlayView.userInteractionEnabled = YES;
+    overlayView.backgroundColor = [UIColor clearColor];
+    [overlayView addSubview:transformView];
+
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
-    [touch setNumberOfTouchesRequired:1];
-    [transformView addGestureRecognizer:touch];
+    [tap setNumberOfTouchesRequired:1];
+    [overlayView addGestureRecognizer:tap];
+    
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didLongPressScreen:)];
     longPressScreen.minimumPressDuration = 1.0;
-    [transformView addGestureRecognizer:longPressScreen];
+    [overlayView addGestureRecognizer:longPressScreen];
     
     UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                            action:@selector(doDown:)];
     swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
-    [transformView addGestureRecognizer:swipeDown];
+    [overlayView addGestureRecognizer:swipeDown];
     
     UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doUp:)];
     swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
-    [transformView addGestureRecognizer:swipeUp];
+    [overlayView addGestureRecognizer:swipeUp];
     
     UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doRight:)];
     swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-    [transformView addGestureRecognizer:swipeRight];
+    [overlayView addGestureRecognizer:swipeRight];
     
     UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doLeft:)];
     swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    [transformView addGestureRecognizer:swipeLeft];
+    [overlayView addGestureRecognizer:swipeLeft];
     
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPinch:)];
-    [transformView addGestureRecognizer:pinch];
+    [overlayView addGestureRecognizer:pinch];
     
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPan:)];
-    [transformView addGestureRecognizer:pan];
+    [overlayView addGestureRecognizer:pan];
 
     [containerView addSubview:transformView];
+    [containerView addSubview:overlayView];
+    [containerView bringSubviewToFront:overlayView];
     
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     screenTask = [screenTasks createTaskForTargetImageView:transformView
@@ -802,6 +710,115 @@ typedef enum {
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
+- (void) configureNavBar {
+    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
+
+//    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
+    
+    depthSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    depthSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
+    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateNormal];
+    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateSelected];
+    [depthSelectButton addTarget:self
+                           action:@selector(chooseDepth:)
+                 forControlEvents:UIControlEventTouchUpInside];
+    UIBarButtonItem *depthBarButton = [[UIBarButtonItem alloc]
+                                        initWithCustomView:depthSelectButton];
+    
+    flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
+    [flipCameraButton setImage:[self barIconFrom:@"flipcamera"] forState:UIControlStateNormal];
+    [flipCameraButton addTarget:self
+                           action:@selector(flipCamera:)
+                 forControlEvents:UIControlEventTouchUpInside];
+    UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:flipCameraButton];
+
+    photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
+    [photoStackButton setImage:[self barIconFrom:@"photostack"]
+                      forState:UIControlStateNormal];
+    [photoStackButton addTarget:self
+                           action:@selector(selectPhoto:)
+                 forControlEvents:UIControlEventTouchUpInside];
+
+    UIBarButtonItem *photoBarButton = [[UIBarButtonItem alloc]
+                                        initWithCustomView:photoStackButton];
+    
+    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                   target:nil action:nil];
+    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                      target:nil action:nil];
+
+    UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
+                                        initWithTitle:@"⋯"
+                                        style:UIBarButtonItemStylePlain
+                                        target:self
+                                        action:@selector(goSelectOptions:)];
+    [otherMenuButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
+        //NSBaselineOffsetAttributeName: @-3
+    } forState:UIControlStateNormal];
+
+    trashBarButton = [[UIBarButtonItem alloc]
+                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+                   target:self
+                   action:@selector(doRemoveAllTransforms)];
+    
+    hiresButton = [[UIBarButtonItem alloc]
+                   initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
+                   target:self action:@selector(doToggleHires:)];
+
+    UIBarButtonItem *saveBarButton = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
+                                   target:self
+                                   action:@selector(doSave)];
+    
+    UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
+                                initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                                target:self
+                                action:@selector(doRemoveLastTransform)];
+    
+    fixedSpace.width = 60;
+    if (isiPhone && isPortrait) {
+        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                  depthBarButton,
+                                                  flexibleSpace,
+                                                  flipBarButton,
+                                                  flexibleSpace,
+                                                  photoBarButton,
+                                                  flexibleSpace,
+                                                  trashBarButton,
+                                                  flexibleSpace,
+                                                  undoBarButton,
+                                                  flexibleSpace,
+                                                  saveBarButton,
+                                                  flexibleSpace,
+                                                  otherMenuButton,
+                                                  nil];
+    } else {
+        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                  depthBarButton,
+                                                  flexibleSpace,
+                                                  flipBarButton,
+                                                  flexibleSpace,
+                                                  photoBarButton,
+                                                  nil];
+        self.title = @"Digital Darkroom";
+        self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                                   otherMenuButton,
+                                                   flexibleSpace,
+                                                   saveBarButton,
+                                                   flexibleSpace,
+                                                   undoBarButton,
+                                                   flexibleSpace,
+                                                   trashBarButton,
+                                                   nil];
+    }
+
+}
 - (void) createThumbArray {
 //    NSLog(@"--- createThumbArray");
 
@@ -910,9 +927,17 @@ typedef enum {
 }
 
 - (void) reconfigure {
+    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
+    UIDeviceOrientationIsFlat(deviceOrientation);
+#ifdef DEBUG_LAYOUT
+    NSLog(@"== reconfigure for %@,    option %@",
+          isPortrait ? @"port" : @"land",
+          displayOptionNames[displayOption]);
+#endif
+    [self configureNavBar];
+    
     taskCtrl.reconfiguring++;
-//    NSLog(@"********* reconfiguring: %d", taskCtrl.reconfiguring);
-   [taskCtrl needLayout];
+    [taskCtrl needLayout];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -955,11 +980,13 @@ typedef enum {
     
     for (AVCaptureDeviceFormat *format in availableFormats) {
         Layout *layout = [[Layout alloc] initForPortrait:isPortrait
+                                                  iPhone:isiPhone
                                            displayOption:displayOption];
         layout.containerView = containerView;
-        layout.isiPhone = isiPhone;
+        layout.thumbCount = transforms.transforms.count;
         
-        int score = [layout layoutForFormat:format scaleOK:scaleOK];
+        int score = [layout layoutForFormat:format
+                                    scaleOK:scaleOK];
         if (score > bestScore) {
             bestScore = score;
             bestLayout = layout;
@@ -972,7 +999,7 @@ typedef enum {
 
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
-    NSLog(@"****** doLayout self.view %0.f x %.0f",
+    NSLog(@"doLayout self.view %0.f x %.0f",
           self.view.frame.size.width, self.view.frame.size.height);
 #endif
     BOOL adjustSourceInfo = (nextSource != nil);
@@ -1087,10 +1114,11 @@ typedef enum {
             [cameraController setupCameraWithFormat:layout.format];
     } else {
         layout = [[Layout alloc] initForPortrait:isPortrait
+                                          iPhone:isiPhone
                                    displayOption:displayOption];
         layout.containerView = containerView;
-        layout.isiPhone = isiPhone;
-
+        layout.thumbCount = transforms.transforms.count;
+        
         int score = [layout layoutForSize:currentSource.imageSize scaleOK:NO];
         if (score == REJECT_SCORE)
             score = [layout layoutForSize:currentSource.imageSize scaleOK:YES];
@@ -1098,7 +1126,9 @@ typedef enum {
             NSLog(@"!!! could not layout image");
     }
 
-    transformView.frame = layout.displayRect;
+    overlayView.frame = layout.displayRect;
+    overlayDebugStatus = layout.status;
+    transformView.frame = overlayView.frame;
     executeView.frame = layout.executeRect;
     thumbScrollView.frame = layout.thumbArrayRect;
     thumbArrayView.frame = CGRectMake(0, 0,
@@ -1138,10 +1168,12 @@ typedef enum {
           thumbScrollView.frame.size.width,
           thumbScrollView.frame.size.height);
 
-    transformView.layer.borderColor = [UIColor redColor].CGColor;
+    overlayView.layer.borderColor = [UIColor redColor].CGColor;
 //    transformView.layer.borderWidth = 5.0;
-    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
-//    executeView.layer.borderWidth = 5.0;
+    executeView.layer.borderColor = [UIColor blackColor].CGColor;
+    executeView.layer.borderWidth = 2.0;
+    executeView.layer.cornerRadius = 5;
+    executeView.clipsToBounds = YES;
     thumbScrollView.layer.borderColor = [UIColor blueColor].CGColor;
 //    thumbScrollView.layer.borderWidth = 5.0;
 #endif
@@ -1173,6 +1205,57 @@ typedef enum {
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
     }
     [self adjustExecuteDisplay];
+    [self updateOverlayView];
+}
+
+#define DEBUG_FONT_SIZE 16
+
+-(void) updateOverlayView {
+    // start fresh
+    [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    UILabel *overlayDebug = nil;
+    
+    switch (overlayState) {
+        case overlayClear:
+            break;
+        case overlayShowingDebug:
+            overlayDebug = [[UILabel alloc] init];
+            overlayDebug.text = overlayDebugStatus;
+            overlayDebug.textColor = [UIColor whiteColor];
+            overlayDebug.opaque = NO;
+            overlayDebug.numberOfLines = 0;
+            overlayDebug.lineBreakMode = NSLineBreakByWordWrapping;
+            overlayDebug.font = [UIFont boldSystemFontOfSize:DEBUG_FONT_SIZE];
+            overlayDebug.backgroundColor = [UIColor colorWithWhite:0.4 alpha:0.2];
+            [overlayView addSubview:overlayDebug];
+            // FALLTHROUGH
+        case overlayShowing: {
+            UILabel *centerPlus = [[UILabel alloc] init];
+            centerPlus.text = BIGPLUS;
+            centerPlus.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE
+                                                weight:UIFontWeightUltraLight];
+            CGRect f = overlayView.frame;
+            f.origin.y = f.size.height/2.0 - STACKING_BUTTON_FONT_SIZE/2.0;
+            f.size.height = STACKING_BUTTON_FONT_SIZE;
+            centerPlus.frame = f;
+            centerPlus.textAlignment = NSTextAlignmentCenter;
+            centerPlus.textColor = [UIColor whiteColor];
+            centerPlus.opaque = NO;
+            centerPlus.backgroundColor = [UIColor clearColor];
+            [overlayView addSubview:centerPlus];
+            [overlayView bringSubviewToFront:centerPlus];
+            
+            if (overlayDebug) {
+                f.size = overlayView.frame.size;
+                f.origin = CGPointMake(5, 5);
+                overlayDebug.frame = f;
+                [overlayDebug sizeToFit];
+                [overlayView bringSubviewToFront:overlayDebug];
+            }
+            break;
+        }
+    }
+    [overlayView setNeedsDisplay];
 }
 
 - (void) adjustCameraButtons {
@@ -1326,6 +1409,7 @@ size_t topExecuteStepDisplayed;
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     NSLog(@" === transformThumbTapped, transform index %ld, %@", tappedTransformIndex, tappedTransform.name);
+    [self dumpRows:@"transformThumbTapped"];
 
     ExecuteRowView *nextAppendRowView = [executeListView
                                        viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
@@ -1361,11 +1445,16 @@ size_t topExecuteStepDisplayed;
     return [thumbArrayView viewWithTag:transformIndex + TRANSFORM_BASE_TAG];
 }
 
+#ifdef DONOTUSE
 - (CGFloat) rowViewYForStep:(size_t) step {
-    CGFloat y = EXECUTE_BORDER_W + (screenTask.transformList.count - 1 - step)*EXECUTE_ROW_H;
-    NSLog(@"-------->  yForStep %ld:  %.0f of %.0f", step, y, executeListView.frame.size.height);
+    if (step == 0 && !DOING_3D)
+        return -1.0;
+    long screenRowIndex = executeListView.subviews.count - step - 1;
+    CGFloat y = EXECUTE_BORDER_W + screenRowIndex*EXECUTE_ROW_H;
+    NSLog(@"-------->  yForStep %ld:  %.0f", step, y);
     return y;
 }
+#endif
 
 - (size_t) appendRowView:(ExecuteRowView *) rowView {
     size_t step = rowView.step;
@@ -1374,7 +1463,8 @@ size_t topExecuteStepDisplayed;
     [rowView setNeedsDisplay];
     [executeListView setNeedsDisplay];
 //XXXXX    [self changeExecuteLengthBy: 1];
-    SET_VIEW_Y(rowView, [self rowViewYForStep:step]);
+// y is set later
+//    SET_VIEW_Y(rowView, [self rowViewYForStep:step]);
     return step;
 }
 
@@ -1413,13 +1503,15 @@ size_t topExecuteStepDisplayed;
                 rowView.statusChar.text = BIGPLUS;
             else
                 rowView.statusChar.text = @"";
-            rowView.backgroundColor= [UIColor greenColor];
+            rowView.backgroundColor= [UIColor colorWithWhite:1.0 alpha:0.3];
             [rowView setNeedsDisplay];
             y += EXECUTE_ROW_H;
         }
         SET_VIEW_HEIGHT(self->executeListView, y + EXECUTE_BORDER_W);
-        self->executeListView.backgroundColor = [UIColor yellowColor];
+        self->executeListView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.3];
         [self->executeListView setNeedsDisplay];
+        [self dumpRows:@"adjustExecuteDisplay adjusted"];
+
     }];
 }
 
@@ -1578,6 +1670,13 @@ size_t topExecuteStepDisplayed;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
+    overlayState++;
+    if (overlayState == OVERLAY_STATES) {
+        overlayState = overlayClear;
+    }
+    [self updateOverlayView];
+    return;
+    
 //    BOOL isHidden = self.navigationController.navigationBarHidden;
 //    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
 //    [self.navigationController setToolbarHidden:!isHidden animated:YES];
@@ -1610,7 +1709,6 @@ size_t topExecuteStepDisplayed;
 }
 
 - (IBAction) doPan:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
-    NSLog(@" panning");
 }
 
 - (IBAction) doSave {
@@ -1639,8 +1737,14 @@ size_t topExecuteStepDisplayed;
 - (IBAction) doPinch:(UIPinchGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateEnded)
         return;
-    NSLog(@"did pinch: %.1f", recognizer.scale);
-    // if scale > 1.0, go to full screen, else down to normal
+    // crude processing, better when more displays are implemented
+    if (recognizer.scale < 1.0 && displayOption == LargestImageDisplay) {
+        displayOption = BestDisplay;
+        [self reconfigure];
+    } else if (recognizer.scale > 1.0 && displayOption == BestDisplay) {
+        displayOption = LargestImageDisplay;
+        [self reconfigure];
+    }
 }
 
 - (IBAction) doLeft:(UISwipeGestureRecognizer *)recognizer {
@@ -1936,14 +2040,16 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) doRemoveLastTransform {
-    NSLog(@" === doRemoveLastTransform");
-    ExecuteRowView *rowView = [executeListView viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
-    if (rowView.step == DEPTH_STEP && IS_EMPTY_ROW(rowView))
-        return;
-    [screenTask removeLastTransform];
+    [self dumpRows:@"doRemoveLastTransform"];
+    int lastStep = (int)screenTask.transformList.count - 1;
+    if (lastStep == DEPTH_STEP)
+        return; // never delete this step
+    ExecuteRowView *rowView = [executeListView viewWithTag:lastStep + EXECUTE_STEP_TAG];
     [rowView removeFromSuperview];
-    nextExecuteAppendStep--;
+    nextExecuteAppendStep = [screenTask removeLastTransform];
     [self adjustExecuteDisplay];
+    [self dumpRows:@"doRemoveLastTransform after"];
+    // appendstep needs adjustment for plus case XXXXX
 // XXXXX    [self adjustBarButtons];    // disable undo if input = 1 and row is empty
 }
 
@@ -2334,10 +2440,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     } else {    // thumbs on the right, center this under the image
         f.origin.x = (transformImageView.frame.size.width - executeView.frame.size.width)/2.0;
     }
-#endif
-#ifdef DEBUG_LAYOUT
-//    executeView.layer.borderColor = [UIColor orangeColor].CGColor;
-//    executeView.layer.borderWidth = 2.0;
 #endif
     
     SET_VIEW_HEIGHT(transformView, BELOW(executeView.frame));

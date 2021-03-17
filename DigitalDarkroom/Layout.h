@@ -12,12 +12,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define REJECT_SCORE    (-5)
+#define REJECT_SCORE    (-9999999)
 
 typedef enum {
+    ControlDisplayOnly,
     TightDisplay,
     BestDisplay,
-    FullScreenDisplay,
+    LargestImageDisplay,
 } DisplayOptions;
 
 @interface Layout : NSObject {
@@ -33,7 +34,7 @@ typedef enum {
     CGRect firstThumbRect;
     CGRect thumbImageRect;      // within the thumb
     
-    size_t thumbsUnderneath, thumbsOnRight;
+    size_t thumbCount;
     float scale, aspectRatio;
     NSString *status;
     
@@ -47,20 +48,24 @@ typedef enum {
 
 @property (assign)              CGSize captureSize;     // what we get from the camera or file
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
-@property (assign)              CGRect displayRect;     // where the chain puts the (possibly scaled) result
+@property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
 @property (assign)              CGRect executeRect;     // where the execution details go
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
+@property (assign)              size_t thumbCount;
 
 @property (assign)              float scale, score, aspectRatio;
 @property (nonatomic, strong)   NSString *status;
 
 - (id)initForPortrait:(BOOL) port
+               iPhone:(BOOL) isPhone
               displayOption:(DisplayOptions) dopt;
 
 - (int) layoutForFormat:(AVCaptureDeviceFormat *) f scaleOK:(BOOL) scaleOK;
 - (int) layoutForSize:(CGSize) s scaleOK:(BOOL) scaleOK;
+
+extern  NSString * __nullable displayOptionNames[];
 
 @end
 

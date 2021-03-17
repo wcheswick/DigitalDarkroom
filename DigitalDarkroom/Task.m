@@ -142,8 +142,8 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (long) removeLastTransform {
-    long step = transformList.count;
-    assert(step > DEPTH_TRANSFORM + 1);    // should never try to delete the depth transform
+    long step = transformList.count - 1;
+    assert(step >= DEPTH_TRANSFORM + 1);    // should never try to delete the depth transform
     [transformList removeLastObject];
     [paramList removeLastObject];
     return step;

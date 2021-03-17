@@ -39,7 +39,7 @@
         stepNumber.textAlignment = NSTextAlignmentRight;
         [self addSubview:stepNumber];
 
-        f.origin.x = RIGHT(f) + SEP;
+        f.origin.x = RIGHT(f) + 2*SEP;
         f.size.width = EXECUTE_NAME_W;
         name = [[UILabel alloc] initWithFrame:f];
         name.font = [UIFont boldSystemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
@@ -80,7 +80,7 @@
     NSLog(@"      %2ld: updateWithName: %@", step, tn);
 #endif
     stepNumber.textColor = textColor;
-    stepNumber.text = [NSString stringWithFormat:@"%2ld ", step];
+    stepNumber.text = [NSString stringWithFormat:@"%2ld", step];
     if (!tn) {
         name.text = nil;
         param.text = @"";
