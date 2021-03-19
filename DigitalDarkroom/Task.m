@@ -183,28 +183,29 @@ static PixelIndex_t dPI(int x, int y) {
     }
 }
 
-- (void) configureTransformAtIndex:(size_t)ti {
+- (void) configureTransformAtIndex:(size_t)index {
 #ifdef DEBUG_TASK_CONFIGURATION
     CGSize s = taskGroup.transformSize;
     NSLog(@"    TT  %-15@   configureTransform  %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
 #endif
-//    assert(taskStatus == Stopped);
-    assert(ti > DEPTH_TRANSFORM);
-    [self computeRemapForTransformAtIndex:ti];
-}
-
-- (void) computeRemapForTransformAtIndex:(size_t) index {
+    //    assert(taskStatus == Stopped);
     assert(index > DEPTH_TRANSFORM);
     Transform *transform = transformList[index];
-    if (!transform.remapImageF)
-        return;
-//    assert(taskStatus == Stopped);
+    TransformInstance *instance = paramList[index];
+    
+    switch (transform.type) {
+        case RemapTrans:
+        case RemapPolarTrans:
+            break;
+        default:
+            return;
+    }
+    instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
+    //    assert(taskStatus == Stopped);
 #ifdef DEBUG_TASK_CONFIGURATION
     CGSize s = taskGroup.transformSize;
     NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
 #endif
-    TransformInstance *instance = paramList[index];
-    instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
 }
 
 - (void) removeTransformAtIndex:(long) index {
@@ -328,8 +329,8 @@ static PixelIndex_t dPI(int x, int y) {
             NSLog(@"stub - etctrans");
             break;
         case GeometricTrans:
+        case RemapPolarTrans:
         case RemapTrans: {
-            assert(transform.remapImageF);
             assert(instance.remapBuf);
 #ifdef DEBUG
             [instance.remapBuf verify];

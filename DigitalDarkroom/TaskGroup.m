@@ -129,7 +129,36 @@
 #endif
     remapBuf = [[RemapBuf alloc] initWithWidth:transformSize.width
                                         height:transformSize.height];
-    transform.remapImageF(remapBuf, instance);
+    if (transform.type == RemapTrans) {
+        transform.remapImageF(remapBuf, instance);
+    } else {  // polar remap
+        int centerX = transformSize.width/2;
+        int centerY = transformSize.height/2;
+        
+        for (int dx=0; dx<=centerX; dx++) {
+            for (int dy=0; dy<=centerY; dy++) {
+                double r = hypot(dx, dy);
+                double a = (dx + dy == 0) ? 0 : atan2(dy,dx);
+                
+                // third quadrant
+                transform.polarRemapF(remapBuf, r, M_PI + a, instance,
+                                      centerX - dx, centerY - dy);
+                
+                // second quandrant
+                if (centerY + dy < remapBuf.h)
+                    transform.polarRemapF(remapBuf, r, M_PI - a, instance, centerX - dx, centerY + dy);
+                
+                if (centerX + dx < remapBuf.w) {
+                    // fourth quadrant
+                    transform.polarRemapF(remapBuf, r, -a, instance, centerX + dx, centerY - dy);
+                    
+                    // first quadrant
+                    if (centerY + dy < remapBuf.h)
+                        transform.polarRemapF(remapBuf, r, a, instance, centerX + dx, centerY + dy);
+                }
+            }
+        }
+    }
     assert(remapBuf);
 #ifdef DEBUG
     [remapBuf verify];

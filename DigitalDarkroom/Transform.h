@@ -27,6 +27,7 @@ typedef enum {
     ColorTrans,
     GeometricTrans,
     RemapTrans,
+    RemapPolarTrans,
     AreaTrans,
     DepthVis,
     EtcTrans,
@@ -37,6 +38,10 @@ typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size
 
 typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)
             (RemapBuf *remapBuf, TransformInstance *instance);
+
+typedef void (^ __nullable __unsafe_unretained ComputePolarRemap_t)
+            (RemapBuf *remapBuf, float r, float a, TransformInstance *instance,
+             int tX, int tY);
 
 #ifdef NOTUSED
 typedef void (^ __nullable __unsafe_unretained
@@ -62,6 +67,7 @@ typedef void (^ __nullable __unsafe_unretained
     depthVis_t depthVisF;
     int low, value, high;
     ComputeRemap_t remapImageF;
+    ComputePolarRemap_t polarRemapF;
 }
 
 @property (nonatomic, strong)   NSString *name, *description;
@@ -71,6 +77,7 @@ typedef void (^ __nullable __unsafe_unretained
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
 @property (unsafe_unretained)   ComputeRemap_t remapImageF;
+@property (unsafe_unretained)   ComputePolarRemap_t polarRemapF;
 @property (assign)              transform_t type;
 @property (assign)              int low, value, high;
 @property (assign)              BOOL hasParameters;
@@ -90,7 +97,10 @@ typedef void (^ __nullable __unsafe_unretained
                 areaFunction:(areaFunction_t) f;
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                   remapImage:(ComputeRemap_t) f;
+                remapImage:(ComputeRemap_t) f;
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                remapPolar:(ComputePolarRemap_t) f;
 
 + (Transform *) depthVis:(NSString *) n description:(NSString *) d
                 depthVis:(depthVis_t) f;

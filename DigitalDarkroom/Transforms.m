@@ -80,6 +80,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) buildTransformList {
     [self addDepthVisualizations];
+    [self addPolarTransforms];
     [self addGeometricTransforms];
     [self addTestTransforms];   // empty
     [self addArtTransforms];
@@ -218,6 +219,27 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 }
 #endif
 
+
+- (void) addPolarTransforms {
+    lastTransform = [Transform areaTransform: @"Fish eye"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double R = hypot(remapBuf.w,remapBuf.h);
+        double r1 = r*r/(R/2.0);
+        int x = (int)remapBuf.w/2 + (int)(r1*cos(a));
+        int y = (int)remapBuf.h/2 + (int)(r1*sin(a));
+        REMAP_TO(tX, tY, x, y);
+    }];
+    lastTransform.low = 10; // XXXXXX these are bogus
+    lastTransform.value = 18;
+    lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+}
+
+
+
 - (void) addAreaTransforms {
     lastTransform = [Transform areaTransform: @"O no!"
                                  description: @"Reflect the right half of the screen on the left"
@@ -310,7 +332,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 
             REMAP_TO(centerX,y, centerX, y);
             REMAP_TO(centerX,y, centerX, y);
-            REMAP_COLOR(0,y, Remap_White);
+            REMAP_COLOR(0,y,remapBuf.w, Remap_White);
             
             for (int x=1; x<=ndots; x++) {
                 size_t dist = (x*(centerX-1))/ndots;
@@ -319,8 +341,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 REMAP_TO(centerX-x,y, centerX - dist,y);
             }
             for (size_t x=ndots; x<centerX; x++) {
-                REMAP_COLOR(centerX+x,y, Remap_White);
-                REMAP_COLOR(centerX-x,y, Remap_White);
+                REMAP_COLOR(centerX+x,y,remapBuf.w, Remap_White);
+                REMAP_COLOR(centerX-x,y,remapBuf.w, Remap_White);
              }
         }
     }];
@@ -1618,7 +1640,6 @@ void convolution(const Pixel *in, Pixel *out,
 #endif
 
 - (void) addGeometricTransforms {
-    // broken:
     lastTransform = [Transform areaTransform: @"Zoom"
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -2303,7 +2324,7 @@ make_block(Pt origin, struct block *b) {
         
         for (int x=0; x<remapBuf.w; x++) {
             for (int y=0; y<remapBuf.h; y++)
-                REMAP_COLOR(x, y, Remap_White);
+                REMAP_COLOR(x, y, remapBuf.w, Remap_White);
         }
 
         int nxBlocks = (((int)remapBuf.w/(2*dxToBlockCenter)) + 2);
@@ -2340,8 +2361,8 @@ make_block(Pt origin, struct block *b) {
                 Pt p = block_list[col][row].b.f[i][j];
                 int x = p.x;
                 int y = p.y;
-                if (IS_IN_REMAP(x, y))
-                    REMAP_COLOR(x,y,Remap_Black);
+                if (IS_IN_REMAP(x, y, remapBuf))
+                    REMAP_COLOR(x,y,remapBuf.w, Remap_Black);
             }
         }
         
@@ -2372,7 +2393,7 @@ make_block(Pt origin, struct block *b) {
                         for (int x=0; x<remapBuf.w; x++)    {
                             int nx = CORNERS[ll].x + y*dyx + x*dxx;
                             int ny = CORNERS[ll].y + y*dyy + x*dxy;
-                            if (IS_IN_REMAP(nx, ny))
+                            if (IS_IN_REMAP(nx, ny, remapBuf))
                                 REMAP_TO(nx,ny, x,y);
                         }
                     }

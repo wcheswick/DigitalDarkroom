@@ -18,6 +18,7 @@
 @synthesize areaF;
 @synthesize depthVisF;
 @synthesize remapImageF;
+@synthesize polarRemapF;
 @synthesize low, value, high;
 @synthesize newValue;
 @synthesize remapTable;
@@ -31,6 +32,7 @@
 //        pointF = nil;
         areaF = nil;
         remapImageF = nil;
+        polarRemapF = nil;
         depthVisF = nil;
         low = high = 0;
         newValue = NO;
@@ -81,6 +83,16 @@
     return t;
 }
 
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                   remapPolar:(ComputePolarRemap_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RemapPolarTrans;
+    t.polarRemapF = f;
+    return t;
+}
+
 - (void) clearRemap {
     if (remapTable) {
         free(remapTable);
@@ -101,6 +113,7 @@
     copy.areaF = areaF;
     copy.depthVisF = depthVisF;
     copy.remapImageF = remapImageF;
+    copy.polarRemapF = polarRemapF;
     copy.low = low;
     copy.high = high;
     copy.value = value;
