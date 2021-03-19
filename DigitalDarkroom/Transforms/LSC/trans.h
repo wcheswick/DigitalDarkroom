@@ -54,7 +54,6 @@ extern	int ptinrect(Point p, Rectangle r);
 /* in trans.c */
 
 extern	init_proc init_cone;
-extern	init_proc init_bignose;
 extern	init_proc init_fisheye;
 extern	init_proc init_dali;
 extern	init_proc init_andrew;

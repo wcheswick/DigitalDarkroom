@@ -31,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define Green           SETRGB(0,Z,0)
 #define Blue            SETRGB(0,0,Z)
 #define Yellow          SETRGB(Z,Z,0)
+#define Magenta         SETRGB(Z,0,Z)
 #define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
 
 @interface Transforms : NSObject {

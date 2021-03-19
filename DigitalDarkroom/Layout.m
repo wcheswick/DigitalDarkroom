@@ -31,6 +31,7 @@ NSString * __nullable displayOptionNames[] = {
     @"TightDisplay",
     @"BestDisplay",
     @"LargestImageDisplay",
+    @"FullScreenImage",
 };
 
 @implementation Layout
@@ -182,6 +183,9 @@ NSString * __nullable displayOptionNames[] = {
             // just image plus (overlaid) execute, no thumbs unless there is spare room
             thumbsPlacement = ThumbsOptional;
             break;
+        case FullScreenImage:
+            thumbSize = CGSizeZero;
+            ; // XXXXX not yet
     }
     
     firstThumbRect.size = thumbSize;

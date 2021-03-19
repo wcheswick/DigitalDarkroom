@@ -128,32 +128,6 @@ init_cone(void) {
 	return setup_polar(compute_cone);
 }
 
-Point
-compute_andrew(double r, double a) {
-	int x = CENTER_X + 0.6*((r - sin(a)*100 + 50) * cos(a));
-	int y = CENTER_Y + 0.6*r*sin(a); // - (CENTER_Y/4);
-	if (x >= 0 && x < MAX_X && y >= 0 && y < MAX_Y)
-		return (Point){x, y};
-	else
-		return (Point){CENTER_X + r*cos(a), CENTER_X + r*sin(a)};
-}
-
-void *
-init_andrew(void) {
-	return setup_polar(compute_andrew);
-}
-
-Point
-compute_fisheye(double r, double a) {
-	double r1 = r*r/(R/2);
-	return (Point){CENTER_X+(int)(r1*cos(a)), CENTER_Y+(int)(r1*sin(a))};
-}
-
-void *
-init_fisheye(void) {
-	return setup_polar(compute_fisheye);
-}
-
 #define INRANGE(p)	(p.x >= 0 && p.x < MAX_X && p.y >= 0 && p.y < MAX_Y)
 
 Point

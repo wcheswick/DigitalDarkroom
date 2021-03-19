@@ -221,24 +221,169 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 
 
 - (void) addPolarTransforms {
+    
+    lastTransform = [Transform areaTransform: @"Can"    // WTF?
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + a*5.0/2.0;
+        long sy = centerY + r*5.0/2.0;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Skrunch"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + (r-(cos(a)/300.0)*sin(a));
+        long sy = centerY + r*sin(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Edward Munch #1"        // old twist right
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double newa = a + (r/3.0)*(M_PI/180.0);
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(newa);
+        long sy = centerY + r*sin(newa);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Edward Munch #2"    // old Ken twist
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(a);
+        long sy = centerY + r*sin(a + r/30.0);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Dali"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(a);
+        long sy = centerY + r*sin(a);
+        sx = centerX + (r*cos(a + (sy*sx/(16*17000.0))));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Andrew"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_TO(tX, tY, centerX + r*cos(a), centerX + r*sin(a));
+    }];
+    [self addTransform:lastTransform];
+    
     lastTransform = [Transform areaTransform: @"Fish eye"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double R = hypot(remapBuf.w,remapBuf.h);
-        double r1 = r*r/(R/2.0);
+        float zoomFactor = instance.value/10.0; // XXXX this is broken, I think
+        double r1 = r*r/(R/zoomFactor);
         int x = (int)remapBuf.w/2 + (int)(r1*cos(a));
         int y = (int)remapBuf.h/2 + (int)(r1*sin(a));
         REMAP_TO(tX, tY, x, y);
     }];
     lastTransform.low = 10; // XXXXXX these are bogus
-    lastTransform.value = 18;
-    lastTransform.high = 50;
+    lastTransform.value = 20;
+    lastTransform.high = 30;
     lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        float maxR = MAX(centerX, centerY);
+        double r1 = sqrt(r*maxR);
+        long sx = centerX + (int)(r1*cos(a));
+        long sy = centerY + (int)(r1*sin(a));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Fish eye"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        float maxR = MAX(centerX, centerY);
+        double r1 = sqrt(r*maxR);
+        long sx = centerX + (int)(r1*cos(a));
+        long sy = centerY + (int)(r1*sin(a));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Paul"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        double x = r*cos(a);
+        double y = r*sin(a);
+        long sx = centerX + (short)(r*sin((y*x)/4.0+a));
+        long sy = centerY + (short)(r*cos(a));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
     [self addTransform:lastTransform];
 
 }
-
-
 
 - (void) addAreaTransforms {
     lastTransform = [Transform areaTransform: @"O no!"
@@ -332,7 +477,7 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
 
             REMAP_TO(centerX,y, centerX, y);
             REMAP_TO(centerX,y, centerX, y);
-            REMAP_COLOR(0,y,remapBuf.w, Remap_White);
+            REMAP_COLOR(0,y, Remap_White);
             
             for (int x=1; x<=ndots; x++) {
                 size_t dist = (x*(centerX-1))/ndots;
@@ -341,8 +486,8 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
                 REMAP_TO(centerX-x,y, centerX - dist,y);
             }
             for (size_t x=ndots; x<centerX; x++) {
-                REMAP_COLOR(centerX+x,y,remapBuf.w, Remap_White);
-                REMAP_COLOR(centerX-x,y,remapBuf.w, Remap_White);
+                REMAP_COLOR(centerX+x,y, Remap_White);
+                REMAP_COLOR(centerX-x,y, Remap_White);
              }
         }
     }];
@@ -1589,8 +1734,6 @@ irand(int i) {
 #endif //NEEW
 }
 
-#define INRANGE(x,y)    (x >= 0 && x < W && y >= 0 && y < H)
-
 #ifdef NOTYET
 
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
@@ -1857,48 +2000,6 @@ void convolution(const Pixel *in, Pixel *out,
     [self addTransform:lastTransform];
 #endif
 
-    lastTransform = [Transform areaTransform: @"Cone projection"
-                                 description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        double r1 = sqrt(r*MAX_R);
-        int y = (int)CENTER_Y+(int)(r1*sin(a));
-        if (y < 0)
-            y = 0;
-        else if (y >= H)
-            y = (int)H - 1;
-        int x = CENTER_X + r1*cos(a);
-        if (x < 0)
-            x = 0;
-        else if (x >= W)
-            x = (int)W - 1;
-        return PI(x, y);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Andrew's projection"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        int x = CENTER_X + 0.6*((r - sin(a)*100 + 50) * cos(a));
-        int y = CENTER_Y + 0.6*r*sin(a); // - (CENTER_Y/4);
-        return PI(x, y);
-#ifdef notdef
-        if (x >= 0 && x < currentFormat.w && y >= 0 && y < currentFormat.h)
-        else
-            return PI(&currentFormat,CENTER_X + r*cos(a), CENTER_X + r*sin(a));
-#endif
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Fish eye"
-                                 description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int p) {
-        double R = hypot(W, H);
-        double r1 = r*r/(R/2.0);
-        int x = (int)CENTER_X + (int)(r1*cos(a));
-        int y = (int)CENTER_Y + (int)(r1*sin(a));
-        return PI(x,y);
-    }];
-    [self addTransform:lastTransform];
 #endif  // NEW
 }
 
@@ -2167,21 +2268,6 @@ void convolution(const Pixel *in, Pixel *out,
     [self addTransform:lastTransform];
 #endif
 
-#ifdef notdef
-pixel
-pg(double r, double a) {
-    double x = r*cos(a);
-    double y = r*sin(a);
-    return frame[CENTER_Y+(short)(r*cos(a))]
-            [CENTER_X+(short)(r*sin((y*x)/4+a))];
-}
-
-pixel
-can(double r, double a) {
-    return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
-}
-#endif
-
 #ifdef notyet
     extern  init_proc init_rotate_right;
     extern  init_proc init_copy_right;
@@ -2191,11 +2277,6 @@ can(double r, double a) {
     extern  init_proc init_cylinder;
     extern  init_proc init_shift_left;
     extern  init_proc init_shift_right;
-    extern  init_proc init_bignose;
-    extern  init_proc init_dali;
-    extern  init_proc init_twist;
-    extern  init_proc init_kentwist;
-    extern  init_proc init_escher;
     extern  init_proc init_slicer;
     extern  init_proc init_seurat;
 
@@ -2245,16 +2326,9 @@ Frand(void) {
 }
 
 #ifdef notdef
-        {"Cone projection", init_cone, do_remap, "Pinhead", "", 0, FRAME_COLOR},
-        {"Fish eye",    init_fisheye, do_remap, "Fish", "eye", 0 ,AREA_COLOR},
-#endif
-
-#ifdef notdef
 
         add_button(right(last_top->r), "neon", "Neon", Green, do_sobel);
         last_top = last_button;
-        add_button(below(last_button->r), "fisheye", "Fish eye", OLD, do_remap);
-        last_button->init = (void *)init_fisheye;
 #endif
 
 typedef struct Pt {
@@ -2324,7 +2398,7 @@ make_block(Pt origin, struct block *b) {
         
         for (int x=0; x<remapBuf.w; x++) {
             for (int y=0; y<remapBuf.h; y++)
-                REMAP_COLOR(x, y, remapBuf.w, Remap_White);
+                REMAP_COLOR(x, y,Remap_White);
         }
 
         int nxBlocks = (((int)remapBuf.w/(2*dxToBlockCenter)) + 2);
@@ -2362,7 +2436,7 @@ make_block(Pt origin, struct block *b) {
                 int x = p.x;
                 int y = p.y;
                 if (IS_IN_REMAP(x, y, remapBuf))
-                    REMAP_COLOR(x,y,remapBuf.w, Remap_Black);
+                    REMAP_COLOR(x,y,Remap_Black);
             }
         }
         
@@ -2408,47 +2482,7 @@ make_block(Pt origin, struct block *b) {
     [self addTransform:lastTransform];
     
 #ifdef NEW
-    lastTransform = [Transform areaTransform: @"Edward Munch #1"
-                                  description: @"twist"
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        double newa = a + (r/3.0)*(M_PI/180.0);
-        int x = CENTER_X + r*cos(newa);
-        int y = CENTER_Y + r*sin(newa);
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Edward Munch #2"
-                                  description: @"Ken's twist"
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        int x = CENTER_X + r*cos(a);
-        int y = CENTER_Y + (r*sin(a+r/30.0));
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Dali"
-                                  description: @""
-                                  remapPolar:^PixelIndex_t (float r, float a, int param) {
-        int x = CENTER_X + r*cos(a);
-        int y = CENTER_Y + r*sin(a);
-        x = CENTER_X + (r*cos(a + (y*x/(16*17000.0))));
-        if (INRANGE(x,y))
-            return PI(x,y);
-        else
-            return Remap_White;
-    }];
-    lastTransform.low = 17;
-    lastTransform.value = 4*lastTransform.low;
-    lastTransform.high = 10*lastTransform.low;
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Seurat"
                                  description: @""
@@ -2675,8 +2709,6 @@ make_block(Pt origin, struct block *b) {
 double r1 = r*r/(R/2);
 return (Point){CENTER_X+(int)(r1*cos(a)), CENTER_Y+(int)(r1*sin(a))};
 
-extern  init_proc init_cone;
-extern  init_proc init_bignose;
 extern  init_proc init_fisheye;
 extern  init_proc init_andrew;
 extern  init_proc init_twist;
@@ -2687,7 +2719,6 @@ extern  init_proc init_high;
 extern  init_proc init_auto;
 
 
-extern  void init_polar(void);
 #endif
 
 #ifdef notdef
@@ -2701,8 +2732,6 @@ typedef void *init_proc(void);
 /* in trans.c */
 extern  int irand(int i);
 extern  int ptinrect(Point p, Rectangle r);
-
-extern  void init_polar(void);
 
 extern  transform_t do_point;
 
@@ -2779,12 +2808,10 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 {"Bignose",        init_fisheye, do_remap, "Fish", "eye", 0, GEOM_COLOR},
 {"Cylinder projection",    init_cylinder, do_remap, "cylinder", "", 0, GEOM_COLOR},
 {"Shower stall 2",    init_shower2, do_remap, "shower", "stall 2", 0, GEOM_COLOR},
-{"Cone projection",    init_cone, do_remap, "Pinhead", "", 0, GEOM_COLOR},
 
 {"Rotate right",    init_rotate_right, do_remap, "rotate", "right", 1, GEOM_COLOR},
 {"Shift right",        init_shift_right, do_remap, "shift", "right", 0, GEOM_COLOR},
 {"Copy right",         init_copy_right, do_remap, "copy", "right", 0, GEOM_COLOR},
-{"Twist right",        init_twist, do_remap, "Edward", "Munch", 0, GEOM_COLOR},
 {"Raise right",        init_raise_right, do_remap, "raise", "right", 0, GEOM_COLOR},
 {"Smear",        0, do_smear, "sine", "smear", 0, GEOM_COLOR},
 
@@ -2799,15 +2826,10 @@ lsc_button(BELOW, "fisheye", do_remap, init_fisheye);
 /*    {"Color logo",        0, do_color_logo, "color", "logo", 0, OTHER_COLOR},*/
 {"Spectrum",         0, do_spectrum, "spectrum", "", 0, OTHER_COLOR},
 #ifdef test
-{"Can",            (proc)do_polar, (subproc)can, GS, "Can", "", 0, OTHER_COLOR},
-{"Pg",            (proc)do_polar, (subproc)pg, GS, "Pg", "", 0, OTHER_COLOR},
-{"Skrunch",        (proc)do_polar, (subproc)skrunch, GS, "Scrunch", "", 0, OTHER_COLOR},
 {"test", 0, cartoon, "Warhol", "", , 0, NEW},
 {"Seurat?", 0, do_cfs, "Matisse", "", 0, NEW},
 {"Slicer", 0, do_slicer, "Picasso", "", 0, OTHER_COLOR},
 {"Neg", 0, do_neg_sobel, "Surreal", "", 0, NEW},
-{"Dali", init_dali, do_remap, "Dali", "", 1, AREA_COLOR},
-{"Munch 2", init_kentwist, do_remap, "Edward", "Munch 2", 0, AREA_COLOR},
 {"Escher", init_escher, do_remap, "Escher", "", 0, NEW},
 #endif
 

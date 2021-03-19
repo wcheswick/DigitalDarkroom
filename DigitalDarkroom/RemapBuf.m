@@ -14,6 +14,16 @@
 
 @end
 
+// #define REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI(fx,fy)
+
+void
+remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
+    if (sx < remapBuf.w && sx >= 0 && sy < remapBuf.h && sy >= 0)
+        UNSAFE_REMAP_TO(tx, ty, sx, sy);
+    else
+        REMAP_COLOR(tx, ty, Remap_OutOfRange);
+}
+
 @implementation RemapBuf
 
 @synthesize w, h;

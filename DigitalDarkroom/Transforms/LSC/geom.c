@@ -384,12 +384,5 @@ do_melt(param *void, image in, image out) {
 		}
 	}
 } 
-
-pixel
-skrunch(double r, double a) {
-	return frame[CENTER_Y+(short)(r*cos(a))]
-		    [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-}
-
 #endif
 #endif

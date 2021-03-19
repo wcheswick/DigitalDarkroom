@@ -359,6 +359,9 @@ static PixelIndex_t dPI(int x, int y) {
                     case Remap_Yellow:
                         p = Yellow;
                         break;
+                    case Remap_OutOfRange:
+                        p = Magenta;
+                        break;
                     case Remap_Unset:
                         p = UnsetColor;
                         break;

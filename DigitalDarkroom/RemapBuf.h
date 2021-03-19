@@ -21,7 +21,8 @@ enum SpecialRemaps {
     Remap_Blue = -4,
     Remap_Black = -5,
     Remap_Yellow = -6,
-    Remap_Unset = -7,
+    Remap_OutOfRange = -7,
+    Remap_Unset = -8,
 };
 
 // The remap buffer contains w*h entries describing where the corresponding
@@ -37,9 +38,12 @@ typedef int BufferIndex;      // index into a buffer at x,y
 // These macros all assume that remapBuf is available
 
 #define RBI(x,y)                ((CLIPX(x)) + (remapBuf.w)*(y))  // buffer index as function of x,y
-#define REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI(fx,fy)
-#define REMAP_COLOR(tx, ty, w, rc) remapBuf.rb[RBI((tx),(ty))] = rc
+#define REMAP_TO(tx,ty, fx,fy)  remapTo(remapBuf, tx, ty, fx, fy)
+#define UNSAFE_REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI((fx),(fy))
+#define REMAP_COLOR(tx, ty, rc) remapBuf.rb[RBI((tx),(ty))] = rc
 #define IS_IN_REMAP(x,y,rb)    ((x) >= 0 && (x) < rb.w && (y) >= 0 && (y) < rb.h)
+
+#define REMAPBUF_IN_RANGE(x,y)   ((x) >= 0 && (x) < remapBuf.w && (y) >= 0 && (y) < remapBuf.h)
 
 @interface RemapBuf : NSMutableData {
     size_t w, h;
@@ -51,6 +55,8 @@ typedef int BufferIndex;      // index into a buffer at x,y
 
 - (id)initWithWidth:(size_t) w height:(size_t)h;
 - (void) verify;
+
+extern void remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy);
 
 @end
 

@@ -19,6 +19,7 @@ typedef enum {
     TightDisplay,
     BestDisplay,
     LargestImageDisplay,
+    FullScreenImage,
 } DisplayOptions;
 
 @interface Layout : NSObject {
