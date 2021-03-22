@@ -174,7 +174,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIButton *stackingButton;
+@property (nonatomic, strong)   UIBarButtonItem *plusBarButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -217,7 +217,7 @@ typedef enum {
 @synthesize thumbArrayView;
 
 @synthesize executeView;
-@synthesize stackingButton;
+@synthesize plusBarButton;
 @synthesize executeListView;
 
 @synthesize deviceOrientation;
@@ -580,7 +580,12 @@ typedef enum {
                                      initWithTarget:self action:@selector(didTapSceen:)];
     [tap setNumberOfTouchesRequired:1];
     [overlayView addGestureRecognizer:tap];
-    
+
+    UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didTwoTapSceen:)];
+    [twoTap setNumberOfTouchesRequired:2];
+    [overlayView addGestureRecognizer:twoTap];
+
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didLongPressScreen:)];
     longPressScreen.minimumPressDuration = 1.0;
@@ -637,40 +642,8 @@ typedef enum {
     executeView.backgroundColor = [UIColor clearColor];
     executeView.userInteractionEnabled = YES;
     
-    stackingButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    stackingButton.frame = CGRectMake(0, 0,
-                                      EXECUTE_BUTTON_W, EXECUTE_BUTTON_H);
-#ifdef NOTDEF
-    UIImage *oneFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
-                                                               pathForResource:@"images/1sq.png"
-                                                               ofType:@""]];
-    UIImage *threeFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
-                                                                 pathForResource:@"images/3sq.png"
-                                                                 ofType:@""]];
-    stackingButton.userInteractionEnabled = YES;
-    // maybe not so clear using these
-    [stackingButton setBackgroundImage:oneFrameImage forState:UIControlStateNormal];
-    [stackingButton setBackgroundImage:threeFrameImage forState:UIControlStateSelected];
-#endif
-    stackingButton.userInteractionEnabled = YES;
-    stackingButton.backgroundColor = [UIColor whiteColor];
-
-    [stackingButton addTarget:self
-                       action:@selector(toggleStackingMode:)
-             forControlEvents:UIControlEventTouchUpInside];
-    [stackingButton setTitle:BIGPLUS forState:UIControlStateNormal];
-    [stackingButton setTitle:BIGPLUS forState:UIControlStateSelected];
-    [stackingButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-//    [stackingButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
-    stackingButton.layer.borderColor = [UIColor blueColor].CGColor;
-    stackingButton.opaque = YES;
-    stackingButton.layer.cornerRadius = 5.0;
-    stackingButton.titleLabel.adjustsFontSizeToFitWidth = YES;
-    [self configureStackButton];
-    [executeView addSubview:stackingButton];
-    
     executeListView =  [[UIView alloc]
-                    initWithFrame:CGRectMake(RIGHT(stackingButton.frame) + SEP, 0,
+                    initWithFrame:CGRectMake(0, 0,
                                              EXECUTE_LIST_W, LATER)];
     executeListView.backgroundColor = [UIColor clearColor];
     executeListView.opaque = NO;
@@ -748,6 +721,8 @@ typedef enum {
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
+    fixedSpace.width = 10;
+    
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
@@ -777,48 +752,94 @@ typedef enum {
                                    action:@selector(doSave)];
     
     UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
-                                initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
-                                target:self
-                                action:@selector(doRemoveLastTransform)];
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                                      target:self
+                                      action:@selector(doRemoveLastTransform)];
     
-    fixedSpace.width = 60;
-    if (isiPhone && isPortrait) {
-        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  depthBarButton,
-                                                  flexibleSpace,
-                                                  flipBarButton,
-                                                  flexibleSpace,
-                                                  photoBarButton,
-                                                  flexibleSpace,
-                                                  trashBarButton,
-                                                  flexibleSpace,
-                                                  undoBarButton,
-                                                  flexibleSpace,
-                                                  saveBarButton,
-                                                  flexibleSpace,
-                                                  otherMenuButton,
-                                                  nil];
-    } else {
-        self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                  depthBarButton,
-                                                  flexibleSpace,
-                                                  flipBarButton,
-                                                  flexibleSpace,
-                                                  photoBarButton,
-                                                  nil];
-        self.title = @"Digital Darkroom";
-        self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                                   otherMenuButton,
-                                                   flexibleSpace,
-                                                   saveBarButton,
-                                                   flexibleSpace,
-                                                   undoBarButton,
-                                                   flexibleSpace,
-                                                   trashBarButton,
-                                                   nil];
-    }
+    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                              depthBarButton,
+                                              flexibleSpace,
+                                              flipBarButton,
+                                              flexibleSpace,
+                                              photoBarButton,
+                                              nil];
 
+    if (!isiPhone || !isPortrait)
+        self.title = @"Digital Darkroom";
+#ifdef NOTDEF
+    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               otherMenuButton,
+                                               flexibleSpace,
+                                               saveBarButton,
+                                               flexibleSpace,
+                                               undoBarButton,
+                                               flexibleSpace,
+                                               trashBarButton,
+                                               nil];
+#endif
+    
+    plusBarButton = [[UIBarButtonItem alloc]
+                                   initWithTitle:BIGPLUS
+                                   style:UIBarButtonItemStylePlain
+                                   target:self
+                                   action:@selector(toggleStackingMode:)];
+    [plusBarButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont systemFontOfSize:navBarH
+                                               weight:UIFontWeightUltraLight],
+        //NSBaselineOffsetAttributeName: @-3
+    } forState:UIControlStateNormal];
+
+    [plusBarButton setTitleTextAttributes:@{
+        NSFontAttributeName: [UIFont systemFontOfSize:navBarH
+                                               weight:UIFontWeightHeavy],
+        //NSBaselineOffsetAttributeName: @-3
+    } forState:UIControlStateSelected];
+
+    self.toolbarItems = [[NSArray alloc] initWithObjects:
+                         plusBarButton,
+                         flexibleSpace,
+                         saveBarButton,
+                         fixedSpace,
+                         undoBarButton,
+                         fixedSpace,
+                         trashBarButton,
+                         fixedSpace,
+                         otherMenuButton,
+                         nil];
+    [self adjustPlusButtonFormat];
 }
+
+
+#ifdef NOTDEF
+UIImage *oneFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
+                                                           pathForResource:@"images/1sq.png"
+                                                           ofType:@""]];
+UIImage *threeFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
+                                                             pathForResource:@"images/3sq.png"
+                                                             ofType:@""]];
+stackingButton.userInteractionEnabled = YES;
+// maybe not so clear using these
+[stackingButton setBackgroundImage:oneFrameImage forState:UIControlStateNormal];
+[stackingButton setBackgroundImage:threeFrameImage forState:UIControlStateSelected];
+#endif
+
+- (void) adjustPlusButtonFormat {
+    CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
+    if (!options.stackingMode) {
+        [plusBarButton setTitleTextAttributes:@{
+            NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                   weight:UIFontWeightUltraLight],
+            //NSBaselineOffsetAttributeName: @-3
+        } forState:UIControlStateNormal];
+    } else {
+        [plusBarButton setTitleTextAttributes:@{
+            NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                   weight:UIFontWeightHeavy],
+            //NSBaselineOffsetAttributeName: @-3
+        } forState:UIControlStateSelected];
+    }
+}
+
 - (void) createThumbArray {
 //    NSLog(@"--- createThumbArray");
 
@@ -1005,9 +1026,10 @@ typedef enum {
     BOOL adjustSourceInfo = (nextSource != nil);
     
     self.navigationController.navigationBarHidden = NO;
+    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
     self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
-    self.navigationController.toolbarHidden = YES;
-    
+    self.navigationController.toolbar.opaque = NO;  // (uiMode == oliveUI);
+
 //    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
     
     // set up new source, if needed
@@ -1230,22 +1252,8 @@ typedef enum {
             [overlayView addSubview:overlayDebug];
             // FALLTHROUGH
         case overlayShowing: {
-            UILabel *centerPlus = [[UILabel alloc] init];
-            centerPlus.text = BIGPLUS;
-            centerPlus.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE
-                                                weight:UIFontWeightUltraLight];
-            CGRect f = overlayView.frame;
-            f.origin.y = f.size.height/2.0 - STACKING_BUTTON_FONT_SIZE/2.0;
-            f.size.height = STACKING_BUTTON_FONT_SIZE;
-            centerPlus.frame = f;
-            centerPlus.textAlignment = NSTextAlignmentCenter;
-            centerPlus.textColor = [UIColor whiteColor];
-            centerPlus.opaque = NO;
-            centerPlus.backgroundColor = [UIColor clearColor];
-            [overlayView addSubview:centerPlus];
-            [overlayView bringSubviewToFront:centerPlus];
-            
             if (overlayDebug) {
+                CGRect f;
                 f.size = overlayView.frame.size;
                 f.origin = CGPointMake(5, 5);
                 overlayDebug.frame = f;
@@ -1545,23 +1553,8 @@ size_t topExecuteStepDisplayed;
     options.stackingMode = !options.stackingMode;
     NSLog(@" === stacking mode now %d", options.stackingMode);
     [options save];
-    [self configureStackButton];
+    [self adjustPlusButtonFormat];
     [self configureStackMode];
-}
-
-- (void) configureStackButton {
-    stackingButton.selected = options.stackingMode;
-    if (options.stackingMode) {
-        stackingButton.layer.borderWidth = 4.0;
-        stackingButton.selected = YES;
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightBold];
-        stackingButton.backgroundColor = [UIColor whiteColor];
-    } else {
-        stackingButton.layer.borderWidth = 1.0;
-        stackingButton.selected = NO;
-        stackingButton.titleLabel.font = [UIFont systemFontOfSize:STACKING_BUTTON_FONT_SIZE weight:UIFontWeightUltraLight];
-    }
-    [stackingButton setNeedsDisplay];
 }
 
 - (void) adjustThumbView:(UIView *) thumb selected:(BOOL)selected {
@@ -1670,12 +1663,19 @@ size_t topExecuteStepDisplayed;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
+    self.navigationController.navigationBarHidden = !self.navigationController.navigationBarHidden;
+    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
+    return;
+    
     overlayState++;
     if (overlayState == OVERLAY_STATES) {
         overlayState = overlayClear;
     }
     [self updateOverlayView];
-    return;
+}
+
+// freeze/unfreeze video
+- (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
     
 //    BOOL isHidden = self.navigationController.navigationBarHidden;
 //    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
@@ -1690,7 +1690,9 @@ size_t topExecuteStepDisplayed;
             [cameraController stopCamera];
         }
     }
+    // XXXX show frozen on screen
 }
+
 
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateBegan)

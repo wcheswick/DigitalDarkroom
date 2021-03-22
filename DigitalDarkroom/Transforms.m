@@ -349,22 +349,6 @@ sobel(channel *s[(int)H], channel *d[(int)H]) {
             REMAP_COLOR(tX, tY, Remap_White);
     }];
     [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Fish eye"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        float maxR = MAX(centerX, centerY);
-        double r1 = sqrt(r*maxR);
-        long sx = centerX + (int)(r1*cos(a));
-        long sy = centerY + (int)(r1*sin(a));
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Paul"
                                  description: @""
