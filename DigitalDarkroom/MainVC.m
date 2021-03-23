@@ -174,7 +174,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *plusBarButton;
+@property (nonatomic, strong)   UIButton *plusButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -217,7 +217,7 @@ typedef enum {
 @synthesize thumbArrayView;
 
 @synthesize executeView;
-@synthesize plusBarButton;
+@synthesize plusButton;
 @synthesize executeListView;
 
 @synthesize deviceOrientation;
@@ -545,8 +545,6 @@ typedef enum {
     NSLog(@" ========= viewDidLoad =========");
 #endif
     
-    [self configureNavBar];
-    
 #define SLIDER_OFF  (-1)
     
     //    UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
@@ -778,22 +776,23 @@ typedef enum {
                                                nil];
 #endif
     
-    plusBarButton = [[UIBarButtonItem alloc]
-                                   initWithTitle:BIGPLUS
-                                   style:UIBarButtonItemStylePlain
-                                   target:self
-                                   action:@selector(toggleStackingMode:)];
-    [plusBarButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont systemFontOfSize:navBarH
+    CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
+    plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    plusButton.frame = CGRectMake(0, 0, toolBarH+SEP, toolBarH);
+    [plusButton setAttributedTitle:[[NSAttributedString alloc] initWithString:BIGPLUS attributes:@{
+        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
                                                weight:UIFontWeightUltraLight],
         //NSBaselineOffsetAttributeName: @-3
-    } forState:UIControlStateNormal];
-
-    [plusBarButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont systemFontOfSize:navBarH
+    }] forState:UIControlStateNormal];
+    [plusButton setAttributedTitle:[[NSAttributedString alloc] initWithString:BIGPLUS attributes:@{
+        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
                                                weight:UIFontWeightHeavy],
         //NSBaselineOffsetAttributeName: @-3
-    } forState:UIControlStateSelected];
+    }] forState:UIControlStateSelected];
+    [plusButton addTarget:self action:@selector(toggleStackMode:) forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc] initWithCustomView:plusButton];
+    [self configureStackMode];
 
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
@@ -806,7 +805,6 @@ typedef enum {
                          fixedSpace,
                          otherMenuButton,
                          nil];
-    [self adjustPlusButtonFormat];
 }
 
 
@@ -822,23 +820,6 @@ stackingButton.userInteractionEnabled = YES;
 [stackingButton setBackgroundImage:oneFrameImage forState:UIControlStateNormal];
 [stackingButton setBackgroundImage:threeFrameImage forState:UIControlStateSelected];
 #endif
-
-- (void) adjustPlusButtonFormat {
-    CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
-    if (!options.stackingMode) {
-        [plusBarButton setTitleTextAttributes:@{
-            NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                   weight:UIFontWeightUltraLight],
-            //NSBaselineOffsetAttributeName: @-3
-        } forState:UIControlStateNormal];
-    } else {
-        [plusBarButton setTitleTextAttributes:@{
-            NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                   weight:UIFontWeightHeavy],
-            //NSBaselineOffsetAttributeName: @-3
-        } forState:UIControlStateSelected];
-    }
-}
 
 - (void) createThumbArray {
 //    NSLog(@"--- createThumbArray");
@@ -1549,11 +1530,10 @@ size_t topExecuteStepDisplayed;
 #endif
 }
 
-- (IBAction) toggleStackingMode:(UIButton *)sender {
+- (IBAction) toggleStackMode:(UIButton *)sender {
     options.stackingMode = !options.stackingMode;
     NSLog(@" === stacking mode now %d", options.stackingMode);
     [options save];
-    [self adjustPlusButtonFormat];
     [self configureStackMode];
 }
 
@@ -2066,8 +2046,11 @@ UIImageOrientation lastOrientation;
                                        viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
     assert(inputRowView);
     
+    plusButton.selected = options.stackingMode;
+    [plusButton setNeedsDisplay];
+    
     if (options.stackingMode) { // initiate stacking mode
-        [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
+         [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
                          animations:^(void) {
             // if the current input row view is empty, do nothing, else append an empty row
             // and point to it
@@ -2081,7 +2064,7 @@ UIImageOrientation lastOrientation;
     
     // to turn off stacking, remove the empty cell at the end, unless it is
     // DEPTH_STEP + 1, in which case just clear the row.
-    [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
+     [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
                      animations:^(void) {
         if (IS_EMPTY_ROW(inputRowView)) {
             if (inputRowView.step > DEPTH_STEP + 1) {
