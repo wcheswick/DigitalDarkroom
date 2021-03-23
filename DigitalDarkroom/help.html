@@ -1,0 +1,203 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html lang='en-us' xml:lang='en-us' xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <meta name="ROBOTS" content="INDEX, FOLLOW" />
+    <link href="https://cheswick.com/ches/ches.css" media='all' rel='Stylesheet' type='text/css' />
+<!--[if !IE]>-->
+<link media="only screen and (max-width: 480px)"
+  rel="stylesheet" type="text/css" href="https://cheswick.com/ches/iphone.css"/>
+<!--<![endif]-->
+    <meta name = "viewport" content = "width=device-width" />
+    <meta name = "viewport" content = "initial-scale = 1.0" />
+    <meta name="author", content="Bill Cheswick" />
+
+    <meta name="description" content="The Digital Darkroom at the Liberty Science Center"/>
+    <meta name=keywords" content="digital darkroom, Bill Cheswick, science exhibits, liberty science center, Gerard Holtzmann"/>
+    <title>The Digital Darkroom at the Liberty Science Center</title>
+</head>
+
+<body>
+
+<h1>The Digital Darkroom at the Liberty Science Center</h1>
+<p>
+
+<img src="i-lsc.jpg">
+
+<a href="http://www.cs.bell-labs.com/~gerard/">Gerard
+Holzmann</a> and I wrote the 
+Digital Darkroom
+for the
+<a href="http://www.lsc.org/">Liberty Science Center</a>.
+This software was written to bring some of Gerard's
+early work on image processing to the museum members.
+A simplification of this software, the 
+<a href="http://www.creative.org/art_studio.html">Portrait Style
+Station</a>, is now running at
+<a href="http://www.creative.org/">Creative Discovery
+Museum</a> in Chattanooga, Tenn.
+Both of these programs are
+available to non-profit institutions
+from the authors in exchange for lifetime family
+memberships.
+<P>
+
+<h2>Some Technical Details</h2>
+
+The program runs on a fast PC equipped with a floppy drive
+and any Targa frame capture board that implements the old
+Targa-16 commands.  At the museum it currently runs on
+a 486 host at 50Mhz: almost steam-driven speeds.
+It has 8MB of ramdisk
+to implement "undo" and keep some images for the attract loop.
+Obviously, it needs a camera and a video monitor (distinct from
+the VGA display) to capture and display its results.
+<p>
+
+The entire program fits on a single floppy
+disk, so it is easy to change versions or back up the software.
+No hard drive is needed. It does take a couple of minutes to
+boot, but runs off the RAM after that. 
+<p>
+
+<h2>User Interface</h2>
+At the museum, the user interface consists of a track ball and
+a VGA display.  My original design called for a touch screen---
+one of those tough ones found in airports---and I stick with
+that choice.  It is the most obvious user interface, and quite
+appropriate.
+<a href="lsc.gif">Here is the screen</a>.
+<p>
+
+You need enough light to let the camera do a good job, and
+this exhibit just meets this requirement.  It would be better
+to have better lighting.
+We let the user adjust the camera for the best shot.  Its
+travel could be improved, and the setup is a little difficult
+for a small kid to use.
+<p>
+
+Though the video camera used is quite expensive, it lacks a switch
+to reverse the scanning direction.  This means that the camera/video
+display acts in reverse of a mirror: you move right, the image
+moves left.  It takes a few seconds to get used to this.
+There is a reticle with a "+" in the center for lining up
+your nose (or whatever) with the center of processing.
+<p>
+
+<h2>The Algorithms</h2>
+The software is written in Microsoft C, using the Targa graphics
+library.  A copy of the source code is stored compressed on the
+boot floppy.
+<p>
+
+Many of the transform algorithms are Gerard's, but we've had
+fun adding others.  Academy award winner Tom Duff supplied several,
+and I have invented a few.  My (then) eight year old son described
+"Terry's kite".
+<p>
+
+<h2>Printing</h2>
+The software currently supports an HP Laserjet for monochrome
+printouts.  It would be easy to add color printing.
+<p>
+
+There are two problems with supporting an attached printer:
+people often print out unmodified pictures of themselves
+(putting those people at the Jersey shore out of business), and
+it costs money to run the printer.
+<p>
+
+I originally implemented a software and hardware interface to
+a coin slot.  The controller is run through a parallel
+interface.
+It worked in my tests, but wasn't used for a couple
+of years.  When they wanted to use it, the parallel port no
+longer worked.  I haven't had time to fix it.
+<p>
+
+The coin device has a relay to reject all coins. We
+don't want to take a quarter and fail to supply a picture.
+There are several ways that the printer can fail, and the
+software carefully rejects coins if the printer is offline,
+out of paper, jammed, etc.
+<p>
+
+The software allows user-specified printing costs, and prints
+a summary of printer usage as a simple accounting tool.
+<p>
+
+<h2>Discussion</h2>
+
+The Museum's original educational intent was to spur interest
+in the science behind the exhibits.  (The staff has turned over
+several times since the museum opened, and their current philosophy
+may be different.)  Gerard and I wanted to teach more about exactly
+what was going on in the exhibit, and in the individual transforms.
+<p>
+
+This hasn't happened, and it would be nice to add explanations.
+Perhaps this web page is a start.  Though some of the transforms
+are quite technical, and best described in the computer language
+they are written in, many are easy to explain.  We need to do this,
+perhaps with a poster next to the exhibit.
+<p>
+
+The processed image is only 256 by 200 with 5 bits each of
+color.  This small size makes processing quite fast, even
+for complex transforms.  When possible, I tried to show the
+algorithm as it proceeds.  This may help the user figure out what is
+going on, and is certainly more interesting than seeing nothing
+while the computation occurs.
+<p>
+
+Like many things, the best museum exhibits leave the user wanting
+to do a little more.  If you find an exhibit on an uncrowded day
+that can keep you interested for half an hour or more, that is a
+good exhibit.
+By that measure, we have done well.  I have a duplicate of the setup
+in my home, and I still find some new effects and interesting
+combinations of transforms occasionally.
+<p>
+
+
+<h2>Future Work</h2>
+
+The exhibit has held up well, and still attracts a fair crowd.
+But there are lots of possibilities.
+<p>
+
+First of all, many transforms are amenable to real-time processing
+with today's processors.
+I have a prototype of the Digital Funhouse implemented on an SGI.
+This is a high-tech version of a funhouse mirror, though I am
+not sure how you would bend metal to do some of the transforms.
+Real-time is a lot more fun, and it is hard to go back to the
+single-frame digital darkroom.
+<p>
+
+I need spare time to work on this, and need a faster PC
+and (especially)
+frame buffer.   Once again, I think I can fit everything
+on a single floppy.
+Some transforms are simply too slow for realtime, which is a 
+shame.  The "oil paint" and Sobel operators would be especially
+good.
+<p>
+
+I'd like to do something similar with sound.  It would be easy
+to show the sound spectrum from several sources, and have the
+user specify or design filters.  He could see and hear the results.
+There's plenty of CPU power for this one.
+<p>
+
+And for all of these, I'd like to sneak in a little more education.
+Perhaps we could teach a little programming, using the transforms
+as statements.
+<p>
+
+I am working on an update to this.
+<a href="https://cheswick.com/ex/index.html">Click here</a> for details.
+
+</body>
+</html>

@@ -14,6 +14,8 @@
 		FB3B9E1D25D5D5E800F6C40F /* ExecuteRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3B9E1C25D5D5E800F6C40F /* ExecuteRowView.m */; };
 		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
 		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
+		FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9BBADA260A32A70026C4E4 /* HelpVC.m */; };
+		FB9BBAE0260A366B0026C4E4 /* help.html in Resources */ = {isa = PBXBuildFile; fileRef = FB9BBADF260A366B0026C4E4 /* help.html */; };
 		FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9E2A752592267C00BD7E1E /* TaskGroup.m */; };
 		FBA1F16925EEE97800434E2F /* Layout.m in Sources */ = {isa = PBXBuildFile; fileRef = FBA1F16825EEE97800434E2F /* Layout.m */; };
 		FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */; };
@@ -66,6 +68,9 @@
 		FB79D710258A67FC00DEAD6A /* Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Task.h; sourceTree = "<group>"; };
 		FB79D711258A67FC00DEAD6A /* Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Task.m; sourceTree = "<group>"; };
 		FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		FB9BBAD9260A32A70026C4E4 /* HelpVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HelpVC.h; sourceTree = "<group>"; };
+		FB9BBADA260A32A70026C4E4 /* HelpVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HelpVC.m; sourceTree = "<group>"; };
+		FB9BBADF260A366B0026C4E4 /* help.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = help.html; sourceTree = "<group>"; };
 		FB9E2A742592267C00BD7E1E /* TaskGroup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TaskGroup.h; sourceTree = "<group>"; };
 		FB9E2A752592267C00BD7E1E /* TaskGroup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroup.m; sourceTree = "<group>"; };
 		FBA1F16725EEE97800434E2F /* Layout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Layout.h; sourceTree = "<group>"; };
@@ -227,6 +232,8 @@
 				FBB1D9D4232FB24800845DF1 /* Transforms.m */,
 				FBB2C8BD2587D41F00AB0B09 /* TransformInstance.h */,
 				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
+				FB9BBAD9260A32A70026C4E4 /* HelpVC.h */,
+				FB9BBADA260A32A70026C4E4 /* HelpVC.m */,
 				FBB2C8A12582595300AB0B09 /* TaskCtrl.h */,
 				FBB2C8A22582595300AB0B09 /* TaskCtrl.m */,
 				FB9E2A742592267C00BD7E1E /* TaskGroup.h */,
@@ -263,6 +270,7 @@
 				FBB1D9D9232FE3F400845DF1 /* Transforms */,
 				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
 				FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */,
+				FB9BBADF260A366B0026C4E4 /* help.html */,
 				FBF5B3B7232E974000DDFC4E /* Info.plist */,
 				FBF5B3B8232E974000DDFC4E /* main.m */,
 			);
@@ -327,6 +335,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FBB1D9FA232FE56700845DF1 /* Links in Resources */,
+				FB9BBAE0260A366B0026C4E4 /* help.html in Resources */,
 				FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */,
 				FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */,
 				FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */,
@@ -347,6 +356,7 @@
 				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
 				FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */,
 				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
+				FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */,
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
 				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,

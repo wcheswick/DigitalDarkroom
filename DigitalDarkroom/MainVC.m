@@ -15,6 +15,7 @@
 #import "OptionsVC.h"
 #import "ExecuteRowView.h"
 #import "Layout.h"
+#import "HelpVC.h"
 #import "Defines.h"
 
 // last settings
@@ -775,6 +776,15 @@ typedef enum {
                                                trashBarButton,
                                                nil];
 #endif
+    
+    UIBarButtonItem *helpButton = [[UIBarButtonItem alloc]
+                                   initWithTitle:@"?"
+                                   style:UIBarButtonItemStylePlain
+                                   target:self
+                                   action:@selector(doHelp:)];
+    
+    self.navigationItem.rightBarButtonItem = helpButton;
+    
     
     CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
@@ -1673,6 +1683,22 @@ size_t topExecuteStepDisplayed;
     // XXXX show frozen on screen
 }
 
+
+- (IBAction) doHelp:(UIBarButtonItem *)button {
+    NSURL *helpURL = [NSURL fileURLWithPath:
+                      [[NSBundle mainBundle] pathForResource:@"help.html" ofType:@""]];
+    assert(helpURL);
+    HelpVC *hvc = [[HelpVC alloc] initWithURL:helpURL];
+    hvc.modalPresentationStyle = UIModalPresentationPopover;
+    hvc.preferredContentSize = CGSizeMake(320, 300);
+    
+    UIPopoverPresentationController *popvc = hvc.popoverPresentationController;
+    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
+    popvc.delegate = self;
+    popvc.sourceView = hvc.view;
+    popvc.barButtonItem = button;
+    [self presentViewController:hvc animated:YES completion:nil];
+}
 
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateBegan)
