@@ -1115,11 +1115,15 @@ stackingButton.userInteractionEnabled = YES;
         NSArray *availableFormats = [cameraController formatsForSelectedCameraNeeding3D:DOING_3D];
         layout = [self chooseLayoutFrom:availableFormats
                                 scaleOK:NO];
+#ifdef DEBUG_LAYOUT
         NSLog(@" score for best unscaled layout: %.1f", layout.score);
+#endif
         if (!layout || layout.score < 0) {
             layout = [self chooseLayoutFrom:availableFormats
                                     scaleOK:YES];
+#ifdef DEBUG_LAYOUT
             NSLog(@"   score for best scaled layout: %.1f", layout.score);
+#endif
         }
         if (!layout)
             NSLog(@"!!! could not layout camera image");
@@ -1483,10 +1487,12 @@ size_t topExecuteStepDisplayed;
 
 // change the size and position of the execute list as needed
 - (void) adjustExecuteDisplay {
-    [self dumpRows:@"adjustExecuteDisplay"];
     long rows = EXECUTE_ROW_COUNT;
+#ifdef DEBUG_EXECUTE
+    [self dumpRows:@"adjustExecuteDisplay"];
     NSLog(@"adjustExecuteDisplay, rows=%ld oldheight=%.0f",
           rows, executeListView.frame.size.height);
+#endif
 
     [UIView animateWithDuration:0.5 animations:^(void) {
         // Adjust the row positions
@@ -1653,8 +1659,9 @@ size_t topExecuteStepDisplayed;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
-    self.navigationController.navigationBarHidden = !self.navigationController.navigationBarHidden;
-    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
+    BOOL hide = !self.navigationController.navigationBarHidden;
+    [self.navigationController setNavigationBarHidden:hide animated:YES];
+    [self.navigationController setToolbarHidden:hide animated:YES];
     return;
     
     overlayState++;

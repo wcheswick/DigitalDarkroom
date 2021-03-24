@@ -234,7 +234,9 @@ NSString * __nullable displayOptionNames[] = {
     
     // adjust and finalize execute display
     if (executeRect.origin.y + executeRect.size.height > containerView.frame.size.height) {
-        NSLog(@"** tighting execute height");
+#ifdef DEBUG_LAYOUT
+        NSLog(@"** tightening execute height");
+#endif
         executeRect.size.height = containerView.frame.size.height - executeRect.origin.y;
     }
     executeRect.origin.x = (displayRect.size.width - executeRect.size.width)/2.0 + displayRect.origin.x;
@@ -316,12 +318,14 @@ NSString * __nullable displayOptionNames[] = {
               rightThumbsOK ? CHECKMARK : @".",
               bottomThumbsOK ? CHECKMARK : @".",
               (wfits & hfits) ? CHECKMARK : @"." ];
+#ifdef DEBUG_LAYOUT
     NSLog(@"%4.0f x %4.0f  %4.2f  %4.0f%%\t%5.1f,%2.0f%%\t%5.1f,%2.0f%%\t%@\t%.0f",
           captureSize.width, captureSize.height, aspectRatio,
           capturePct,
           rightThumbs, rightPct,
           bottomThumbs, bottomPct,
           status, score);
+#endif
     
     // screen %
     //XXX thumbs %
@@ -341,7 +345,9 @@ NSString * __nullable displayOptionNames[] = {
               100.0*scale,
               scaleScore, thumbScore,
               score];
+#ifdef DEBUG_LAYOUT
     NSLog(@"*** final layout status: %@", status);
+#endif
     return score;
 }
 

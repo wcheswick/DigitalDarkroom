@@ -16,7 +16,7 @@
 //#define DEBUG_SOURCE  1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
-#define DEBUG_EXECUTE 1
+//#define DEBUG_EXECUTE 1
 
 #define POINTING_HAND_CHAR  @"☞"
 
