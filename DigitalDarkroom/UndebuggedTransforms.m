@@ -1607,5 +1607,51 @@ void convolution(const Pixel *in, Pixel *out,
 
        // other depths?
        
+       
+       
+#ifdef notyet
+
+    // colorblind
+
+    extern  transform_t op_art;
+    extern  transform_t do_auto;
+    extern  init_proc init_colorize;
+    extern  init_proc init_swapcolors;
+    extern  init_proc init_lum;
+    extern  init_proc init_high;
+    extern  init_proc init_lum;
+    extern  init_proc init_truncatepix;
+    extern  init_proc init_brighten;
+    extern  init_proc init_auto;
+    extern  init_proc init_negative;
+
+    #ifdef notdef
+        for (int y=0; y<height/2; y++) {    // copy bottom
+            for (int x=0; x<width; x++) {
+                *A(image,x,y)] = *A(image,x,height - y - 1)];
+            }
+        }
+
+
+        for (int y=0; y<height/2; y++) {    // copy top
+            for (int x=0; x<width; x++) {
+                pixels[P(x,height - y - 1)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy right
+            for (int y=0; y<height; y++) {
+                pixels[P(width - x - 1,y)] = pixels[P(x,y)];
+            }
+        }
+
+        for (int x=0; x<width/2; x++) { // copy left
+            for (int y=0; y<height; y++) {
+                pixels[P(x,y)] = pixels[P(width - x - 1,y)];
+            }
+        }
+    #endif
+#endif
+
 #endif
        

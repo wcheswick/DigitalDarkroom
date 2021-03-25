@@ -36,7 +36,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
-@property (nonatomic, strong)   ChBuf *sChan, *dChan;
+@property (nonatomic, strong)   ChBuf *chBuf;
 @property (nonatomic, strong)   PixBuf *imBuf0, *imBuf1;
 @property (nonatomic, strong)   NSMutableArray *imBufs;
 
@@ -48,7 +48,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize transformList;
 @synthesize paramList;
 @synthesize targetImageView;
-@synthesize sChan, dChan;
+@synthesize chBuf;
 @synthesize imBufs;
 @synthesize imBuf0, imBuf1;
 @synthesize taskGroup;
@@ -69,7 +69,7 @@ static PixelIndex_t dPI(int x, int y) {
         depthLocked = NO;
         taskStatus = Stopped;
         targetImageView = nil;
-        sChan = dChan = nil;
+        chBuf = nil;
         imBuf0 = imBuf1 = nil;
         imBufs = [[NSMutableArray alloc] initWithCapacity:2];
     }
@@ -174,6 +174,7 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
     imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
+    chBuf = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
     assert(imBuf0);
     assert(imBuf1);
     imBufs[0] = imBuf0;
@@ -320,7 +321,7 @@ static PixelIndex_t dPI(int x, int y) {
             transform.ipPointF(src.pb, src.w*src.h, instance.value);
             return sourceIndex;     // was done in place
         case AreaTrans:
-            transform.areaF(src.pa, dst.pa, src.w, src.h, instance);
+            transform.areaF(src, dst, chBuf, instance);
             break;
         case DepthVis:
             assert(0);  // no depths here, please

@@ -387,20 +387,23 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
-                                areaFunction:^(PixelArray_t src, PixelArray_t dest,
-                                               size_t w, size_t h, TransformInstance *instance) {
-        channel lum[h][w];  // XXX does this variable array work?
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf, TransformInstance *instance) {
+        size_t h = src.h;
+        size_t w = src.w;
+#define L chBuf.ca
+        assert(chBuf.w == w && chBuf.h == h);
         for (int y=1; y<h-1; y++)
             for (int x=1; x<w-1; x++)
-                lum[y][x] = LUM(src[y][x]);
+                L[y][x] = LUM(src.pa[y][x]);
 
         for (int y=1; y<h-1; y++) {
             for (int x=1; x<w-1; x++) {
                 channel aa, bb, s;
-                aa = lum[y-1][x-1] + 2*lum[y-1][x] + lum[y-1][x+1] -
-                     lum[y+1][x-1] - 2*lum[y+1][x] - lum[y+1][x+1];
-                bb = lum[y-1][x-1] + 2*lum[y][x-1] + lum[y+1][x-1] -
-                     lum[y-1][x+1] - 2*lum[y][x+1] - lum[y+1][x+1];
+                aa = L[y-1][x-1] + 2*L[y-1][x] + L[y-1][x+1] -
+                    L[y+1][x-1] - 2*L[y+1][x] - L[y+1][x+1];
+                bb = L[y-1][x-1] + 2*L[y][x-1] + L[y+1][x-1] -
+                    L[y-1][x+1] - 2*L[y][x+1] - L[y+1][x+1];
 
                 channel c;
                 s = sqrt(aa*aa + bb*bb);
@@ -408,7 +411,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     c = Z;
                 else
                     c = s;
-                dest[y][x] = SETRGB(c,c,c);
+                dest.pa[y][x] = SETRGB(c,c,c);
             }
         }
     }];
@@ -417,12 +420,14 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     // this destroys src
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                  description: @"Tom Duff's logo transform"
-                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                size_t w, size_t h, TransformInstance *instance) {
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf, TransformInstance *instance) {
+        size_t h = src.h;
+        size_t w = src.w;
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = LUM(src[y][x]);
-                src[y][x] = SETRGB(c,c,c);
+                channel c = LUM(src.pa[y][x]);
+                src.pa[y][x] = SETRGB(c,c,c);
             }
         }
         
@@ -437,18 +442,18 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             for (int x=0; x < w; x++) {
                 c=0;
                 for(y0=0; y0<hgt; y0++)
-                c += src[y+y0][x].r;
+                c += src.pa[y+y0][x].r;
                 y0 = y+(hgt-1)/2;
                 y1 = y+(hgt-1-(hgt-1)/2);
                 for (; y0 >= y; --y0, ++y1)
-                c = stripe(src, x, y0, y1, c);
+                c = stripe(src.pa, x, y0, y1, c);
             }
         }
         
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = src[y][x].r;
-                dest[y][x] = SETRGB(c, c, c);
+                channel c = src.pa[y][x].r;
+                dest.pa[y][x] = SETRGB(c, c, c);
             }
         }
     }];
@@ -962,9 +967,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform areaTransform: @"Tin Type"
                                  description: @"Edge detection"
-                                areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                                size_t w, size_t h, TransformInstance *instance) {
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf, TransformInstance *instance) {
         Pixel p = {0,0,0,Z};
+        size_t h = src.h;
+        size_t w = src.w;
 
         for (int y=0; y<h; y++) {
             int x;
@@ -973,18 +980,18 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                 int r, g, b;
                 long xin = (x+2) >= w ? w - 1 : x+2;
                 long yin = (y+2) >= h ? h - 1 : y+2;
-                pin = src[yin][xin];
-                r = src[y][x].r + Z/2 - pin.r;
-                g = src[y][x].g + Z/2 - pin.g;
-                b = src[y][x].b + Z/2 - pin.b;
+                pin = src.pa[yin][xin];
+                r = src.pa[y][x].r + Z/2 - pin.r;
+                g = src.pa[y][x].g + Z/2 - pin.g;
+                b = src.pa[y][x].b + Z/2 - pin.b;
                 p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
-                dest[y][x] = p;
+                dest.pa[y][x] = p;
             }
-            dest[y][x-3] = Grey;
-            dest[y][x-2] = Grey;
-            dest[y][x-1] = Grey;
-            dest[y][x  ] = Grey;
-            dest[y][x+1] = Grey;
+            dest.pa[y][x-3] = Grey;
+            dest.pa[y][x-2] = Grey;
+            dest.pa[y][x-1] = Grey;
+            dest.pa[y][x  ] = Grey;
+            dest.pa[y][x+1] = Grey;
         }
     }];
     [self addTransform:lastTransform];
@@ -1171,49 +1178,5 @@ irand(int i) {
     [self addTransform:lastTransform];
     
 }
-
-#ifdef notyet
-
-    // colorblind
-
-    extern  transform_t op_art;
-    extern  transform_t do_auto;
-    extern  init_proc init_colorize;
-    extern  init_proc init_swapcolors;
-    extern  init_proc init_lum;
-    extern  init_proc init_high;
-    extern  init_proc init_lum;
-    extern  init_proc init_truncatepix;
-    extern  init_proc init_brighten;
-    extern  init_proc init_auto;
-    extern  init_proc init_negative;
-
-    #ifdef notdef
-        for (int y=0; y<height/2; y++) {    // copy bottom
-            for (int x=0; x<width; x++) {
-                *A(image,x,y)] = *A(image,x,height - y - 1)];
-            }
-        }
-
-
-        for (int y=0; y<height/2; y++) {    // copy top
-            for (int x=0; x<width; x++) {
-                pixels[P(x,height - y - 1)] = pixels[P(x,y)];
-            }
-        }
-
-        for (int x=0; x<width/2; x++) { // copy right
-            for (int y=0; y<height; y++) {
-                pixels[P(width - x - 1,y)] = pixels[P(x,y)];
-            }
-        }
-
-        for (int x=0; x<width/2; x++) { // copy left
-            for (int y=0; y<height; y++) {
-                pixels[P(x,y)] = pixels[P(width - x - 1,y)];
-            }
-        }
-    #endif
-#endif
 
 @end

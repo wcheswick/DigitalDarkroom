@@ -12,6 +12,7 @@
 #import "PixBuf.h"
 #import "RemapBuf.h"
 #import "DepthBuf.h"
+#import "ChBuf.h"
 #import "TransformInstance.h"
 #import "Defines.h"
 
@@ -49,8 +50,10 @@ typedef void (^ __nullable __unsafe_unretained
 #endif
 
 typedef void (^ __nullable __unsafe_unretained
-              areaFunction_t)(PixelArray_t src, PixelArray_t dest,
-                              size_t w, size_t h, TransformInstance * __nullable instance);
+              areaFunction_t)(PixBuf *src,
+                              PixBuf *dest,
+                              ChBuf *chBuf,
+                              TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
               depthVis_t)(const DepthBuf *depthBuf,

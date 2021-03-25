@@ -80,12 +80,6 @@
         [taskGroup layoutCompleted];
 }
 
-- (void) configureForSize:(CGSize) ts {
-}
-
-- (void) configureForImage:(UIImage *) image {
-}
-
 // not used, taskStatus needs to be right
 - (void) executeTasksWithImage:(UIImage *)image {
     for (TaskGroup *taskGroup in taskGroups) {

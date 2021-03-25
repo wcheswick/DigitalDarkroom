@@ -24,7 +24,7 @@ typedef channel *_Nullable *_Nonnull ChannelArray_t;
 @property (assign)  ChannelArray_t ca;
 @property (assign)  channel *cb;
 
-- (id) initForWidth:(size_t) w height:(size_t)h;
+- (id)initWithSize:(CGSize)s;
 
 @end
 
