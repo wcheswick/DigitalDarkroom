@@ -114,6 +114,8 @@
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance {
+    NSLog(@"transform name: %@", transform.name);
+    NSLog(@"         value: %d", instance.value);
     NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, instance.value];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
     if (remapBuf) {

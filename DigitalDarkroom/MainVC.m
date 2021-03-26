@@ -1695,16 +1695,20 @@ size_t topExecuteStepDisplayed;
     NSURL *helpURL = [NSURL fileURLWithPath:
                       [[NSBundle mainBundle] pathForResource:@"help.html" ofType:@""]];
     assert(helpURL);
-    HelpVC *hvc = [[HelpVC alloc] initWithURL:helpURL];
+    HelpVC *hvc __block = [[HelpVC alloc] initWithURL:helpURL];
     hvc.modalPresentationStyle = UIModalPresentationPopover;
-    hvc.preferredContentSize = CGSizeMake(320, 300);
+    [self presentViewController:hvc animated:YES completion:^{
+//        [hvc.view removeFromSuperview];
+        hvc = nil;
+    }];
+
+//    hvc.preferredContentSize = CGSizeMake(100, 200);
     
-    UIPopoverPresentationController *popvc = hvc.popoverPresentationController;
-    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
-    popvc.delegate = self;
-    popvc.sourceView = hvc.view;
-    popvc.barButtonItem = button;
-    [self presentViewController:hvc animated:YES completion:nil];
+    UIPopoverPresentationController *popController = hvc.popoverPresentationController;
+    //    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
+    //    popvc.sourceView = hvc.view;
+    popController.delegate = self;
+    popController.barButtonItem = button;
 }
 
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {

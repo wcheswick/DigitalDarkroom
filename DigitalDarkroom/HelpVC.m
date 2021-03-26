@@ -14,6 +14,7 @@
 
 @property (nonatomic, strong)   WKWebView *webView;
 @property (nonatomic, strong)   NSURL *startURL;
+@property (weak) UIViewController *lastPresentedController;
 
 @end
 
@@ -21,6 +22,7 @@
 
 @synthesize webView;
 @synthesize startURL;
+@synthesize lastPresentedController;
 
 - (id)initWithURL:(NSURL *) sURL {
     self = [super init];
@@ -39,7 +41,9 @@
     [super viewDidLoad];
 
     self.title = @"Documentation";
-     
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.navigationBar.opaque = YES;
+
      UIBarButtonItem *leftBarButton = [[UIBarButtonItem alloc]
                                        initWithBarButtonSystemItem:UIBarButtonSystemItemDone
                                        target:self action:@selector(doDone:)];
@@ -47,7 +51,7 @@
 }
 
 - (IBAction)doDone:(UISwipeGestureRecognizer *)sender {
-    [self.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+    [webView removeFromSuperview];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
