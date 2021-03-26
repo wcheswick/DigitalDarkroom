@@ -80,12 +80,201 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) buildTransformList {
     [self addDepthVisualizations];
+    [self addTestTransforms];
     [self addPolarTransforms];
     [self addGeometricTransforms];
-    [self addTestTransforms];   // empty
     [self addArtTransforms];
     [self addAreaTransforms];   // manu unimplemented
     [self addPointTransforms];  // working:
+}
+
+// derived from Gerard's original code
+void
+sobel(ChBuf *s, ChBuf *d) {
+    long H = s.h;
+    long W = s.w;
+    for (int y=1; y<H-1-1; y++) {
+        for (int x=1; x<W-1-1; x++) {
+            int aa, bb;
+            aa = s.ca[y-1][x-1] + s.ca[y][x-1]*2 + s.ca[y+1][x-1] -
+                s.ca[y-1][x+1] - s.ca[y][x+1]*2 - s.ca[y+1][x+1];
+            bb = s.ca[y-1][x-1] + s.ca[y-1][x]*2 +
+                s.ca[y-1][x+1] -
+                s.ca[y+1][x-1] - s.ca[y+1][x]*2 -
+                s.ca[y+1][x+1];
+            int diff = sqrt(aa*aa + bb*bb);
+            if (diff > Z)
+                d.ca[y][x] = Z;
+            else
+                d.ca[y][x] = diff;
+        }
+    }
+}
+
+// if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
+// we use the a channel of our pixel buffers.
+
+void convolution(ChBuf *in, ChBuf *out,
+                 const float *kernel, const int kn, const BOOL normalize) {
+    long W = in.w;
+    long H = in.h;
+    assert(kn % 2 == 1);
+    assert(W > kn && H > kn);
+    const int khalf = kn / 2;
+    float min = FLT_MAX, max = -FLT_MAX;
+    
+    if (normalize) {
+        for (int x = khalf; x < W - khalf; x++) {
+            for (int y = khalf; y < H - khalf; y++) {
+                float chan = 0.0;
+                size_t c = 0;
+                for (int j = -khalf; j <= khalf; j++) {
+                    for (int i = -khalf; i <= khalf; i++) {
+                        chan += in.ca[y-j][x-i] * kernel[c];
+                        c++;
+                    }
+                }
+                if (chan < min)
+                    min = chan;
+                if (chan > max)
+                    max = chan;
+            }
+        }
+    }
+ 
+    for (int x = khalf; x < W - khalf; x++) {
+        for (int y = khalf; y < H - khalf; y++) {
+            float chan = 0.0;
+            size_t c = 0;
+            for (int j = -khalf; j <= khalf; j++)
+                for (int i = -khalf; i <= khalf; i++) {
+                    chan += in.ca[y-j][x-i] * kernel[c];
+                    c++;
+                }
+            if (normalize)
+                chan = Z * (chan - min) / (max - min);
+            out.ca[y][x] = chan;
+        }
+    }
+}
+
+- (void) addTestTransforms {
+    lastTransform = [Transform areaTransform: @"Monochrome Sobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = src.w;
+        long H = src.h;
+        for (int i=0; i<src.h*src.w; i++) {
+            chBuf0.cb[i] = LUM(src.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                channel d = chBuf1.ca[y][x];
+                dest.pa[y][x] = SETRGB(d,d,d);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Negative Sobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = src.w;
+        long H = src.h;
+        for (int i=0; i<src.h*src.w; i++) {
+            chBuf0.cb[i] = LUM(src.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                channel d = Z - chBuf1.ca[y][x];
+                dest.pa[y][x] = SETRGB(d,d,d);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    // channel-based
+    lastTransform = [Transform areaTransform: @"Color Sobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long N = src.w * src.h;
+        for (int i=0; i<N; i++) { // do the red channel
+            chBuf0.cb[i] = src.pb[i].r;
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) {
+            dest.pb[i].r = chBuf1.cb[i];     // store red...
+            chBuf0.cb[i] = src.pb[i].g;     // ... and get green
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dest.pb[i].g = chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = src.pb[i].b;     // ... and get blue
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dest.pb[i].b = chBuf1.cb[i];     // store blue
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    // channel-based
+    lastTransform = [Transform areaTransform: @"Negative Color Sobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long N = src.w * src.h;
+        for (int i=0; i<N; i++) { // do the red channel
+            chBuf0.cb[i] = src.pb[i].r;
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) {
+            dest.pb[i].r = Z - chBuf1.cb[i];     // store red...
+            chBuf0.cb[i] = src.pb[i].g;     // ... and get green
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dest.pb[i].g = Z - chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = src.pb[i].b;     // ... and get blue
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dest.pb[i].b = Z - chBuf1.cb[i];     // store blue
+        }
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"convolution sobel filter "
+                                description: @"Edge detection"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+
+        for (int i=0; i<src.h*src.w; i++) {
+            chBuf0.cb[i] = LUM(src.pb[i]);
+        }
+        const float Gx[] = {-1, 0, 1,
+                            -2, 0, 2,
+                            -1, 0, 1};
+        convolution(chBuf0, chBuf1, Gx, 3, NO);
+     
+        const float Gy[] = { 1, 2, 1,
+                             0, 0, 0,
+                            -1,-2,-1};
+        convolution(chBuf1, chBuf0, Gy, 3, NO);
+        
+        for (int i=0; i<src.h*src.w; i++) {
+            int c = chBuf0.cb[i];
+            dest.pb[i] = SETRGB(c,c,c);
+        }
+    }];
+    [self addTransform:lastTransform];
 }
 
 - (void) addTransform:(Transform *)transform {
@@ -121,9 +310,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     buf[p0][x].r = c/2;
     buf[p1][x].r = c - c/2;
     return 0;
-}
-
-- (void) addTestTransforms {
 }
 
 
@@ -388,11 +574,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf, TransformInstance *instance) {
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         size_t h = src.h;
         size_t w = src.w;
-#define L chBuf.ca
-        assert(chBuf.w == w && chBuf.h == h);
+#define L chBuf0.ca
+        assert(chBuf0.w == w && chBuf0.h == h);
         for (int y=1; y<h-1; y++)
             for (int x=1; x<w-1; x++)
                 L[y][x] = LUM(src.pa[y][x]);
@@ -421,7 +607,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                  description: @"Tom Duff's logo transform"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf, TransformInstance *instance) {
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         size_t h = src.h;
         size_t w = src.w;
         for (int y=0; y<h; y++) {
@@ -968,7 +1154,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Tin Type"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf, TransformInstance *instance) {
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         Pixel p = {0,0,0,Z};
         size_t h = src.h;
         size_t w = src.w;

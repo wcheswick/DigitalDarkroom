@@ -282,38 +282,6 @@ lastTransform = [Transform areaTransform: @"Old blur"
     }
 }];
 [self addTransform:lastTransform];
-// channel-based
-    lastTransform = [Transform areaTransform: @"Color Sobel"
-                                          description: @"Edge detection"
-                                        areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int w, int h) {
-        for (int y=0; y<h; y++) {    // red
-            for (int x=0; x<w; x++) {
-                sChan[x][y] = srcBuf[PI(x,y)].r;
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].r = dChan[x][y];    // install red
-                sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].g = dChan[x][y];    // install green
-                sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
-            }
-        }
-        sobel(sChan, dChan);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-    ADD_TO_OLIVE(lastTransform);
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"
@@ -912,51 +880,6 @@ min3(Pixel p) {
         // move image
     }
 
-
-// if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
-// we use the a channel of our pixel buffers.
-
-void convolution(const Pixel *in, Pixel *out,
-                 const float *kernel, const int kn, const BOOL normalize) {
-    assert(kn % 2 == 1);
-    assert(W > kn && H > kn);
-    const int khalf = kn / 2;
-    float min = FLT_MAX, max = -FLT_MAX;
-    
-    if (normalize) {
-        for (int x = khalf; x < W - khalf; x++) {
-            for (int y = khalf; y < H - khalf; y++) {
-                float pixel = 0.0;
-                size_t c = 0;
-                for (int j = -khalf; j <= khalf; j++) {
-                    for (int i = -khalf; i <= khalf; i++) {
-                        pixel += in[PI(x - i, y - j)].a * kernel[c];
-                        c++;
-                    }
-                }
-                if (pixel < min)
-                    min = pixel;
-                if (pixel > max)
-                    max = pixel;
-            }
-        }
-    }
- 
-    for (int x = khalf; x < W - khalf; x++) {
-        for (int y = khalf; y < H - khalf; y++) {
-            float pixel = 0.0;
-            size_t c = 0;
-            for (int j = -khalf; j <= khalf; j++)
-                for (int i = -khalf; i <= khalf; i++) {
-                    pixel += in[PI(x - i, y - j)].a * kernel[c];
-                    c++;
-                }
-            if (normalize)
-                pixel = Z * (pixel - min) / (max - min);
-            out[PI(x, y)].a = (channel)pixel;
-        }
-    }
-}
 
     lastTransform = [Transform areaTransform: @"Shower stall"
                                   description: @"Through the wet glass"

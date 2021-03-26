@@ -52,7 +52,7 @@ typedef void (^ __nullable __unsafe_unretained
 typedef void (^ __nullable __unsafe_unretained
               areaFunction_t)(PixBuf *src,
                               PixBuf *dest,
-                              ChBuf *chBuf,
+                              ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
