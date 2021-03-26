@@ -88,29 +88,6 @@ static PixelIndex_t dPI(int x, int y) {
     [self addPointTransforms];  // working:
 }
 
-// derived from Gerard's original code
-void
-sobel(ChBuf *s, ChBuf *d) {
-    long H = s.h;
-    long W = s.w;
-    for (int y=1; y<H-1-1; y++) {
-        for (int x=1; x<W-1-1; x++) {
-            int aa, bb;
-            aa = s.ca[y-1][x-1] + s.ca[y][x-1]*2 + s.ca[y+1][x-1] -
-                s.ca[y-1][x+1] - s.ca[y][x+1]*2 - s.ca[y+1][x+1];
-            bb = s.ca[y-1][x-1] + s.ca[y-1][x]*2 +
-                s.ca[y-1][x+1] -
-                s.ca[y+1][x-1] - s.ca[y+1][x]*2 -
-                s.ca[y+1][x+1];
-            int diff = sqrt(aa*aa + bb*bb);
-            if (diff > Z)
-                d.ca[y][x] = Z;
-            else
-                d.ca[y][x] = diff;
-        }
-    }
-}
-
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
 // we use the a channel of our pixel buffers.
 
@@ -158,7 +135,90 @@ void convolution(ChBuf *in, ChBuf *out,
     }
 }
 
+// derived from Gerard's original code
+void
+sobel(ChBuf *s, ChBuf *d) {
+    long H = s.h;
+    long W = s.w;
+    for (int y=1; y<H-1-1; y++) {
+        for (int x=1; x<W-1-1; x++) {
+            int aa, bb;
+            aa = s.ca[y-1][x-1] + s.ca[y][x-1]*2 + s.ca[y+1][x-1] -
+                s.ca[y-1][x+1] - s.ca[y][x+1]*2 - s.ca[y+1][x+1];
+            bb = s.ca[y-1][x-1] + s.ca[y-1][x]*2 +
+                s.ca[y-1][x+1] -
+                s.ca[y+1][x-1] - s.ca[y+1][x]*2 -
+                s.ca[y+1][x+1];
+            int diff = sqrt(aa*aa + bb*bb);
+            if (diff > Z)
+                d.ca[y][x] = Z;
+            else
+                d.ca[y][x] = diff;
+        }
+    }
+}
+
+// Gerard's original code
+void
+focus(ChBuf *s, ChBuf *d) {
+    long H = s.h;
+    long W = s.w;
+    for (int y=1; y<H-1; y++) {
+        for (int x=1; x<W-1; x++) {
+            int c =
+                5*s.ca[y][x] -
+                  s.ca[y][x+1] -
+                  s.ca[y][x-1] -
+                  s.ca[y-1][x] -
+                  s.ca[y+1][x];
+            d.ca[y][x] = CLIP(c);
+        }
+    }
+}
+
 - (void) addTestTransforms {
+    lastTransform = [Transform areaTransform: @"Charcoal sketch"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        // monochrome sobel...
+        long N = src.w * src.h;
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = LUM(src.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+
+        // ... + negative + high contrast...
+        u_long hist[Z+1];
+        float map[Z+1];
+        for (int i = 0; i < Z+1; i++)
+            hist[i] = 0;
+        
+        for (int i=0; i<N; i++) {
+            channel c = Z - chBuf1.cb[i];
+            hist[c]++;
+        }
+        u_long ps = 0;
+        for (int i = 0; i < Z+1; i++) {
+            map[i] = Z*((float)ps/((float)N));
+            ps += hist[i];
+        }
+        for (int i=0; i<N; i++) {
+            channel c = chBuf1.cb[i];
+            float a = (map[c] - c)/Z;
+            chBuf0.cb[i] = CLIP(a*(Z - c));
+        }
+        
+        focus(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) {   // apply autocontrast
+            channel c = chBuf1.cb[i];
+            c = CLIP((c-HALF_Z)*2+HALF_Z);
+            dest.pb[i] = SETRGB(c,c,c);
+        }
+    }];
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Monochrome Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,

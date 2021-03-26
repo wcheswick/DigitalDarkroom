@@ -215,42 +215,6 @@ fs(int depth, int buf[W][H]) {
     }
 }
 
-void
-focus(channel *s[(int)H], channel *d[(int)H]) {
-    for (int y=1; y<H-1; y++) {
-        for (int x=1; x<W-1; x++) {
-            int c =
-                5*s[x][y] -
-                s[x+1][y] -
-                s[x-1][y] -
-                s[x][y-1] -
-                s[x][y+1];
-            d[x][y] = CLIP(c);
-        }
-    }
-}
-
-void
-sobel(channel *s[(int)H], channel *d[(int)H]) {
-    for (int y=1; y<H-1-1; y++) {
-        for (int x=1; x<W-1-1; x++) {
-            int aa, bb;
-            aa = s[x-1][y-1] + s[x-1][y]*2 + s[x-1][y+1] -
-                s[x+1][y-1] - s[x+1][y]*2 - s[x+1][y+1];
-            bb = s[x-1][y-1] + s[x][y-1]*2 +
-                s[x+1][y-1] -
-                s[x-1][y+1] - s[x][y+1]*2 -
-                s[x+1][y+1];
-            int diff = sqrt(aa*aa + bb*bb);
-            if (diff > Z)
-                d[x][y] = Z;
-            else
-                d[x][y] = diff;
-        }
-    }
-}
-
-
 // not very blurry
 
 
