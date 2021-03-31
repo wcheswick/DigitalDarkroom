@@ -29,6 +29,7 @@
     if (self) {
         mainVC = nil;
         taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
+        assert(taskGroups);
         layoutNeeded = YES;
         layingOut = NO;
         reconfiguring = 0;

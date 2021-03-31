@@ -72,6 +72,7 @@ static PixelIndex_t dPI(int x, int y) {
         chBuf0 = chBuf1 = nil;
         imBuf0 = imBuf1 = nil;
         imBufs = [[NSMutableArray alloc] initWithCapacity:2];
+        assert(imBufs);
     }
     return self;
 }
@@ -137,7 +138,6 @@ static PixelIndex_t dPI(int x, int y) {
                                    initFromTransform:(Transform *)transform];
     [paramList addObject:instance];
     long newIndex = transformList.count - 1;
-    [self configureTransformAtIndex:newIndex];
     return newIndex;
 }
 
@@ -174,40 +174,43 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
     imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
-    chBuf0 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
-    chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
     assert(imBuf0);
     assert(imBuf1);
     imBufs[0] = imBuf0;
     imBufs[1] = imBuf1;
+    
+    chBuf0 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
+    chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
+    assert(chBuf0);
+    assert(chBuf1);
     for (int i=1; i<transformList.count; i++) { // XXX not depth viz
         [self configureTransformAtIndex:i];
     }
 }
 
 - (void) configureTransformAtIndex:(size_t)index {
-#ifdef DEBUG_TASK_CONFIGURATION
     CGSize s = taskGroup.transformSize;
-    NSLog(@"    TT  %-15@   configureTransform  %zu size %.0f x %.0f", taskName, ti, s.width, s.height);
+#ifdef DEBUG_TASK_CONFIGURATION
+    NSLog(@"    TT %-15@   configureTransform  %zu size %.0f x %.0f", taskName, index, s.width, s.height);
 #endif
+    assert(s.width > 0 && s.height > 0);
     //    assert(taskStatus == Stopped);
     assert(index > DEPTH_TRANSFORM);
     Transform *transform = transformList[index];
     TransformInstance *instance = paramList[index];
-    
+
     switch (transform.type) {
         case RemapTrans:
         case RemapPolarTrans:
+            instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
+            //    assert(taskStatus == Stopped);
+#ifdef DEBUG_TASK_CONFIGURATION
+            NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
+#endif
             break;
         default:
-            return;
+            ;
     }
-    instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
-    //    assert(taskStatus == Stopped);
-#ifdef DEBUG_TASK_CONFIGURATION
-    CGSize s = taskGroup.transformSize;
-    NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
-#endif
 }
 
 - (void) removeTransformAtIndex:(long) index {
@@ -245,6 +248,11 @@ static PixelIndex_t dPI(int x, int y) {
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
     [srcBuf copyPixelsTo:imBuf0];
+#ifdef ONLY_RED
+    for (int i=0; i<imBuf0.w*imBuf0.h; i++)
+        imBuf0.pb[i] = Red;
+    onlyRed = YES;
+#endif
     [self executeTransformsStartingWithImBuf0];
 }
 
@@ -255,6 +263,7 @@ static PixelIndex_t dPI(int x, int y) {
         return;
     }
     
+//    NSLog(@"transforming %@ to %zu x %zu", self.taskName, imBuf0.w, imBuf0.h);
     NSDate *startTime = [NSDate now];
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
@@ -271,6 +280,7 @@ static PixelIndex_t dPI(int x, int y) {
                                source:sourceIndex];
         assert(destIndex == 0 || destIndex == 1);
         sourceIndex = destIndex;
+        NSLog(@"                                            EEElapsed: %10.3f", [startTime timeIntervalSinceNow]);
         NSDate *transformEnd = [NSDate now];
         instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
         instance.timesCalled++;
@@ -287,6 +297,11 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) updateTargetWith:(const PixBuf *)pixBuf {
+    NSLog(@" pixBuf.pa[0][0] [30][30] [49][49] = %08x %08x %08x",
+          *(uint32_t *)&pixBuf.pa[10][10],
+          *(uint32_t *)&pixBuf.pa[30][30],
+          *(uint32_t *)&pixBuf.pa[49][49]);
+
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
     NSUInteger bytesPerRow = bytesPerPixel * pixBuf.w;

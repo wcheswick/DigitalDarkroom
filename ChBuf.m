@@ -29,6 +29,7 @@
         assert(rowSize % sizeof(int) == 0);   // must fit in ints
         size_t arraySize = sizeof(channel *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
+        assert(buffer);
         ca = (ChannelArray_t)buffer.bytes;
         cb = (channel *)buffer.bytes + arraySize;
         channel *rowPtr = cb;

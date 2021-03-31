@@ -1286,6 +1286,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) placeThumbsForLayout:(Layout *)layout {
     nextButtonFrame = layout.firstThumbRect;
+    assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
     atStartOfRow = YES;
@@ -1419,7 +1420,8 @@ size_t topExecuteStepDisplayed;
     assert(nextAppendRowView);
     
     if (IS_EMPTY_ROW(nextAppendRowView)) {
-        [screenTask appendTransformToTask:tappedTransform];
+        long step = [screenTask appendTransformToTask:tappedTransform];
+        [screenTask configureTransformAtIndex:step];
         [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
         if (options.stackingMode) { // append an empty cell for next transform
             nextExecuteAppendStep = [self appendEmptyRow];
@@ -1436,7 +1438,8 @@ size_t topExecuteStepDisplayed;
             // current transform just retapped.  Empty it, and done
             [nextAppendRowView makeRowEmpty];
         } else {
-            [screenTask appendTransformToTask:tappedTransform];
+            long step = [screenTask appendTransformToTask:tappedTransform];
+            [screenTask configureTransformAtIndex:step];
             [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
         }
     }
@@ -1917,8 +1920,8 @@ if captureDevice.position == AVCaptureDevicePosition.front {
 - (void) doTransformsOn:(UIImage *)sourceImage {
     [screenTasks executeTasksWithImage:sourceImage];
 
-    if (DISPLAYING_THUMBS)
-        [thumbTasks executeTasksWithImage:sourceImage];
+//    if (DISPLAYING_THUMBS)
+//        [thumbTasks executeTasksWithImage:sourceImage];
 }
     
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
@@ -1965,16 +1968,6 @@ UIImageOrientation lastOrientation;
 #endif
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
-#ifdef DEBUG_TASK_CONFIGURATION
-    if (!haveOrientation) {
-        lastOrientation = orientation;
-        NSLog(@" OOOO first capture orientation is %ld", (long)orientation);
-        haveOrientation = YES;
-    } else if (orientation != lastOrientation) {
-        NSLog(@" OOOO new capture orientation: %ld", (long)orientation);
-        lastOrientation = orientation;
-    }
-#endif
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     

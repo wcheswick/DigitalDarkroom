@@ -12,6 +12,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+
 typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 
 @interface PixBuf : NSMutableData {
@@ -27,6 +28,9 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 - (id)initWithSize:(CGSize)s;
 - (void) copyPixelsTo:(PixBuf *) dest;
 - (void) verify;
+
+- (void) assertPaInrange: (int) y x:(int)x;
+- (Pixel) check_get_Pa:(int) y X:(int)x;
 
 @end
 

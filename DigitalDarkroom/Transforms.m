@@ -13,7 +13,7 @@
 #import "RemapBuf.h"
 #import "Defines.h"
 
-// #define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define LUM(p)  (channel)((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -29,6 +29,7 @@
 
 #define RPI(x,y)    (PixelIndex_t)(((y)*self->execute.bytesPerRow) + (x*sizeof(Pixel)))
 
+#ifdef NOTUSED
 #ifdef DEBUG_TRANSFORMS
 // Some of our transforms might be a little buggy around the edges.  Make sure
 // all the indicies are in range.
@@ -48,6 +49,11 @@ static PixelIndex_t dPI(int x, int y) {
 #else
 #define PI(x,y)   RPI((x),(y))
 #endif
+#endif
+
+//BOOL oilfunction = NO;
+//Transform *oilTransform = nil;
+BOOL onlyRed = NO;
 
 @interface Transforms ()
 
@@ -78,10 +84,23 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+#ifdef NOTDEF
++ (void) checkTheOil {
+    if (!oilfunction) {
+        return;
+    }
+    return;
+//    NSLog(@" oil Transform is %p", oilTransform );
+//    NSLog(@" area function at %p", oilTransform.areaF );
+}
+#endif
+
 - (void) buildTransformList {
     [self addDepthVisualizations];
     [self addTestTransforms];
+    
     [self addPolarTransforms];
+
     [self addGeometricTransforms];
     [self addArtTransforms];
     [self addAreaTransforms];   // manu unimplemented
@@ -176,7 +195,589 @@ focus(ChBuf *s, ChBuf *d) {
     }
 }
 
+- (NSString *) showPixel:(Pixel) p {
+    return [NSString stringWithFormat:@"%02x %02x %02x %02x ", p.r, p.g, p.b, p.a];
+}
+
+#ifdef DEBUG_TRANSFORMS
+#define GET_PA(p, y, x) [p check_get_Pa: y X:x];
+#else
+#define GET_PA(p, y, x) (p).pa[y][x]
+#endif
+
+#define DA(d,y,x)    (d).pa[y][x]
+#define DB(d,y,x)    (d).pb[(y)*(d).w + (x)]
+#define D(d,y,x)    DA(d,y,x)
+
 - (void) addTestTransforms {
+    
+    typedef struct {
+        u_int rh[Z+1], gh[Z+1], bh[Z+1];
+    } Hist_t;
+
+    lastTransform = [Transform areaTransform: @"Delta Old oil"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        int x, y, dx, dy;
+        int oilD = 1 << instance.value; // powers of two
+        Hist_t hists;
+
+        long W = src.w;
+        long H = src.h;
+        for (y=0; y<H; y++) {
+            for (x=0; x<oilD; x++) {
+                dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
+            }
+            if (y < oilD || y > H - oilD)
+                for (int x=0; x < W; x++)
+                    dest.pa[y][x] = White;
+        }
+        for (y=oilD; y<H-oilD; y++) {
+            for (x=oilD; x<W-oilD; x++) {
+                Pixel p = {0,0,0,Z};
+                int rmax=0, gmax=0, bmax=0;
+
+                memset(&hists, 0, sizeof(hists));
+                
+                for (dy=y-oilD; dy < y+oilD; dy++)
+                    for (dx=x-oilD; dx <x+oilD; dx++) {
+                        Pixel p = src.pa[dy][dx];
+                        hists.rh[p.r]++;
+                        hists.gh[p.g]++;
+                        hists.bh[p.b]++;
+                    }
+                for (dx=0; dx<=Z; dx++) {
+                    if (hists.rh[dx] > rmax) {
+                        p.r = dx;
+                        rmax = hists.rh[dx];
+                    }
+                    if (hists.gh[dx] > gmax) {
+                        p.g = dx;
+                        gmax = hists.gh[dx];
+                    }
+                    if (hists.bh[dx] > bmax) {
+                        p.b = dx;
+                        bmax = hists.bh[dx];
+                    }
+                }
+                dest.pa[y][x] = p;
+            }
+        }
+    }];
+    lastTransform.low = 1;      // 2^1
+    lastTransform.value = 2;    // 2^2
+    lastTransform.high = 4;     // 2^4
+    lastTransform.hasParameters = YES;
+    NSLog(@" **** install areaTransform %@, %p:", lastTransform.name, lastTransform.areaF);
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Old oil"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        int x, y, dx, dy;
+        u_int rh[Z+1], gh[Z+1], bh[Z+1];
+        int oilD = 1 << instance.value; // powers of two
+
+        long W = src.w;
+        long H = src.h;
+        for (y=0; y<H; y++) {
+            for (x=0; x<oilD; x++) {
+                dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
+            }
+            if (y < oilD || y > H - oilD)
+                for (int x=0; x < W; x++)
+                    dest.pa[y][x] = White;
+        }
+        for (y=oilD; y<H-oilD; y++) {
+            for (x=oilD; x<W-oilD; x++) {
+                Pixel p = {0,0,0,Z};
+                int rmax=0, gmax=0, bmax=0;
+
+                for (dx=0; dx<=Z; dx++)
+                    rh[dx] = bh[dx] = gh[dx] = 0;
+                for (dy=y-oilD; dy < y+oilD; dy++)
+                    for (dx=x-oilD; dx <x+oilD; dx++) {
+                        Pixel p = src.pa[dy][dx];
+                        rh[p.r]++;
+                        gh[p.g]++;
+                        bh[p.b]++;
+                    }
+                for (dx=0; dx<=Z; dx++) {
+                    if (rh[dx] > rmax) {
+                        p.r = dx;
+                        rmax = rh[dx];
+                    }
+                    if (gh[dx] > gmax) {
+                        p.g = dx;
+                        gmax = gh[dx];
+                    }
+                    if (bh[dx] > bmax) {
+                        p.b = dx;
+                        bmax = bh[dx];
+                    }
+                }
+                dest.pa[y][x] = p;
+            }
+        }
+    }];
+    lastTransform.low = 1;      // 2^1
+    lastTransform.value = 2;    // 2^2
+    lastTransform.high = 4;     // 2^4
+    lastTransform.hasParameters = YES;
+    NSLog(@" **** install areaTransform %@, %p:", lastTransform.name, lastTransform.areaF);
+    [self addTransform:lastTransform];
+    
+    
+    /* timings for oil on digitalis:
+     *
+     *                  Z    param    f/s
+     * original oil     31    3    ~7.0
+     *
+     * original oil     255    3    1.2
+     *
+     * new oil        255    3    2.5
+     * new oil        255    2    2.7
+     * new oil        255    1    2.7    seurat-like
+     *
+     * new oil        31    3    5.8    notable loss of detail
+     * new oil        31    2    6.5    better detail than N==3
+     * new oil        31    1    7.2    looks more like seurat
+     *
+     * new oil        15    2    7.6    isophots visible
+     */
+    
+    // This is much faster than the simple version, above.  Why? Two reasons:
+    // - we truncate the pixel values making the table much smaller, no, this doesn't speed it up.
+    // - we travel through the pixels boustrophedonically (as an ox plows a field).
+    
+    lastTransform = [Transform areaTransform: @"Oil paint"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        int x, y, dx, dy, dz;
+        int rmax, gmax, bmax;
+        Hist_t hist;
+        u_int rh[Z+1], gh[Z+1], bh[Z+1];
+
+        int oilD = 1 << instance.value; // powers of two
+  
+        if (onlyRed) {  // check initial conditions
+            Pixel p;
+            for (int y=0; y<src.h; y++) {
+                for (int x=0; x<src.w/2; x++) {
+                    p = src.pa[y][x];
+                    assert(p.r == Z);
+                    assert(!p.g && !p.b);
+                }
+            }
+            
+            for (int i=0; i<src.w * src.h; i++) {
+                p = src.pb[i];
+                assert(p.r == Z);
+                assert(!p.g && !p.b);
+            }
+        }
+
+        long W = src.w;
+        long H = src.h;
+        for (y=0; y<H; y++) {
+            for (x=0; x<oilD; x++) {
+                D(dest,y,x) = onlyRed ? Red : White;
+                D(dest,y,W - x - 1) = onlyRed ? Red : White;
+            }
+            if (y < oilD || y > H - oilD)
+                for (int x=0; x < W; x++)
+//            dest.pa[y][x] = onlyRed ? Red : White;
+            D(dest,y,x) = onlyRed ? Red : White;
+
+        }
+        for (dz=0; dz<Z; dz++)
+            rh[dz] = bh[dz] = gh[dz] = 0;
+
+        /*
+         * Initialize our histogram with the upper left NxN pixels
+         */
+        y=oilD;
+        x=oilD;
+        for (dy=y-oilD; dy<=y+oilD; dy++) {
+            for (dx=x-oilD; dx<=x+oilD; dx++) {
+                assert(dx >= 0 && dx < W && dy >= 0 && dy < H);
+                Pixel p = src.pa[dy][dx];
+                rh[p.r]++;
+                if (onlyRed) {
+                    assert(p.r == Z);
+                    assert(!p.g);
+                    assert(!p.b);
+                }
+                gh[p.g]++;
+                bh[p.b]++;
+            }
+        }
+        rmax = gmax = bmax = 0;
+        Pixel p = Black;
+        for (dz=0; dz<Z; dz++) {    // find the maximum value encountered for each color
+            if (rh[dz] > rmax) {
+                p.r = dz;
+                rmax = rh[dz];
+            }
+            if (gh[dz] > gmax) {
+                p.g = dz;
+                gmax = gh[dz];
+            }
+            if (bh[dz] > bmax) {
+                p.b = dz;
+                bmax = bh[dz];
+            }
+            if (onlyRed) {
+                assert(!p.g);
+                assert(!p.b);
+            }
+       }
+        if (onlyRed) {
+            assert(p.r == Z);
+            assert(!p.g);
+            assert(!p.b);
+        }
+        if (onlyRed) {
+            assert(bmax);
+            assert(gmax);
+        }
+#ifdef DEBUG_TRANSFORMS
+        [dest assertPaInrange:y x:x];
+#endif
+        if (onlyRed) {
+            assert(p.r == Z);
+            assert(!p.g);
+            assert(!p.b);
+        }
+        D(dest,y,x) = p;
+//        dest.pa[y][x] = p;
+
+        while (1) {
+            /*
+             * Creep across the row one pixel at a time updating our
+             * histogram by subtracting the contribution of the left-most
+             * edge and adding the new right edge. Jon Bentley, a long time ago,
+             * confirmed that this really was the right way to do this.
+             */
+            for (x++; x<W-oilD; x++) {
+                Pixel p = Black;
+                for (dy=y-oilD; dy<=y+oilD; dy++) {
+                    Pixel op = GET_PA(src, dy, x-oilD-1);
+                    Pixel ip = GET_PA(src, dy, x+oilD);;
+                    rh[op.r]--;
+                    rh[ip.r]++;
+                    gh[op.g]--;
+                    gh[ip.g]++;
+                    bh[op.b]--;
+                    bh[ip.b]++;
+                }
+                rmax = gmax = bmax = 0;
+                for (dz=0; dz<Z; dz++) {
+                    if (rh[dz] > rmax) {
+                        p.r = dz;
+                        rmax = rh[dz];
+                    }
+                    if (gh[dz] > gmax) {
+                        p.g = Z;
+                        gmax = gh[dz];
+                    }
+                    if (bh[dz] > bmax) {
+                        p.b = dz;
+                        bmax = bh[dz];
+                    }
+                }
+                if (onlyRed) {
+                    assert(bmax);
+                    assert(gmax);
+                }
+#ifdef DEBUG_TRANSFORMS
+                [dest assertPaInrange:y x:x];
+#endif
+                if (onlyRed) {
+                    assert(p.r == Z);
+                    assert(!p.g);
+                    assert(!p.b);
+                }
+                D(dest,y,x) = p;
+//                dest.pa[y][x] = p;
+            }
+
+            /*
+             * Now move our histogram down a pixel on the right hand side,
+             * and recompute our histograms.
+             */
+            y++;
+            if (y+oilD >= H)
+                break;        /* unfortunate place to break out of the loop */
+            x = (int)W - oilD - 1;
+            for (dx=x-oilD; dx<=x+oilD; dx++) {
+                Pixel op = GET_PA(src, y-oilD-1, dx);
+                Pixel ip = GET_PA(src, y+oilD, dx);;
+                assert(ip.r);
+                rh[op.r]--;
+                rh[ip.r]++;
+                gh[op.g]--;
+                gh[ip.g]++;
+                bh[op.b]--;
+                bh[ip.b]++;
+            }
+            rmax = gmax = bmax = 0;
+            Pixel p = Black;
+            for (dz=0; dz<Z; dz++) {
+                if (rh[dz] > rmax) {
+                    p.r = dz;
+                    rmax = rh[dz];
+                }
+                if (gh[dz] > gmax) {
+                    p.g = dz;
+                    gmax = gh[dz];
+                }
+                if (bh[dz] > bmax) {
+                    p.b = dz;
+                    bmax = bh[dz];
+                }
+            }
+            if (onlyRed) {
+                assert(bmax);
+                assert(gmax);
+            }
+#ifdef DEBUG_TRANSFORMS
+            [dest assertPaInrange:y x:x];
+#endif
+            if (onlyRed) {
+                assert(p.r == Z);
+                assert(!p.g);
+                assert(!p.b);
+            }
+            D(dest,y,x) = p;
+//            dest.pa[y][x] = p;
+
+            /*
+             * Now creep the histogram back to the left, one pixel at a time
+             */
+            p = Black;
+            for (x=x-1; x>=oilD; x--) {
+                for (dy=y-oilD; dy<=y+oilD; dy++) {
+                    Pixel op = src.pa[dy][x+oilD+1];
+                    Pixel ip = src.pa[dy][x-oilD];
+                    rh[op.r]--;
+                    rh[ip.r]++;
+                    gh[op.g]--;
+                    gh[ip.g]++;
+                    bh[op.b]--;
+                    bh[ip.b]++;
+                }
+                rmax = gmax = bmax = 0;
+                for (dz=0; dz<Z; dz++) {
+                    if (rh[dz] > rmax) {
+                        p.r = dz;
+                        rmax = rh[dz];
+                    }
+                    if (gh[dz] > gmax) {
+                        p.g = dz;
+                        gmax = gh[dz];
+                    }
+                    if (bh[dz] > bmax) {
+                        p.b = dz;
+                        bmax = bh[dz];
+                    }
+                }
+            }
+            if (onlyRed) {
+                assert(bmax);
+                assert(gmax);
+            }
+#ifdef DEBUG_TRANSFORMS
+            [dest assertPaInrange:y x:x];
+#endif
+            if (onlyRed) {
+                assert(p.r == Z);
+                assert(!p.g);
+                assert(!p.b);
+            }
+            D(dest,y,x) = p;
+//            dest.pa[y][x] = p;
+
+            /*
+             * Move our histogram down one pixel on the left side.
+             */
+            y++;
+            x = oilD;
+            if (y+oilD >= H)
+                break;        /* unfortunate place to break out of the loop */
+            for (dx=x-oilD; dx<=x+oilD; dx++) {
+                Pixel op = GET_PA(src, y-oilD-1, dx);
+                Pixel ip = GET_PA(src, y+oilD, dx);;
+                rh[op.r]--;
+                rh[ip.r]++;
+                gh[op.g]--;
+                gh[ip.g]++;
+                bh[op.b]--;
+                bh[ip.b]++;
+            }
+            rmax = gmax = bmax = 0;
+            p = Black;
+            for (dz=0; dz<Z; dz++) {
+                if (rh[dz] > rmax) {
+                    p.r = dz;
+                    rmax = rh[dz];
+                }
+                if (gh[dz] > gmax) {
+                    p.g = dz;
+                    gmax = gh[dz];
+                }
+                if (bh[dz] > bmax) {
+                    p.b = dz;
+                    bmax = bh[dz];
+                }
+            }
+            if (onlyRed) {
+                assert(p.r == Z);
+                assert(!p.g);
+                assert(!p.b);
+            }
+            D(dest,y,x) = p;
+//            dest.pa[y][x] = p;
+        }
+        for (int y=0; y<dest.h; y++) {
+            for (int x=0; x<dest.w; x++) {
+                p = dest.pa[y][x];
+//                D(dest,y,x) = Red;
+            }
+        }
+
+#ifdef notdef
+        NSLog(@"dest.pb[0] = %p", &dest.pb[0]);
+        NSLog(@"dest.pb[1] = %p", &dest.pb[1]);
+        NSLog(@"dest.pb[w] = %p", &dest.pb[dest.w]);
+        NSLog(@"dest.pa[0][0] = %p", &dest.pa[0][0]);
+        NSLog(@"dest.pa[0][1] = %p", &dest.pa[0][1]);
+        NSLog(@"dest.pa[1][0] = %p", &dest.pa[1][0]);
+   
+        NSLog(@"src.pb[10*w+10] = %p %08x", &src.pb[10*src.w+10], *(uint32_t *)&src.pb[10*src.w+10]);
+        NSLog(@" src.pa[10][10] = %p %08x", &src.pa[10][10], *(uint32_t *)&src.pa[10][10]);
+
+        NSLog(@"dest.pb[10*w+10] = %p %08x", &dest.pb[10*dest.w+10], *(uint32_t *)&dest.pb[10*dest.w+10]);
+        NSLog(@" dest.pa[10][10] = %p %08x", &dest.pa[10][10], *(uint32_t *)&dest.pa[10][10]);
+        
+        if (onlyRed) {
+            for (int y=0; y<dest.h; y++) {
+                for (int x=0; x<dest.w; x++) {
+                    p = dest.pa[y][x];
+                    if (p.r < MAX_BUCKETED_Z)
+                        NSLog(@"not at %4d, %4d   not red: %d", x, y, p.r);
+//                    assert(p.r >= Z);
+                    assert(!p.g && !p.b);
+                }
+            }
+            
+            for (int i=0; i<dest.w * dest.h; i++) {
+                p = dest.pb[i];
+                assert(p.r == Z);
+                assert(!p.g && !p.b);
+            }
+        }
+#endif
+#ifdef NOTDEF
+        for (int y=0; y<dest.h; y++) {
+            for (int x=0; x<dest.w/2; x++) {
+                Pixel p = dest.pa[y][x];
+                Pixel pp = SETRGB(p.r,p.g,p.b);
+                if ((uint32_t *)&p != (uint32_t *)&pp) {   // mismatch!
+                    NSLog(@"mismatch @ %4d x %4d:  %@  %@", x, y,
+                          [self showPixel:dest.pa[y][x]],
+                          [self showPixel:SETRGB(p.r,p.g,p.b)]);
+                    Pixel ppp = SETRGB(p.r,p.g,p.b);
+                    NSLog(@"mismatch @ %4d x %4d:  %@", x, y, [self showPixel:ppp]);
+                    NSLog(@"         %@", [self showPixel:Red]);
+                    NSLog(@"         %@", [self showPixel:Green]);
+                    NSLog(@"         %@", [self showPixel:Blue]);
+                }
+            }
+        }
+        
+        for (int i=0; i<dest.w * dest.h/2; i++) {
+            Pixel p = dest.pb[i];
+            p.b = 0;
+            p.g = 0;
+//            p = SETRGB(p.r, 0, 0);
+            dest.pb[i] = p;
+        }
+
+        if (dest.w > 100){  // not a thumbnail
+            for (int y=0; y<dest.h; y++) {
+                for (int x=0; x<dest.w; x++) {
+                    Pixel p = dest.pa[y][x];
+                    if (p.g > 0)
+                        continue;
+                    if (p.b != 0) {
+                        NSLog(@" err at %d, %d, %d %d %d %d", x, y, p.r, p.g, p.b, p.a);
+                        assert(p.b == 0);
+                    }
+                }
+            }
+        }
+        
+        for (int i=0; i<dest.w * dest.h; i++) {
+            Pixel p = dest.pb[i];
+            assert(p.a == Z);
+        }
+#endif
+    }];
+    lastTransform.low = 1;      // 2^1
+    lastTransform.value = 2;    // 2^2
+    lastTransform.high = 4;     // 2^4
+    lastTransform.hasParameters = YES;
+    NSLog(@" **** install areaTransform %@, %p:", lastTransform.name, lastTransform.areaF);
+    [self addTransform:lastTransform];
+    
+#ifdef NOTDEF
+    oilTransform = lastTransform;
+    oilfunction = YES;
+    [Transforms checkTheOil];
+#endif
+    return;
+
+    lastTransform = [Transform areaTransform: @"Focus"
+                                  description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = src.w;
+        long H = src.h;
+        long N = W * H;
+        for (int i=0; i<N; i++) {           // red
+            chBuf0.cb[i] = src.pb[i].r;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
+            }
+        }
+        for (int i=0; i<N; i++) {           // green
+            chBuf0.cb[i] = src.pb[i].g;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x].g = chBuf1.ca[y][x];
+            }
+        }
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = src.pb[i].b;
+        }
+        focus(chBuf0, chBuf1);              // blue
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x].b = chBuf1.ca[y][x];
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
                                  description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -189,37 +790,19 @@ focus(ChBuf *s, ChBuf *d) {
         // gerard's sobol, which is right
         sobel(chBuf0, chBuf1);
 
+        // ... negate and high contrast...
         // ... + negative + high contrast...
-        u_long hist[Z+1];
-        float map[Z+1];
-        for (int i = 0; i < Z+1; i++)
-            hist[i] = 0;
         
         for (int i=0; i<N; i++) {
-            channel c = Z - chBuf1.cb[i];
-            hist[c]++;
-        }
-        u_long ps = 0;
-        for (int i = 0; i < Z+1; i++) {
-            map[i] = Z*((float)ps/((float)N));
-            ps += hist[i];
-        }
-        for (int i=0; i<N; i++) {
             channel c = chBuf1.cb[i];
-            float a = (map[c] - c)/Z;
-            chBuf0.cb[i] = CLIP(a*(Z - c));
-        }
-        
-        focus(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) {   // apply autocontrast
-            channel c = chBuf1.cb[i];
-            c = CLIP((c-HALF_Z)*2+HALF_Z);
-            dest.pb[i] = SETRGB(c,c,c);
+            channel nc = Z - CLIP((c-HALF_Z)*2+HALF_Z);
+            Pixel p = SETRGB(nc, nc, nc);
+            dest.pb[i] = p;
         }
     }];
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Monochrome Sobel"
+    lastTransform = [Transform areaTransform: @"Mono Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -245,7 +828,8 @@ focus(ChBuf *s, ChBuf *d) {
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         long W = src.w;
         long H = src.h;
-        for (int i=0; i<src.h*src.w; i++) {
+        long N = W * H;
+        for (int i=0; i<N; i++) {
             chBuf0.cb[i] = LUM(src.pb[i]);
         }
         // gerard's sobol, which is right
@@ -270,7 +854,7 @@ focus(ChBuf *s, ChBuf *d) {
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) {
-            dest.pb[i].r = chBuf1.cb[i];     // store red...
+            dest.pb[i] = SETRGB(chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
             chBuf0.cb[i] = src.pb[i].g;     // ... and get green
         }
         sobel(chBuf0, chBuf1);
@@ -296,7 +880,7 @@ focus(ChBuf *s, ChBuf *d) {
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) {
-            dest.pb[i].r = Z - chBuf1.cb[i];     // store red...
+            dest.pb[i] = SETRGB(Z - chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
             chBuf0.cb[i] = src.pb[i].g;     // ... and get green
         }
         sobel(chBuf0, chBuf1);
@@ -332,6 +916,27 @@ focus(ChBuf *s, ChBuf *d) {
         for (int i=0; i<src.h*src.w; i++) {
             int c = chBuf0.cb[i];
             dest.pb[i] = SETRGB(c,c,c);
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Null test"
+                                  description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = src.w;
+        long H = src.h;
+//        long N = W * H;
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                channel r = src.pa[y][x].r;
+                channel g = src.pa[y][x].g;
+                channel b = src.pa[y][x].b;
+                dest.pa[y][x].r = r;
+                dest.pa[y][x].g = g;
+                dest.pa[y][x].b = b;
+                dest.pa[y][x].a = Z;
+            }
         }
     }];
     [self addTransform:lastTransform];
@@ -373,9 +978,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 }
 
 
-
 - (void) addPolarTransforms {
-    
+
     lastTransform = [Transform areaTransform: @"Can"    // WTF?
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -520,7 +1124,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             REMAP_COLOR(tX, tY, Remap_White);
     }];
     [self addTransform:lastTransform];
-
 }
 
 - (void) addAreaTransforms {
@@ -603,8 +1206,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        assert(remapBuf.w > 0 && remapBuf.h > 0);
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
+//        NSLog(@" kite %zu x %zu", remapBuf.w, remapBuf.h);
         for (int y=0; y<remapBuf.h; y++) {
             size_t ndots;
             
@@ -612,24 +1217,35 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 ndots = (y*(remapBuf.w-1))/remapBuf.h;
             else
                 ndots = ((remapBuf.h-y-1)*(remapBuf.w))/remapBuf.h;
+            
+//            NSLog(@" kite %d, %zu", y, ndots);
 
+            assert(y>= 0 && y < remapBuf.h);
             REMAP_TO(centerX,y, centerX, y);
             REMAP_TO(centerX,y, centerX, y);
             REMAP_COLOR(0,y, Remap_White);
             
             for (int x=1; x<=ndots; x++) {
                 size_t dist = (x*(centerX-1))/ndots;
-
+                assert(centerX - dist >= 0 && centerX - dist < remapBuf.w);
+                assert(centerX + dist >= 0 && centerX + dist < remapBuf.w);
                 REMAP_TO(centerX+x,y, centerX + dist,y);
                 REMAP_TO(centerX-x,y, centerX - dist,y);
             }
             for (size_t x=ndots; x<centerX; x++) {
+                assert(centerX - x >= 0 && centerX - x < remapBuf.w);
+                assert(centerX + x >= 0 && centerX + x < remapBuf.w);
                 REMAP_COLOR(centerX+x,y, Remap_White);
                 REMAP_COLOR(centerX-x,y, Remap_White);
              }
+//            NSLog(@" kite %d done", y);
         }
+//        NSLog(@" kite verifying");
+        [remapBuf verify];
+//        NSLog(@" kite Z");
     }];
     [self addTransform:lastTransform];
+//    NSLog(@" post kite");
 
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""

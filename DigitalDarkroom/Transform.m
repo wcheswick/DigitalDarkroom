@@ -111,6 +111,7 @@
     copy.description = description;
 //    copy.pointF = pointF;
     copy.areaF = areaF;
+    NSLog(@" **** copy areaTransform %@,   areaF: %p:", copy.name, copy.areaF);
     copy.depthVisF = depthVisF;
     copy.remapImageF = remapImageF;
     copy.polarRemapF = polarRemapF;

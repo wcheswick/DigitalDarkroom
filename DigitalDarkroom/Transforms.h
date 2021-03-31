@@ -32,7 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define Blue            SETRGB(0,0,Z)
 #define Yellow          SETRGB(Z,Z,0)
 #define Magenta         SETRGB(Z,0,Z)
-#define UnsetColor      (Pixel){Z,Z/2,Z,Z-1}
+#define UnsetColor      SETRGBA(Z,Z/2,Z,Z-1)
 
 @interface Transforms : NSObject {
     NSMutableArray *transforms;     // the depth transforms are first in the list
@@ -54,6 +54,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              BOOL debugTransforms;
 
 - (Transform * __nullable) transformAtIndex:(long) index;
+
+extern BOOL onlyRed;
 
 @end
 

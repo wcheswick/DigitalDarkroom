@@ -52,12 +52,14 @@
 }
 
 // Must be called before any tasks are added.  May be called afterwords to
-// change size.
+// change size. Is this true?
+
 - (void) configureGroupForSize:(CGSize) s {
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
 #endif
 
+    assert(s.width > 0 && s.height > 0);
     transformSize = s;
     
     if (!srcPix || srcPix.w != transformSize.width ||
@@ -114,8 +116,8 @@
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance {
-    NSLog(@"transform name: %@", transform.name);
-    NSLog(@"         value: %d", instance.value);
+//    NSLog(@"transform name: %@", transform.name);
+//    NSLog(@"         value: %d", instance.value);
     NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, instance.value];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
     if (remapBuf) {
@@ -207,7 +209,7 @@
 
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
-    
+
     if (taskCtrl.layoutNeeded && tasksStatus != Stopped) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
@@ -226,7 +228,7 @@
         }
     }
     tasksStatus = Running;
-    
+
     UIImage *scaledImage;
     if (srcPix.h != srcImage.size.height || srcPix.w != srcImage.size.width) {  // scale
         UIGraphicsBeginImageContext(CGSizeMake(srcPix.w, srcPix.h));
@@ -264,7 +266,7 @@
     CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
-    
+
     @synchronized (srcPix) {
         for (Task *task in tasks) {
             if (task.taskStatus == Running)

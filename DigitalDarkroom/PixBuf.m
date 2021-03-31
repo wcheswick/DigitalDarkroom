@@ -28,6 +28,7 @@
         size_t rowSize = sizeof(Pixel) * w;
         size_t arraySize = sizeof(Pixel *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
+        assert(buffer);
         pa = (PixelArray_t)buffer.bytes;
         pb = (Pixel *)buffer.bytes + arraySize;
         Pixel *rowPtr = pb;
@@ -98,6 +99,16 @@
             USED(p);
         }
     }
+    
+    // contiguous and consistent addressing?
+    int i=0;
+    for (int y=0; y<h; y++) {
+        for (int x=0; x<w; x++) {
+            void *pixAddr = (void *)&pa[y][x];
+            void *bAddr = (void *)&pb[i++];
+            assert(pixAddr == bAddr);
+        }
+    }
 }
 
 - (void) copyPixelsTo:(PixBuf *) dest {
@@ -110,7 +121,7 @@
     assert(w == dest.w);
     assert(h == dest.h);    // the PixelArray pointers in the destination will do
     memcpy(dest.pb, pb, w * h * sizeof(Pixel));
-    [self verify];
+    [dest verify];
 }
 
 // not used at the moment, maybe never:
@@ -118,6 +129,16 @@
     PixBuf *copy = [[PixBuf alloc] initWithSize:CGSizeMake(w, h)];
     memcpy(copy.pb, pb, w * h * sizeof(Pixel));
     return copy;
+}
+
+- (void) assertPaInrange: (int) y x:(int)x {
+    assert(x >= 0 && x < self.w);
+    assert(y >= 0 && y < self.h);
+}
+
+- (Pixel) check_get_Pa:(int) y X:(int)x {
+    [self assertPaInrange:y x:x];
+    return self.pa[y][x];
 }
 
 @end

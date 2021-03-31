@@ -17,12 +17,13 @@
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_CAMERA  1
 //#define DEBUG_EXECUTE 1
+//#define ONLY_RED    1   // process pure red input only
 
 #define POINTING_HAND_CHAR  @"☞"
 
 #define USED(x) ((void)(x)) // to suppress "variable unused" messages
 
-typedef u_char channel;
+typedef uint8_t channel;
 
 typedef struct {
     channel b, g, r, a;
@@ -90,7 +91,7 @@ typedef long PixelIndex_t;
 #define EXECUTE_BEST_BELOW_H    (EXECUTE_MAX_VISIBLE_ROWS * \
                     (EXECUTE_BUTTON_H + SEP) + 2*EXECUTE_BORDER_W)
 #define EXECUTE_NAME_W  140
-#define EXECUTE_NUMBERS_W   45
+#define EXECUTE_NUMBERS_W   60
 #define EXECUTE_BUTTON_W    (EXECUTE_BUTTON_FONT_W)
 #define EXECUTE_CELL_SELECTED_BORDER_W  3.0
 #define EXECUTE_CELL_SELECTED_CORNER_RADIUS  5

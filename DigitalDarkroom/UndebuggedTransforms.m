@@ -651,37 +651,6 @@ extern  transform_t do_sampled_zoom;
 extern  transform_t do_mean;
 extern  transform_t do_median;
 
-lastTransform = [Transform areaTransform: @"Focus"
-                              description: @""
-                            areaFunction: ^(Pixel *srcBuf, Pixel *dstBuf, int streak) {
-    for (int y=0; y<H; y++) {    // red
-        for (int x=0; x<W; x++) {
-            sChan[x][y] = srcBuf[PI(x,y)].r;
-        }
-    }
-    focus(sChan, dChan);
-    for (int y=0; y<H; y++) {
-        for (int x=0; x<W; x++) {
-            dstBuf[PI(x,y)].r = dChan[x][y];    // install red
-            sChan[x][y] = srcBuf[PI(x,y)].g;    // get green
-        }
-    }
-    focus(sChan, dChan);
-    for (int y=0; y<H; y++) {
-        for (int x=0; x<W; x++) {
-            dstBuf[PI(x,y)].g = dChan[x][y];    // install green
-            sChan[x][y] = srcBuf[PI(x,y)].b;    // get blue
-        }
-    }
-    focus(sChan, dChan);
-    for (int y=0; y<H; y++) {
-        for (int x=0; x<W; x++) {
-            dstBuf[PI(x,y)].b = dChan[x][y];    // install blue
-        }
-    }
-}];
-[self addTransform:lastTransform];
-
 
 channel
 max3(Pixel p) {
@@ -1538,6 +1507,75 @@ min3(Pixel p) {
             }
         }
     #endif
+#endif
+
+#ifdef OLD  // debugged, but really slow
+    
+#define    N_OIL    4 // was 2
+    [Transforms checkTheOil];
+
+    // this one is Waaaaaay too slow, 21 seconds on the big iPad
+    lastTransform = [Transform areaTransform: @"Old oil"
+                                  description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        int x, y, dx, dy;
+        u_int rh[Z+1], gh[Z+1], bh[Z+1];
+        int oilD = instance.value;
+
+        long W = src.w;
+        long H = src.h;
+        for (y=0; y<H; y++) {
+            for (x=0; x<oilD; x++) {
+                dest.pa[y][x] = dest.pa[y][W - x - x] = White;
+            }
+            if (y < oilD || y > H - oilD)
+                for (int x=0; x < W; x++)
+                    dest.pa[y][x] = White;
+        }
+        for (y=oilD; y<H-oilD; y++) {
+            for (x=oilD; x<W-oilD; x++) {
+                Pixel p = {0,0,0,Z};
+                int rmax=0, gmax=0, bmax=0;
+
+                for (dx=0; dx<=Z; dx++)
+                    rh[dx] = bh[dx] = gh[dx] = 0;
+                for (dy=y-oilD; dy < y+oilD; dy++)
+                    for (dx=x-oilD; dx <x+oilD; dx++) {
+                        Pixel p = src.pa[dy][dx];
+                        rh[p.r]++;
+                        gh[p.g]++;
+                        bh[p.b]++;
+                    }
+                for (dx=0; dx<=Z; dx++) {
+                    if (rh[dx] > rmax) {
+                        p.r = dx;
+                        rmax = rh[dx];
+                    }
+                    if (gh[dx] > gmax) {
+                        p.g = dx;
+                        gmax = gh[dx];
+                    }
+                    if (bh[dx] > bmax) {
+                        p.b = dx;
+                        bmax = bh[dx];
+                    }
+                }
+                dest.pa[y][x] = p;
+            }
+        }
+    }];
+    lastTransform.low = N_OIL;
+    lastTransform.value = N_OIL;
+    lastTransform.high = N_OIL;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+#endif
+
+#if OLD
+#define N_BUCKETS    (Z+1)
+#define    BUCKET(x)    (x)
+#define    UNBUCKET(x)    (x)
 #endif
 
 #endif

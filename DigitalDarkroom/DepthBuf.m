@@ -29,6 +29,7 @@
         size_t rowSize = sizeof(Distance) * w;
         size_t arraySize = sizeof(Distance *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
+        assert(buffer);
         da = (DepthArray_t)buffer.bytes;
         db = (Distance *)buffer.bytes + arraySize;
         Distance *rowPtr = db;
