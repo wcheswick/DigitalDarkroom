@@ -56,8 +56,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (Transform * __nullable) transformAtIndex:(long) index;
 
-extern BOOL onlyRed;
-
 @end
 
 NS_ASSUME_NONNULL_END

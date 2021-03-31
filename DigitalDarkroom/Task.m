@@ -248,11 +248,6 @@ static PixelIndex_t dPI(int x, int y) {
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
     [srcBuf copyPixelsTo:imBuf0];
-#ifdef ONLY_RED
-    for (int i=0; i<imBuf0.w*imBuf0.h; i++)
-        imBuf0.pb[i] = Red;
-    onlyRed = YES;
-#endif
     [self executeTransformsStartingWithImBuf0];
 }
 
@@ -280,7 +275,6 @@ static PixelIndex_t dPI(int x, int y) {
                                source:sourceIndex];
         assert(destIndex == 0 || destIndex == 1);
         sourceIndex = destIndex;
-        NSLog(@"                                            EEElapsed: %10.3f", [startTime timeIntervalSinceNow]);
         NSDate *transformEnd = [NSDate now];
         instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
         instance.timesCalled++;
@@ -297,10 +291,6 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) updateTargetWith:(const PixBuf *)pixBuf {
-    NSLog(@" pixBuf.pa[0][0] [30][30] [49][49] = %08x %08x %08x",
-          *(uint32_t *)&pixBuf.pa[10][10],
-          *(uint32_t *)&pixBuf.pa[30][30],
-          *(uint32_t *)&pixBuf.pa[49][49]);
 
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
