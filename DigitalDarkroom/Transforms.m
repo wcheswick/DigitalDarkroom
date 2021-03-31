@@ -209,22 +209,109 @@ focus(ChBuf *s, ChBuf *d) {
 #define DB(d,y,x)    (d).pb[(y)*(d).w + (x)]
 #define D(d,y,x)    DA(d,y,x)
 
-- (void) addTestTransforms {
-    
-    typedef struct {
-        u_int rh[Z+1], gh[Z+1], bh[Z+1];
-    } Hist_t;
+typedef struct {
+    u_int rh[Z+1], gh[Z+1], bh[Z+1];
+} Hist_t;
 
-    lastTransform = [Transform areaTransform: @"Delta Old oil"
+void
+setHistAround(PixelArray_t srcpa, int x, int y, int range, Hist_t *hists) {
+    for (int dy=y-range; dy <= y+range; dy++) {
+        for (int dx=x-range; dx <= x+range; dx++) {
+            Pixel p = srcpa[dy][dx];
+            hists->rh[p.r]++;
+            hists->gh[p.g]++;
+            hists->bh[p.b]++;
+        }
+    }
+}
+
+// For each of these, x,y is the new central pixel.  Remove the ones now
+// out of range on the left, and add the new ones from the right. I couldn't
+// think of a more efficient way to do this, and Jon Bentley confirmed it.
+
+void
+moveHistRight(PixelArray_t srcpa, int x, int y, int range, Hist_t *hists) {
+    for (int row=y-range; row<=y+range; row++) {
+        Pixel lp = srcpa[row][x-range-1];
+        hists->rh[lp.r]--;
+        hists->gh[lp.g]--;
+        hists->bh[lp.b]--;
+        Pixel np = srcpa[row][x+range];
+        hists->rh[np.r]++;
+        hists->gh[np.g]++;
+        hists->bh[np.b]++;
+    }
+}
+
+void
+moveHistLeft(PixelArray_t srcpa, int x, int y, int range, Hist_t *hists) {
+    for (int row=y-range; row<=y+range; row++) {
+        Pixel rp = srcpa[row][x+range+1];
+        hists->rh[rp.r]--;
+        hists->gh[rp.g]--;
+        hists->bh[rp.b]--;
+        Pixel np = srcpa[row][x-range];
+        hists->rh[np.r]++;
+        hists->gh[np.g]++;
+        hists->bh[np.b]++;
+    }
+}
+
+void
+moveHistDown(PixelArray_t srcpa, int x, int y, int range, Hist_t *hists) {
+    for (int col=x-range; col<=x+range; col++) {
+        Pixel tp = srcpa[y-range-1][col];
+        hists->rh[tp.r]--;
+        hists->gh[tp.g]--;
+        hists->bh[tp.b]--;
+        Pixel np = srcpa[y+range][col];
+        hists->rh[np.r]++;
+        hists->gh[np.g]++;
+        hists->bh[np.b]++;
+    }
+}
+
+Pixel
+mostCommonColorInHist(Hist_t *hists) {
+    int rmax=0, gmax=0, bmax=0;
+    channel r=0, g=0, b=0;
+    
+    for (int i=0; i<=Z; i++) {
+        if (hists->rh[i] > rmax) {
+            r = i;
+            rmax = hists->rh[i];
+        }
+        if (hists->gh[i] > gmax) {
+            g = i;
+            gmax = hists->gh[i];
+        }
+        if (hists->bh[i] > bmax) {
+            b = i;
+            bmax = hists->bh[i];
+        }
+    }
+    return SETRGB(r,g,b);
+}
+
+- (void) addTestTransforms {
+
+    lastTransform = [Transform areaTransform: @"New new oil"
                                  description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        int x, y, dx, dy;
+        // the following is needlessly inefficient, and transforms a 1024x768
+        // image in 6.2 second on my iPad pro.
+        //
+        // But it is simple, and gives the correct result.
+        
+        int x, y;
         int oilD = 1 << instance.value; // powers of two
         Hist_t hists;
 
         long W = src.w;
         long H = src.h;
+
+        // set the border
         for (y=0; y<H; y++) {
             for (x=0; x<oilD; x++) {
                 dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
@@ -233,40 +320,72 @@ focus(ChBuf *s, ChBuf *d) {
                 for (int x=0; x < W; x++)
                     dest.pa[y][x] = White;
         }
-        for (y=oilD; y<H-oilD; y++) {
-            for (x=oilD; x<W-oilD; x++) {
-                Pixel p = {0,0,0,Z};
-                int rmax=0, gmax=0, bmax=0;
-
-                memset(&hists, 0, sizeof(hists));
-                
-                for (dy=y-oilD; dy < y+oilD; dy++)
-                    for (dx=x-oilD; dx <x+oilD; dx++) {
-                        Pixel p = src.pa[dy][dx];
-                        hists.rh[p.r]++;
-                        hists.gh[p.g]++;
-                        hists.bh[p.b]++;
-                    }
-                for (dx=0; dx<=Z; dx++) {
-                    if (hists.rh[dx] > rmax) {
-                        p.r = dx;
-                        rmax = hists.rh[dx];
-                    }
-                    if (hists.gh[dx] > gmax) {
-                        p.g = dx;
-                        gmax = hists.gh[dx];
-                    }
-                    if (hists.bh[dx] > bmax) {
-                        p.b = dx;
-                        bmax = hists.bh[dx];
-                    }
-                }
-                dest.pa[y][x] = p;
+        
+#ifdef RIGHTMOVETEST
+        // just the move right
+        for (int y=oilD; y < H - oilD; y++) {
+            x = oilD;
+            memset(&hists, 0, sizeof(hists));   // clear the histograms
+            setHistAround(src.pa, x, y, oilD, &hists);
+            dest.pa[y][x] = mostCommonColorInHist(&hists);
+            for (int x=oilD+1; x<W-oilD; x++) {
+                moveHistRight(src.pa, x, y, oilD, &hists);
+                dest.pa[y][x] = mostCommonColorInHist(&hists);
             }
         }
+#endif
+        
+//#ifdef FULLBROKEN
+        x = y = oilD;   // start in the upper left corner
+        BOOL goingRight = YES;
+        memset(&hists, 0, sizeof(hists));   // clear the histograms
+        setHistAround(src.pa, x, y, oilD, &hists);
+        do {
+            dest.pa[y][x] = mostCommonColorInHist(&hists);
+            if (goingRight) {
+                if (x + oilD - 1 < W) {
+                    x++;
+                    moveHistRight(src.pa, x, y, oilD, &hists);
+                } else {
+                    // go down one pixel and change directions
+                    y++;
+                    if (y + oilD == H)
+                        break;  // hit the bottom
+                    goingRight = NO;
+                    moveHistDown(src.pa, x, y, oilD, &hists);
+                }
+            } else {    // going left
+                if (x > oilD) {
+                    x--;
+                    moveHistLeft(src.pa, x, y, oilD, &hists);
+                } else {
+                    y++;
+                    if (y + oilD == H)
+                        break;  // hit the bottom
+                    moveHistDown(src.pa, x, y, oilD, &hists);
+                    goingRight = YES;
+                }}
+        } while (1);
+//#endif
+#ifdef WORKS
+        // simplest loop: compute and analyze the full histogram around each point.
+        // speeds for oilD:
+        // 0    4.3
+        // 1    4.8
+        // 2    6.264
+        // 3    11.6
+        // 4    31.9
+        for (y=oilD; y<H-oilD; y++) {
+            for (x=oilD; x<W-oilD; x++) {
+                memset(&hists, 0, sizeof(hists));   // clear the histograms
+                setHistAround(src.pa, x, y, oilD, &hists);
+                dest.pa[y][x] = mostCommonColorAround(src.pa, x, y, oilD, &hists);
+            }
+        }
+#endif
     }];
     lastTransform.low = 1;      // 2^1
-    lastTransform.value = 2;    // 2^2
+    lastTransform.value = 2;    // 2^2.  2^3 is MUCH shower
     lastTransform.high = 4;     // 2^4
     lastTransform.hasParameters = YES;
     NSLog(@" **** install areaTransform %@, %p:", lastTransform.name, lastTransform.areaF);
@@ -362,23 +481,6 @@ focus(ChBuf *s, ChBuf *d) {
         u_int rh[Z+1], gh[Z+1], bh[Z+1];
 
         int oilD = 1 << instance.value; // powers of two
-  
-        if (onlyRed) {  // check initial conditions
-            Pixel p;
-            for (int y=0; y<src.h; y++) {
-                for (int x=0; x<src.w/2; x++) {
-                    p = src.pa[y][x];
-                    assert(p.r == Z);
-                    assert(!p.g && !p.b);
-                }
-            }
-            
-            for (int i=0; i<src.w * src.h; i++) {
-                p = src.pb[i];
-                assert(p.r == Z);
-                assert(!p.g && !p.b);
-            }
-        }
 
         long W = src.w;
         long H = src.h;
@@ -393,7 +495,7 @@ focus(ChBuf *s, ChBuf *d) {
             D(dest,y,x) = onlyRed ? Red : White;
 
         }
-        for (dz=0; dz<Z; dz++)
+        for (dz=0; dz<=Z; dz++)
             rh[dz] = bh[dz] = gh[dz] = 0;
 
         /*
@@ -417,7 +519,7 @@ focus(ChBuf *s, ChBuf *d) {
         }
         rmax = gmax = bmax = 0;
         Pixel p = Black;
-        for (dz=0; dz<Z; dz++) {    // find the maximum value encountered for each color
+        for (dz=0; dz<=Z; dz++) {    // find the maximum value encountered for each color
             if (rh[dz] > rmax) {
                 p.r = dz;
                 rmax = rh[dz];
@@ -435,23 +537,9 @@ focus(ChBuf *s, ChBuf *d) {
                 assert(!p.b);
             }
        }
-        if (onlyRed) {
-            assert(p.r == Z);
-            assert(!p.g);
-            assert(!p.b);
-        }
-        if (onlyRed) {
-            assert(bmax);
-            assert(gmax);
-        }
 #ifdef DEBUG_TRANSFORMS
         [dest assertPaInrange:y x:x];
 #endif
-        if (onlyRed) {
-            assert(p.r == Z);
-            assert(!p.g);
-            assert(!p.b);
-        }
         D(dest,y,x) = p;
 //        dest.pa[y][x] = p;
 
@@ -475,7 +563,7 @@ focus(ChBuf *s, ChBuf *d) {
                     bh[ip.b]++;
                 }
                 rmax = gmax = bmax = 0;
-                for (dz=0; dz<Z; dz++) {
+                for (dz=0; dz<=Z; dz++) {
                     if (rh[dz] > rmax) {
                         p.r = dz;
                         rmax = rh[dz];
@@ -489,18 +577,9 @@ focus(ChBuf *s, ChBuf *d) {
                         bmax = bh[dz];
                     }
                 }
-                if (onlyRed) {
-                    assert(bmax);
-                    assert(gmax);
-                }
 #ifdef DEBUG_TRANSFORMS
                 [dest assertPaInrange:y x:x];
 #endif
-                if (onlyRed) {
-                    assert(p.r == Z);
-                    assert(!p.g);
-                    assert(!p.b);
-                }
                 D(dest,y,x) = p;
 //                dest.pa[y][x] = p;
             }
@@ -526,7 +605,7 @@ focus(ChBuf *s, ChBuf *d) {
             }
             rmax = gmax = bmax = 0;
             Pixel p = Black;
-            for (dz=0; dz<Z; dz++) {
+            for (dz=0; dz<=Z; dz++) {
                 if (rh[dz] > rmax) {
                     p.r = dz;
                     rmax = rh[dz];
@@ -571,7 +650,7 @@ focus(ChBuf *s, ChBuf *d) {
                     bh[ip.b]++;
                 }
                 rmax = gmax = bmax = 0;
-                for (dz=0; dz<Z; dz++) {
+                for (dz=0; dz<=Z; dz++) {
                     if (rh[dz] > rmax) {
                         p.r = dz;
                         rmax = rh[dz];
@@ -620,7 +699,7 @@ focus(ChBuf *s, ChBuf *d) {
             }
             rmax = gmax = bmax = 0;
             p = Black;
-            for (dz=0; dz<Z; dz++) {
+            for (dz=0; dz<=Z; dz++) {
                 if (rh[dz] > rmax) {
                     p.r = dz;
                     rmax = rh[dz];
