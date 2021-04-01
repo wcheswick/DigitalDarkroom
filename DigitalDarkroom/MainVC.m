@@ -330,20 +330,7 @@ typedef enum {
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-        
-//        [self saveUIMode];
-        
-#ifdef OLD
-        NSString *lastUIMode = [[NSUserDefaults standardUserDefaults]
-                                     stringForKey:UI_MODE_KEY];
-        if (lastUIMode) {
-            uiMode = [lastUIMode intValue];
-        } else {
-            uiMode = oliveUI;
-            [self saveUIMode];
-        }
-#endif
-        
+                
         nextSource = nil;
         lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_FILE_SOURCE_KEY];
@@ -361,7 +348,6 @@ typedef enum {
             }
         }
         
-//        nextSource = nil; // XXXXX debug
         if (!nextSource)  {   // no known default, pick the first camera
             for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
                 if ([cameraController isCameraAvailable:sourceIndex]) {
@@ -1082,12 +1068,12 @@ stackingButton.userInteractionEnabled = YES;
     [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
     
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
-    CGFloat topPadding = window.safeAreaInsets.top;
     CGFloat bottomPadding = window.safeAreaInsets.bottom;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
 #ifdef DEBUG_LAYOUT
+    CGFloat topPadding = window.safeAreaInsets.top;
     NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f %0.f",
           leftPadding, rightPadding, topPadding, bottomPadding);
 #endif

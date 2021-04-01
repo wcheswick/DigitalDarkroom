@@ -13,7 +13,7 @@
 #import "RemapBuf.h"
 #import "Defines.h"
 
-#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+//#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
 
 #define LUM(p)  (channel)((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -80,17 +80,6 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-#ifdef NOTDEF
-+ (void) checkTheOil {
-    if (!oilfunction) {
-        return;
-    }
-    return;
-//    NSLog(@" oil Transform is %p", oilTransform );
-//    NSLog(@" area function at %p", oilTransform.areaF );
-}
-#endif
-
 - (void) buildTransformList {
     [self addDepthVisualizations];
     [self addTestTransforms];
@@ -101,6 +90,14 @@ static PixelIndex_t dPI(int x, int y) {
     [self addArtTransforms];
     [self addAreaTransforms];   // manu unimplemented
     [self addPointTransforms];  // working:
+}
+
+// transform at given index, or nil if NO_TRANSFORM
+
+- (Transform * __nullable) transformAtIndex:(long) index {
+    if (index == NO_TRANSFORM)
+        return nil;
+    return [transforms objectAtIndex:index];
 }
 
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
@@ -191,17 +188,13 @@ focus(ChBuf *s, ChBuf *d) {
     }
 }
 
-- (NSString *) showPixel:(Pixel) p {
-    return [NSString stringWithFormat:@"%02x %02x %02x %02x ", p.r, p.g, p.b, p.a];
-}
-
 #ifdef DEBUG_TRANSFORMS
 #define GET_PA(p, y, x) [p check_get_Pa: y X:x];
 #else
 #define GET_PA(p, y, x) (p).pa[y][x]
 #endif
 
-#define DA(d,y,x)    (d).pa[y][x]
+#define DA(d,y,x)    (d).pa[y][x]           // this is 0.5% faster than DB
 #define DB(d,y,x)    (d).pb[(y)*(d).w + (x)]
 #define D(d,y,x)    DA(d,y,x)
 
@@ -291,15 +284,27 @@ mostCommonColorInHist(Hist_t *hists) {
 
 - (void) addTestTransforms {
 
-    lastTransform = [Transform areaTransform: @"New new oil"
+    /* timings for oil on digitalis:
+     *
+     *                  Z    param    f/s
+     * original oil     31    3    ~7.0
+     *
+     * original oil     255    3    1.2
+     *
+     * new oil        255    3    2.5
+     * new oil        255    2    2.7
+     * new oil        255    1    2.7    seurat-like
+     *
+     * new oil        31    3    5.8    notable loss of detail
+     * new oil        31    2    6.5    better detail than N==3
+     * new oil        31    1    7.2    looks more like seurat
+     *
+     * new oil        15    2    7.6    isophots visible
+     */
+    lastTransform = [Transform areaTransform: @"Oil paint"
                                  description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        // the following is needlessly inefficient, and transforms a 1024x768
-        // image in 6.2 second on my iPad pro.
-        //
-        // But it is simple, and gives the correct result.
-        
         int x, y;
         int oilD = 1 << instance.value; // powers of two
         Hist_t hists;
@@ -317,21 +322,6 @@ mostCommonColorInHist(Hist_t *hists) {
                     dest.pa[y][x] = White;
         }
         
-#ifdef RIGHTMOVETEST
-        // just the move right
-        for (int y=oilD; y < H - oilD; y++) {
-            x = oilD;
-            memset(&hists, 0, sizeof(hists));   // clear the histograms
-            setHistAround(src.pa, x, y, oilD, &hists);
-            dest.pa[y][x] = mostCommonColorInHist(&hists);
-            for (int x=oilD+1; x<W-oilD; x++) {
-                moveHistRight(src.pa, x, y, oilD, &hists);
-                dest.pa[y][x] = mostCommonColorInHist(&hists);
-            }
-        }
-#endif
-        
-//#ifdef FULLBROKEN
         x = y = oilD;   // start in the upper left corner
         BOOL goingRight = YES;
         memset(&hists, 0, sizeof(hists));   // clear the histograms
@@ -362,8 +352,8 @@ mostCommonColorInHist(Hist_t *hists) {
                     goingRight = YES;
                 }}
         } while (1);
-//#endif
-#ifdef WORKS
+
+#ifdef SIMPLEST
         // simplest loop: compute and analyze the full histogram around each point.
         // speeds for oilD:
         // 0    4.3
@@ -385,27 +375,6 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform.high = 4;     // 2^4
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
-    
-    
-    /* timings for oil on digitalis:
-     *
-     *                  Z    param    f/s
-     * original oil     31    3    ~7.0
-     *
-     * original oil     255    3    1.2
-     *
-     * new oil        255    3    2.5
-     * new oil        255    2    2.7
-     * new oil        255    1    2.7    seurat-like
-     *
-     * new oil        31    3    5.8    notable loss of detail
-     * new oil        31    2    6.5    better detail than N==3
-     * new oil        31    1    7.2    looks more like seurat
-     *
-     * new oil        15    2    7.6    isophots visible
-     */
-    
-    return;
 
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
@@ -611,14 +580,6 @@ mostCommonColorInHist(Hist_t *hists) {
 - (void) addTransform:(Transform *)transform {
     transform.arrayIndex = transforms.count;
     [transforms addObject:transform];
-}
-
-// transform at given index, or nil if NO_TRANSFORM
-
-- (Transform * __nullable) transformAtIndex:(long) index {
-    if (index == NO_TRANSFORM)
-        return nil;
-    return [transforms objectAtIndex:index];
 }
 
 // For Tom's logo algorithm

@@ -284,14 +284,11 @@ static PixelIndex_t dPI(int x, int y) {
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
     
     PixBuf *outBuf = imBufs[sourceIndex];
-#ifdef DEBUG
-    [outBuf verify];
-#endif
+//    [outBuf verify];
     [self updateTargetWith:outBuf];
 }
 
 - (void) updateTargetWith:(const PixBuf *)pixBuf {
-
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
     NSUInteger bytesPerRow = bytesPerPixel * pixBuf.w;
@@ -339,9 +336,7 @@ static PixelIndex_t dPI(int x, int y) {
         case RemapPolarTrans:
         case RemapTrans: {
             assert(instance.remapBuf);
-#ifdef DEBUG
-            [instance.remapBuf verify];
-#endif
+ //           [instance.remapBuf verify];
             BufferIndex *bip = instance.remapBuf.rb;
             Pixel *dp = dst.pb;
             for (int i=0; i<dst.w*dst.h; i++) {
