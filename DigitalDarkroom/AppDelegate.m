@@ -43,6 +43,26 @@
     return YES;
 }
 
+- (BOOL) application:(UIApplication *)application
+             openURL:(nonnull NSURL *)url
+             options:(nonnull NSDictionary<UIApplicationOpenURLOptionsKey,id> *)options {
+    NSLog(@"incoming URL: %@", url);
+    NSLog(@"     options: %@", options);
+    NSString* urlPath = url.path;
+    if(![[NSFileManager defaultManager] isReadableFileAtPath:urlPath])
+    {
+        if([url startAccessingSecurityScopedResource])
+        {
+            NSString* docsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+            NSString* destPath = [NSString stringWithFormat:@"%@/%@", docsPath, [url.path lastPathComponent]];
+            NSLog(@"copy file %@ to %2", docsPath, [url.path lastPathComponent]);
+//            urlPath = [FileHandler copyFileAtPath:url.path toPath:destPath increment:YES];
+            [url stopAccessingSecurityScopedResource];
+        }
+    }
+    return YES;
+}
+
 #ifdef notdef
 - (BOOL)application:(UIApplication *)application handleOpenURL:(NSURL *)url {
     NSLog(@"opening app with URL %@", [url absoluteString]);

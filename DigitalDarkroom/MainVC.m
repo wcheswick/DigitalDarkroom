@@ -1906,8 +1906,8 @@ if captureDevice.position == AVCaptureDevicePosition.front {
 - (void) doTransformsOn:(UIImage *)sourceImage {
     [screenTasks executeTasksWithImage:sourceImage];
 
-//    if (DISPLAYING_THUMBS)
-//        [thumbTasks executeTasksWithImage:sourceImage];
+    if (DISPLAYING_THUMBS)
+        [thumbTasks executeTasksWithImage:sourceImage];
 }
     
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
