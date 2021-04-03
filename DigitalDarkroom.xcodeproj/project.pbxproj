@@ -11,7 +11,6 @@
 		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
-		FB3B9E1D25D5D5E800F6C40F /* ExecuteRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3B9E1C25D5D5E800F6C40F /* ExecuteRowView.m */; };
 		FB625E1E260B9DFA008636FC /* UndebuggedTransforms.m in Sources */ = {isa = PBXBuildFile; fileRef = FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */; };
 		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
 		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
@@ -64,8 +63,6 @@
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
 		FB389A4A254055F500E29530 /* ColorTable.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ColorTable.m; sourceTree = "<group>"; };
 		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
-		FB3B9E1B25D5D5E800F6C40F /* ExecuteRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExecuteRowView.h; sourceTree = "<group>"; };
-		FB3B9E1C25D5D5E800F6C40F /* ExecuteRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExecuteRowView.m; sourceTree = "<group>"; };
 		FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UndebuggedTransforms.m; sourceTree = "<group>"; };
 		FB79D710258A67FC00DEAD6A /* Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Task.h; sourceTree = "<group>"; };
 		FB79D711258A67FC00DEAD6A /* Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Task.m; sourceTree = "<group>"; };
@@ -245,8 +242,6 @@
 				FB79D711258A67FC00DEAD6A /* Task.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
-				FB3B9E1B25D5D5E800F6C40F /* ExecuteRowView.h */,
-				FB3B9E1C25D5D5E800F6C40F /* ExecuteRowView.m */,
 				FBB2C8AC2586A9E400AB0B09 /* PixBuf.h */,
 				FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */,
 				FBB2C8B92586B9AA00AB0B09 /* RemapBuf.h */,
@@ -375,7 +370,6 @@
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
 				FBB2C8B62586AA3C00AB0B09 /* ChBuf.m in Sources */,
-				FB3B9E1D25D5D5E800F6C40F /* ExecuteRowView.m in Sources */,
 				FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
 				FBA1F16925EEE97800434E2F /* Layout.m in Sources */,

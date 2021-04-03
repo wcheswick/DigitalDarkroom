@@ -77,39 +77,6 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
-
-- (ExecuteRowView *) emptyListViewForStep:(long) step {
-    ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
-    [rowView makeRowEmpty];
-    return rowView;
-}
-
-- (ExecuteRowView *) listViewForStep:(long) step depthActive:(BOOL)doingDepth {
-    ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
-    rowView.hidden = (step == DEPTH_STEP) && !doingDepth;
-    [self updateRowView:rowView depthActive:doingDepth];
-    return rowView;
-}
-
-- (void) updateRowView:(ExecuteRowView *)rowView
-           depthActive:(BOOL)doingDepth {
-    Transform *transform = nil;
-    TransformInstance *instance = nil;
-    UIColor *textColor;
-    if (!doingDepth && rowView.step == DEPTH_STEP)
-        textColor = [UIColor lightGrayColor];
-    else
-        textColor = [UIColor blackColor];
-
-    if (rowView.step < transformList.count) {  // non-empty step
-        transform = [transformList objectAtIndex:rowView.step];
-        instance = [paramList objectAtIndex:rowView.step];
-    }
-    [rowView updateWithName:transform.name
-            param:instance
-            color:textColor];
-}
-
 // we may not reveal it, but it is always there
 
 - (void) useDepthTransform:(Transform *) transform {

@@ -31,7 +31,7 @@ typedef enum {
     
     CGSize captureSize;
     CGSize transformSize;
-    CGRect thumbArrayRect, executeRect;
+    CGRect thumbArrayRect;
     CGRect firstThumbRect;
     CGRect thumbImageRect;      // within the thumb
     
@@ -51,7 +51,6 @@ typedef enum {
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
 @property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
-@property (assign)              CGRect executeRect;     // where the execution details go
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 @property (assign)              size_t thumbCount;

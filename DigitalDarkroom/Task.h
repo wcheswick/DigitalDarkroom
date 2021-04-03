@@ -9,7 +9,6 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "TaskGroup.h"
-#import "ExecuteRowView.h"
 
 #import "Transforms.h"
 #import "Transform.h"
@@ -55,12 +54,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
-
-- (ExecuteRowView *) listViewForStep:(long) step
-                         depthActive:(BOOL)doingDepth;
-- (ExecuteRowView *) emptyListViewForStep:(long) step;
-
-- (void) updateRowView:(ExecuteRowView *) rowView depthActive:(BOOL)doingDepth;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 

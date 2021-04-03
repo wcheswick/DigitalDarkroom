@@ -376,43 +376,6 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Focus"
-                                  description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = src.w;
-        long H = src.h;
-        long N = W * H;
-        for (int i=0; i<N; i++) {           // red
-            chBuf0.cb[i] = src.pb[i].r;
-        }
-        focus(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dest.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
-            }
-        }
-        for (int i=0; i<N; i++) {           // green
-            chBuf0.cb[i] = src.pb[i].g;
-        }
-        focus(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dest.pa[y][x].g = chBuf1.ca[y][x];
-            }
-        }
-        for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = src.pb[i].b;
-        }
-        focus(chBuf0, chBuf1);              // blue
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dest.pa[y][x].b = chBuf1.ca[y][x];
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
                                  description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -555,6 +518,44 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
     
+    lastTransform = [Transform areaTransform: @"Focus"
+                                  description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = src.w;
+        long H = src.h;
+        long N = W * H;
+        for (int i=0; i<N; i++) {           // red
+            chBuf0.cb[i] = src.pb[i].r;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
+            }
+        }
+        for (int i=0; i<N; i++) {           // green
+            chBuf0.cb[i] = src.pb[i].g;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x].g = chBuf1.ca[y][x];
+            }
+        }
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = src.pb[i].b;
+        }
+        focus(chBuf0, chBuf1);              // blue
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dest.pa[y][x].b = chBuf1.ca[y][x];
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+
+#ifdef NOTDEF
     lastTransform = [Transform areaTransform: @"Null test"
                                   description: @""
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -575,6 +576,7 @@ mostCommonColorInHist(Hist_t *hists) {
         }
     }];
     [self addTransform:lastTransform];
+#endif
 }
 
 - (void) addTransform:(Transform *)transform {

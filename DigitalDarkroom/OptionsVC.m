@@ -119,18 +119,14 @@
         cell.contentView.backgroundColor = [UIColor yellowColor];
         switch (indexPath.row) {
             case 0:
-                cell.largeContentTitle = @"Build mode";
-                cell.accessoryType = options.stackingMode ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-                break;
-            case 1:
                 cell.largeContentTitle = @"Debug exec";
                 cell.accessoryType = options.executeDebug ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
-           case 2:
+            case 1:
                 cell.largeContentTitle = @"Hi res";
                 cell.accessoryType = options.needHires ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
-            case 3:
+            case 2:
                 cell.largeContentTitle = @"Reticle";
                 cell.accessoryType = options.reticle ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
@@ -154,15 +150,12 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.row < OPTION_COUNT) {
         switch (indexPath.row) {
             case 0:
-                options.stackingMode = !options.stackingMode;
-                break;
-            case 1:
                 options.executeDebug = !options.executeDebug;
                 break;
-           case 2:
+           case 1:
                 options.needHires = !options.needHires;
                 break;
-            case 3:
+            case 2:
                 options.reticle = !options.reticle;
                 break;
        }

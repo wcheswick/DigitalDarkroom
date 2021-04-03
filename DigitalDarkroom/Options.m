@@ -10,7 +10,6 @@
 
 #define kReticleOption     @"Heretical"
 #define kHiresOption        @"Hires"
-#define kstackingModeOption     @"stackingMode"
 #define kExecuteDebugOption @"ExecuteDebug"
 
 @implementation Options
@@ -19,7 +18,6 @@
 
 @synthesize executeDebug;
 @synthesize needHires;
-@synthesize stackingMode;
 @synthesize reticle;
 
 - (id)init {
@@ -27,7 +25,6 @@
     if (self) {
         reticle = [[NSUserDefaults standardUserDefaults] boolForKey:kReticleOption];
         needHires = [[NSUserDefaults standardUserDefaults] boolForKey:kHiresOption];;
-        stackingMode = [[NSUserDefaults standardUserDefaults] boolForKey:kstackingModeOption];;
         executeDebug = [[NSUserDefaults standardUserDefaults] boolForKey:kExecuteDebugOption];
         displayMode = medium;   // not in use
         needHires = NO;
@@ -39,7 +36,6 @@
 - (void) save {
     [[NSUserDefaults standardUserDefaults] setBool:reticle forKey:kReticleOption];
     [[NSUserDefaults standardUserDefaults] setBool:needHires forKey:kHiresOption];
-    [[NSUserDefaults standardUserDefaults] setBool:stackingMode forKey:kstackingModeOption];
     [[NSUserDefaults standardUserDefaults] setBool:executeDebug forKey:kExecuteDebugOption];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }

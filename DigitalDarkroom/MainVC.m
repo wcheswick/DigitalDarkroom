@@ -13,7 +13,6 @@
 #import "Transforms.h"  // includes DepthImage.h
 #import "TaskCtrl.h"
 #import "OptionsVC.h"
-#import "ExecuteRowView.h"
 #import "Layout.h"
 #import "HelpVC.h"
 #import "Defines.h"
@@ -143,12 +142,7 @@ typedef enum {
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
-@property (nonatomic, strong)   UIView *executeView;        // active transform list and details
-
-// in executeView
-@property (nonatomic, strong)   UIView *executeListView;
-@property (assign)              long selectedExecutionStep;         // or NO_TRANSFORM
-@property (assign)              long nextInputRow;                  // or NO_TRANSFORM
+@property (nonatomic, strong)   UITextView *executeView;        // active transform list
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
@@ -214,12 +208,10 @@ typedef enum {
 @synthesize depthSelectButton, flipCameraButton, photoStackButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
-@synthesize selectedExecutionStep;
 @synthesize thumbArrayView;
 
 @synthesize executeView;
 @synthesize plusButton;
-@synthesize executeListView;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait;
@@ -231,7 +223,6 @@ typedef enum {
 @synthesize inputSources, currentSource;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
-@synthesize nextInputRow;
 
 @synthesize nextSource;
 @synthesize availableCameraCount;
@@ -265,7 +256,6 @@ typedef enum {
         transforms = [[Transforms alloc] init];
         currentDepthTransformIndex = NO_TRANSFORM;
         currentTransformIndex = NO_TRANSFORM;
-        nextInputRow = NO_INPUT_ROW;
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
@@ -295,7 +285,7 @@ typedef enum {
         busy = NO;
         options = [[Options alloc] init];
         
-        overlayState = overlayShowingDebug;
+        overlayState = overlayShowing;
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
@@ -559,7 +549,17 @@ typedef enum {
     overlayView.opaque = NO;
     overlayView.userInteractionEnabled = YES;
     overlayView.backgroundColor = [UIColor clearColor];
-    [overlayView addSubview:transformView];
+
+    executeView = [[UITextView alloc]
+                   initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
+    executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    executeView.userInteractionEnabled = NO;
+    executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
+    executeView.textColor = [UIColor blackColor];
+    executeView.layer.borderWidth = 1.0;
+    executeView.layer.borderColor = [UIColor blackColor].CGColor;
+    executeView.text = @"pooooooooot";
+    executeView.opaque = YES;
 
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTapSceen:)];
@@ -612,34 +612,13 @@ typedef enum {
 
     [containerView addSubview:transformView];
     [containerView addSubview:overlayView];
+    [containerView addSubview:executeView];
     [containerView bringSubviewToFront:overlayView];
     
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     screenTask = [screenTasks createTaskForTargetImageView:transformView
                                                      named:@"main"
                                             depthTransform:depthTransform];
-
-    executeView = [[UIView alloc]
-                   initWithFrame: CGRectMake(LATER, LATER,
-                                             EXECUTE_VIEW_W,
-                                             EXECUTE_MAX_VISIBLE_VIEW_H)];
-    executeView.opaque = NO;
-    executeView.backgroundColor = [UIColor clearColor];
-    executeView.userInteractionEnabled = YES;
-    
-    executeListView =  [[UIView alloc]
-                    initWithFrame:CGRectMake(0, 0,
-                                             EXECUTE_LIST_W, LATER)];
-    executeListView.backgroundColor = [UIColor clearColor];
-    executeListView.opaque = NO;
-    executeListView.layer.borderWidth = EXECUTE_BORDER_W;
-    executeListView.layer.cornerRadius = 10;
-    executeListView.layer.borderColor = [UIColor lightGrayColor].CGColor;
-    [executeView addSubview:executeListView];
-    
-    [self initExecList];
-    
-    [containerView addSubview:executeView];
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -785,10 +764,10 @@ typedef enum {
                                                weight:UIFontWeightHeavy],
         //NSBaselineOffsetAttributeName: @-3
     }] forState:UIControlStateSelected];
-    [plusButton addTarget:self action:@selector(toggleStackMode:) forControlEvents:UIControlEventTouchUpInside];
+    [plusButton addTarget:self action:@selector(togglePlusMode:)
+         forControlEvents:UIControlEventTouchUpInside];
     
     UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc] initWithCustomView:plusButton];
-    [self configureStackMode];
 
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
@@ -1020,7 +999,6 @@ stackingButton.userInteractionEnabled = YES;
         currentSource = nextSource;
         nextSource = nil;
         [self saveCurrentSource];
-        [self changeStepInExecuteList:DEPTH_STEP];  // reflect possibly-new depth state
     }
     assert(currentSource);
     
@@ -1132,11 +1110,14 @@ stackingButton.userInteractionEnabled = YES;
     overlayView.frame = layout.displayRect;
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
-    executeView.frame = layout.executeRect;
     thumbScrollView.frame = layout.thumbArrayRect;
     thumbArrayView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
+    f = transformView.frame;
+    f.origin.x = 0;
+    executeView.frame = CGRectMake(transformView.frame.origin.x, LATER,
+                                   transformView.frame.size.width, LATER);
 
 #ifdef DEBUG_LAYOUT
     NSLog(@"layout selected:");
@@ -1159,12 +1140,6 @@ stackingButton.userInteractionEnabled = YES;
           transformView.frame.size.width,
           transformView.frame.size.height);
 
-    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
-          executeView.frame.origin.x,
-          executeView.frame.origin.y,
-          executeView.frame.size.width,
-          executeView.frame.size.height);
-
     NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
           thumbScrollView.frame.origin.x,
           thumbScrollView.frame.origin.y,
@@ -1173,10 +1148,6 @@ stackingButton.userInteractionEnabled = YES;
 
     overlayView.layer.borderColor = [UIColor redColor].CGColor;
 //    transformView.layer.borderWidth = 5.0;
-    executeView.layer.borderColor = [UIColor blackColor].CGColor;
-    executeView.layer.borderWidth = 2.0;
-    executeView.layer.cornerRadius = 5;
-    executeView.clipsToBounds = YES;
     thumbScrollView.layer.borderColor = [UIColor blueColor].CGColor;
 //    thumbScrollView.layer.borderWidth = 5.0;
 #endif
@@ -1207,8 +1178,8 @@ stackingButton.userInteractionEnabled = YES;
     } else {
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
     }
-    [self adjustExecuteDisplay];
     [self updateOverlayView];
+    [self updateExecuteView];
 }
 
 #define DEBUG_FONT_SIZE 16
@@ -1374,8 +1345,6 @@ CGFloat topOfNonDepthArray = 0;
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
     if (DISPLAYING_THUMBS)
         [thumbTasks configureGroupWithNewDepthTransform:depthTransform];
-    
-    [self changeStepInExecuteList:DEPTH_STEP];
 }
 
 - (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
@@ -1392,44 +1361,27 @@ CGFloat topOfNonDepthArray = 0;
 
 #define EXECUTE_ROW_COUNT   (self->executeListView.subviews.count)
 
-size_t nextExecuteAppendStep;
-size_t topExecuteStepDisplayed;
-
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
     NSLog(@" === transformThumbTapped, transform index %ld, %@", tappedTransformIndex, tappedTransform.name);
-    [self dumpRows:@"transformThumbTapped"];
-
-    ExecuteRowView *nextAppendRowView = [executeListView
-                                       viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
-    assert(nextAppendRowView);
     
-    if (IS_EMPTY_ROW(nextAppendRowView)) {
+    if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1) {   // add a new transform
         long step = [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTransformAtIndex:step];
-        [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
-        if (options.stackingMode) { // append an empty cell for next transform
-            nextExecuteAppendStep = [self appendEmptyRow];
-        }
-    } else {
-        // this can only be in non-stacking mode, where we are clearing
-        // or replacing the current transform
-        assert(!options.stackingMode);
+        plusButton.selected = NO;
+    } else {    // change the last transform
         Transform *lastTransform = [screenTask.transformList lastObject];
         UIView *oldThumb = [self thumbViewForTransform:lastTransform];
         [self adjustThumbView:oldThumb selected:NO];
         [screenTask removeLastTransform];
-        if ([tappedTransform.name isEqual:lastTransform.name]) {
-            // current transform just retapped.  Empty it, and done
-            [nextAppendRowView makeRowEmpty];
-        } else {
+        if (![tappedTransform.name isEqual:lastTransform.name]) {
+            // install new last transform
             long step = [screenTask appendTransformToTask:tappedTransform];
             [screenTask configureTransformAtIndex:step];
-            [screenTask updateRowView:nextAppendRowView depthActive:DOING_3D];
         }
     }
-    [self adjustExecuteDisplay];
+    [self updateExecuteView];
 }
 
 - (UIView *) thumbViewForTransform:(Transform *) transform {
@@ -1437,109 +1389,10 @@ size_t topExecuteStepDisplayed;
     return [thumbArrayView viewWithTag:transformIndex + TRANSFORM_BASE_TAG];
 }
 
-#ifdef DONOTUSE
-- (CGFloat) rowViewYForStep:(size_t) step {
-    if (step == 0 && !DOING_3D)
-        return -1.0;
-    long screenRowIndex = executeListView.subviews.count - step - 1;
-    CGFloat y = EXECUTE_BORDER_W + screenRowIndex*EXECUTE_ROW_H;
-    NSLog(@"-------->  yForStep %ld:  %.0f", step, y);
-    return y;
-}
-#endif
-
-- (size_t) appendRowView:(ExecuteRowView *) rowView {
-    size_t step = rowView.step;
-    assert(step == executeListView.subviews.count);
-    [executeListView addSubview:rowView];
-    [rowView setNeedsDisplay];
-    [executeListView setNeedsDisplay];
-//XXXXX    [self changeExecuteLengthBy: 1];
-// y is set later
-//    SET_VIEW_Y(rowView, [self rowViewYForStep:step]);
-    return step;
-}
-
-- (size_t) appendEmptyRow {
-    ExecuteRowView *emptyRow = [[ExecuteRowView alloc]
-                                initForStep:executeListView.subviews.count];
-    [emptyRow makeRowEmpty];
-    return [self appendRowView:emptyRow];
-}
-
-- (void) initExecList {
-    ExecuteRowView *rowView = [screenTask listViewForStep:DEPTH_STEP
-                                                      depthActive:DOING_3D];
-    [self appendRowView: rowView];
-    nextExecuteAppendStep = [self appendEmptyRow];
-}
-
-// change the size and position of the execute list as needed
-- (void) adjustExecuteDisplay {
-    long rows = EXECUTE_ROW_COUNT;
-#ifdef DEBUG_EXECUTE
-    [self dumpRows:@"adjustExecuteDisplay"];
-    NSLog(@"adjustExecuteDisplay, rows=%ld oldheight=%.0f",
-          rows, executeListView.frame.size.height);
-#endif
-
-    [UIView animateWithDuration:0.5 animations:^(void) {
-        // Adjust the row positions
-        CGFloat y = EXECUTE_BORDER_W;
-        for (int step = 0; step < rows; step++) {
-            ExecuteRowView *rowView = [self->executeListView viewWithTag:step + EXECUTE_STEP_TAG];
-            rowView.hidden = step == DEPTH_STEP && !DOING_3D;
-            if (rowView.hidden) {
-                continue;
-            }
-            SET_VIEW_Y(rowView, y);
-            if (step == nextExecuteAppendStep)
-                rowView.statusChar.text = BIGPLUS;
-            else
-                rowView.statusChar.text = @"";
-            rowView.backgroundColor= [UIColor colorWithWhite:1.0 alpha:0.3];
-            [rowView setNeedsDisplay];
-            y += EXECUTE_ROW_H;
-        }
-        SET_VIEW_HEIGHT(self->executeListView, y + EXECUTE_BORDER_W);
-        self->executeListView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.3];
-        [self->executeListView setNeedsDisplay];
-        [self dumpRows:@"adjustExecuteDisplay adjusted"];
-
-    }];
-}
-
-- (void) appendStepToExecuteList:(long) step {
-    ExecuteRowView *rowView = [[ExecuteRowView alloc] initForStep:step];
-    [screenTask updateRowView:rowView depthActive:DOING_3D];
-    [executeListView addSubview:rowView];
-    [self adjustExecuteDisplay];
-}
-
-- (void) changeStepInExecuteList:(long) step {
-    ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
-    assert(rowView);
-    [screenTask updateRowView:rowView depthActive:DOING_3D];
-    [self adjustExecuteDisplay];
-}
-
-- (void) dumpRows:(NSString *)label {
-#ifdef DEBUG_EXECUTE
-    NSLog(@" -- dumpRows  %@, %ld", label, EXECUTE_ROW_COUNT);
-    for (long step=0; step<EXECUTE_ROW_COUNT; step++) {
-        ExecuteRowView *rowView = [executeListView viewWithTag:EXECUTE_STEP_TAG + step];
-        NSLog(@"    %2ld  tag:%2ld @ %2.0f  %@", step, (long)rowView.tag,
-              rowView.frame.origin.y,
-              IS_EMPTY_ROW(rowView) ? @"*empty*": rowView.name.text );
-    }
-#endif
-}
-
-- (IBAction) toggleStackMode:(UIButton *)sender {
-    options.stackingMode = !options.stackingMode;
-    NSLog(@" === stacking mode now %d", options.stackingMode);
-    [options save];
-    [self configureStackMode];
+- (IBAction) togglePlusMode:(UIButton *)sender {
+    plusButton.selected = !plusButton.selected;
+    [plusButton setNeedsDisplay];
+    [self updateExecuteView];
 }
 
 - (void) adjustThumbView:(UIView *) thumb selected:(BOOL)selected {
@@ -1713,7 +1566,7 @@ size_t topExecuteStepDisplayed;
     options.executeDebug = !options.executeDebug;
     [options save];
     NSLog(@" debugging execute: %d", options.executeDebug);
-    [self adjustExecuteDisplay];
+    [self updateExecuteView];
 }
 
 - (IBAction) doPan:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
@@ -1988,9 +1841,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveAllTransforms {
     NSLog(@" === doRemoveAllTransforms");
     [screenTasks removeAllTransforms];
-    [executeListView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
-    [self initExecList];
-    [self adjustExecuteDisplay];
+    [self updateExecuteView];
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {
@@ -2003,11 +1854,6 @@ UIImageOrientation lastOrientation;
 - (void) doTick:(NSTimer *)sender {
     if (taskCtrl.layoutNeeded)
         [taskCtrl layoutIfReady];
-    
-    for (ExecuteRowView *rowView in executeListView.subviews) {
-        [screenTask updateRowView:rowView depthActive:DOING_3D];
-    }
-
     
 #ifdef NOTYET
     NSDate *now = [NSDate now];
@@ -2044,64 +1890,44 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) doRemoveLastTransform {
-    [self dumpRows:@"doRemoveLastTransform"];
-    int lastStep = (int)screenTask.transformList.count - 1;
-    if (lastStep == DEPTH_STEP)
-        return; // never delete this step
-    ExecuteRowView *rowView = [executeListView viewWithTag:lastStep + EXECUTE_STEP_TAG];
-    [rowView removeFromSuperview];
-    nextExecuteAppendStep = [screenTask removeLastTransform];
-    [self adjustExecuteDisplay];
-    [self dumpRows:@"doRemoveLastTransform after"];
-    // appendstep needs adjustment for plus case XXXXX
-// XXXXX    [self adjustBarButtons];    // disable undo if input = 1 and row is empty
+    [self updateExecuteView];
 }
 
-- (void) configureStackMode {
-    ExecuteRowView *inputRowView = [self->executeListView
-                                       viewWithTag:nextExecuteAppendStep + EXECUTE_STEP_TAG];
-    assert(inputRowView);
-    
-    plusButton.selected = options.stackingMode;
-    [plusButton setNeedsDisplay];
-    
-    if (options.stackingMode) { // initiate stacking mode
-         [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
-                         animations:^(void) {
-            // if the current input row view is empty, do nothing, else append an empty row
-            // and point to it
-            if (!IS_EMPTY_ROW(inputRowView)) {
-                nextExecuteAppendStep = [self appendEmptyRow];
-            }
-            [self adjustExecuteDisplay];
-        }];
-        return;
-    }
-    
-    // to turn off stacking, remove the empty cell at the end, unless it is
-    // DEPTH_STEP + 1, in which case just clear the row.
-     [UIView animateWithDuration:EXECUTE_VIEW_ANIMATION_TIME
-                     animations:^(void) {
-        if (IS_EMPTY_ROW(inputRowView)) {
-            if (inputRowView.step > DEPTH_STEP + 1) {
-                [inputRowView removeFromSuperview];
-                nextExecuteAppendStep--;
-            }
+- (void) updateExecuteView {
+    NSString *t = nil;
+    for (Transform *transform in screenTask.transformList) {
+        if (!t)
+            t = transform.name;
+        else {
+            t = [NSString stringWithFormat:@"%@ + %@", t, transform.name];
         }
-        [self adjustExecuteDisplay];
-    }];
+    }
+    if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
+        t = [t stringByAppendingString:@" +"];
+    executeView.text = t;
+    SET_VIEW_HEIGHT(executeView, executeView.contentSize.height);
+    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
+    NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f text:%@",
+          executeView.frame.origin.x, executeView.frame.origin.y,
+          executeView.frame.size.width, executeView.frame.size.height, t);
+#ifdef notdef
+    UIFont *font = [UIFont systemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
+    CGSize size = [t sizeWithFont:font
+                          constrainedToSize:plusButton.frame.size
+                          lineBreakMode:NSLineBreakByWordWrapping];
+//    float numberOfLines = size.height / font.lineHeight;
+#endif
+    [executeView setNeedsDisplay];
 }
 
 - (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doUp");
-    selectedExecutionStep--;
-    [self adjustExecuteDisplay];
+    [self updateExecuteView];
 }
 
 - (IBAction) doDown:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doDown");
-    selectedExecutionStep++;
-    [self adjustExecuteDisplay];
+    [self updateExecuteView];
 }
 
 - (IBAction) chooseDepth:(UIButton *)button {

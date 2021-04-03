@@ -19,7 +19,6 @@ typedef enum {
 } DisplayMode_t;
 
 @interface Options : NSObject {
-    BOOL stackingMode;
     BOOL executeDebug;
     BOOL needHires;
     BOOL reticle;
@@ -27,7 +26,7 @@ typedef enum {
 #define OPTION_COUNT    4
 
 @property (assign)  DisplayMode_t displayMode;
-@property (assign)  BOOL stackingMode, executeDebug, needHires, reticle;
+@property (assign)  BOOL executeDebug, needHires, reticle;
 
 - (void) save;
 

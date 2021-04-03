@@ -40,7 +40,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize isPortrait, isiPhone, displayOption;
 @synthesize containerView;
 @synthesize captureSize, transformSize;
-@synthesize displayRect, thumbArrayRect, executeRect;
+@synthesize displayRect, thumbArrayRect;
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize thumbsPlacement;
@@ -60,7 +60,7 @@ NSString * __nullable displayOptionNames[] = {
         scale = 1.0;
         score = 0;
         thumbCount = 1000;  // rediculous number
-        displayRect = thumbArrayRect = executeRect = CGRectZero;
+        displayRect = thumbArrayRect = CGRectZero;
         status = nil;
         containerView = nil;
     }
@@ -207,18 +207,12 @@ NSString * __nullable displayOptionNames[] = {
         default:
             ;
     }
-        
-    executeRect = CGRectMake(0, BELOW(displayRect), EXECUTE_VIEW_W, EXECUTE_BEST_BELOW_H);
 
     switch (thumbsPlacement) {
        case ThumbsOptional:
             break;
         case ThumbsUnderneath:
             thumbScore = bottomThumbScore;
-            if (displayOption == TightDisplay) {
-                executeRect.size.height = EXECUTE_BUTTON_H;
-                executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
-            }
             // center display for thumbs on bottom
             displayRect.origin.x = (containerView.frame.size.width - displayRect.size.width)/2.0;
             break;
@@ -231,23 +225,14 @@ NSString * __nullable displayOptionNames[] = {
         default:
             assert(0); // should not happen
     }
-    
-    // adjust and finalize execute display
-    if (executeRect.origin.y + executeRect.size.height > containerView.frame.size.height) {
-#ifdef DEBUG_LAYOUT
-        NSLog(@"** tightening execute height");
-#endif
-        executeRect.size.height = containerView.frame.size.height - executeRect.origin.y;
-    }
-    executeRect.origin.x = (displayRect.size.width - executeRect.size.width)/2.0 + displayRect.origin.x;
-    
+   
     switch (thumbsPlacement) {
         case ThumbsOnRight:
             thumbArrayRect.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
             thumbArrayRect.size = right;
             break;
         case ThumbsUnderneath:
-            thumbArrayRect.origin = CGPointMake(0, BELOW(executeRect));
+            thumbArrayRect.origin = CGPointMake(0, BELOW(displayRect));
             thumbArrayRect.size = CGSizeMake(containerView.frame.size.width,
                                              containerView.frame.size.height - thumbArrayRect.origin.y);
             break;
