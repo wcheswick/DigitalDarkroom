@@ -108,7 +108,7 @@ NSString * __nullable displayOptionNames[] = {
     BOOL fits = wfits && hfits;
     
     if (!fits && !scaleOK)
-        return REJECT_SCORE;
+        return REJECT_SCORE + 1;
     
     if (!fits && scaleOK) {    // scale
         scale = [self aspectScaleToSize:containerSize];
@@ -226,6 +226,9 @@ NSString * __nullable displayOptionNames[] = {
             assert(0); // should not happen
     }
    
+    if (thumbScore > 100)
+        thumbScore -= (thumbScore - 100) / 2;   // wasted thumb space
+
     switch (thumbsPlacement) {
         case ThumbsOnRight:
             thumbArrayRect.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
@@ -294,9 +297,9 @@ NSString * __nullable displayOptionNames[] = {
         score += 5;     // avoids execution performance hit
     
     if (!(hfits || wfits))
-        score = REJECT_SCORE;
+        score = REJECT_SCORE + 2;
     if (!(rightThumbsOK || bottomThumbsOK))
-        score = REJECT_SCORE;
+        score = REJECT_SCORE + 3;
 
     
     status = [NSString stringWithFormat:@"%@%@ %@",

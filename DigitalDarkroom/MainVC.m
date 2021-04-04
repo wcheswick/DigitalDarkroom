@@ -170,6 +170,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 @property (nonatomic, strong)   UIButton *plusButton;
+@property (assign)              BOOL plusButtonLocked;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -211,7 +212,7 @@ typedef enum {
 @synthesize thumbArrayView;
 
 @synthesize executeView;
-@synthesize plusButton;
+@synthesize plusButton, plusButtonLocked;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait;
@@ -283,6 +284,7 @@ typedef enum {
         depthBuf = nil;
         thumbScrollView = nil;
         busy = NO;
+        plusButtonLocked = NO;
         options = [[Options alloc] init];
         
         overlayState = overlayShowing;
@@ -750,24 +752,26 @@ typedef enum {
     
     self.navigationItem.rightBarButtonItem = helpButton;
     
-    
     CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     plusButton.frame = CGRectMake(0, 0, toolBarH+SEP, toolBarH);
-    [plusButton setAttributedTitle:[[NSAttributedString alloc] initWithString:BIGPLUS attributes:@{
-        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                               weight:UIFontWeightUltraLight],
-        //NSBaselineOffsetAttributeName: @-3
-    }] forState:UIControlStateNormal];
-    [plusButton setAttributedTitle:[[NSAttributedString alloc] initWithString:BIGPLUS attributes:@{
-        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                               weight:UIFontWeightHeavy],
-        //NSBaselineOffsetAttributeName: @-3
-    }] forState:UIControlStateSelected];
+    [plusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:BIGPLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightUltraLight],
+                                        //NSBaselineOffsetAttributeName: @-3
+                                    }] forState:UIControlStateNormal];
+    [plusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:BIGPLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightHeavy],
+                                        //NSBaselineOffsetAttributeName: @-3
+                                    }] forState:UIControlStateSelected];
     [plusButton addTarget:self action:@selector(togglePlusMode:)
          forControlEvents:UIControlEventTouchUpInside];
     
-    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc] initWithCustomView:plusButton];
+    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:plusButton];
 
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
@@ -1180,6 +1184,7 @@ stackingButton.userInteractionEnabled = YES;
     }
     [self updateOverlayView];
     [self updateExecuteView];
+    [self adjustBarButtons];
 }
 
 #define DEBUG_FONT_SIZE 16
@@ -1364,24 +1369,47 @@ CGFloat topOfNonDepthArray = 0;
 - (void) transformThumbTapped: (UIView *) tappedThumb {
     long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
     Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
-    NSLog(@" === transformThumbTapped, transform index %ld, %@", tappedTransformIndex, tappedTransform.name);
+
+    size_t lastTransformIndex = screenTask.transformList.count - 1; // depth transform (#0) doesn't count
+    Transform *lastTransform = nil;
+    if (lastTransformIndex > DEPTH_TRANSFORM) {
+        lastTransform = screenTask.transformList[lastTransformIndex];
+    }
     
-    if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1) {   // add a new transform
-        long step = [screenTask appendTransformToTask:tappedTransform];
-        [screenTask configureTransformAtIndex:step];
-        plusButton.selected = NO;
-    } else {    // change the last transform
-        Transform *lastTransform = [screenTask.transformList lastObject];
-        UIView *oldThumb = [self thumbViewForTransform:lastTransform];
-        [self adjustThumbView:oldThumb selected:NO];
-        [screenTask removeLastTransform];
-        if (![tappedTransform.name isEqual:lastTransform.name]) {
-            // install new last transform
-            long step = [screenTask appendTransformToTask:tappedTransform];
-            [screenTask configureTransformAtIndex:step];
+    if (plusButton.selected) {  // add new transform
+        if (lastTransform) {
+            UIView *oldThumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + lastTransform.arrayIndex];
+            [self adjustThumbView:oldThumb selected:NO];
         }
+        [screenTask appendTransformToTask:tappedTransform];
+        [screenTask configureTaskForSize];
+        [self adjustThumbView:tappedThumb selected:YES];
+        if (!plusButtonLocked)
+            plusButton.selected = NO;
+    } else {    // not plus mode
+        if (lastTransform) {
+            BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
+            [screenTask removeLastTransform];
+            UIView *oldThumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + lastTransform.arrayIndex];
+            [self adjustThumbView:oldThumb selected:NO];
+            if (reTap) {
+                // retapping a transform in not plus mode means just remove it, and we are done
+                [self updateExecuteView];
+                [self adjustBarButtons];
+                return;
+            }
+        }
+        [screenTask appendTransformToTask:tappedTransform];
+        [self adjustThumbView:tappedThumb selected:YES];
+        [screenTask configureTaskForSize];
     }
     [self updateExecuteView];
+    [self adjustBarButtons];
+}
+
+- (void) adjustBarButtons {
+    undoBarButton.enabled = screenTask.transformList.count > 1;
+    trashBarButton.enabled = screenTask.transformList.count > 1;;
 }
 
 - (UIView *) thumbViewForTransform:(Transform *) transform {
@@ -1662,41 +1690,6 @@ CGFloat topOfNonDepthArray = 0;
     return newImage;
 }
 
-#ifdef NOTNEEDED
-// Apparently, this translation is not needed
-- (UIImageOrientation) imageOrientationForDeviceOrientation {
-    UIImageOrientation orient;
-    switch (deviceOrientation) {
-        case UIDeviceOrientationPortrait:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationPortraitUpsideDown:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationLandscapeRight:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationLandscapeLeft:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationFaceUp:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationFaceDown:
-            orient = UIImageOrientationUp;
-            break;
-        case UIDeviceOrientationUnknown:
-            orient = UIImageOrientationUp;
-            break;
-        default:
-            NSLog(@"***** Inconceivable video orientation: %ld",
-                  (long)deviceOrientation);
-            orient = UIImageOrientationUpMirrored;
-    }
-    
-    return orient;
-}
-#endif
 
 #ifdef XXXX
 if captureDevice.position == AVCaptureDevicePosition.back {
@@ -1839,9 +1832,9 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) doRemoveAllTransforms {
-    NSLog(@" === doRemoveAllTransforms");
     [screenTasks removeAllTransforms];
     [self updateExecuteView];
+    [self adjustBarButtons];
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {
@@ -1890,27 +1883,35 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) doRemoveLastTransform {
-    [self updateExecuteView];
+    if (screenTask.transformList.count > 1) {
+        [screenTask removeLastTransform];
+        [self updateExecuteView];
+        [self adjustBarButtons];
+    }
 }
 
 - (void) updateExecuteView {
     NSString *t = nil;
-    for (Transform *transform in screenTask.transformList) {
+    size_t start = DOING_3D ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
+    for (long step=start; step<screenTask.transformList.count; step++) {
+        Transform *transform = screenTask.transformList[step];
         if (!t)
             t = transform.name;
         else {
-            t = [NSString stringWithFormat:@"%@ + %@", t, transform.name];
+            t = [NSString stringWithFormat:@"%@  +  %@", t, transform.name];
         }
     }
     if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
-        t = [t stringByAppendingString:@" +"];
+        t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     SET_VIEW_HEIGHT(executeView, executeView.contentSize.height);
+    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
     SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
-    NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f text:%@",
-          executeView.frame.origin.x, executeView.frame.origin.y,
-          executeView.frame.size.width, executeView.frame.size.height, t);
 #ifdef notdef
+    NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f (%0.f x %.0f) text:%@",
+          executeView.frame.origin.x, executeView.frame.origin.y,
+          executeView.frame.size.width, executeView.frame.size.height,
+          executeView.contentSize.width, executeView.contentSize.height, t);
     UIFont *font = [UIFont systemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
     CGSize size = [t sizeWithFont:font
                           constrainedToSize:plusButton.frame.size
