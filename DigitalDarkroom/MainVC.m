@@ -520,10 +520,6 @@ typedef enum {
 - (void) viewDidLoad {
     [super viewDidLoad];
     
-#ifdef DEBUG_LAYOUT
-    NSLog(@" ========= viewDidLoad =========");
-#endif
-    
 #define SLIDER_OFF  (-1)
     
     //    UIBarButtonItem *sliderBarButton = [[UIBarButtonItem alloc] initWithCustomView:valueSlider];
@@ -960,7 +956,7 @@ stackingButton.userInteractionEnabled = YES;
     Layout *bestLayout = nil;
     
     for (AVCaptureDeviceFormat *format in availableFormats) {
-        Layout *layout = [[Layout alloc] initForPortrait:isPortrait
+        Layout *layout = [[Layout alloc] initForOrientation:isPortrait
                                                   iPhone:isiPhone
                                            displayOption:displayOption];
         layout.containerView = containerView;
@@ -979,10 +975,6 @@ stackingButton.userInteractionEnabled = YES;
 // this is called when we know the transforms are all Stopped.
 
 - (void) doLayout {
-#ifdef DEBUG_LAYOUT
-    NSLog(@"doLayout self.view %0.f x %.0f",
-          self.view.frame.size.width, self.view.frame.size.height);
-#endif
     BOOL adjustSourceInfo = (nextSource != nil);
     
     self.navigationController.navigationBarHidden = NO;
@@ -1098,7 +1090,7 @@ stackingButton.userInteractionEnabled = YES;
         else
             [cameraController setupCameraWithFormat:layout.format];
     } else {
-        layout = [[Layout alloc] initForPortrait:isPortrait
+        layout = [[Layout alloc] initForOrientation:isPortrait
                                           iPhone:isiPhone
                                    displayOption:displayOption];
         layout.containerView = containerView;
@@ -1533,12 +1525,6 @@ CGFloat topOfNonDepthArray = 0;
     [self.navigationController setNavigationBarHidden:hide animated:YES];
     [self.navigationController setToolbarHidden:hide animated:YES];
     return;
-    
-    overlayState++;
-    if (overlayState == OVERLAY_STATES) {
-        overlayState = overlayClear;
-    }
-    [self updateOverlayView];
 }
 
 // freeze/unfreeze video

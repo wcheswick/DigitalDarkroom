@@ -58,7 +58,7 @@ typedef enum {
 @property (assign)              float scale, score, aspectRatio;
 @property (nonatomic, strong)   NSString *status;
 
-- (id)initForPortrait:(BOOL) port
+- (id)initForOrientation:(BOOL) port
                iPhone:(BOOL) isPhone
               displayOption:(DisplayOptions) dopt;
 

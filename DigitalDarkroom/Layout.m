@@ -48,7 +48,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize scale, score, aspectRatio;
 @synthesize status;
 
-- (id)initForPortrait:(BOOL) port
+- (id)initForOrientation:(BOOL) port
                iPhone:(BOOL) isPhone
               displayOption:(DisplayOptions) dopt {
     self = [super init];
@@ -74,9 +74,6 @@ NSString * __nullable displayOptionNames[] = {
     CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
     CGSize capSize = isPortrait ? CGSizeMake(dimensions.height, dimensions.width) :
                 CGSizeMake(dimensions.width, dimensions.height);
-#ifdef DEBUG_CAMERA_CAPTURE_SIZE
-    NSLog(@"capture size  %4.0f  x %4.0f", capSize.width, capSize.height);
-#endif
     return [self layoutForSize:capSize scaleOK:scaleOK];
 }
 
@@ -195,8 +192,8 @@ NSString * __nullable displayOptionNames[] = {
     
     int rightThumbCount = [self thumbsInArea:right];
     int bottomThumbCount = [self thumbsInArea:bottom];
-    float rightThumbScore = 100.0 * (float)rightThumbCount / (float)thumbCount;
-    float bottomThumbScore = 100.0 * (float)bottomThumbCount / (float)thumbCount;
+    float rightThumbScore = 100.0 - 100.0*((float)abs((int)thumbCount - rightThumbCount)/(float)thumbCount);
+    float bottomThumbScore = 100.0 - 100.0*((float)abs((int)thumbCount - bottomThumbCount)/(float)thumbCount);
     float thumbScore = 0.0;
     
     switch (thumbsPlacement) {
@@ -225,9 +222,6 @@ NSString * __nullable displayOptionNames[] = {
         default:
             assert(0); // should not happen
     }
-   
-    if (thumbScore > 100)
-        thumbScore -= (thumbScore - 100) / 2;   // wasted thumb space
 
     switch (thumbsPlacement) {
         case ThumbsOnRight:
@@ -279,7 +273,6 @@ NSString * __nullable displayOptionNames[] = {
         score = 1.00 - captureArea/containerArea;
     }
     
-    
 //    int thumbsUnderneath = bottomThumbCount > rightThumbCount;
     
     float rightThumbs = right.width / (firstThumbRect.size.width + SEP);
@@ -302,11 +295,11 @@ NSString * __nullable displayOptionNames[] = {
         score = REJECT_SCORE + 3;
 
     
-    status = [NSString stringWithFormat:@"%@%@ %@",
+    NSString *thumbStatus = [NSString stringWithFormat:@"%@%@ %@",
               rightThumbsOK ? CHECKMARK : @".",
               bottomThumbsOK ? CHECKMARK : @".",
               (wfits & hfits) ? CHECKMARK : @"." ];
-#ifdef DEBUG_LAYOUT
+#ifdef OLD
     NSLog(@"%4.0f x %4.0f  %4.2f  %4.0f%%\t%5.1f,%2.0f%%\t%5.1f,%2.0f%%\t%@\t%.0f",
           captureSize.width, captureSize.height, aspectRatio,
           capturePct,
@@ -322,19 +315,33 @@ NSString * __nullable displayOptionNames[] = {
     
     float transformArea = transformSize.width * transformSize.height;
     float screenPct = 100.0*transformArea / containerArea;
+    float screenScore = 0;
+    switch (displayOption) {
+        case ControlDisplayOnly:
+            screenScore = screenPct < 10.0;
+            break;
+        case TightDisplay:
+            screenScore = screenPct > 10.0 && screenPct < 50.0 ? 100.0 : 0;
+            break;
+        case BestDisplay:
+            screenScore = screenPct > 60.0 && screenPct < 80.0 ? 100.0 : 0;
+            break;
+        case LargestImageDisplay:
+            screenScore = screenPct > 70.0 ? 100.0 : 0;
+            break;
+        case FullScreenImage:
+            screenScore = screenPct > 90.0 ? 100.0 : 0;
+            break;
+    }
     capturePct = 100.0 * transformArea / captureArea;
     
-    status = [NSString stringWithFormat:@"for screen %4.0f x %4.0f:\n%@\n\ntransform %4.0f x %4.0f  (%5.1f%%)\nfrom capture %4.0f x %4.0f  (%5.1f%%)\nscale score %.0f\nthumb score %.0f\nscore:%5.0f",
-              containerSize.width, containerSize.height,
-              displayOptionNames[displayOption],
-              transformSize.width, transformSize.height,
-              screenPct,
-              captureSize.width, captureSize.height,
-              100.0*scale,
-              scaleScore, thumbScore,
-              score];
+    NSLog(@"    capture size: %3.0f           %4.0f x %4.0f", 0., captureSize.width, captureSize.height);
+    NSLog(@"      screen pct: %3.0f           %3.0f%% ", screenScore, screenPct);
+    NSLog(@"           scale: %3.0f           %.0f", scaleScore, scale);
+    NSLog(@"    thumb status: %3.0f           %@", thumbScore, thumbStatus);
+    score = screenScore + scaleScore + thumbScore;
 #ifdef DEBUG_LAYOUT
-    NSLog(@"*** final layout status: %@", status);
+    NSLog(@"    SSSSSS          score: %.0f", score);
 #endif
     return score;
 }
