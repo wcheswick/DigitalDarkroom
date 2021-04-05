@@ -192,8 +192,8 @@ NSString * __nullable displayOptionNames[] = {
     
     int rightThumbCount = [self thumbsInArea:right];
     int bottomThumbCount = [self thumbsInArea:bottom];
-    float rightThumbScore = 100.0 - 100.0*((float)abs((int)thumbCount - rightThumbCount)/(float)thumbCount);
-    float bottomThumbScore = 100.0 - 100.0*((float)abs((int)thumbCount - bottomThumbCount)/(float)thumbCount);
+    float rightThumbScore = 100.0*(float)rightThumbCount/(float)thumbCount;
+    float bottomThumbScore = 100.0*(float)bottomThumbCount/(float)thumbCount;
     float thumbScore = 0.0;
     
     switch (thumbsPlacement) {
@@ -223,6 +223,9 @@ NSString * __nullable displayOptionNames[] = {
             assert(0); // should not happen
     }
 
+    if (thumbScore > 100)
+        thumbScore = 100.0;
+    
     switch (thumbsPlacement) {
         case ThumbsOnRight:
             thumbArrayRect.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
