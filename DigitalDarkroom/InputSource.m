@@ -8,44 +8,93 @@
 
 #import "InputSource.h"
 
+#define LAST_SOURCE_ARCHIVE   @"LastSource.archive"
+
+#define kLabel                  @"Label"
+#define kImagePath              @"ImagePath"
+#define kFrontCameraSelected    @"FrontCameraSelected"
+#define kThreeDCamera           @"ThreeDCamera"
 
 @implementation InputSource
 
-@synthesize sourceType;
 @synthesize label;
+@synthesize frontCamera, threeDCamera;
 @synthesize imagePath;
 @synthesize thumbImage;
 @synthesize imageSize;
-@synthesize cameraNames;
 
 - (id)init {
     self = [super init];
     if (self) {
-        sourceType = NotACamera;
-        imageSize = CGSizeZero;
+        label = @"";
         imagePath = nil;
+        imageSize = CGSizeZero;
         thumbImage = nil;
+        frontCamera = YES;
+        threeDCamera = NO;
     }
     return self;
 }
 
-+ (InputSource *) sourceForCamera:(Cameras) cam {
-    InputSource *newSource = [[InputSource alloc] init];
-    newSource.sourceType = cam;
-    newSource.label = cameraNames[cam];
-    return newSource;
+- (void) makeCameraSource {
+    label = @"Cameras";
+    imagePath = nil;   // signifies camera input
+    frontCamera = YES;
+    threeDCamera = NO;
+    imageSize = CGSizeZero;
+    thumbImage = nil;
 }
 
-static NSString * const cameraNames[] = {
-    @"Front\ncamera",
-    @"Rear\ncamera",
-    @"Front 3D\ncamera",
-    @"Rear 3D\ncamera",
-    @"File"};
+- (id) initWithCoder: (NSCoder *)coder {
+    self = [super init];
+    if (self) {
+        self.label = [coder decodeObjectForKey:kLabel];
+        self.imagePath = [coder decodeObjectForKey: kImagePath];
+        self.frontCamera = [coder decodeBoolForKey: kFrontCameraSelected];
+        self.threeDCamera = [coder decodeBoolForKey: kThreeDCamera];
+    }
+    return self;
+}
 
-+ (NSString *)cameraNameFor:(Cameras)camera {
-    assert(ISCAMERA(camera));
-    return cameraNames[camera];
+- (void)encodeWithCoder:(NSCoder *)coder {
+    [coder encodeObject:label forKey:kLabel];
+    [coder encodeObject:imagePath forKey:kImagePath];
+    [coder encodeBool:frontCamera forKey:kFrontCameraSelected];
+    [coder encodeBool:threeDCamera forKey:kThreeDCamera];
+}
+
+- (void) setUpImageAt:(NSString *)path {
+    imagePath = path;
+    label = [path lastPathComponent];
+    UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
+    if (!image) {
+        imageSize = CGSizeZero;
+        label = [label stringByAppendingString:@" (missing)"];
+    } else {
+        imageSize = image.size;
+    }
+}
+
++ (NSData *) lastSourceArchive {
+    return [NSData dataWithContentsOfFile:LAST_SOURCE_ARCHIVE];
+}
+
+- (void) save {
+    NSError *error;
+    NSData *archiveData = [NSKeyedArchiver archivedDataWithRootObject:self
+                                                requiringSecureCoding:NO error:&error];
+    [archiveData writeToFile:LAST_SOURCE_ARCHIVE atomically:YES];
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    InputSource *copy = [[InputSource alloc] init];
+    copy.label = label;
+    copy.imagePath = imagePath;
+    copy.frontCamera = frontCamera;
+    copy.threeDCamera = threeDCamera;
+    copy.imageSize = imageSize;
+    copy.thumbImage = thumbImage;
+    return copy;
 }
 
 @end

@@ -24,6 +24,7 @@
 #define UI_MODE_KEY             @"UIMode"
 #define LAST_DEPTH_TRANSFORM    @"LastDepthTransform"
 
+
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
 #define STATS_FONT_SIZE     18
@@ -82,14 +83,12 @@
 #define RETLO_GREEN [UIColor colorWithRed:0 green:.4 blue:0 alpha:1]
 #define NAVY_BLUE   [UIColor colorWithRed:0 green:0 blue:0.5 alpha:1]
 
-#define TRANS_SEC_VIS_ARCHIVE  @"trans_sec_vis.archive"
-
 #define EXECUTE_STATS_TAG   1
 
 #define DEPTH_TABLE_SECTION     0
 
 #define NO_STEP_SELECTED    -1
-#define DOING_3D    IS_3D_CAMERA(self->currentSource.sourceType)
+#define DOING_3D    (self->currentSource.threeDCamera)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 typedef enum {
@@ -135,6 +134,7 @@ typedef enum {
 @property (nonatomic, strong)   UIButton *depthSelectButton;
 @property (nonatomic, strong)   UIButton *flipCameraButton;
 @property (nonatomic, strong)   UIButton *photoStackButton;
+@property (nonatomic, strong)   UIButton *capturingButton;
 
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
@@ -147,10 +147,10 @@ typedef enum {
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
-@property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (nonatomic, strong)   InputSource *currentSource;
 @property (nonatomic, strong)   InputSource *nextSource;
 @property (nonatomic, strong)   InputSource *fileSource;
+@property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign)              int availableCameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
@@ -191,7 +191,6 @@ typedef enum {
 @property (assign)              CGSize transformDisplaySize;
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelectionView;
-@property (nonatomic, strong)   NSString *lastFileSourceUsed;
 
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
 @property (nonatomic, strong)   UIScrollView *thumbScrollView;
@@ -207,6 +206,7 @@ typedef enum {
 
 @synthesize containerView;
 @synthesize depthSelectButton, flipCameraButton, photoStackButton;
+@synthesize capturingButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
 @synthesize thumbArrayView;
@@ -221,7 +221,7 @@ typedef enum {
 @synthesize sourcesNavVC;
 @synthesize options;
 
-@synthesize inputSources, currentSource;
+@synthesize currentSource, inputSources;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 
@@ -247,7 +247,6 @@ typedef enum {
 
 @synthesize transformDisplaySize;
 @synthesize sourceSelectionView;
-@synthesize lastFileSourceUsed;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
 
@@ -299,14 +298,9 @@ typedef enum {
         cameraController.delegate = self;
 
         inputSources = [[NSMutableArray alloc] init];
-        
-        availableCameraCount = 0;
-        for (Cameras c=0; c<NCAMERA; c++) {
-            if ([cameraController isCameraAvailable:c]) {
-                [inputSources addObject:[InputSource sourceForCamera:c]];
-                availableCameraCount++;
-            }
-        }
+        InputSource *cameraSource = [[InputSource alloc] init];
+        [cameraSource makeCameraSource];
+        [inputSources addObject:cameraSource];
 
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
@@ -314,44 +308,25 @@ typedef enum {
         [self addFileSource:@"800px-RCA_Indian_Head_test_pattern.jpg"
                       label:@"RCA test pattern"];
 #endif
-        [self addFileSource:@"ishihara6.jpeg" label:@"Ishibara 6"];
+        [self addFileSource:@"ishihara6.jpeg" label:@"Ishihara 6"];
         [self addFileSource:@"cube.jpeg" label:@"Rubix cube"];
-        [self addFileSource:@"ishihara8.jpeg" label:@"Ishibara 8"];
-        [self addFileSource:@"ishihara25.jpeg" label:@"Ishibara 25"];
-        [self addFileSource:@"ishihara45.jpeg" label:@"Ishibara 45"];
-        [self addFileSource:@"ishihara56.jpeg" label:@"Ishibara 56"];
+        [self addFileSource:@"ishihara8.jpeg" label:@"Ishihara 8"];
+        [self addFileSource:@"ishihara25.jpeg" label:@"Ishihara 25"];
+        [self addFileSource:@"ishihara45.jpeg" label:@"Ishihara 45"];
+        [self addFileSource:@"ishihara56.jpeg" label:@"Ishihara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-                
-        nextSource = nil;
-        lastFileSourceUsed = [[NSUserDefaults standardUserDefaults]
-                                   stringForKey:LAST_FILE_SOURCE_KEY];
-        NSString *lastSourceUsedLabel = [[NSUserDefaults standardUserDefaults]
-                                         stringForKey:LAST_SOURCE_KEY];
-        if (lastSourceUsedLabel) {
-            for (int sourceIndex=0; sourceIndex<inputSources.count; sourceIndex++) {
-                nextSource = [inputSources objectAtIndex:sourceIndex];
-                if ([lastSourceUsedLabel isEqual:nextSource.label]) {
-#ifdef DEBUG_SOURCE
-                    NSLog(@"  - initializing source index %d", sourceIndex);
-#endif
-                    break;
-                }
-            }
+
+        currentSource = nil;
+        NSData *lastSourceData = [InputSource lastSourceArchive];
+        if (lastSourceData) {
+            NSError *error;
+            currentSource = [NSKeyedUnarchiver unarchivedObjectOfClass:[InputSource class]
+                                                           fromData:lastSourceData error:&error];
         }
         
-        if (!nextSource)  {   // no known default, pick the first camera
-            for (int sourceIndex=0; sourceIndex<NCAMERA; sourceIndex++) {
-                if ([cameraController isCameraAvailable:sourceIndex]) {
-                    nextSource = [inputSources objectAtIndex:sourceIndex];
-#ifdef DEBUG_SOURCE
-                    NSLog(@"  - no previous source, using %d, %@", sourceIndex, nextSource.label);
-#endif
-                    break;
-                }
-            }
-        }
-        currentSource = nextSource;
+        if (!currentSource)
+            currentSource = [[InputSource alloc] init];
     }
     return self;
 }
@@ -361,17 +336,6 @@ typedef enum {
     Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
     [[NSUserDefaults standardUserDefaults] setObject:transform.name
                                               forKey:LAST_DEPTH_TRANSFORM];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
-- (void) saveCurrentSource {
-//    NSLog(@"Saving source %d, %@", currentSource.sourceType, currentSource.label);
-    assert(currentSource);
-    [[NSUserDefaults standardUserDefaults] setObject:currentSource.label
-                                              forKey:LAST_SOURCE_KEY];
-    if (lastFileSourceUsed)
-        [[NSUserDefaults standardUserDefaults] setObject:lastFileSourceUsed
-                                                  forKey:LAST_FILE_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
@@ -434,31 +398,15 @@ typedef enum {
 }
 #endif
 
-- (void) addCameraSource:(Cameras)c label:(NSString *)l {
-    InputSource *is = [[InputSource alloc] init];
-    is.sourceType = c;
-    is.label = l;
-}
-
 - (void) addFileSource:(NSString *)fn label:(NSString *)l {
     InputSource *source = [[InputSource alloc] init];
-    source.sourceType = NotACamera;
-    source.label = l;
     NSString *file = [@"images/" stringByAppendingPathComponent:fn];
     NSString *imagePath = [[NSBundle mainBundle] pathForResource:file ofType:@""];
     if (!imagePath) {
-        source.label = [fn stringByAppendingString:@" missing"];
         NSLog(@"**** Image not found: %@", fn);
-    } else {
-        UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
-        if (!image) {
-            source.label = [fn stringByAppendingString:@" Missing"];
-            source.imageSize = CGSizeZero;
-        } else {
-            source.imagePath = imagePath;
-            source.imageSize = image.size;
-        }
+        return;
     }
+    [source setUpImageAt:fn];
     [inputSources addObject:source];
 }
 
@@ -494,13 +442,12 @@ typedef enum {
 #define SOURCE_TYPE_TAG_OFFSET  30
 
 - (void) adjustSourceSelectionView {
-    NSString *cameraIconName = IS_3D_CAMERA(currentSource.sourceType) ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconName = currentSource.threeDCamera ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
     NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
     UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
     
     [sourceSelectionView setImage:cameraIconView forSegmentAtIndex:CameraTypeSelect];
-    
-    sourceSelectionView.selectedSegmentIndex = ISCAMERA(currentSource.sourceType) ? CameraTypeSelect : ChooseFile;
+    sourceSelectionView.selectedSegmentIndex = currentSource.threeDCamera ? CameraTypeSelect : ChooseFile;
     [sourceSelectionView setNeedsDisplay];
 }
 
@@ -646,39 +593,25 @@ typedef enum {
 }
 
 - (void) configureNavBar {
-    CGFloat navBarH = self.navigationController.navigationBar.frame.size.height;
-
 //    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     
-    depthSelectButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    depthSelectButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [depthSelectButton setImage: [self barIconFrom:@"3Dcamera"] forState:UIControlStateNormal];
-    [depthSelectButton setImage: [self barIconFrom:@"2Dcamera"] forState:UIControlStateSelected];
-    [depthSelectButton addTarget:self
-                           action:@selector(chooseDepth:)
-                 forControlEvents:UIControlEventTouchUpInside];
     UIBarButtonItem *depthBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:depthSelectButton];
+                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
+                                       style:UIBarButtonItemStylePlain
+                                       target:self
+                                       action:@selector(doTapDepthVis:)];
     
-    flipCameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    flipCameraButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [flipCameraButton setImage:[self barIconFrom:@"flipcamera"] forState:UIControlStateNormal];
-    [flipCameraButton addTarget:self
-                           action:@selector(flipCamera:)
-                 forControlEvents:UIControlEventTouchUpInside];
     UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:flipCameraButton];
-
-    photoStackButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    photoStackButton.frame = CGRectMake(0, 0, navBarH+SEP, navBarH);
-    [photoStackButton setImage:[self barIconFrom:@"photostack"]
-                      forState:UIControlStateNormal];
-    [photoStackButton addTarget:self
-                           action:@selector(selectPhoto:)
-                 forControlEvents:UIControlEventTouchUpInside];
-
-    UIBarButtonItem *photoBarButton = [[UIBarButtonItem alloc]
-                                        initWithCustomView:photoStackButton];
+                                      initWithImage:[UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"]
+                                      style:UIBarButtonItemStylePlain
+                                      target:self
+                                      action:@selector(flipCamera:)];
+    
+    UIBarButtonItem *inputSelectBarButton = [[UIBarButtonItem alloc]
+                                             initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
+                                             style:UIBarButtonItemStylePlain
+                                             target:self
+                                             action:@selector(flipCamera:)];
     
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
@@ -688,16 +621,12 @@ typedef enum {
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
-
+    
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
-                                        initWithTitle:@"⋯"
+                                        initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                         style:UIBarButtonItemStylePlain
                                         target:self
                                         action:@selector(goSelectOptions:)];
-    [otherMenuButton setTitleTextAttributes:@{
-        NSFontAttributeName: [UIFont boldSystemFontOfSize:navBarH],
-        //NSBaselineOffsetAttributeName: @-3
-    } forState:UIControlStateNormal];
 
     trashBarButton = [[UIBarButtonItem alloc]
                    initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
@@ -719,34 +648,34 @@ typedef enum {
                                       action:@selector(doRemoveLastTransform)];
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                              depthBarButton,
+                                              inputSelectBarButton,
                                               flexibleSpace,
                                               flipBarButton,
                                               flexibleSpace,
-                                              photoBarButton,
+                                              depthBarButton,
                                               nil];
-
+    
     if (!isiPhone || !isPortrait)
         self.title = @"Digital Darkroom";
-#ifdef NOTDEF
+    
+    UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
+                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
+                                     style:UIBarButtonItemStylePlain
+                                     target:self
+                                     action:@selector(doHelp:)];
+    
+    capturingButton = [UIButton systemButtonWithImage:[UIImage
+                                                       systemImageNamed:@"video.slash"]
+                                               target:self
+                                               action:@selector(toggleLiveCapture:)];
+    UIBarButtonItem *capturingBarButton = [[UIBarButtonItem alloc]
+                                           initWithCustomView:capturingButton];
+    
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               otherMenuButton,
-                                               flexibleSpace,
-                                               saveBarButton,
-                                               flexibleSpace,
-                                               undoBarButton,
-                                               flexibleSpace,
-                                               trashBarButton,
+                                               docBarButton,
+                                               fixedSpace,
+                                               capturingBarButton,
                                                nil];
-#endif
-    
-    UIBarButtonItem *helpButton = [[UIBarButtonItem alloc]
-                                   initWithTitle:@"?"
-                                   style:UIBarButtonItemStylePlain
-                                   target:self
-                                   action:@selector(doHelp:)];
-    
-    self.navigationItem.rightBarButtonItem = helpButton;
     
     CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
@@ -941,7 +870,7 @@ stackingButton.userInteractionEnabled = YES;
     NSLog(@"********* viewWillDisappear *********");
     
     [super viewWillDisappear:animated];
-    if (currentSource && ISCAMERA(currentSource.sourceType)) {
+    if (currentSource && IS_CAMERA(currentSource)) {
         [self cameraOn:NO];
     }
 }
@@ -975,8 +904,6 @@ stackingButton.userInteractionEnabled = YES;
 // this is called when we know the transforms are all Stopped.
 
 - (void) doLayout {
-    BOOL adjustSourceInfo = (nextSource != nil);
-    
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
     self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
@@ -986,15 +913,12 @@ stackingButton.userInteractionEnabled = YES;
     
     // set up new source, if needed
     if (nextSource) {
-        if (currentSource && ISCAMERA(currentSource.sourceType)) {
+        if (currentSource && IS_CAMERA(currentSource)) {
             [self cameraOn:NO];
-        }
-        if (!ISCAMERA(nextSource.sourceType)) {
-            lastFileSourceUsed = nextSource.label;
         }
         currentSource = nextSource;
         nextSource = nil;
-        [self saveCurrentSource];
+        [currentSource save];
     }
     assert(currentSource);
     
@@ -1026,8 +950,8 @@ stackingButton.userInteractionEnabled = YES;
     //
     // - I suppose there will be a video capture option some day.  That would be another target.
     
-    if (ISCAMERA(currentSource.sourceType)) {
-        [cameraController selectCamera:currentSource.sourceType];
+    if (IS_CAMERA(currentSource)) {
+        [cameraController selectCamera:currentSource];
         [cameraController setupSessionForOrientation:deviceOrientation];
     } else {
         NSLog(@"    file source size: %.0f x %.0f",
@@ -1071,8 +995,9 @@ stackingButton.userInteractionEnabled = YES;
 #endif
 
     Layout *layout;
-    if (ISCAMERA(currentSource.sourceType)) {   // select camera setting for available area
-        NSArray *availableFormats = [cameraController formatsForSelectedCameraNeeding3D:DOING_3D];
+    if (IS_CAMERA(currentSource)) {   // select camera setting for available area
+        NSArray *availableFormats = [cameraController
+                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
         layout = [self chooseLayoutFrom:availableFormats
                                 scaleOK:NO];
 #ifdef DEBUG_LAYOUT
@@ -1161,15 +1086,12 @@ stackingButton.userInteractionEnabled = YES;
         }];
     }
     
-    if (adjustSourceInfo) {
-        [self adjustCameraButtons];
-    }
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     
     [taskCtrl layoutCompleted];
 
-    if (ISCAMERA(currentSource.sourceType)) {
+    if (IS_CAMERA(currentSource)) {
         [self cameraOn:YES];
     } else {
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
@@ -1215,8 +1137,10 @@ stackingButton.userInteractionEnabled = YES;
     [overlayView setNeedsDisplay];
 }
 
-- (void) adjustCameraButtons {
-//    NSLog(@"****** adjustCameraButtons ******");
+- (void) adjustBaraButtons {
+    depthSelectButton.enabled = [cameraController isDepthAvailable:currentSource];
+    flipCameraButton.enabled = [cameraController isFlipAvailable:currentSource];
+
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
     stopCamera.enabled = capturing;
@@ -1501,7 +1425,7 @@ CGFloat topOfNonDepthArray = 0;
         [cameraController startCamera];
     else
         [cameraController stopCamera];
-    [self adjustCameraButtons];
+    [self adjustBarButtons];
 }
 
 - (void) updateStats: (float) fps
@@ -1525,6 +1449,11 @@ CGFloat topOfNonDepthArray = 0;
     [self.navigationController setNavigationBarHidden:hide animated:YES];
     [self.navigationController setToolbarHidden:hide animated:YES];
     return;
+}
+
+- (IBAction) toggleLiveCapture:(UITapGestureRecognizer *)recognizer {
+    capturingButton.highlighted = !capturingButton.highlighted;
+    [capturingButton setNeedsDisplay];
 }
 
 // freeze/unfreeze video
@@ -1918,46 +1847,20 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) chooseDepth:(UIButton *)button {
-    InputSource *newSource;
-    switch (currentSource.sourceType) {
-        case FrontCamera:
-            newSource = [inputSources objectAtIndex:Front3DCamera];
-            break;
-        case Front3DCamera:
-            newSource = [inputSources objectAtIndex:FrontCamera];
-            break;
-        case RearCamera:
-            newSource = [inputSources objectAtIndex:Rear3DCamera];
-            break;
-       case Rear3DCamera:
-            newSource = [inputSources objectAtIndex:RearCamera];
-            break;
-       default:
-            newSource = [inputSources objectAtIndex:FrontCamera];
-    }
-    if (![cameraController isCameraAvailable:newSource.sourceType])
+    InputSource *newSource = [currentSource copy];
+    newSource.threeDCamera = ! newSource.threeDCamera;
+    if (![cameraController isCameraAvailable:newSource])
         return;
     nextSource = newSource;
     [self reconfigure];
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
-    switch (currentSource.sourceType) {
-        case FrontCamera:
-            nextSource = [inputSources objectAtIndex:RearCamera];
-            break;
-        case RearCamera:
-            nextSource = [inputSources objectAtIndex:FrontCamera];
-            break;
-        case Front3DCamera:
-            nextSource = [inputSources objectAtIndex:Rear3DCamera];
-            break;
-       case Rear3DCamera:
-            nextSource = [inputSources objectAtIndex:Front3DCamera];
-            break;
-       default:
-            return;
-    }
+    InputSource *newSource = [currentSource copy];
+    newSource.frontCamera = ! newSource.frontCamera;
+    if (![cameraController isCameraAvailable:newSource])
+        return;
+    nextSource = newSource;
     [self reconfigure];
 }
 
@@ -2081,7 +1984,7 @@ static NSString * const sourceSectionTitles[] = {
      numberOfItemsInSection:(NSInteger)section {
     switch ((FixedSources) section) {
         case sampleSource:
-            return inputSources.count - NCAMERA;
+            return inputSources.count;
         case librarySource:
             return 0;   // XXX not yet
     }
@@ -2125,7 +2028,7 @@ static NSString * const sourceSectionTitles[] = {
     
     switch ((FixedSources)indexPath.section) {
         case sampleSource: {
-            InputSource *source = [inputSources objectAtIndex:indexPath.row + NCAMERA];
+            InputSource *source = [inputSources objectAtIndex:indexPath.row];
             thumbLabel.text = source.label;
             UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
             thumbImageView.image = [self fitImage:sourceImage
@@ -2143,7 +2046,7 @@ static NSString * const sourceSectionTitles[] = {
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     switch ((FixedSources)indexPath.section) {
         case sampleSource:
-            nextSource = [inputSources objectAtIndex:indexPath.row + NCAMERA];
+            nextSource = [inputSources objectAtIndex:indexPath.row];
             break;
         case librarySource:
             ; // XXX stub

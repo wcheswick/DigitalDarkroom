@@ -24,9 +24,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
 
+- (BOOL) isCameraAvailable:(InputSource *)source;
+- (BOOL) isDepthAvailable:(InputSource *)source;
+- (BOOL) isFlipAvailable:(InputSource *)source;
 
-- (BOOL) isCameraAvailable:(Cameras) camera;
-- (void) selectCamera:(Cameras) camera;
+- (void) selectCamera:(InputSource *)source;
 - (void) setupSessionForOrientation: (UIDeviceOrientation) deviceOrientation;
 
 - (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;

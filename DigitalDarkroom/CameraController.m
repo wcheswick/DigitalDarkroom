@@ -16,13 +16,12 @@
 
 @interface CameraController ()
 
-@property (assign)              Cameras selectedCamera;
-
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
 
+@property (nonatomic, strong)   InputSource *currentCamera;
 @end
 
 @implementation CameraController
@@ -30,88 +29,87 @@
 @synthesize captureSession;
 @synthesize delegate;
 
-@synthesize captureDevice, selectedCamera;
+@synthesize captureDevice;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
+@synthesize currentCamera;
 
 
 - (id)init {
     self = [super init];
     if (self) {
         captureVideoPreviewLayer = nil;
-        selectedCamera = NotACamera;
         delegate = nil;
         captureDevice = nil;
         captureSession = nil;
+        currentCamera = nil;
     }
     return self;
 }
 
-- (AVCaptureDevice *) captureDeviceForCamera:(Cameras) camera {
-    AVCaptureDevice *captureDevice = nil;
-    switch (camera) {
-        case FrontCamera:
-            captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                             mediaType: AVMediaTypeVideo
-                             position: AVCaptureDevicePositionFront];
-            if (!captureDevice) {
-                captureDevice = [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                                 mediaType: AVMediaTypeVideo
-                                 position: AVCaptureDevicePositionFront];
-            }
-            break;
-        case Front3DCamera:
-            captureDevice = [AVCaptureDevice
+- (AVCaptureDevice *) captureDeviceForCamera:(BOOL)frontCamera threeD:(BOOL)threeD {
+    if (threeD) {
+        if (frontCamera) {
+            return [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
                              mediaType: AVMediaTypeDepthData
                              position: AVCaptureDevicePositionFront];
-            break;
-        case RearCamera:
-            captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                             mediaType: AVMediaTypeVideo
-                             position: AVCaptureDevicePositionBack];
-            if (!captureDevice)
-                captureDevice = [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                                 mediaType: AVMediaTypeVideo
-                                 position: AVCaptureDevicePositionBack];
-            break;
-        case Rear3DCamera:
-            captureDevice = [AVCaptureDevice
+        } else {
+            return [AVCaptureDevice
                              defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                              mediaType: AVMediaTypeDepthData
                              position: AVCaptureDevicePositionBack];
-            break;
-       default:
-            NSLog(@" *** inconceivable, selected non-existant camera, %d", camera);
-            return nil;
+        }
     }
-    //NSLog(@"***** captureDevice: cam %d %@", camera, captureDevice.activeFormat.supportedDepthDataFormats);
+    
+    AVCaptureDevice *captureDevice = nil;
+    if (frontCamera) {
+        captureDevice = [AVCaptureDevice
+                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                         mediaType: AVMediaTypeVideo
+                         position: AVCaptureDevicePositionFront];
+        if (!captureDevice) {
+            captureDevice = [AVCaptureDevice
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                             mediaType: AVMediaTypeVideo
+                             position: AVCaptureDevicePositionFront];
+        }
+    } else {    // rear camera
+        captureDevice = [AVCaptureDevice
+                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                         mediaType: AVMediaTypeVideo
+                         position: AVCaptureDevicePositionBack];
+        if (!captureDevice)
+            captureDevice = [AVCaptureDevice
+                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                             mediaType: AVMediaTypeVideo
+                             position: AVCaptureDevicePositionBack];
+    }
     return captureDevice;
 }
 
-- (BOOL) isCameraAvailable:(Cameras) camera {
-    assert(ISCAMERA(camera));
-//    if (camera == Rear3DCamera)
-//        return NO;  // temp broken. XXXXX why?
-    return [self captureDeviceForCamera:camera];
+- (BOOL) isCameraAvailable:(InputSource *)source {
+    return [self captureDeviceForCamera:source.frontCamera threeD:source.threeDCamera] != nil;
 }
 
-- (void) selectCamera:(Cameras) camera {
-    captureDevice = [self captureDeviceForCamera:camera];
+- (BOOL) isDepthAvailable: (InputSource *)source {
+    return [self captureDeviceForCamera:source.frontCamera threeD:YES] == nil;
+
+}
+
+- (BOOL) isFlipAvailable:(InputSource *)source {
+    return [self captureDeviceForCamera:!source.frontCamera threeD:source.threeDCamera] != nil;
+}
+
+- (void) selectCamera:(InputSource *)source {
+    captureDevice = [self captureDeviceForCamera:source.frontCamera threeD:source.threeDCamera];
     assert(captureDevice);
-    selectedCamera = camera;
-#ifdef DEBUG_CAMERA
-    NSLog(@" -- camera selected: %d", selectedCamera);
-#endif
+    currentCamera = source;
 }
 
 // I really have no idea what is going on here.  Values were determined by
-// experimentation.
+// experimentation.  The Apple documentation has been ... difficult.
 
 - (AVCaptureVideoOrientation) videoOrientationForDeviceOrientation {
     switch (deviceOrientation) {
@@ -175,7 +173,7 @@
         NSLog(@"**** could not add camera input");
     }
 
-    if (IS_3D_CAMERA(selectedCamera)) {   // XXX i.e. depth available ?!        
+    if (currentCamera.threeDCamera) {   // XXX i.e. depth available ?!        
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
@@ -186,7 +184,7 @@
         AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(depthConnection);
         [depthConnection setVideoOrientation:videoOrientation];
-        depthConnection.videoMirrored = (selectedCamera == Front3DCamera);
+        depthConnection.videoMirrored = currentCamera.threeDCamera;
 #ifdef DEBUG_DEPTH
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
@@ -207,7 +205,7 @@
         // depthDataByApplyingExifOrientation
         AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        videoConnection.videoMirrored = (selectedCamera == FrontCamera);
+        videoConnection.videoMirrored = !currentCamera.threeDCamera;
 #ifdef DEBUG_ORIENTATION
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               deviceOrientationNames[videoOrientation]);

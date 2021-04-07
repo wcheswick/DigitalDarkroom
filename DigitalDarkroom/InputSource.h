@@ -11,37 +11,29 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef enum {
-    FrontCamera,
-    RearCamera,
-    Front3DCamera,
-    Rear3DCamera,
-    NotACamera,
-} Cameras;
-
-#define NCAMERA (NotACamera)
-#define ISCAMERA(i) ((i) < NCAMERA)
-#define IS_2D_CAMERA(i)    ((i) < Front3DCamera)
-#define IS_3D_CAMERA(i)    ((i) == Front3DCamera || (i) == Rear3DCamera)
+#define IS_CAMERA(i)        ((i).imagePath == nil)
+#define IS_3D_CAMERA(i)     (IS_CAMERA(i) && i.threeDCamera)
 
 @interface InputSource : NSObject {
-    Cameras sourceType;
     NSString *label;
-    NSString *imagePath;
+    NSString *__nullable imagePath;        // if file set, then not a camera
+    BOOL frontCamera;           // if imagePath == nil, which camera is selected
+    BOOL threeDCamera;          // ... and it it the depth camera
     CGSize imageSize;
-    UIImageView *thumbImage;
+    UIImageView *__nullablethumbImage;
 }
 
-@property (assign)  Cameras sourceType;
 @property (nonatomic, strong)   NSString *label;
-@property (nonatomic, strong)   NSString *imagePath;
-@property (nonatomic, strong)   UIImageView *thumbImage;
+@property (assign)              BOOL frontCamera, threeDCamera;
+@property (nonatomic, strong)   NSString *__nullable imagePath;
+@property (nonatomic, strong)   UIImageView *__nullable thumbImage;
 @property (assign)              CGSize imageSize;
 @property (nonatomic, strong)   NSArray *cameraNames;
 
-+ (NSString *)cameraNameFor:(Cameras)camera;
-+ (InputSource *) sourceForCamera:(Cameras) cam;
-
+- (void) makeCameraSource;
+- (void) setUpImageAt:(NSString *)path;
++ (NSData *) lastSourceArchive;
+- (void) save;
 
 @end
 
