@@ -38,6 +38,16 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    self.title = @"Options";
+    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
+                                       initWithTitle:@"Dismiss"
+                                       style:UIBarButtonItemStylePlain
+                                       target:self
+                                       action:@selector(doDismiss:)];
+    rightBarButton.enabled = YES;
+    self.navigationItem.rightBarButtonItem = rightBarButton;
+
+    
     self.tableView.tableHeaderView = nil;
     self.tableView.tableFooterView = nil;
 
@@ -94,6 +104,11 @@
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
+
+- (IBAction) doDismiss:(UIBarButtonItem *)sender {
+    [self.navigationController dismissViewControllerAnimated:YES completion:nil];
+}
+
 #pragma mark - Table view data source
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -127,7 +142,8 @@
                 cell.accessoryType = options.needHires ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
             case 2:
-                cell.largeContentTitle = @"Reticle";
+                [cell.contentView addSubview:[[UIImageView alloc]
+                                              initWithImage:[UIImage systemImageNamed:@"plus"]]];
                 cell.accessoryType = options.reticle ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
        }

@@ -13,6 +13,7 @@
 #import "Transforms.h"  // includes DepthImage.h
 #import "TaskCtrl.h"
 #import "OptionsVC.h"
+#import "ReticleView.h"
 #import "Layout.h"
 #import "HelpVC.h"
 #import "Defines.h"
@@ -137,10 +138,12 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *capturingBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *reticleBarButton;
 
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
 @property (assign)              OverlayState overlayState;
+@property (nonatomic, strong)   ReticleView *reticleView;
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
@@ -212,6 +215,7 @@ typedef enum {
 @synthesize depthSelectBarButton, flipBarButton, sourceBarButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
+@synthesize reticleView, reticleBarButton;
 @synthesize thumbArrayView;
 
 @synthesize executeView;
@@ -498,6 +502,12 @@ typedef enum {
     overlayView.userInteractionEnabled = YES;
     overlayView.backgroundColor = [UIColor clearColor];
 
+    reticleView = [[ReticleView alloc] init];
+    reticleView.opaque = NO;
+    reticleView.contentMode = UIViewContentModeRedraw;
+    reticleView.backgroundColor = [UIColor clearColor];
+    [overlayView addSubview:reticleView];
+    
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
@@ -624,29 +634,34 @@ typedef enum {
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
-    
+
+#ifdef DISABLED
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                         style:UIBarButtonItemStylePlain
                                         target:self
                                         action:@selector(goSelectOptions:)];
-
+#endif
+    
     trashBarButton = [[UIBarButtonItem alloc]
-                   initWithBarButtonSystemItem:UIBarButtonSystemItemTrash
+                      initWithImage:[UIImage systemImageNamed:@"trash"]
+                      style:UIBarButtonItemStylePlain
                    target:self
                    action:@selector(doRemoveAllTransforms)];
     
     hiresButton = [[UIBarButtonItem alloc]
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
-
+    
     saveBarButton = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemSave
-                                   target:self
-                                   action:@selector(doSave)];
+                     initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
+                     style:UIBarButtonItemStylePlain
+                     target:self
+                     action:@selector(doSave)];
     
     undoBarButton = [[UIBarButtonItem alloc]
-                                      initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
+                     initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
+                     style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(doRemoveLastTransform)];
     
@@ -666,7 +681,13 @@ typedef enum {
                                      style:UIBarButtonItemStylePlain
                                      target:self
                                      action:@selector(doHelp:)];
-    
+
+    reticleBarButton = [[UIBarButtonItem alloc]
+                                        initWithImage:[UIImage systemImageNamed:@"squareshape.split.2x2.dotted"]
+                                        style:UIBarButtonItemStylePlain
+                                        target:self
+                                        action:@selector(toggleReticle:)];
+
 #ifdef NOTDEF
     capturingButton = [UIButton systemButtonWithImage:[UIImage
                                                        systemImageNamed:@"video.slash"]
@@ -682,6 +703,8 @@ typedef enum {
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                docBarButton,
+                                               fixedSpace,
+                                               reticleBarButton,
                                                nil];
     
     CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
@@ -708,13 +731,13 @@ typedef enum {
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
                          flexibleSpace,
-                         saveBarButton,
+                         trashBarButton,
                          fixedSpace,
                          undoBarButton,
                          fixedSpace,
-                         trashBarButton,
-                         fixedSpace,
-                         otherMenuButton,
+                         saveBarButton,
+//                         fixedSpace,
+// disabled                         otherMenuButton,
                          nil];
 }
 
@@ -1036,6 +1059,10 @@ stackingButton.userInteractionEnabled = YES;
     }
 
     overlayView.frame = layout.displayRect;
+    reticleView.frame = CGRectMake(0, 0,
+                                   overlayView.frame.size.width, overlayView.frame.size.height);
+    reticleView.hidden = !options.reticle;
+    [reticleView setNeedsDisplay];
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
     thumbScrollView.frame = layout.thumbArrayRect;
@@ -1114,6 +1141,9 @@ stackingButton.userInteractionEnabled = YES;
     // start fresh
     [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     UILabel *overlayDebug = nil;
+    
+    reticleView.hidden = !options.reticle;
+    [reticleView setNeedsDisplay];
     
     switch (overlayState) {
         case overlayClear:
@@ -1505,7 +1535,19 @@ CGFloat topOfNonDepthArray = 0;
     popController.barButtonItem = button;
 }
 
+
+- (IBAction) toggleReticle:(UIBarButtonItem *)reticleBarButton {
+    options.reticle = !options.reticle;
+    NSLog(@"reticle is %@", options.reticle ? @"ON" : @"OFF");
+
+    reticleView.hidden = !options.reticle;
+    
+    [options save];
+    [self updateOverlayView];
+}
+
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
+    // XXXXX use this for something else
     if (recognizer.state != UIGestureRecognizerStateBegan)
         return;
     options.reticle = !options.reticle;
@@ -1870,6 +1912,18 @@ UIImageOrientation lastOrientation;
         return;
     nextSource = newSource;
     [self reconfigure];
+}
+
+- (IBAction) selectOptions:(UIButton *)button {
+    OptionsVC *oVC = [[OptionsVC alloc] initWithOptions:options];
+    UINavigationController *optionsNavVC = [[UINavigationController alloc]
+                                            initWithRootViewController:oVC];
+     [self presentViewController:optionsNavVC
+                       animated:YES
+                     completion:^{
+        [self adjustBarButtons];
+        [self reconfigure];
+    }];
 }
 
 #define SELECTION_CELL_ID  @"fileSelectCell"

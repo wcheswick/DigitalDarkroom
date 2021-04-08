@@ -45,6 +45,7 @@
 		FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */; };
 		FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */; };
 		FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */; };
+		FBD1FADC261F8169005B0EEA /* ReticleView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD1FADB261F8169005B0EEA /* ReticleView.m */; };
 		FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */; };
 		FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3AD232E973F00DDFC4E /* MainVC.m */; };
 		FBF5B3B3232E974000DDFC4E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBF5B3B2232E974000DDFC4E /* Assets.xcassets */; };
@@ -113,6 +114,8 @@
 		FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TransformInstance.m; sourceTree = "<group>"; };
 		FBB4E3D2251E5998000D99B7 /* ThimblebySRDS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThimblebySRDS.h; sourceTree = "<group>"; };
 		FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = InglisEtAlSRDS.c; sourceTree = "<group>"; };
+		FBD1FADA261F8169005B0EEA /* ReticleView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ReticleView.h; sourceTree = "<group>"; };
+		FBD1FADB261F8169005B0EEA /* ReticleView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ReticleView.m; sourceTree = "<group>"; };
 		FBF5B3A6232E973F00DDFC4E /* DigitalDarkroom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DigitalDarkroom.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBF5B3A9232E973F00DDFC4E /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		FBF5B3AA232E973F00DDFC4E /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -232,6 +235,8 @@
 				FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */,
 				FBB2C8BD2587D41F00AB0B09 /* TransformInstance.h */,
 				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
+				FBD1FADA261F8169005B0EEA /* ReticleView.h */,
+				FBD1FADB261F8169005B0EEA /* ReticleView.m */,
 				FB9BBAD9260A32A70026C4E4 /* HelpVC.h */,
 				FB9BBADA260A32A70026C4E4 /* HelpVC.m */,
 				FBB2C8A12582595300AB0B09 /* TaskCtrl.h */,
@@ -362,6 +367,7 @@
 				FBB1D9F9232FE56700845DF1 /* colorblind.c in Sources */,
 				FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */,
 				FBF5B3B9232E974000DDFC4E /* main.m in Sources */,
+				FBD1FADC261F8169005B0EEA /* ReticleView.m in Sources */,
 				FBB1D9F5232FE56700845DF1 /* cb.c in Sources */,
 				FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */,
 				FB20A72125D1791C0005CA53 /* Options.m in Sources */,
