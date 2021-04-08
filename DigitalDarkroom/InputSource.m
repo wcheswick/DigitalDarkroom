@@ -20,7 +20,7 @@
 @synthesize label;
 @synthesize frontCamera, threeDCamera;
 @synthesize imagePath;
-@synthesize thumbImage;
+@synthesize thumbImageCache;
 @synthesize imageSize;
 
 - (id)init {
@@ -29,7 +29,7 @@
         label = @"";
         imagePath = nil;
         imageSize = CGSizeZero;
-        thumbImage = nil;
+        thumbImageCache = nil;
         frontCamera = YES;
         threeDCamera = NO;
     }
@@ -42,7 +42,7 @@
     frontCamera = YES;
     threeDCamera = NO;
     imageSize = CGSizeZero;
-    thumbImage = nil;
+    thumbImageCache = nil;
 }
 
 - (id) initWithCoder: (NSCoder *)coder {
@@ -52,6 +52,7 @@
         self.imagePath = [coder decodeObjectForKey: kImagePath];
         self.frontCamera = [coder decodeBoolForKey: kFrontCameraSelected];
         self.threeDCamera = [coder decodeBoolForKey: kThreeDCamera];
+        thumbImageCache = nil;
     }
     return self;
 }
@@ -65,7 +66,7 @@
 
 - (void) setUpImageAt:(NSString *)path {
     imagePath = path;
-    label = [path lastPathComponent];
+    label = [[path lastPathComponent] stringByDeletingPathExtension];
     UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
     if (!image) {
         imageSize = CGSizeZero;
@@ -93,7 +94,7 @@
     copy.frontCamera = frontCamera;
     copy.threeDCamera = threeDCamera;
     copy.imageSize = imageSize;
-    copy.thumbImage = thumbImage;
+    copy.thumbImageCache = thumbImageCache;
     return copy;
 }
 

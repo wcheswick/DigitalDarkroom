@@ -56,8 +56,10 @@
 #define SOURCE_THUMB_H  SOURCE_THUMB_W
 #define SOURCE_BUTTON_FONT_SIZE 24
 #define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
+
 #define SOURCE_CELL_W   SOURCE_THUMB_W
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
+#define SOURCE_CELL_IPHONE_SCALE    0.75
 
 #define TRANS_INSET 2
 #define TRANS_BUTTON_FONT_SIZE 12
@@ -88,7 +90,7 @@
 #define DEPTH_TABLE_SECTION     0
 
 #define NO_STEP_SELECTED    -1
-#define DOING_3D    (self->currentSource.threeDCamera)
+#define DOING_3D    (IS_CAMERA(self->currentSource) && self->currentSource.threeDCamera)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 typedef enum {
@@ -131,10 +133,10 @@ typedef enum {
 
 @property (nonatomic, strong)   UIView *containerView;
 
-@property (nonatomic, strong)   UIButton *depthSelectButton;
-@property (nonatomic, strong)   UIButton *flipCameraButton;
-@property (nonatomic, strong)   UIButton *photoStackButton;
-@property (nonatomic, strong)   UIButton *capturingButton;
+@property (nonatomic, strong)   UIBarButtonItem *depthSelectBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *capturingBarButton;
 
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
@@ -169,6 +171,8 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *snapButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *saveBarButton;
+
 @property (nonatomic, strong)   UIButton *plusButton;
 @property (assign)              BOOL plusButtonLocked;
 
@@ -205,8 +209,7 @@ typedef enum {
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize depthSelectButton, flipCameraButton, photoStackButton;
-@synthesize capturingButton;
+@synthesize depthSelectBarButton, flipBarButton, sourceBarButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
 @synthesize thumbArrayView;
@@ -230,14 +233,14 @@ typedef enum {
 
 @synthesize cameraController;
 
-@synthesize undoBarButton;
+@synthesize undoBarButton, saveBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
 @synthesize capturing, busy;
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
-@synthesize trashBarButton, hiresButton;
+@synthesize hiresButton;
 @synthesize snapButton;
 @synthesize stopCamera, startCamera;
 @synthesize displayOption;
@@ -406,7 +409,7 @@ typedef enum {
         NSLog(@"**** Image not found: %@", fn);
         return;
     }
-    [source setUpImageAt:fn];
+    [source setUpImageAt:imagePath];
     [inputSources addObject:source];
 }
 
@@ -595,24 +598,24 @@ typedef enum {
 - (void) configureNavBar {
 //    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
     
-    UIBarButtonItem *depthBarButton = [[UIBarButtonItem alloc]
-                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
-                                       style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(doTapDepthVis:)];
+    sourceBarButton = [[UIBarButtonItem alloc]
+                                             initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
+                                             style:UIBarButtonItemStylePlain
+                                             target:self
+                                             action:@selector(selectSource:)];
     
-    UIBarButtonItem *flipBarButton = [[UIBarButtonItem alloc]
+    flipBarButton = [[UIBarButtonItem alloc]
                                       initWithImage:[UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"]
                                       style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(flipCamera:)];
     
-    UIBarButtonItem *inputSelectBarButton = [[UIBarButtonItem alloc]
-                                             initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
-                                             style:UIBarButtonItemStylePlain
-                                             target:self
-                                             action:@selector(flipCamera:)];
-    
+    depthSelectBarButton = [[UIBarButtonItem alloc]
+                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
+                                       style:UIBarButtonItemStylePlain
+                                       target:self
+                                       action:@selector(doTapDepthVis:)];
+
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
@@ -637,22 +640,22 @@ typedef enum {
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
 
-    UIBarButtonItem *saveBarButton = [[UIBarButtonItem alloc]
+    saveBarButton = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemSave
                                    target:self
                                    action:@selector(doSave)];
     
-    UIBarButtonItem *undoBarButton = [[UIBarButtonItem alloc]
+    undoBarButton = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemUndo
                                       target:self
                                       action:@selector(doRemoveLastTransform)];
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                              inputSelectBarButton,
+                                              sourceBarButton,
                                               flexibleSpace,
                                               flipBarButton,
                                               flexibleSpace,
-                                              depthBarButton,
+                                              depthSelectBarButton,
                                               nil];
     
     if (!isiPhone || !isPortrait)
@@ -664,17 +667,21 @@ typedef enum {
                                      target:self
                                      action:@selector(doHelp:)];
     
+#ifdef NOTDEF
     capturingButton = [UIButton systemButtonWithImage:[UIImage
                                                        systemImageNamed:@"video.slash"]
                                                target:self
                                                action:@selector(toggleLiveCapture:)];
-    UIBarButtonItem *capturingBarButton = [[UIBarButtonItem alloc]
+//    capturingButton.enabled = YES;
+//    capturingButton.highlighted = !capturingButton.enabled;
+    
+    capturingBarButton = [[UIBarButtonItem alloc]
                                            initWithCustomView:capturingButton];
+    [capturingBarButton setEnabled:YES];
+#endif
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                docBarButton,
-                                               fixedSpace,
-                                               capturingBarButton,
                                                nil];
     
     CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
@@ -1137,12 +1144,12 @@ stackingButton.userInteractionEnabled = YES;
     [overlayView setNeedsDisplay];
 }
 
-- (void) adjustBaraButtons {
-    depthSelectButton.enabled = [cameraController isDepthAvailable:currentSource];
-    flipCameraButton.enabled = [cameraController isFlipAvailable:currentSource];
+- (void) adjustBarButtons {
+    depthSelectBarButton.enabled = [cameraController isDepthAvailable:currentSource];
+    flipBarButton.enabled = [cameraController isFlipAvailable:currentSource];
 
-    trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
-    undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM;
+    trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
+    undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
     stopCamera.enabled = capturing;
     startCamera.enabled = !stopCamera.enabled;
 }
@@ -1323,11 +1330,6 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustBarButtons];
 }
 
-- (void) adjustBarButtons {
-    undoBarButton.enabled = screenTask.transformList.count > 1;
-    trashBarButton.enabled = screenTask.transformList.count > 1;;
-}
-
 - (UIView *) thumbViewForTransform:(Transform *) transform {
     long transformIndex = transform.arrayIndex;
     return [thumbArrayView viewWithTag:transformIndex + TRANSFORM_BASE_TAG];
@@ -1452,8 +1454,15 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) toggleLiveCapture:(UITapGestureRecognizer *)recognizer {
-    capturingButton.highlighted = !capturingButton.highlighted;
+#ifdef NOTDEF
+    capturingBarButton.enabled = !capturingBarButton.enabled;
+    return;
+    UIButton *button = (UIButton *)recognizer;
+    
+    capturingButton.enabled = YES;
+    capturingButton.highlighted = !capturingButton.enabled;
     [capturingButton setNeedsDisplay];
+#endif
 }
 
 // freeze/unfreeze video
@@ -1604,7 +1613,6 @@ CGFloat topOfNonDepthArray = 0;
     UIGraphicsEndImageContext();
     return newImage;
 }
-
 
 #ifdef XXXX
 if captureDevice.position == AVCaptureDevicePosition.back {
@@ -1864,61 +1872,16 @@ UIImageOrientation lastOrientation;
     [self reconfigure];
 }
 
-- (IBAction) selectPhoto:(UIButton *)button {
-    depthSelectButton.selected = NO;
-    [self doSelecFileSource];
-    [self reconfigure];
-}
-
-#ifdef OLD
-- (IBAction) selectSource:(UISegmentedControl *)sender {
-    SourceSelectOptions option = (SourceSelectOptions)sender.selectedSegmentIndex;
-    Cameras source = currentSource.sourceType;
-    switch (option) {
-        case CameraTypeSelect:
-            if (!ISCAMERA(source)) { // selecting camera.
-                nextSource = [inputSources objectAtIndex:FrontCamera];
-                [sourceSelectionView setSelectedSegmentIndex:CameraTypeSelect];
-                break;
-            }
-            // FALLTHROUGH
-        case CameraFlip:
-            if (!ISCAMERA(source))
-                return;
-            if (source == FrontCamera)
-                nextSource = [inputSources objectAtIndex:RearCamera];
-            else
-                nextSource = [inputSources objectAtIndex:FrontCamera];
-            break;
-        case ChooseFile:
-            // not yet available
-            [self doSelecFileSource];
-            [sourceSelectionView setSelectedSegmentIndex:ChooseFile]
-            ;;
-    }
-    [self reconfigure];
-}
-#endif
-
-#ifdef OLD
-- (IBAction) selectUI:(UISegmentedControl *)sender {
-    uiMode = (UIMode_t)sender.selectedSegmentIndex;
-    for (UIView *subView in [containerView subviews])
-        [subView removeFromSuperview];  // clear the slate
-    [self.view setNeedsLayout];
-    [self saveUIMode];
-}
-#endif
-
 #define SELECTION_CELL_ID  @"fileSelectCell"
 #define SELECTION_HEADER_CELL_ID  @"fileSelectHeaderCell"
 
-- (void) doSelecFileSource {
+- (IBAction) selectSource:(UIButton *)button {
     UIViewController *collectionVC = [[UIViewController alloc] init];
     
     UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
     flowLayout.sectionInset = UIEdgeInsetsMake(2*INSET, 2*INSET, INSET, 2*INSET);
-    flowLayout.itemSize = CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
+    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
+    flowLayout.itemSize = CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
     flowLayout.scrollDirection = UICollectionViewScrollDirectionVertical;
     //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
     //flowLayout.minimumInteritemSpacing = 16;
@@ -1926,7 +1889,7 @@ UIImageOrientation lastOrientation;
     flowLayout.headerReferenceSize = CGSizeMake(0, COLLECTION_HEADER_H);
     
     UICollectionView *collectionView = [[UICollectionView alloc]
-                                        initWithFrame:self.view.frame
+                                        initWithFrame:containerView.frame
                                         collectionViewLayout:flowLayout];
     collectionView.dataSource = self;
     collectionView.delegate = self;
@@ -1938,6 +1901,7 @@ UIImageOrientation lastOrientation;
     [collectionView registerClass:[CollectionHeaderView class]
        forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
               withReuseIdentifier:SELECTION_HEADER_CELL_ID];
+    
     sourcesNavVC = [[UINavigationController alloc]
                     initWithRootViewController:collectionVC];
     UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
@@ -1947,10 +1911,14 @@ UIImageOrientation lastOrientation;
                                        action:@selector(dismissSourceVC:)];
     rightBarButton.enabled = YES;
     collectionVC.navigationItem.rightBarButtonItem = rightBarButton;
-    collectionVC.title = @"Image and video sources";
+    collectionVC.title = @"Image sources";
     [self presentViewController:sourcesNavVC
                        animated:YES
-                     completion:NULL];
+                     completion:^{
+        [self adjustBarButtons];
+        [self reconfigure];
+        
+    }];
 }
 
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
@@ -1993,7 +1961,8 @@ static NSString * const sourceSectionTitles[] = {
 - (CGSize)collectionView:(UICollectionView *)collectionView
                   layout:(UICollectionViewLayout*)collectionViewLayout
   sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    return CGSizeMake(SOURCE_CELL_W, SOURCE_CELL_H);
+    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
+    return CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
@@ -2005,8 +1974,10 @@ static NSString * const sourceSectionTitles[] = {
     CGRect f = cell.contentView.frame;
     UIView *cellView = [[UIView alloc] initWithFrame:f];
     [cell.contentView addSubview:cellView];
-    
-    f.size = CGSizeMake(SOURCE_THUMB_W, SOURCE_THUMB_H);
+
+    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
+    f.size =  CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
+
     UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
     thumbImageView.layer.borderWidth = 1.0;
     thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
@@ -2014,14 +1985,14 @@ static NSString * const sourceSectionTitles[] = {
     [cellView addSubview:thumbImageView];
     
     f.origin.y = BELOW(f);
-    f.size.height = SOURCE_LABEL_H;
+    f.size.height = SOURCE_LABEL_H*scale;
     UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
     thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
     thumbLabel.numberOfLines = 0;
     thumbLabel.adjustsFontSizeToFitWidth = YES;
     thumbLabel.textAlignment = NSTextAlignmentCenter;
     thumbLabel.font = [UIFont
-                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE];
+                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE*scale];
     thumbLabel.textColor = [UIColor blackColor];
     thumbLabel.backgroundColor = [UIColor whiteColor];
     [cellView addSubview:thumbLabel];

@@ -94,15 +94,19 @@
 }
 
 - (BOOL) isDepthAvailable: (InputSource *)source {
-    return [self captureDeviceForCamera:source.frontCamera threeD:YES] == nil;
-
+    if (!IS_CAMERA(source))
+        return NO;
+    return [self captureDeviceForCamera:source.frontCamera threeD:YES] != nil;
 }
 
 - (BOOL) isFlipAvailable:(InputSource *)source {
+    if (!IS_CAMERA(source))
+        return NO;
     return [self captureDeviceForCamera:!source.frontCamera threeD:source.threeDCamera] != nil;
 }
 
 - (void) selectCamera:(InputSource *)source {
+    assert(IS_CAMERA(source));
     captureDevice = [self captureDeviceForCamera:source.frontCamera threeD:source.threeDCamera];
     assert(captureDevice);
     currentCamera = source;

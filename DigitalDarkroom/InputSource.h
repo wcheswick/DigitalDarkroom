@@ -20,7 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
     BOOL frontCamera;           // if imagePath == nil, which camera is selected
     BOOL threeDCamera;          // ... and it it the depth camera
     CGSize imageSize;
-    UIImageView *__nullablethumbImage;
+    UIImage *__nullable thumbImageCache;
 }
 
 @property (nonatomic, strong)   NSString *label;
@@ -29,6 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   UIImageView *__nullable thumbImage;
 @property (assign)              CGSize imageSize;
 @property (nonatomic, strong)   NSArray *cameraNames;
+@property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 
 - (void) makeCameraSource;
 - (void) setUpImageAt:(NSString *)path;
