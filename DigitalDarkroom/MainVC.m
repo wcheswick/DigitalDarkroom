@@ -525,13 +525,12 @@ typedef enum {
     [twoTap setNumberOfTouchesRequired:2];
     [overlayView addGestureRecognizer:twoTap];
 
-#ifdef NOTUSED
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
-                                     initWithTarget:self action:@selector(didLongPressScreen:)];
+                                                     initWithTarget:self action:@selector(doLeft:)];
     longPressScreen.minimumPressDuration = 1.0;
     [overlayView addGestureRecognizer:longPressScreen];
-#endif
     
+#ifdef NOTUSED
     UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                            action:@selector(doDown:)];
@@ -543,7 +542,8 @@ typedef enum {
                                          action:@selector(doUp:)];
     swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
     [overlayView addGestureRecognizer:swipeUp];
-    
+#endif
+
     UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
                                          action:@selector(doRight:)];
@@ -1608,15 +1608,6 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (IBAction) doLeft:(UISwipeGestureRecognizer *)recognizer {
-    [self doSave];
-}
-
-- (IBAction) doRight:(UISwipeGestureRecognizer *)recognizer {
-    NSLog(@"did swipe video right");
-    [self doRemoveLastTransform];
-}
-
 - (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
     float xScale = size.width/srcSize.width;
     float yScale = size.height/srcSize.height;
@@ -1892,6 +1883,23 @@ UIImageOrientation lastOrientation;
     [executeView setNeedsDisplay];
 }
 
+- (IBAction) doRight:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doRight");
+    [self doSave];
+}
+
+- (IBAction) doLeft:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doLeft");
+#define PHOTO_APP_URL   @"photo-redirect://"
+    NSURL *URL = [NSURL URLWithString:PHOTO_APP_URL];
+    [[UIApplication sharedApplication] openURL:URL
+                                       options:@{}
+                             completionHandler:^(BOOL success) {
+        NSLog(@"photo app open success: %d", success);
+    }];
+}
+
+#ifdef NOTDEF
 - (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doUp");
     [self updateExecuteView];
@@ -1901,6 +1909,7 @@ UIImageOrientation lastOrientation;
     NSLog(@"doDown");
     [self updateExecuteView];
 }
+#endif
 
 - (IBAction) chooseDepth:(UIButton *)button {
     InputSource *newSource = [currentSource copy];
