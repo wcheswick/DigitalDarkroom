@@ -143,7 +143,7 @@ typedef enum {
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
 @property (assign)              OverlayState overlayState;
-@property (nonatomic, strong)   ReticleView *reticleView;
+@property (nonatomic, strong)   ReticleView *reticleView;   // nil if reticle not selected
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
@@ -502,11 +502,7 @@ typedef enum {
     overlayView.userInteractionEnabled = YES;
     overlayView.backgroundColor = [UIColor clearColor];
 
-    reticleView = [[ReticleView alloc] init];
-    reticleView.opaque = NO;
-    reticleView.contentMode = UIViewContentModeRedraw;
-    reticleView.backgroundColor = [UIColor clearColor];
-    [overlayView addSubview:reticleView];
+    reticleView = nil;      // defaults to off
     
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
@@ -529,10 +525,12 @@ typedef enum {
     [twoTap setNumberOfTouchesRequired:2];
     [overlayView addGestureRecognizer:twoTap];
 
+#ifdef NOTUSED
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didLongPressScreen:)];
     longPressScreen.minimumPressDuration = 1.0;
     [overlayView addGestureRecognizer:longPressScreen];
+#endif
     
     UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
@@ -1057,12 +1055,13 @@ stackingButton.userInteractionEnabled = YES;
         if (score == REJECT_SCORE)
             NSLog(@"!!! could not layout image");
     }
-
+    
     overlayView.frame = layout.displayRect;
-    reticleView.frame = CGRectMake(0, 0,
-                                   overlayView.frame.size.width, overlayView.frame.size.height);
-    reticleView.hidden = !options.reticle;
-    [reticleView setNeedsDisplay];
+    if (reticleView) {
+        reticleView.frame = CGRectMake(0, 0,
+                                       overlayView.frame.size.width, overlayView.frame.size.height);
+        [reticleView setNeedsDisplay];
+    }
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
     thumbScrollView.frame = layout.thumbArrayRect;
@@ -1141,9 +1140,6 @@ stackingButton.userInteractionEnabled = YES;
     // start fresh
     [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     UILabel *overlayDebug = nil;
-    
-    reticleView.hidden = !options.reticle;
-    [reticleView setNeedsDisplay];
     
     switch (overlayState) {
         case overlayClear:
@@ -1537,15 +1533,24 @@ CGFloat topOfNonDepthArray = 0;
 
 
 - (IBAction) toggleReticle:(UIBarButtonItem *)reticleBarButton {
-    options.reticle = !options.reticle;
-    NSLog(@"reticle is %@", options.reticle ? @"ON" : @"OFF");
-
-    reticleView.hidden = !options.reticle;
+    if (reticleView) {  // turn it off by removing it
+        [reticleView removeFromSuperview];
+        reticleView = nil;
+        [overlayView setNeedsDisplay];
+        return;
+    }
     
-    [options save];
-    [self updateOverlayView];
+    CGRect f = overlayView.frame;
+    f.origin = CGPointZero;
+    reticleView = [[ReticleView alloc] initWithFrame:f];
+    reticleView.contentMode = UIViewContentModeRedraw;
+    reticleView.opaque = NO;
+    reticleView.backgroundColor = [UIColor clearColor];
+    [overlayView addSubview:reticleView];
+    [reticleView setNeedsDisplay];
 }
 
+#ifdef NOTDEEF
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
     // XXXXX use this for something else
     if (recognizer.state != UIGestureRecognizerStateBegan)
@@ -1553,6 +1558,7 @@ CGFloat topOfNonDepthArray = 0;
     options.reticle = !options.reticle;
     [options save];
 }
+#endif
 
 - (IBAction) didLongPressExecute:(UILongPressGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateBegan)

@@ -8,7 +8,6 @@
 
 #import "Options.h"
 
-#define kReticleOption     @"Heretical"
 #define kHiresOption        @"Hires"
 #define kExecuteDebugOption @"ExecuteDebug"
 
@@ -18,12 +17,10 @@
 
 @synthesize executeDebug;
 @synthesize needHires;
-@synthesize reticle;
 
 - (id)init {
     self = [super init];
     if (self) {
-        reticle = [[NSUserDefaults standardUserDefaults] boolForKey:kReticleOption];
         needHires = [[NSUserDefaults standardUserDefaults] boolForKey:kHiresOption];;
         executeDebug = [[NSUserDefaults standardUserDefaults] boolForKey:kExecuteDebugOption];
         displayMode = medium;   // not in use
@@ -34,7 +31,6 @@
 }
 
 - (void) save {
-    [[NSUserDefaults standardUserDefaults] setBool:reticle forKey:kReticleOption];
     [[NSUserDefaults standardUserDefaults] setBool:needHires forKey:kHiresOption];
     [[NSUserDefaults standardUserDefaults] setBool:executeDebug forKey:kExecuteDebugOption];
     [[NSUserDefaults standardUserDefaults] synchronize];

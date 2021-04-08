@@ -21,12 +21,11 @@ typedef enum {
 @interface Options : NSObject {
     BOOL executeDebug;
     BOOL needHires;
-    BOOL reticle;
 }
 #define OPTION_COUNT    4
 
 @property (assign)  DisplayMode_t displayMode;
-@property (assign)  BOOL executeDebug, needHires, reticle;
+@property (assign)  BOOL executeDebug, needHires;
 
 - (void) save;
 

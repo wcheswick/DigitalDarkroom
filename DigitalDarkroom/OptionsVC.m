@@ -141,11 +141,6 @@
                 cell.largeContentTitle = @"Hi res";
                 cell.accessoryType = options.needHires ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
                 break;
-            case 2:
-                [cell.contentView addSubview:[[UIImageView alloc]
-                                              initWithImage:[UIImage systemImageNamed:@"plus"]]];
-                cell.accessoryType = options.reticle ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
-                break;
        }
     } else {   // bottom cell is Dismiss
         assert(indexPath.row == OPTION_COUNT);
@@ -170,9 +165,6 @@ didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
                 break;
            case 1:
                 options.needHires = !options.needHires;
-                break;
-            case 2:
-                options.reticle = !options.reticle;
                 break;
        }
     } else {
