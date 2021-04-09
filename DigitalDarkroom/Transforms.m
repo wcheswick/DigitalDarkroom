@@ -608,7 +608,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 
 - (void) addPolarTransforms {
-
     lastTransform = [Transform areaTransform: @"Can"    // WTF?
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {

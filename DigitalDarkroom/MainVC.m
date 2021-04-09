@@ -197,7 +197,7 @@ typedef enum {
 @property (assign)              UIDeviceOrientation deviceOrientation;
 @property (assign)              BOOL isPortrait;
 @property (assign)              BOOL isiPhone;
-@property (assign)              Layout *layout;
+@property (nonatomic, strong)   Layout *layout;
 
 @property (assign)              DisplayOptions displayOption;
 
@@ -271,8 +271,8 @@ typedef enum {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
-        currentDepthTransformIndex = NO_TRANSFORM;
         currentTransformIndex = NO_TRANSFORM;
+        layout = nil;
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
@@ -632,7 +632,7 @@ typedef enum {
                                        initWithImage:[UIImage systemImageNamed:@"view.3d"]
                                        style:UIBarButtonItemStylePlain
                                        target:self
-                                       action:@selector(doTapDepthVis:)];
+                                       action:@selector(chooseDepth:)];
 
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
@@ -923,17 +923,17 @@ stackingButton.userInteractionEnabled = YES;
     Layout *bestLayout = nil;
     
     for (AVCaptureDeviceFormat *format in availableFormats) {
-        Layout *layout = [[Layout alloc] initForOrientation:isPortrait
+        Layout *candidateLayout = [[Layout alloc] initForOrientation:isPortrait
                                                   iPhone:isiPhone
                                            displayOption:displayOption];
-        layout.containerView = containerView;
-        layout.thumbCount = transforms.transforms.count;
+        candidateLayout.containerView = containerView;
+        candidateLayout.thumbCount = transforms.transforms.count;
         
-        int score = [layout layoutForFormat:format
+        int score = [candidateLayout layoutForFormat:format
                                     scaleOK:scaleOK];
         if (score > bestScore) {
             bestScore = score;
-            bestLayout = layout;
+            bestLayout = candidateLayout;
         }
     }
     return bestLayout;
@@ -1032,7 +1032,7 @@ stackingButton.userInteractionEnabled = YES;
     }
 #endif
 
-    Layout *layout;
+    layout = nil;
     if (IS_CAMERA(currentSource)) {   // select camera setting for available area
         NSArray *availableFormats = [cameraController
                                      formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
@@ -1125,7 +1125,7 @@ stackingButton.userInteractionEnabled = YES;
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {
             // move views to where they need to be now.
-            [self placeThumbsForLayout: layout];
+            [self placeThumbsForLayout: self->layout];
         }];
     }
     
@@ -1966,9 +1966,8 @@ CGSize sourceCellSize;
 
 - (IBAction) selectSource:(UIBarButtonItem *)button {
     float scale = isiPhone ? SOURCE_IPHONE_SCALE : 1.0;
-    float aspectRatio = transformView.frame.size.height / transformView.frame.size.width;
     sourceCellImageSize = CGSizeMake(SOURCE_THUMB_W*scale,
-                                     SOURCE_THUMB_W*aspectRatio*scale);
+                                     SOURCE_THUMB_W*scale/layout.aspectRatio);
     sourceFontSize = SOURCE_THUMB_FONT_H*scale;
     sourceLabelH = 2*(sourceFontSize + 2);
     sourceCellSize = CGSizeMake(sourceCellImageSize.width,
