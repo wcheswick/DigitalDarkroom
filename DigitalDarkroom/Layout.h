@@ -12,7 +12,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define REJECT_SCORE    (-9999999)
+#define REJECT_SCORE    (-9000000)
 
 typedef enum {
     ControlDisplayOnly,

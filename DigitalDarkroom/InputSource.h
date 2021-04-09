@@ -26,7 +26,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *label;
 @property (assign)              BOOL frontCamera, threeDCamera;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
-@property (nonatomic, strong)   UIImageView *__nullable thumbImage;
 @property (assign)              CGSize imageSize;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;

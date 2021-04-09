@@ -105,7 +105,7 @@ NSString * __nullable displayOptionNames[] = {
     BOOL fits = wfits && hfits;
     
     if (!fits && !scaleOK)
-        return REJECT_SCORE + 1;
+        return REJECT_SCORE - 1;
     
     if (!fits && scaleOK) {    // scale
         scale = [self aspectScaleToSize:containerSize];
@@ -293,9 +293,9 @@ NSString * __nullable displayOptionNames[] = {
         score += 5;     // avoids execution performance hit
     
     if (!(hfits || wfits))
-        score = REJECT_SCORE + 2;
+        score = REJECT_SCORE - 2;
     if (!(rightThumbsOK || bottomThumbsOK))
-        score = REJECT_SCORE + 3;
+        score = REJECT_SCORE - 3;
 
     
     NSString *thumbStatus = [NSString stringWithFormat:@"%@%@ %@",

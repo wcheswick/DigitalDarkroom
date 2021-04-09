@@ -54,13 +54,18 @@
 #define ACTIVE_SLIDER_H     ACTIVE_TABLE_ENTRY_H
 
 #define SOURCE_THUMB_W  120
+#define SOURCE_IPHONE_SCALE 0.75
+#define SOURCE_THUMB_FONT_H 20
+
+#ifdef OLD
 #define SOURCE_THUMB_H  SOURCE_THUMB_W
-#define SOURCE_BUTTON_FONT_SIZE 24
+#define SOURCE_BUTTON_FONT_SIZE 20
 #define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
 
 #define SOURCE_CELL_W   SOURCE_THUMB_W
 #define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
 #define SOURCE_CELL_IPHONE_SCALE    0.75
+#endif
 
 #define TRANS_INSET 2
 #define TRANS_BUTTON_FONT_SIZE 12
@@ -105,9 +110,11 @@ typedef enum {
 } CollectionTags;
 
 typedef enum {
-    sampleSource,
-    librarySource,
-} FixedSources;
+    CameraSource,
+    SampleSource,
+    LibrarySource,
+} SourceTypes;
+#define N_SOURCES 3
 
 typedef enum {
     overlayClear,
@@ -116,7 +123,6 @@ typedef enum {
 } OverlayState;
 #define OVERLAY_STATES  (overlayShowingDebug+1)
 
-#define N_FIXED_SOURCES 2
 
 @interface MainVC ()
 
@@ -153,6 +159,8 @@ typedef enum {
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
 @property (nonatomic, strong)   InputSource *currentSource;
+@property (nonatomic, strong)   InputSource *cameraSource;
+@property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
 @property (nonatomic, strong)   InputSource *nextSource;
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
@@ -229,6 +237,7 @@ typedef enum {
 @synthesize options;
 
 @synthesize currentSource, inputSources;
+@synthesize cameraSource, cameraSourceThumb;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 
@@ -236,6 +245,7 @@ typedef enum {
 @synthesize availableCameraCount;
 
 @synthesize cameraController;
+@synthesize layout;
 
 @synthesize undoBarButton, saveBarButton, trashBarButton;
 
@@ -304,11 +314,11 @@ typedef enum {
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
 
-        inputSources = [[NSMutableArray alloc] init];
-        InputSource *cameraSource = [[InputSource alloc] init];
+        cameraSource = [[InputSource alloc] init];
         [cameraSource makeCameraSource];
-        [inputSources addObject:cameraSource];
+        cameraSourceThumb = nil;
 
+        inputSources = [[NSMutableArray alloc] init];
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
 #ifdef wrongformat
@@ -935,7 +945,7 @@ stackingButton.userInteractionEnabled = YES;
     self.navigationController.navigationBarHidden = NO;
     self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
     self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
-    self.navigationController.toolbar.opaque = NO;  // (uiMode == oliveUI);
+    self.navigationController.toolbar.opaque = YES;  // (uiMode == oliveUI);
 
 //    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
     
@@ -1050,10 +1060,10 @@ stackingButton.userInteractionEnabled = YES;
         layout.thumbCount = transforms.transforms.count;
         
         int score = [layout layoutForSize:currentSource.imageSize scaleOK:NO];
-        if (score == REJECT_SCORE)
+        if (score <= REJECT_SCORE)
             score = [layout layoutForSize:currentSource.imageSize scaleOK:YES];
-        if (score == REJECT_SCORE)
-            NSLog(@"!!! could not layout image");
+        if (score <= REJECT_SCORE)
+            NSLog(@"!!! could not layout image, score: %d", score);
     }
     
     overlayView.frame = layout.displayRect;
@@ -1124,14 +1134,18 @@ stackingButton.userInteractionEnabled = YES;
     
     [taskCtrl layoutCompleted];
 
+    [self doTransforms];
+    [self updateOverlayView];
+    [self updateExecuteView];
+    [self adjustBarButtons];
+}
+
+- (void) doTransforms {
     if (IS_CAMERA(currentSource)) {
         [self cameraOn:YES];
     } else {
         [self doTransformsOn:[UIImage imageWithContentsOfFile:currentSource.imagePath]];
     }
-    [self updateOverlayView];
-    [self updateExecuteView];
-    [self adjustBarButtons];
 }
 
 #define DEBUG_FONT_SIZE 16
@@ -1354,6 +1368,7 @@ CGFloat topOfNonDepthArray = 0;
     }
     [self updateExecuteView];
     [self adjustBarButtons];
+    [self doTransforms];
 }
 
 - (UIView *) thumbViewForTransform:(Transform *) transform {
@@ -1473,9 +1488,6 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
-    BOOL hide = !self.navigationController.navigationBarHidden;
-    [self.navigationController setNavigationBarHidden:hide animated:YES];
-    [self.navigationController setToolbarHidden:hide animated:YES];
     return;
 }
 
@@ -1509,7 +1521,6 @@ CGFloat topOfNonDepthArray = 0;
     }
     // XXXX show frozen on screen
 }
-
 
 - (IBAction) doHelp:(UIBarButtonItem *)button {
     NSURL *helpURL = [NSURL fileURLWithPath:
@@ -1716,6 +1727,10 @@ if captureDevice.position == AVCaptureDevicePosition.front {
 
     if (DISPLAYING_THUMBS)
         [thumbTasks executeTasksWithImage:sourceImage];
+    if (cameraSourceThumb) {
+        [cameraSourceThumb setImage:sourceImage];
+        [cameraSourceThumb setNeedsDisplay];
+    }
 }
     
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
@@ -1941,16 +1956,27 @@ UIImageOrientation lastOrientation;
     }];
 }
 
+CGSize sourceCellImageSize;
+CGFloat sourceFontSize;
+CGFloat sourceLabelH;
+CGSize sourceCellSize;
+
 #define SELECTION_CELL_ID  @"fileSelectCell"
 #define SELECTION_HEADER_CELL_ID  @"fileSelectHeaderCell"
 
-- (IBAction) selectSource:(UIButton *)button {
-    UIViewController *collectionVC = [[UIViewController alloc] init];
+- (IBAction) selectSource:(UIBarButtonItem *)button {
+    float scale = isiPhone ? SOURCE_IPHONE_SCALE : 1.0;
+    float aspectRatio = transformView.frame.size.height / transformView.frame.size.width;
+    sourceCellImageSize = CGSizeMake(SOURCE_THUMB_W*scale,
+                                     SOURCE_THUMB_W*aspectRatio*scale);
+    sourceFontSize = SOURCE_THUMB_FONT_H*scale;
+    sourceLabelH = 2*(sourceFontSize + 2);
+    sourceCellSize = CGSizeMake(sourceCellImageSize.width,
+                                sourceCellImageSize.height + sourceLabelH);
     
     UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
     flowLayout.sectionInset = UIEdgeInsetsMake(2*INSET, 2*INSET, INSET, 2*INSET);
-    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
-    flowLayout.itemSize = CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
+    flowLayout.itemSize = sourceCellSize;
     flowLayout.scrollDirection = UICollectionViewScrollDirectionVertical;
     //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
     //flowLayout.minimumInteritemSpacing = 16;
@@ -1966,37 +1992,41 @@ UIImageOrientation lastOrientation;
     [collectionView registerClass:[UICollectionViewCell class]
        forCellWithReuseIdentifier:SELECTION_CELL_ID];
     collectionView.backgroundColor = [UIColor whiteColor];
-    collectionVC.view = collectionView;
+    
     [collectionView registerClass:[CollectionHeaderView class]
        forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
               withReuseIdentifier:SELECTION_HEADER_CELL_ID];
     
+    UIViewController __block *cVC = [[UIViewController alloc] init];
+    cVC.view = collectionView;
+    cVC.modalPresentationStyle = UIModalPresentationPopover;
+    
     sourcesNavVC = [[UINavigationController alloc]
-                    initWithRootViewController:collectionVC];
-    UIBarButtonItem *rightBarButton = [[UIBarButtonItem alloc]
-                                       initWithTitle:@"Dismiss"
-                                       style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(dismissSourceVC:)];
-    rightBarButton.enabled = YES;
-    collectionVC.navigationItem.rightBarButtonItem = rightBarButton;
-    collectionVC.title = @"Image sources";
-    [self presentViewController:sourcesNavVC
-                       animated:YES
-                     completion:^{
-        [self adjustBarButtons];
-        [self reconfigure];
-        
-    }];
+                    initWithRootViewController:cVC];
+    cVC.title = @"Select source";
+    cVC.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+                                                initWithTitle:@"Dismiss"
+                                                style:UIBarButtonItemStylePlain
+                                                target:self
+                                                action:@selector(dismissSourceVC:)];
+
+    [self presentViewController:sourcesNavVC animated:YES completion:nil];
+}
+
+- (IBAction) dismissSourceVC:(UIBarButtonItem *)dismissButton {
+    cameraSourceThumb = nil;
+    [sourcesNavVC dismissViewControllerAnimated:YES
+                                     completion:NULL];
 }
 
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
-    return N_FIXED_SOURCES;
+    return N_SOURCES;
 }
 
 static NSString * const sourceSectionTitles[] = {
-    [sampleSource] = @"    Samples",
-    [librarySource] = @"    From library",
+    [CameraSource] = @"    Camera",
+    [SampleSource] = @"    Samples",
+    [LibrarySource] = @"    From library",
 };
 
 #ifdef BROKEN
@@ -2019,10 +2049,12 @@ static NSString * const sourceSectionTitles[] = {
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView
      numberOfItemsInSection:(NSInteger)section {
-    switch ((FixedSources) section) {
-        case sampleSource:
+    switch ((SourceTypes) section) {
+        case CameraSource:
+            return 1;
+        case SampleSource:
             return inputSources.count;
-        case librarySource:
+        case LibrarySource:
             return 0;   // XXX not yet
     }
 }
@@ -2030,8 +2062,7 @@ static NSString * const sourceSectionTitles[] = {
 - (CGSize)collectionView:(UICollectionView *)collectionView
                   layout:(UICollectionViewLayout*)collectionViewLayout
   sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
-    return CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
+    return sourceCellSize;
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView
@@ -2044,9 +2075,7 @@ static NSString * const sourceSectionTitles[] = {
     UIView *cellView = [[UIView alloc] initWithFrame:f];
     [cell.contentView addSubview:cellView];
 
-    float scale = isiPhone ? SOURCE_CELL_IPHONE_SCALE : 1.0;
-    f.size =  CGSizeMake(SOURCE_CELL_W*scale, SOURCE_CELL_H*scale);
-
+    f.size = sourceCellImageSize;
     UIImageView *thumbImageView = [[UIImageView alloc] initWithFrame:f];
     thumbImageView.layer.borderWidth = 1.0;
     thumbImageView.layer.borderColor = [UIColor blackColor].CGColor;
@@ -2054,29 +2083,37 @@ static NSString * const sourceSectionTitles[] = {
     [cellView addSubview:thumbImageView];
     
     f.origin.y = BELOW(f);
-    f.size.height = SOURCE_LABEL_H*scale;
+    f.size.height = sourceLabelH;
     UILabel *thumbLabel = [[UILabel alloc] initWithFrame:f];
     thumbLabel.lineBreakMode = NSLineBreakByWordWrapping;
     thumbLabel.numberOfLines = 0;
     thumbLabel.adjustsFontSizeToFitWidth = YES;
     thumbLabel.textAlignment = NSTextAlignmentCenter;
-    thumbLabel.font = [UIFont
-                       systemFontOfSize:SOURCE_BUTTON_FONT_SIZE*scale];
+    thumbLabel.font = [UIFont systemFontOfSize:sourceFontSize];
     thumbLabel.textColor = [UIColor blackColor];
     thumbLabel.backgroundColor = [UIColor whiteColor];
     [cellView addSubview:thumbLabel];
     
-    switch ((FixedSources)indexPath.section) {
-        case sampleSource: {
+    switch ((SourceTypes)indexPath.section) {
+        case CameraSource:
+            cameraSourceThumb = thumbImageView;
+            thumbLabel.text = @"Cameras";
+            break;
+        case SampleSource: {
             InputSource *source = [inputSources objectAtIndex:indexPath.row];
             thumbLabel.text = source.label;
             UIImage *sourceImage = [UIImage imageWithContentsOfFile:source.imagePath];
-            thumbImageView.image = [self fitImage:sourceImage
-                                           toSize:thumbImageView.frame.size
-                                         centered:YES];
+            if (source.thumbImageCache)
+                thumbImageView.image = source.thumbImageCache;
+            else {
+                source.thumbImageCache = [self fitImage:sourceImage
+                                                 toSize:thumbImageView.frame.size
+                                               centered:YES];
+                thumbImageView.image = source.thumbImageCache;
+            }
             break;
         }
-        case librarySource:
+        case LibrarySource:
             ; // XXX stub
     }
     return cell;
@@ -2084,21 +2121,18 @@ static NSString * const sourceSectionTitles[] = {
 
 - (void)collectionView:(UICollectionView *)collectionView
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
-    switch ((FixedSources)indexPath.section) {
-        case sampleSource:
+    switch ((SourceTypes)indexPath.section) {
+        case CameraSource:
+            nextSource = cameraSource;
+            break;
+        case SampleSource:
             nextSource = [inputSources objectAtIndex:indexPath.row];
             break;
-        case librarySource:
+        case LibrarySource:
             ; // XXX stub
     }
-    [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
-    NSLog(@"    ***** collectionView setneedslayout");
     [self reconfigure];
-}
-
-- (IBAction) dismissSourceVC:(UIBarButtonItem *)sender {
-    [sourcesNavVC dismissViewControllerAnimated:YES
-                                     completion:NULL];
+    [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
 }
 
 #define CELL_H  44

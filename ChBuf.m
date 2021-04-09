@@ -25,7 +25,9 @@
     if (self) {
         self.w = s.width;
         self.h = s.height;
-        size_t rowSize = sizeof(channel) * w;
+        // end row on an integer word boundary...
+        size_t rowSize = ((sizeof(channel) * w + sizeof(int) - 1) /
+                          sizeof(int)) * sizeof(int);
         assert(rowSize % sizeof(int) == 0);   // must fit in ints
         size_t arraySize = sizeof(channel *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
