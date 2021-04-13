@@ -22,24 +22,41 @@ typedef enum {
     FullScreenImage,
 } DisplayOptions;
 
+
+typedef enum {
+    ThumbsUnderneath,
+    ThumbsOnRight,
+    ThumbsUnderAndRight,        // not implemented
+    ThumbsOff,              // Internal use ...
+    ThumbsUndecided,        // ...
+    ThumbsOptional,         // ... only
+} ThumbsPlacement;
+
 @interface Layout : NSObject {
     AVCaptureDeviceFormat *format;
     BOOL isPortrait, isiPhone;
     DisplayOptions displayOption;
-    
     UIView *containerView;  // copied from the caller
+    size_t thumbCount;        // copied from the caller
     
-    CGSize captureSize;
-    CGSize transformSize;
-    CGRect thumbArrayRect;
-    CGRect firstThumbRect;
-    CGRect thumbImageRect;      // within the thumb
+    float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
+    float aspectRatio;
+
+    // layout stats and results:
+
+    ThumbsPlacement thumbsPlacement;
+    float displayFrac;      // fraction of total display used by the transformed image
+    float thumbFrac;        // fraction of thumbs shown
     
-    size_t thumbCount;
-    float scale, aspectRatio;
+    CGSize captureSize;     // what we get from the input source
+    CGSize transformSize;   // what we give the transform chain
+    CGRect displayRect;     // what we give to the main display
+    CGRect thumbArrayRect;  // where the thumbs go
+    CGRect firstThumbRect;  // thumb size for device, orientation, and aspect ratio
+    CGRect thumbImageRect;  // image sample size in the thumb
+    CGRect executeRect;     // where the description text goes
+    
     NSString *status;
-    
-    float score;
 }
 
 @property (nonatomic, strong)   AVCaptureDeviceFormat *format;
@@ -47,23 +64,27 @@ typedef enum {
 @property (assign)              BOOL isPortrait, isiPhone;
 @property (nonatomic, strong)   UIView *containerView;  // the screen real estate we lay out in
 
+@property (assign)              ThumbsPlacement thumbsPlacement;
+@property (assign)              float displayFrac, thumbFrac;
+
 @property (assign)              CGSize captureSize;     // what we get from the camera or file
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
 @property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
+@property (assign)              CGRect executeRect;     // text list location
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 @property (assign)              size_t thumbCount;
 
-@property (assign)              float scale, score, aspectRatio;
+@property (assign)              float scale, aspectRatio;
 @property (nonatomic, strong)   NSString *status;
 
 - (id)initForOrientation:(BOOL) port
                iPhone:(BOOL) isPhone
               displayOption:(DisplayOptions) dopt;
 
-- (int) layoutForFormat:(AVCaptureDeviceFormat *) f scaleOK:(BOOL) scaleOK;
-- (int) layoutForSize:(CGSize) s scaleOK:(BOOL) scaleOK;
+- (BOOL) layoutForFormat:(AVCaptureDeviceFormat *) f scale:(float) scale;
+- (BOOL) layoutForSize:(CGSize) cs scale:(float) scale;
 
 extern  NSString * __nullable displayOptionNames[];
 

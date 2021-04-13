@@ -500,8 +500,8 @@ typedef enum {
     containerView.userInteractionEnabled = YES;
     containerView.clipsToBounds = YES;  // this shouldn't be needed
 #ifdef DEBUG_LAYOUT
-    containerView.layer.borderWidth = 3.0;
-    containerView.layer.borderColor = [UIColor greenColor].CGColor;
+//    containerView.layer.borderWidth = 3.0;
+//    containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
     
     transformView = [[UIImageView alloc] init];
@@ -913,30 +913,36 @@ stackingButton.userInteractionEnabled = YES;
     }
 }
 
-- (Layout *) chooseLayoutFrom:(NSArray *)availableFormats scaleOK:(BOOL)scaleOK {
-//    NSLog(@"  %4.0f x %4.0f   ar %4.2f   chooseFormatForSize",
-//          availableSize.width, availableSize.height,
-//          availableSize.width/availableSize.height);
-//    NSLog(@"  ----");
-    
-    int bestScore = REJECT_SCORE;
+- (Layout *) chooseLayoutFrom:(NSArray *)availableFormats {
     Layout *bestLayout = nil;
+    Layout *bestScaledLayout = nil;
     
     for (AVCaptureDeviceFormat *format in availableFormats) {
         Layout *candidateLayout = [[Layout alloc] initForOrientation:isPortrait
-                                                  iPhone:isiPhone
-                                           displayOption:displayOption];
+                                                              iPhone:isiPhone
+                                                       displayOption:displayOption];
         candidateLayout.containerView = containerView;
         candidateLayout.thumbCount = transforms.transforms.count;
         
-        int score = [candidateLayout layoutForFormat:format
-                                    scaleOK:scaleOK];
-        if (score > bestScore) {
-            bestScore = score;
+        // check unscaled possibility
+        if ([candidateLayout layoutForFormat:format scale:1.0]) {
+            if (bestLayout && bestLayout.thumbFrac >= 1.0 && candidateLayout.thumbFrac < 1.0) {
+                NSLog(@"  X loss of thumbs thumbs");
+                continue;
+            }
             bestLayout = candidateLayout;
+            NSLog(@" ✓✓✓✓✓");
+            continue;
         }
+        // try scaling
+        bestScaledLayout = nil;
+        // XXXXXX stub
     }
-    return bestLayout;
+    if (bestLayout)
+        return bestLayout;
+    else if (bestScaledLayout)
+        return bestScaledLayout;
+    return nil;
 }
 
 // this is called when we know the transforms are all Stopped.
@@ -959,7 +965,6 @@ stackingButton.userInteractionEnabled = YES;
         [currentSource save];
     }
     assert(currentSource);
-    
     
     // We have several image sizes to consider and process:
     //
@@ -1018,6 +1023,7 @@ stackingButton.userInteractionEnabled = YES;
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height -= f.origin.y + bottomPadding;
+    f.size.height -= self.navigationController.toolbar.frame.size.height;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
@@ -1025,45 +1031,19 @@ stackingButton.userInteractionEnabled = YES;
           f.origin.x, f.origin.y, f.size.width, f.size.height);
 #endif
     
-#ifdef NOTDEF
-    if (availableSize.width < EXECUTE_VIEW_W) {
-        NSLog(@"*** execute view is too wide to fit by %.0f",
-              EXECUTE_VIEW_W - availableSize.width);
-    }
-#endif
-
     layout = nil;
     if (IS_CAMERA(currentSource)) {   // select camera setting for available area
         NSArray *availableFormats = [cameraController
                                      formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
-        layout = [self chooseLayoutFrom:availableFormats
-                                scaleOK:NO];
-#ifdef DEBUG_LAYOUT
-        NSLog(@" score for best unscaled layout: %.1f", layout.score);
-#endif
-        if (!layout || layout.score < 0) {
-            layout = [self chooseLayoutFrom:availableFormats
-                                    scaleOK:YES];
-#ifdef DEBUG_LAYOUT
-            NSLog(@"   score for best scaled layout: %.1f", layout.score);
-#endif
-        }
-        if (!layout)
-            NSLog(@"!!! could not layout camera image");
-        else
-            [cameraController setupCameraWithFormat:layout.format];
+        layout = [self chooseLayoutFrom:availableFormats];
+        assert(layout); // could not layout camera image
+        [cameraController setupCameraWithFormat:layout.format];
     } else {
         layout = [[Layout alloc] initForOrientation:isPortrait
-                                          iPhone:isiPhone
-                                   displayOption:displayOption];
+                                             iPhone:isiPhone
+                                      displayOption:displayOption];
         layout.containerView = containerView;
         layout.thumbCount = transforms.transforms.count;
-        
-        int score = [layout layoutForSize:currentSource.imageSize scaleOK:NO];
-        if (score <= REJECT_SCORE)
-            score = [layout layoutForSize:currentSource.imageSize scaleOK:YES];
-        if (score <= REJECT_SCORE)
-            NSLog(@"!!! could not layout image, score: %d", score);
     }
     
     overlayView.frame = layout.displayRect;
@@ -1075,20 +1055,23 @@ stackingButton.userInteractionEnabled = YES;
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
     thumbScrollView.frame = layout.thumbArrayRect;
+    CGFloat below = BELOW(thumbScrollView.frame);
+    assert(below <= containerView.frame.size.height);
+    assert(below <= self.navigationController.toolbar.frame.origin.y);
+
     thumbArrayView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
+    
     f = transformView.frame;
     f.origin.x = 0;
-    executeView.frame = CGRectMake(transformView.frame.origin.x, LATER,
-                                   transformView.frame.size.width, LATER);
+    executeView.frame = layout.executeRect;
 
 #ifdef DEBUG_LAYOUT
     NSLog(@"layout selected:");
 
-    NSLog(@"        capture:               %4.0f x %4.0f\tscale=%.1f score=%.0f",
-          layout.captureSize.width, layout.captureSize.height,
-          layout.scale, layout.score);
+    NSLog(@"        capture:               %4.0f x %4.0f\tscale=%.1f",
+          layout.captureSize.width, layout.captureSize.height, layout.scale);
 
     NSLog(@"      container:               %4.0f x %4.0f",
           containerView.frame.size.width,
@@ -1104,16 +1087,20 @@ stackingButton.userInteractionEnabled = YES;
           transformView.frame.size.width,
           transformView.frame.size.height);
 
+    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
+          executeView.frame.origin.x,
+          executeView.frame.origin.y,
+          executeView.frame.size.width,
+          executeView.frame.size.height);
+
     NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
           thumbScrollView.frame.origin.x,
           thumbScrollView.frame.origin.y,
           thumbScrollView.frame.size.width,
           thumbScrollView.frame.size.height);
 
-    overlayView.layer.borderColor = [UIColor redColor].CGColor;
-//    transformView.layer.borderWidth = 5.0;
-    thumbScrollView.layer.borderColor = [UIColor blueColor].CGColor;
-//    thumbScrollView.layer.borderWidth = 5.0;
+    NSLog(@"    display frac: %.3f", layout.displayFrac);
+    NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
 #endif
     
     // layout.transformSize is what the tasks get to run.  They
@@ -1251,7 +1238,7 @@ CGFloat topOfNonDepthArray = 0;
         label.frame = CGRectMake(0, BELOW(imageView.frame), thumb.frame.size.width, OLIVE_LABEL_H);
 
         atStartOfRow = NO;
-        thumbsH = BELOW(thumb.frame) + 2*SEP;
+        thumbsH = BELOW(thumb.frame);
         
         // next thumb position.  On a new line, if this is the end of the depthvis
         if (DOING_3D && i == transforms.depthTransformCount - 1) {  // end of depth transforms
@@ -1881,10 +1868,11 @@ UIImageOrientation lastOrientation;
     if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
-    SET_VIEW_HEIGHT(executeView, executeView.contentSize.height);
-    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
-    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
+    
 #ifdef notdef
+    SET_VIEW_HEIGHT(executeView, executeView.contentSize.height);
+//    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
+//    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
     NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f (%0.f x %.0f) text:%@",
           executeView.frame.origin.x, executeView.frame.origin.y,
           executeView.frame.size.width, executeView.frame.size.height,
@@ -2148,116 +2136,5 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         [self doLayout];
     }];
 }
-
-#ifdef OLD
-
-#ifdef NOTDEF
-    // The chosen capture size may be bigger than the display size. Figure out
-    // the final display size.  The transform stuff will have to scale the
-    // incoming stuff, hopefully efficiently, if needed.
-    // At present, we don't expand small captures, just use them.
-
-#ifdef DEBUG_LAYOUT
-    NSLog(@" >>> captureSize %.0f x %.0f  AR %4.2f",
-          captureSize.width, captureSize.height,
-          captureSize.width/captureSize.height);
-#endif
-
-    CGSize displaySize;
-    if (captureSize.width <= bestSize.width && captureSize.height <= bestSize.height)
-        displaySize = captureSize;
-    else {
-        double captureAR = captureSize.width/captureSize.height;
-        double finalAR = bestSize.width/bestSize.height;
-        CGFloat scale;
-        if (finalAR > captureAR)
-            scale = bestSize.height / captureSize.height;
-        else
-            scale = bestSize.width / captureSize.width;
-        NSLog(@"  ** scaling by %.2f", scale);
-        displaySize = CGSizeMake(round(captureSize.width*scale), round(captureSize.height*scale));
-    }
-#endif
-    
-    if (layout.displaySize.height < 288) {
-        NSLog(@"  ** needs minimum height of 288 for iPhone ***");
-        NSLog(@" >>>  got %.1f x %.1f ***", layout.displaySize.width, layout.displaySize.height);
-    }
-    
-    assert(layout.displaySize.height > 0);
-    if (layout.displaySize.width < EXECUTE_VIEW_W) {
-        NSLog(@"!!! execute view will not fit by %.0f",
-              EXECUTE_VIEW_W - layout.displaySize.width);
-    }
-    
-#ifdef NOTDEF
-    f.origin.y = 0;
-    if (layout.thumbsUnderneath) { // transform view spans the width of the screen
-        f.size.width = containerView.frame.size.width;
-        f.size.height = layout.displaySize.height + LATER;
-    } else {
-        f.size.height = containerView.frame.size.height;
-        f.size.width = layout.displaySize.width;
-    }
-    transformView.frame = layout.displayRect;
-    
-    if (layout.thumbsUnderneath) { // center view in container view
-        f.origin.x = (transformView.frame.size.width - layout.displaySize.width)/2.0;
-        f.origin.y = 0;
-    } else      // upper left hand corner
-        f.origin = CGPointZero;
-    f.size = layout.displaySize;
-#endif
-
-#ifdef DEBUG_LAYOUT
-    NSLog(@" >>> displaySize %.0f x %.0f  AR %4.2f",
-          layout.displaySize.width, layout.displaySize.height,
-          layout.displaySize.width/layout.displaySize.height);
-#endif
-
-#ifdef FORIPHONENOTYET
-    CGFloat execSpace = containerView.frame.size.height - BELOW(transformImageView.frame);
-    assert(execSpace >= EXECUTE_MIN_BELOW_SPACE);
-    if (thumbsUnderneath) {
-        execSpace = EXECUTE_MIN_ROWS_BELOW;
-        // XXX maybe we don't need to squeeze here so hard sometimes.
-    }
-    
-    f = executeView.frame;
-    f.origin.y = BELOW(transformImageView.frame);
-    if (layout.thumbsUnderneath) { // center in the whole container width
-        f.origin.x = (transformView.frame.size.width - f.size.width)/2.0;
-        f.size.width = transformView.frame.size.width;
-        if (isiPhone) { // not much room below image
-            f.size.height = EXECUTE_MIN_BELOW_H;
-        } else {
-            f.size.height = EXECUTE_BEST_BELOW_H;
-        }
-    } else {    // thumbs on the right, center this under the image
-        f.origin.x = (transformImageView.frame.size.width - executeView.frame.size.width)/2.0;
-    }
-#endif
-    
-    SET_VIEW_HEIGHT(transformView, BELOW(executeView.frame));
-    [transformView bringSubviewToFront:executeView];
-    transformView.clipsToBounds = YES;
-
-f = containerView.frame;
-f.origin = CGPointMake(0, transformView.frame.origin.y);
-f.size.height -= f.origin.y;
-if (layout.thumbsUnderneath) {
-    f.origin.x = 0;
-    f.origin.y = BELOW(transformView.frame);
-    f.size = layout.thumbArraySize;
-} else {
-    f.origin.x = RIGHT(transformView.frame) + SEP;
-    f.origin.y = transformView.frame.origin.y;
-}
-f.size = layout.thumbArraySize;
-thumbScrollView.frame = f;
-f.origin = CGPointZero;
-thumbArrayView.frame = f;   // the final may be higher
-
-#endif
 
 @end

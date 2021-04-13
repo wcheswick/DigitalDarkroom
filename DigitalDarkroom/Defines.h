@@ -66,12 +66,12 @@ typedef long PixelIndex_t;
 
 #define SMALL_THUMB_W   64  // must be an even multiple of sizeof(int)
 #define THUMB_W         80
+#define TIGHT_THUMB_W   60
 
 #define OLIVE_FONT_SIZE 14
 #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 
 #define SECTION_HEADER_FONT_SIZE    24
-
 
 #define EXECUTE_BORDER_W    2
 
@@ -80,5 +80,6 @@ typedef long PixelIndex_t;
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
 #define EXECUTE_FONT_SIZE    (18)
+#define EXECUTE_MIN_BELOW_H  (3*EXECUTE_FONT_SIZE)
 
 #endif /* Defines_h */
