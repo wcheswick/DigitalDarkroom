@@ -72,7 +72,8 @@ NSString * __nullable displayOptionNames[] = {
 
 // Can we make an acceptible layout with the given capture size and scaling?
 
-- (BOOL) layoutForSize:(CGSize) cs scale:(float) scale {   // for captureSize
+- (BOOL) layoutForSize:(CGSize) cs scale:(float) s {   // for captureSize
+    scale = s;
     captureSize = cs;
     aspectRatio = captureSize.width / captureSize.height;
     CGSize scaledSize = CGSizeMake(cs.width*scale, cs.height*scale);
@@ -88,8 +89,11 @@ NSString * __nullable displayOptionNames[] = {
     BOOL hfits = scaledSize.height <= containerView.frame.size.height;
     BOOL fits = wfits && hfits;
     
-    if (!fits)
+    if (!fits) {
+        NSLog(@" *** layoutForSize: does not fit: %.0f X %.0f",
+              scaledSize.width, scaledSize.height);
         return NO;
+    }
     
     transformSize = scaledSize;
 
