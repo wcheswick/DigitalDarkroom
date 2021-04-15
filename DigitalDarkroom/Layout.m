@@ -90,8 +90,10 @@ NSString * __nullable displayOptionNames[] = {
     BOOL fits = wfits && hfits;
     
     if (!fits) {
-        NSLog(@" *** layoutForSize: does not fit: %.0f X %.0f",
-              scaledSize.width, scaledSize.height);
+#ifdef NODEF
+        if (s != 1.0)
+            NSLog(@"reject, too big:  %4.0f x %4.0f @ %.2f", cs.width, cs.height, s);
+#endif
         return NO;
     }
     
@@ -192,6 +194,8 @@ NSString * __nullable displayOptionNames[] = {
             thumbFrac = bottomThumbFrac;
             // with thumbs underneath, the execute can go to the right edge of the container
             executeRect.size.width = containerView.frame.size.width;
+            // and the transform display can be centered
+            displayRect.origin.x = (containerView.frame.size.width - displayRect.size.width)/2.0;
            break;
         default:
             thumbArrayRect = CGRectZero;
@@ -215,11 +219,13 @@ NSString * __nullable displayOptionNames[] = {
               bottomThumbsOK ? CHECKMARK : @"."];
 #endif
     
-    NSLog(@"    capture size: %4.0f x %4.0f", captureSize.width, captureSize.height);
-    NSLog(@"           scale: %.0f", scale);
-    NSLog(@"     scaled size: %4.0f x %4.0f", scaledSize.width, scaledSize.height);
-    NSLog(@"    display frac: %.3f", displayFrac);
-    NSLog(@"      thumb frac: %.3f", thumbFrac);
+#ifdef DEBUG_LAYOUT
+    NSLog(@"    capture size: %4.0f x %4.0f  @ %.1f   fracs: %.3f  %.3f",
+          captureSize.width, captureSize.height, scale,
+          displayFrac, thumbFrac);
+    if (scale != 1.0)
+        NSLog(@"     scaled size: %4.0f x %4.0f", scaledSize.width, scaledSize.height);
+#endif
     return YES;
 }
 

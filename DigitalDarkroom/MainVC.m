@@ -913,56 +913,68 @@ stackingButton.userInteractionEnabled = YES;
     }
 }
 
+Layout *bestLayout = nil;
+Layout *bestScaledLayout = nil;
+Layout *soSoLayout = nil;
+float minDisplayFrac, bestMinDisplayFrac;
+float minThumbFrac, bestMinThumbFrac;
+
 - (Layout *) chooseLayoutFrom:(NSArray *)availableFormats {
-    Layout *bestLayout = nil;
-    Layout *bestScaledLayout = nil;
-    Layout *soSoLayout = nil;
+    bestLayout = nil;
+    bestScaledLayout = nil;
+    soSoLayout = nil;
     
-    for (AVCaptureDeviceFormat *format in availableFormats) {
+    // these values are tweaked to satisfy the all the cameras on two
+    // different iPhones and two different iPads.
+    
+    if (isiPhone) {
+        bestMinDisplayFrac = 0.4;
+        minDisplayFrac = 0.3;
+        bestMinThumbFrac = 0.4;
+        minThumbFrac = 0.249;   // 0.3 for large iphones
+    } else {
+        bestMinDisplayFrac = 0.46;
+        minDisplayFrac = 0.4;
+        bestMinThumbFrac = 0.5;
+        minThumbFrac = 0.3;
+    }
+    
+    for (int i=0; i<availableFormats.count; i++) {
+        AVCaptureDeviceFormat *format = availableFormats[i];
         Layout *candidateLayout = [[Layout alloc] initForOrientation:isPortrait
                                                               iPhone:isiPhone
                                                        displayOption:displayOption];
         candidateLayout.containerView = containerView;
         candidateLayout.thumbCount = transforms.transforms.count;
         
-        // check unscaled possibility
-        if ([candidateLayout layoutForFormat:format scale:1.0]) {   // XXXXXX if it doesn't fit, need to test scaling. iphone only.
-            if (isiPhone) {
-                if (candidateLayout.displayFrac < 0.3)
-                    continue;
-                soSoLayout = candidateLayout;
-                if (candidateLayout.thumbFrac >= 0.3) {
+        NSArray *scales = @[@1.0, @0.8, @0.6, @0.4, @0.2];
+        BOOL fits = NO;
+        for (NSNumber *s in scales) {
+            fits = [candidateLayout layoutForFormat:format scale:[s floatValue]];
+            if (fits)
+                break;
+        }
+        if (!fits) {
+            NSLog(@"*** no fit found for %.2f", candidateLayout.scale);
+            continue;
+        }
+        
+        if (candidateLayout.displayFrac < minDisplayFrac)
+            continue;
+        if (candidateLayout.thumbFrac >= minThumbFrac) {
+            if (candidateLayout.displayFrac >= bestMinDisplayFrac) {
+                if (candidateLayout.scale == 1.0) {
                     bestLayout = candidateLayout;
                     NSLog(@" ✓✓✓✓✓");
-                    continue;
+                } else {
+                    NSLog(@" ✓✓✓✓");
+                    bestScaledLayout = candidateLayout;
                 }
-#ifdef NOTDEF
-                else {    // try scaling down the image a bit
-                    if ([candidateLayout layoutForFormat:format scale:0.8]) {
-                        if (candidateLayout.displayFrac >= 0.5 &&
-                            candidateLayout.thumbFrac >= 0.5)
-                            bestScaledLayout = candidateLayout;
-                    }
-                    continue;
-                }
-#endif
             } else {
-                if (candidateLayout.displayFrac < 0.5)
-                    continue;
                 soSoLayout = candidateLayout;
-                if (candidateLayout.thumbFrac >= 0.5) {
-                    bestLayout = candidateLayout;
-                    NSLog(@" ✓✓✓✓✓");
-                    continue;
-                } else {    // try scaling down the image a bit
-                    if ([candidateLayout layoutForFormat:format scale:0.8]) {
-                        if (candidateLayout.displayFrac >= 0.5 &&
-                            candidateLayout.thumbFrac >= 0.5)
-                            bestScaledLayout = candidateLayout;
-                    }
-                    continue;
-                }
+                NSLog(@" ✓✓");
             }
+            continue;
         }
     }
     if (bestLayout)
@@ -1100,14 +1112,14 @@ stackingButton.userInteractionEnabled = YES;
 #ifdef DEBUG_LAYOUT
     NSLog(@"layout selected:");
 
-    NSLog(@"        capture:               %4.0f x %4.0f\tscale = %.1f",
+    NSLog(@"        capture:               %4.0f x %4.0f\t @%.1f",
           layout.captureSize.width, layout.captureSize.height, layout.scale);
 
     NSLog(@"      container:               %4.0f x %4.0f",
           containerView.frame.size.width,
           containerView.frame.size.height);
 
-    NSLog(@" transform size:               %4.0f x %4.0f  scaled %.2f",
+    NSLog(@" transform size:               %4.0f x %4.0f  @  %.2f",
           layout.transformSize.width,
           layout.transformSize.height,
           layout.scale);
