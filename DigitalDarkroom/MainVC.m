@@ -933,7 +933,7 @@ float minThumbFrac, bestMinThumbFrac;
         bestMinThumbFrac = 0.4;
         minThumbFrac = 0.249;   // 0.3 for large iphones
     } else {
-        bestMinDisplayFrac = 0.46;
+        bestMinDisplayFrac = 0.42;
         minDisplayFrac = 0.4;
         bestMinThumbFrac = 0.5;
         minThumbFrac = 0.3;
@@ -955,7 +955,7 @@ float minThumbFrac, bestMinThumbFrac;
                 break;
         }
         if (!fits) {
-            NSLog(@"*** no fit found for %.2f", candidateLayout.scale);
+//            NSLog(@"*** no fit found for %.2f", candidateLayout.scale);
             continue;
         }
         
@@ -971,8 +971,9 @@ float minThumbFrac, bestMinThumbFrac;
                     bestScaledLayout = candidateLayout;
                 }
             } else {
-                soSoLayout = candidateLayout;
                 NSLog(@" ✓✓");
+                if (!soSoLayout)
+                    soSoLayout = candidateLayout;
             }
             continue;
         }
@@ -1144,6 +1145,7 @@ float minThumbFrac, bestMinThumbFrac;
 
     NSLog(@"    display frac: %.3f", layout.displayFrac);
     NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
+    NSLog(@"           scale: %.3f", layout.scale);
 #endif
     
     // layout.transformSize is what the tasks get to run.  They

@@ -32,7 +32,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize displayFrac, thumbFrac;
 @synthesize thumbsPlacement;
 @synthesize thumbArrayRect;
-@synthesize executeRect;
+@synthesize executeRect, executeOverlayOK;
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize thumbCount;
@@ -85,18 +85,6 @@ NSString * __nullable displayOptionNames[] = {
     CGRect right = CGRectZero;
     CGRect bottom = CGRectZero;
     
-    BOOL wfits = scaledSize.width <= containerView.frame.size.width;
-    BOOL hfits = scaledSize.height <= containerView.frame.size.height;
-    BOOL fits = wfits && hfits;
-    
-    if (!fits) {
-#ifdef NODEF
-        if (s != 1.0)
-            NSLog(@"reject, too big:  %4.0f x %4.0f @ %.2f", cs.width, cs.height, s);
-#endif
-        return NO;
-    }
-    
     transformSize = scaledSize;
 
     float containerArea = containerView.frame.size.width * containerView.frame.size.height;
@@ -107,10 +95,28 @@ NSString * __nullable displayOptionNames[] = {
     displayRect.size = transformSize;
     displayFrac = transformArea / containerArea;
     
-    // minimum executeRect, to be adjusted later
+    executeOverlayOK = isiPhone;
     executeRect.origin = CGPointMake(0, BELOW(displayRect) + SEP);
-    executeRect.size = CGSizeMake(displayRect.size.width,EXECUTE_MIN_BELOW_H);
+    executeRect.size.width = displayRect.size.width;
+    if (isiPhone) {
+        executeRect.size.height = EXECUTE_MIN_BELOW_H;
+    } else {
+        CGFloat roomUnderneath = containerView.frame.size.height - BELOW(displayRect) - SEP;
+        executeRect.size.height = (roomUnderneath > EXECUTE_H) ? roomUnderneath : EXECUTE_H;
+    }
+
+    BOOL wfits = scaledSize.width <= containerView.frame.size.width;
+    BOOL hfits = BELOW(executeRect) <= containerView.frame.size.height;
+    BOOL fits = wfits && hfits;
     
+    if (!fits) {
+#ifdef NOTDEF
+        if (s != 1.0)
+            NSLog(@"reject, too big:  %4.0f x %4.0f @ %.2f", cs.width, cs.height, s);
+#endif
+        return NO;
+    }
+
     right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
     right.size = CGSizeMake(containerView.frame.size.width - right.origin.x, containerView.frame.size.height);
     bottom.origin = CGPointMake(0, BELOW(executeRect) + SEP);
