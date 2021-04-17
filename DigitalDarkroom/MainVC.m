@@ -1703,9 +1703,9 @@ CGFloat topOfNonDepthArray = 0;
         scaledRect.origin.y = (size.height - scaledRect.size.height)/2.0;
     }
     
-    NSLog(@"scaled image at %.0f,%.0f  size: %.0fx%.0f",
-          scaledRect.origin.x, scaledRect.origin.y,
-          scaledRect.size.width, scaledRect.size.height);
+//    NSLog(@"scaled image at %.0f,%.0f  size: %.0fx%.0f",
+//          scaledRect.origin.x, scaledRect.origin.y,
+//          scaledRect.size.width, scaledRect.size.height);
     
     UIGraphicsBeginImageContextWithOptions(size, NO, 0.0);
     CGContextRef ctx = UIGraphicsGetCurrentContext();
