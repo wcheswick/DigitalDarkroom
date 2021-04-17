@@ -646,7 +646,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Edward Munch #1"        // old twist right
+    lastTransform = [Transform areaTransform: @"Edvard Munch #1"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double newa = a + (r/3.0)*(M_PI/180.0);
@@ -661,7 +661,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
     
-    lastTransform = [Transform areaTransform: @"Edward Munch #2"    // old Ken twist
+    lastTransform = [Transform areaTransform: @"Edvard Munch #2"    // old Ken twist
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         long centerX = remapBuf.w/2;
