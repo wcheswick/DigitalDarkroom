@@ -825,6 +825,7 @@ stackingButton.userInteractionEnabled = YES;
     transformLabel.text = transform.name;
     transformLabel.textColor = [UIColor blackColor];
     transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+    transformLabel.highlighted = NO;    // yes if selected
 #ifdef NOTDEF
     transformLabel.attributedText = [[NSMutableAttributedString alloc]
                                      initWithString:transform.name
@@ -1420,9 +1421,11 @@ CGFloat topOfNonDepthArray = 0;
         label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
         thumb.layer.borderWidth = 5.0;
         currentTransformIndex = thumb.tag - TRANSFORM_BASE_TAG;
+        label.highlighted = YES;
     } else {
         label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
         thumb.layer.borderWidth = 1.0;
+        label.highlighted = NO;
     }
     [label setNeedsDisplay];
     [thumb setNeedsDisplay];
@@ -1842,6 +1845,12 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
+    for (UIView *thumbView in thumbArrayView.subviews) { // deselect all selected thumbs
+        UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
+        if (thumbLabel.highlighted) {
+            [self adjustThumbView:thumbView selected:NO];
+        }
+    }
     [self updateExecuteView];
     [self adjustBarButtons];
 }
