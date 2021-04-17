@@ -186,6 +186,7 @@ typedef enum {
 
 @property (nonatomic, strong)   UIButton *plusButton;
 @property (assign)              BOOL plusButtonLocked;
+@property (nonatomic, strong)   UIButton *doublePlusButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -228,6 +229,7 @@ typedef enum {
 
 @synthesize executeView;
 @synthesize plusButton, plusButtonLocked;
+@synthesize doublePlusButton;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait;
@@ -730,14 +732,36 @@ typedef enum {
                                                                                weight:UIFontWeightHeavy],
                                         //NSBaselineOffsetAttributeName: @-3
                                     }] forState:UIControlStateSelected];
-    [plusButton addTarget:self action:@selector(togglePlusMode:)
+    [plusButton addTarget:self action:@selector(togglePlusMode)
          forControlEvents:UIControlEventTouchUpInside];
     
     UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
                                       initWithCustomView:plusButton];
+    
+    doublePlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    doublePlusButton.frame = CGRectMake(0, 0, 1.5*toolBarH+SEP, toolBarH);
+    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:DOUBLE_PLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightUltraLight],
+                                        NSBaselineOffsetAttributeName: @3
+                                    }] forState:UIControlStateNormal];
+    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:DOUBLE_PLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightHeavy],
+                                        NSBaselineOffsetAttributeName: @3
+                                    }] forState:UIControlStateSelected];
+    [doublePlusButton addTarget:self action:@selector(toggleDoublePlusMode)
+         forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *doublePlusBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:doublePlusButton];
 
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
+                         fixedSpace,
+                         doublePlusBarButton,
                          flexibleSpace,
                          trashBarButton,
                          fixedSpace,
@@ -1373,10 +1397,6 @@ CGFloat topOfNonDepthArray = 0;
     }
     
     if (plusButton.selected) {  // add new transform
-        if (lastTransform) {
-            UIView *oldThumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + lastTransform.arrayIndex];
-            [self adjustThumbView:oldThumb selected:NO];
-        }
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTaskForSize];
         [self adjustThumbView:tappedThumb selected:YES];
@@ -1386,7 +1406,7 @@ CGFloat topOfNonDepthArray = 0;
         if (lastTransform) {
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
             [screenTask removeLastTransform];
-            UIView *oldThumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + lastTransform.arrayIndex];
+            UIView *oldThumb = [self thumbForTransform:lastTransform];
             [self adjustThumbView:oldThumb selected:NO];
             if (reTap) {
                 // retapping a transform in not plus mode means just remove it, and we are done
@@ -1404,14 +1424,18 @@ CGFloat topOfNonDepthArray = 0;
     [self doTransforms];
 }
 
-- (UIView *) thumbViewForTransform:(Transform *) transform {
-    long transformIndex = transform.arrayIndex;
-    return [thumbArrayView viewWithTag:transformIndex + TRANSFORM_BASE_TAG];
-}
-
-- (IBAction) togglePlusMode:(UIButton *)sender {
+- (IBAction) togglePlusMode {
     plusButton.selected = !plusButton.selected;
     [plusButton setNeedsDisplay];
+    [self updateExecuteView];
+}
+
+- (IBAction) toggleDoublePlusMode {
+    doublePlusButton.selected = !doublePlusButton.selected;
+    plusButtonLocked = doublePlusButton.selected;
+    [doublePlusButton setNeedsDisplay];
+    if (doublePlusButton.selected && !plusButton.selected)
+        [self togglePlusMode];
     [self updateExecuteView];
 }
 
@@ -1902,10 +1926,17 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveLastTransform {
     if (screenTask.transformList.count > 1) {
+        Transform *lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
+        UIView *thumbView = [self thumbForTransform:lastTransform];
+        [self adjustThumbView:thumbView selected:NO];
         [screenTask removeLastTransform];
         [self updateExecuteView];
         [self adjustBarButtons];
     }
+}
+
+- (UIView *) thumbForTransform:(Transform *) transform {
+    return [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + transform.arrayIndex];
 }
 
 - (void) updateExecuteView {
