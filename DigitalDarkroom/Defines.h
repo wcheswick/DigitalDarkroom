@@ -71,6 +71,8 @@ typedef long PixelIndex_t;
 #define THUMB_W         80
 #define TIGHT_THUMB_W   60
 
+#define PAUSE_FONT_SIZE 18
+#define PAUSE_W         (PAUSE_FONT_SIZE*12)
 #define OLIVE_FONT_SIZE 14
 #define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
 

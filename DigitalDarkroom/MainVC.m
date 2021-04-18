@@ -151,6 +151,7 @@ typedef enum {
 @property (assign)              OverlayState overlayState;
 @property (nonatomic, strong)   ReticleView *reticleView;   // nil if reticle not selected
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
+@property (nonatomic, strong)   UILabel *pausedLabel;       // shown if camera selected but not capturing
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
 @property (nonatomic, strong)   UITextView *executeView;        // active transform list
@@ -224,6 +225,7 @@ typedef enum {
 @synthesize depthSelectBarButton, flipBarButton, sourceBarButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
+@synthesize pausedLabel;
 @synthesize reticleView, reticleBarButton;
 @synthesize thumbArrayView;
 
@@ -502,7 +504,7 @@ typedef enum {
     containerView.userInteractionEnabled = YES;
     containerView.clipsToBounds = YES;  // this shouldn't be needed
 #ifdef DEBUG_LAYOUT
-    containerView.layer.borderWidth = 3.0;
+    containerView.layer.borderWidth = 1.0;
     containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
     
@@ -514,6 +516,17 @@ typedef enum {
     overlayView.userInteractionEnabled = YES;
     overlayView.backgroundColor = [UIColor clearColor];
 
+    pausedLabel = [[UILabel alloc]
+                   initWithFrame:CGRectMake(0, SEP,
+                                            LATER, PAUSE_FONT_SIZE+2*SEP)];
+    pausedLabel.text = @"** PAUSED **";
+    pausedLabel.textColor = [UIColor blackColor];
+    pausedLabel.font = [UIFont boldSystemFontOfSize:PAUSE_FONT_SIZE];
+//    pausedLabel.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    pausedLabel.textAlignment = NSTextAlignmentCenter;
+    [transformView addSubview:pausedLabel];
+    [transformView bringSubviewToFront:pausedLabel];
+    
     reticleView = nil;      // defaults to off
     
     executeView = [[UITextView alloc]
@@ -820,8 +833,6 @@ stackingButton.userInteractionEnabled = YES;
 #endif
 
 - (void) createThumbArray {
-//    NSLog(@"--- createThumbArray");
-
     UITapGestureRecognizer *touch;
     for (size_t i=0; i<transforms.depthTransformCount; i++) {
         Transform *transform = [transforms.transforms objectAtIndex:i];
@@ -1061,9 +1072,7 @@ float minThumbFrac, bestMinThumbFrac;
     
     // set up new source, if needed
     if (nextSource) {
-        if (currentSource && IS_CAMERA(currentSource)) {
-            [self cameraOn:NO];
-        }
+        [self cameraOn:(currentSource && IS_CAMERA(currentSource))];
         currentSource = nextSource;
         nextSource = nil;
         [currentSource save];
@@ -1158,6 +1167,7 @@ float minThumbFrac, bestMinThumbFrac;
     }
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
+    SET_VIEW_WIDTH(pausedLabel, transformView.frame.size.width);
     thumbScrollView.frame = layout.thumbArrayRect;
     thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
     thumbScrollView.layer.borderWidth = 3.0;
@@ -1567,10 +1577,15 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) cameraOn:(BOOL) on {
     capturing = on;
-    if (capturing)
+    if (capturing) {
+        pausedLabel.hidden = YES;
         [cameraController startCamera];
-    else
+    } else {
         [cameraController stopCamera];
+        if (IS_CAMERA(currentSource))
+            pausedLabel.hidden = NO;
+    }
+    [pausedLabel setNeedsDisplay];
     [self adjustBarButtons];
 }
 
@@ -1591,38 +1606,15 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
-    return;
-}
-
-- (IBAction) toggleLiveCapture:(UITapGestureRecognizer *)recognizer {
-#ifdef NOTDEF
-    capturingBarButton.enabled = !capturingBarButton.enabled;
-    return;
-    UIButton *button = (UIButton *)recognizer;
-    
-    capturingButton.enabled = YES;
-    capturingButton.highlighted = !capturingButton.enabled;
-    [capturingButton setNeedsDisplay];
-#endif
+    if (!IS_CAMERA(currentSource))
+        return;
+    capturing = !capturing;
+    [self cameraOn:capturing];
 }
 
 // freeze/unfreeze video
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
-    
-//    BOOL isHidden = self.navigationController.navigationBarHidden;
-//    [self.navigationController setNavigationBarHidden:!isHidden animated:YES];
-//    [self.navigationController setToolbarHidden:!isHidden animated:YES];
-    capturing = !capturing;
-    if (capturing) {
-        if (![cameraController isCameraOn]) {
-            [cameraController startCamera];
-        }
-    } else {
-        if ([cameraController isCameraOn]) {
-            [cameraController stopCamera];
-        }
-    }
-    // XXXX show frozen on screen
+    NSLog(@"did two-tap screen");
 }
 
 - (IBAction) doHelp:(UIBarButtonItem *)button {
