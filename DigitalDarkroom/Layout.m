@@ -37,7 +37,7 @@ NSString * __nullable displayOptionNames[] = {
 
 @synthesize thumbCount;
 @synthesize scale, aspectRatio;
-@synthesize status;
+@synthesize status, quality;
 
 - (id)initForOrientation:(BOOL) port
                iPhone:(BOOL) isPhone
@@ -49,6 +49,7 @@ NSString * __nullable displayOptionNames[] = {
         isiPhone = isPhone;
         displayOption = dopt;
         scale = 1.0;
+        quality = REJECT_LAYOUT;
         thumbCount = 1000;  // rediculous number
         thumbArrayRect = CGRectZero;
         displayRect = CGRectZero;

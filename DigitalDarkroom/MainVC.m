@@ -186,7 +186,7 @@ typedef enum {
 
 @property (nonatomic, strong)   UIButton *plusButton;
 @property (assign)              BOOL plusButtonLocked;
-@property (nonatomic, strong)   UIButton *doublePlusButton;
+@property (nonatomic, strong)   UIButton *plusLockButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *stopCamera;
 @property (nonatomic, strong)   UIBarButtonItem *startCamera;
@@ -229,7 +229,7 @@ typedef enum {
 
 @synthesize executeView;
 @synthesize plusButton, plusButtonLocked;
-@synthesize doublePlusButton;
+@synthesize plusLockButton;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait;
@@ -717,18 +717,18 @@ typedef enum {
                                                reticleBarButton,
                                                nil];
     
-    CGFloat toolBarH = self.navigationController.toolbar.frame.size.height;
+#define TOOLBAR_H   self.navigationController.toolbar.frame.size.height
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusButton.frame = CGRectMake(0, 0, toolBarH+SEP, toolBarH);
+    plusButton.frame = CGRectMake(0, 0, TOOLBAR_H+SEP, TOOLBAR_H);
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
                                     initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
                                                                                weight:UIFontWeightUltraLight],
                                         //NSBaselineOffsetAttributeName: @-3
                                     }] forState:UIControlStateNormal];
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
                                     initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
                                                                                weight:UIFontWeightHeavy],
                                         //NSBaselineOffsetAttributeName: @-3
                                     }] forState:UIControlStateSelected];
@@ -737,7 +737,8 @@ typedef enum {
     
     UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
                                       initWithCustomView:plusButton];
-    
+
+#ifdef NOTDEF
     doublePlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     doublePlusButton.frame = CGRectMake(0, 0, 1.5*toolBarH+SEP, toolBarH);
     [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
@@ -752,16 +753,47 @@ typedef enum {
                                                                                weight:UIFontWeightHeavy],
                                         NSBaselineOffsetAttributeName: @3
                                     }] forState:UIControlStateSelected];
-    [doublePlusButton addTarget:self action:@selector(toggleDoublePlusMode)
+    [doublePlusButton addTarget:self action:@selector(togglePlusLock)
          forControlEvents:UIControlEventTouchUpInside];
+#endif
     
-    UIBarButtonItem *doublePlusBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:doublePlusButton];
+    plusLockButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    plusLockButton.selected = NO;
+    
+    plusLockButton.frame = CGRectMake(0, 0, 1.5*TOOLBAR_H+SEP, TOOLBAR_H);
+    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
+    NSLog(@" ****** %@", pLock);
+
+#define PLUS_LOCK_FONT_SIZE (TOOLBAR_H*0.6)
+#define PLUS_LOCK_KERN           (-TOOLBAR_H*0.3)
+#define PLUS_LOCK_SUPERSCRIPT   (TOOLBAR_H*0.1)
+#define OFFSET              0   // (TOOLBAR_H*0.1)
+ 
+    NSMutableAttributedString *littleRaisedPlus = [[NSMutableAttributedString alloc]
+                                           initWithString:BIGPLUS];
+    [littleRaisedPlus addAttribute: NSKernAttributeName value: @PLUS_LOCK_KERN range:NSMakeRange(0,1)];
+    [littleRaisedPlus addAttribute: (NSString*)NSBaselineOffsetAttributeName value: @PLUS_LOCK_SUPERSCRIPT range:NSMakeRange(0,1)];
+
+    NSMutableAttributedString *littleLock = [[NSMutableAttributedString alloc]
+                                           initWithString:LOCK];
+    //    [plusLock addAttribute: NSBaselineOffsetAttributeName value: @OFFSET range:NSMakeRange(0, 1)];
+
+    NSMutableAttributedString *plusLock = littleRaisedPlus;
+    [plusLock appendAttributedString:littleLock];
+    
+    [plusLockButton setAttributedTitle:plusLock forState:UIControlStateNormal];
+    plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
+
+    [plusLockButton addTarget:self action:@selector(togglePlusLock)
+             forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *plusLockBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:plusLockButton];
 
     self.toolbarItems = [[NSArray alloc] initWithObjects:
                          plusBarButton,
                          fixedSpace,
-                         doublePlusBarButton,
+                         plusLockBarButton,
                          flexibleSpace,
                          trashBarButton,
                          fixedSpace,
@@ -984,19 +1016,23 @@ float minThumbFrac, bestMinThumbFrac;
             continue;
         }
         
+        candidateLayout.quality = 1;
         if (candidateLayout.displayFrac < minDisplayFrac)
             continue;
         if (candidateLayout.thumbFrac >= minThumbFrac) {
             if (candidateLayout.displayFrac >= bestMinDisplayFrac) {
                 if (candidateLayout.scale == 1.0) {
                     bestLayout = candidateLayout;
+                    candidateLayout.quality = 5;
                     NSLog(@" ✓✓✓✓✓");
                 } else {
                     NSLog(@" ✓✓✓✓");
+                    candidateLayout.quality = 4;
                     bestScaledLayout = candidateLayout;
                 }
             } else {
                 NSLog(@" ✓✓");
+                candidateLayout.quality = 2;
                 if (!soSoLayout)
                     soSoLayout = candidateLayout;
             }
@@ -1430,11 +1466,16 @@ CGFloat topOfNonDepthArray = 0;
     [self updateExecuteView];
 }
 
-- (IBAction) toggleDoublePlusMode {
-    doublePlusButton.selected = !doublePlusButton.selected;
-    plusButtonLocked = doublePlusButton.selected;
-    [doublePlusButton setNeedsDisplay];
-    if (doublePlusButton.selected && !plusButton.selected)
+- (IBAction) togglePlusLock {
+    plusLockButton.selected = !plusLockButton.selected;
+    plusButtonLocked = plusLockButton.selected;
+    if (plusButtonLocked)
+        plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
+    else
+        plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightHeavy];
+
+    [plusLockButton setNeedsDisplay];
+    if (plusLockButton.selected && !plusButton.selected)
         [self togglePlusMode];
     [self updateExecuteView];
 }

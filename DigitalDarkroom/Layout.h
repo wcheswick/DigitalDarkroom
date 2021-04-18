@@ -12,7 +12,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define REJECT_SCORE    (-9000000)
+#define REJECT_LAYOUT    (-1)
 
 typedef enum {
     ControlDisplayOnly,
@@ -41,6 +41,7 @@ typedef enum {
     
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
     float aspectRatio;
+    int quality;
 
     // layout stats and results:
 
@@ -79,6 +80,8 @@ typedef enum {
 @property (assign)              size_t thumbCount;
 
 @property (assign)              float scale, aspectRatio;
+@property (assign)              int quality;        // -1 = no, more positive is better
+
 @property (nonatomic, strong)   NSString *status;
 
 - (id)initForOrientation:(BOOL) port

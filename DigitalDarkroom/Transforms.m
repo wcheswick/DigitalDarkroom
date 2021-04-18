@@ -1599,6 +1599,9 @@ irand(int i) {
         int row, col;
         Pt start = {-irand(dxToBlockCenter/2), -irand(pixPerSide/2)};
         
+        // XXX we really should just compute one block, and point all the necessary
+        // pixels to it.  The speed-up will be terrific.
+        
         for (row=0; row<nyBlocks; ) {
             Pt origin = start;
             for (col=0; col<nxBlocks; col++) {

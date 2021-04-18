@@ -59,6 +59,7 @@ typedef long PixelIndex_t;
 #define CHECKMARK   @"✓"
 #define BIGPLUS     @"＋"
 #define DOUBLE_PLUS @"⧺"
+#define LOCK        @"🔒"
 
 
 #define MIN_THUMB_COLS  4
