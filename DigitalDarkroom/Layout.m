@@ -186,8 +186,20 @@ NSString * __nullable displayOptionNames[] = {
             ; // XXXXX not yet
     }
     
-    int rightThumbCount = [self thumbsInArea:right.size];
-    int bottomThumbCount = [self thumbsInArea:bottom.size];
+    int rightRows = [self thumbsPerColIn:right.size];
+    int rightCols = [self thumbsPerRowIn:right.size];
+    int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
+
+    int bottomRows = [self thumbsPerColIn:bottom.size];
+    int bottomCols = [self thumbsPerRowIn:bottom.size];
+    int bottomW = (firstThumbRect.size.width + SEP)*bottomCols;   // for centering
+
+//    CGFloat rightArea = bottom.size.width * bottom.size.height;
+//     CGFloat bottomArea = bottom.size.width * bottom.size.height;
+
+    int rightThumbCount = rightRows * rightCols;
+    int bottomThumbCount = bottomRows * bottomCols;
+
     float rightThumbFrac = (float)rightThumbCount/(float)thumbCount;
     float bottomThumbFrac = (float)bottomThumbCount/(float)thumbCount;
 
@@ -203,17 +215,23 @@ NSString * __nullable displayOptionNames[] = {
     switch (thumbsPlacement) {
         case ThumbsOnRight:
             thumbArrayRect = right;
+            thumbArrayRect.origin.x += (right.size.width - rightW)/2.0;
+            thumbArrayRect.size.width = rightW;
             thumbFrac = rightThumbFrac;
             // with thumbs on the right, the execute can go to the bottom of the container
             executeRect.size.height = containerView.frame.size.height - executeRect.origin.y;
             break;
         case ThumbsUnderneath:
             thumbArrayRect = bottom;
+            thumbArrayRect.origin.x += (bottom.size.width - bottomW)/2.0;
+            thumbArrayRect.size.width = bottomW;
             thumbFrac = bottomThumbFrac;
             // with thumbs underneath, the execute can go to the right edge of the container
             executeRect.size.width = containerView.frame.size.width;
             // and the transform display can be centered
             displayRect.origin.x = (containerView.frame.size.width - displayRect.size.width)/2.0;
+            // and so can the thumbs
+            thumbArrayRect.origin.x = (containerView.frame.size.width - thumbArrayRect.size.width)/2.0;
            break;
         default:
             thumbArrayRect = CGRectZero;
@@ -253,10 +271,14 @@ NSString * __nullable displayOptionNames[] = {
     return MIN(hScale, vScale);
 }
 
-- (int) thumbsInArea:(CGSize) area {
-    int ncols = area.width / firstThumbRect.size.width;
-    int nrows = area.height / firstThumbRect.size.height;
-    return ncols * nrows;
+// c.f nextButtonPosition and buttonsContinueOnNextRow in MainVC.m
+
+- (int) thumbsPerColIn:(CGSize) area {
+    return (area.height - SEP) / (firstThumbRect.size.height + SEP);
+}
+
+- (int) thumbsPerRowIn:(CGSize) area {
+    return (area.width - SEP) / (firstThumbRect.size.width + SEP);
 }
 
 @end

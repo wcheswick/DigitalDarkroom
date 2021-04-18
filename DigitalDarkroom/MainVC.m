@@ -502,8 +502,8 @@ typedef enum {
     containerView.userInteractionEnabled = YES;
     containerView.clipsToBounds = YES;  // this shouldn't be needed
 #ifdef DEBUG_LAYOUT
-//    containerView.layer.borderWidth = 3.0;
-//    containerView.layer.borderColor = [UIColor greenColor].CGColor;
+    containerView.layer.borderWidth = 3.0;
+    containerView.layer.borderColor = [UIColor greenColor].CGColor;
 #endif
     
     transformView = [[UIImageView alloc] init];
@@ -1159,6 +1159,9 @@ float minThumbFrac, bestMinThumbFrac;
     overlayDebugStatus = layout.status;
     transformView.frame = overlayView.frame;
     thumbScrollView.frame = layout.thumbArrayRect;
+    thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
+    thumbScrollView.layer.borderWidth = 3.0;
+    
     CGFloat below = BELOW(thumbScrollView.frame);
     assert(below <= containerView.frame.size.height);
     assert(below <= self.navigationController.toolbar.frame.origin.y);
