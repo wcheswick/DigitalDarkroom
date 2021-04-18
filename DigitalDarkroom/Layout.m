@@ -96,14 +96,25 @@ NSString * __nullable displayOptionNames[] = {
     displayRect.size = transformSize;
     displayFrac = transformArea / containerArea;
     
-    executeOverlayOK = isiPhone;
     executeRect.origin = CGPointMake(0, BELOW(displayRect) + SEP);
     executeRect.size.width = displayRect.size.width;
-    if (isiPhone) {
-        executeRect.size.height = EXECUTE_MIN_BELOW_H;
+    CGFloat roomUnderneath = containerView.frame.size.height - BELOW(displayRect) - SEP;
+
+    if (isiPhone || displayOption == TightDisplay) {
+        // this rect overlays the bottom of the displayed image
+        executeRect.size.height = EXECUTE_MIN_H;
+        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
+        executeOverlayOK = YES;
     } else {
-        CGFloat roomUnderneath = containerView.frame.size.height - BELOW(displayRect) - SEP;
-        executeRect.size.height = (roomUnderneath > EXECUTE_H) ? roomUnderneath : EXECUTE_H;
+        executeRect.origin.y = BELOW(displayRect) + SEP;
+        if (roomUnderneath >= EXECUTE_FULL_H) {
+            executeOverlayOK = NO;
+            executeRect.size.height = roomUnderneath;
+        } else {
+            // it may overlap if it gets too tall
+            executeOverlayOK = NO;
+        }
+        executeRect.size.height = roomUnderneath;
     }
 
     BOOL wfits = scaledSize.width <= containerView.frame.size.width;

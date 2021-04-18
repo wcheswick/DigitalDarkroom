@@ -83,7 +83,8 @@ typedef long PixelIndex_t;
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
 #define EXECUTE_FONT_SIZE    (18)
-#define EXECUTE_H           (6*EXECUTE_FONT_SIZE)
-#define EXECUTE_MIN_BELOW_H  (EXECUTE_FONT_SIZE)
+#define EXECUTE_ROW_H       (EXECUTE_FONT_SIZE + SEP)
+#define EXECUTE_MIN_H       (1*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
+#define EXECUTE_FULL_H           (6*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
 
 #endif /* Defines_h */

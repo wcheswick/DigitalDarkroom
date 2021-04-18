@@ -1995,8 +1995,11 @@ UIImageOrientation lastOrientation;
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     
+    if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
+        SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
+    }
+    
 #ifdef notdef
-    SET_VIEW_HEIGHT(executeView, executeView.contentSize.height);
 //    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
 //    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
     NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f (%0.f x %.0f) text:%@",
