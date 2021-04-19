@@ -96,6 +96,8 @@
 #define DEPTH_TABLE_SECTION     0
 
 #define NO_STEP_SELECTED    -1
+#define NO_LAYOUT_SELECTED   (-1)
+
 #define DOING_3D    (IS_CAMERA(self->currentSource) && self->currentSource.threeDCamera)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
@@ -155,6 +157,8 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
 @property (nonatomic, strong)   UITextView *executeView;        // active transform list
+@property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
+@property (assign)              long currentLayoutIndex;       // index into layouts
 
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
@@ -228,6 +232,7 @@ typedef enum {
 @synthesize pausedLabel;
 @synthesize reticleView, reticleBarButton;
 @synthesize thumbArrayView;
+@synthesize layouts, currentLayoutIndex;
 
 @synthesize executeView;
 @synthesize plusButton, plusButtonLocked;
@@ -277,6 +282,7 @@ typedef enum {
         transforms = [[Transforms alloc] init];
         currentTransformIndex = NO_TRANSFORM;
         layout = nil;
+        layouts = [[NSMutableArray alloc] init];
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
                                    stringForKey:LAST_DEPTH_TRANSFORM];
@@ -981,16 +987,16 @@ stackingButton.userInteractionEnabled = YES;
     }
 }
 
-Layout *bestLayout = nil;
-Layout *bestScaledLayout = nil;
-Layout *soSoLayout = nil;
-float minDisplayFrac, bestMinDisplayFrac;
-float minThumbFrac, bestMinThumbFrac;
+- (long) chooseLayoutFrom:(NSArray *)availableFormats {
+    long bestLayoutIndex = NO_LAYOUT_SELECTED;
+    long bestScaledLayoutIndex = NO_LAYOUT_SELECTED;
+    long bestSoSoLayoutIndex = NO_LAYOUT_SELECTED;
+    float minDisplayFrac, bestMinDisplayFrac;
+    float minThumbFrac, bestMinThumbFrac;
 
-- (Layout *) chooseLayoutFrom:(NSArray *)availableFormats {
-    bestLayout = nil;
-    bestScaledLayout = nil;
-    soSoLayout = nil;
+    [layouts removeAllObjects];
+    CGSize lastAcceptedSize = CGSizeZero;
+    currentLayoutIndex = NO_LAYOUT_SELECTED;
     
     // these values are tweaked to satisfy the all the cameras on two
     // different iPhones and two different iPads.
@@ -1027,37 +1033,51 @@ float minThumbFrac, bestMinThumbFrac;
             continue;
         }
         
-        candidateLayout.quality = 1;
+        candidateLayout.quality = candidateLayout.scale == 1.0 ? 2 : 1;
+        CGSize candidateSize = candidateLayout.displayRect.size;
+        if (candidateSize.width != lastAcceptedSize.width || candidateSize.height != lastAcceptedSize.height) {
+            [layouts addObject:candidateLayout];
+            currentLayoutIndex = layouts.count - 1;
+            lastAcceptedSize = candidateSize;
+        }
         if (candidateLayout.displayFrac < minDisplayFrac)
             continue;
+        candidateLayout.quality++;
+        
         if (candidateLayout.thumbFrac >= minThumbFrac) {
+            candidateLayout.quality++;
             if (candidateLayout.displayFrac >= bestMinDisplayFrac) {
                 if (candidateLayout.scale == 1.0) {
-                    bestLayout = candidateLayout;
-                    candidateLayout.quality = 5;
+                    bestLayoutIndex = currentLayoutIndex;
+                    candidateLayout.quality = 10;
                     NSLog(@" ✓✓✓✓✓");
                 } else {
                     NSLog(@" ✓✓✓✓");
-                    candidateLayout.quality = 4;
-                    bestScaledLayout = candidateLayout;
+                    candidateLayout.quality = 8;
+                    bestScaledLayoutIndex = currentLayoutIndex;
                 }
             } else {
                 NSLog(@" ✓✓");
-                candidateLayout.quality = 2;
-                if (!soSoLayout)
-                    soSoLayout = candidateLayout;
+                if (bestSoSoLayoutIndex == NO_LAYOUT_SELECTED)
+                    bestSoSoLayoutIndex = currentLayoutIndex;
             }
-            continue;
+
         }
+        // the last candidate on the list is the same size as this one, and may
+        // even be the same as this one.  We keep the one with the best score.
+        Layout *lastCandidate = layouts[layouts.count - 1];
+        if (candidateLayout.quality > lastCandidate.quality)
+            layouts[currentLayoutIndex] = candidateLayout;
     }
-    if (bestLayout)
-        return bestLayout;
-    if (bestScaledLayout)
-        return bestScaledLayout;
-    if (soSoLayout)
-        return soSoLayout;
+    
+    if (bestLayoutIndex != NO_LAYOUT_SELECTED)
+        return bestLayoutIndex;
+    if (bestScaledLayoutIndex  != NO_LAYOUT_SELECTED)
+        return bestScaledLayoutIndex;
+    if (bestSoSoLayoutIndex != NO_LAYOUT_SELECTED)
+        return bestSoSoLayoutIndex;
     NSLog(@"*** no good layout ***");
-    return nil;
+    return NO_LAYOUT_SELECTED;
 }
 
 // this is called when we know the transforms are all Stopped.
@@ -1076,6 +1096,7 @@ float minThumbFrac, bestMinThumbFrac;
         currentSource = nextSource;
         nextSource = nil;
         [currentSource save];
+        layout = nil;
     }
     assert(currentSource);
     
@@ -1144,17 +1165,22 @@ float minThumbFrac, bestMinThumbFrac;
           f.origin.x, f.origin.y, f.size.width, f.size.height);
 #endif
     
-    layout = nil;
     if (IS_CAMERA(currentSource)) {   // select camera setting for available area
         NSArray *availableFormats = [cameraController
                                      formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
-        layout = [self chooseLayoutFrom:availableFormats];
-        assert(layout); // could not layout camera image
+        if (!layout) {
+            currentLayoutIndex = [self chooseLayoutFrom:availableFormats];
+            assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
+            layout = layouts[currentLayoutIndex];
+            assert(layout); // could not layout camera image
+        }
         [cameraController setupCameraWithFormat:layout.format];
     } else {
-        layout = [[Layout alloc] initForOrientation:isPortrait
-                                             iPhone:isiPhone
-                                      displayOption:displayOption];
+        if (!layout) {
+            layout = [[Layout alloc] initForOrientation:isPortrait
+                                                 iPhone:isiPhone
+                                          displayOption:displayOption];
+        }
         layout.containerView = containerView;
         layout.thumbCount = transforms.transforms.count;
     }
@@ -1704,14 +1730,21 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) doPinch:(UIPinchGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateEnded)
         return;
-    // crude processing, better when more displays are implemented
-    if (recognizer.scale < 1.0 && displayOption == LargestImageDisplay) {
-        displayOption = BestDisplay;
+    if (recognizer.scale > 1.0) {
+        // go to bigger display image
+        if (currentLayoutIndex + 1 < layouts.count) {
+            currentLayoutIndex++;
+            layout = layouts[currentLayoutIndex];
+        }
         [self reconfigure];
-    } else if (recognizer.scale > 1.0 && displayOption == BestDisplay) {
-        displayOption = LargestImageDisplay;
-        [self reconfigure];
+    } else if (recognizer.scale < 1.0) {
+        // smaller display image
+        if (currentLayoutIndex > 0) {
+            currentLayoutIndex--;
+            layout = layouts[currentLayoutIndex];
+        }
     }
+    [self reconfigure];
 }
 
 - (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
