@@ -11,6 +11,9 @@
 
 @interface Layout ()
 
+@property (assign)  float minDisplayFrac, bestMinDisplayFrac;
+@property (assign)  float minThumbFrac, bestMinThumbFrac;
+
 @end
 
 
@@ -25,8 +28,11 @@ NSString * __nullable displayOptionNames[] = {
 @implementation Layout
 
 @synthesize format;
-@synthesize isPortrait, isiPhone, displayOption;
-@synthesize containerView;
+@synthesize minDisplayFrac, bestMinDisplayFrac;
+@synthesize minThumbFrac, bestMinThumbFrac;
+@synthesize isPortrait, isiPhone;
+@synthesize containerFrame;
+@synthesize targetDisplaySize;
 @synthesize captureSize;
 @synthesize transformSize, displayRect;
 @synthesize displayFrac, thumbFrac;
@@ -40,44 +46,54 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize status, quality;
 
 - (id)initForOrientation:(BOOL) port
-               iPhone:(BOOL) isPhone
-              displayOption:(DisplayOptions) dopt {
+                  iPhone:(BOOL) isPhone
+           containerRect:(CGRect) containerRect {
     self = [super init];
     if (self) {
-        format = nil;
         isPortrait = port;
         isiPhone = isPhone;
-        displayOption = dopt;
-        scale = 1.0;
-        quality = REJECT_LAYOUT;
+        scale = 0.0;
+        quality = LAYOUT_NO_GOOD;
         thumbCount = 1000;  // rediculous number
         thumbArrayRect = CGRectZero;
         displayRect = CGRectZero;
         transformSize = CGSizeZero;
         executeRect = CGRectZero;
         status = nil;
-        containerView = nil;
+        containerFrame = containerRect;    // filled in by caller
+        
+        // these values are tweaked to satisfy the all the cameras on two
+        // different iPhones and two different iPads.
+        
+        if (isiPhone) {
+            bestMinDisplayFrac = 0.4;
+            minDisplayFrac = 0.3;
+            bestMinThumbFrac = 0.4;
+            minThumbFrac = 0.249;   // 0.3 for large iphones
+        } else {
+            bestMinDisplayFrac = 0.42;
+            minDisplayFrac = 0.4;
+            bestMinThumbFrac = 0.5;
+            minThumbFrac = 0.3;
+        }
     }
     return self;
 }
 
-- (BOOL) layoutForFormat:(AVCaptureDeviceFormat *) f scale:(float) scale {
-    format = f;
-//    NSLog(@" trying format %@", format);
-    CMFormatDescriptionRef ref = format.formatDescription;
-    CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
-    CGSize capSize = isPortrait ? CGSizeMake(dimensions.height, dimensions.width) :
-                CGSizeMake(dimensions.width, dimensions.height);
-    return [self layoutForSize:capSize scale:scale];
-}
-
 // Can we make an acceptible layout with the given capture size and scaling?
+// return no if layout is bad.
 
-- (BOOL) layoutForSize:(CGSize) cs scale:(float) s {   // for captureSize
-    scale = s;
+- (Layout *) layoutForSourceSize:(CGSize) cs
+                   targetSize:(CGSize) ts
+                   displayOption:(DisplayOptions) displayOption {
     captureSize = cs;
+    targetDisplaySize = ts;
+    quality = LAYOUT_NO_GOOD;
     aspectRatio = captureSize.width / captureSize.height;
-    CGSize scaledSize = CGSizeMake(cs.width*scale, cs.height*scale);
+//    float targetAspectRatio = targetDisplaySize.width / targetDisplaySize.height;
+    // figure out the scaling.
+    scale = targetDisplaySize.width / captureSize.width;
+    CGSize scaledSize = CGSizeMake(targetDisplaySize.width*scale, targetDisplaySize.height*scale);
     
     thumbArrayRect = CGRectZero;
     int minThumbCols = MIN_THUMB_COLS;
@@ -87,18 +103,24 @@ NSString * __nullable displayOptionNames[] = {
     CGRect bottom = CGRectZero;
     
     transformSize = scaledSize;
+    if (displayOption == NoDisplay)
+        transformSize.width = captureSize.width;        // width on an empty screen...needs thought XXX
 
-    float containerArea = containerView.frame.size.width * containerView.frame.size.height;
+    float containerArea = containerFrame.size.width * containerFrame.size.height;
     
 //    float captureArea = captureSize.width * captureSize.height;
     float transformArea = transformSize.width * transformSize.height;
     displayRect.origin = CGPointZero;
     displayRect.size = transformSize;
     displayFrac = transformArea / containerArea;
+    if (displayOption == NoDisplay)
+        quality = captureSize.width;
+    else
+        quality = 100 * displayFrac;
     
     executeRect.origin = CGPointMake(0, BELOW(displayRect) + SEP);
     executeRect.size.width = displayRect.size.width;
-    CGFloat roomUnderneath = containerView.frame.size.height - BELOW(displayRect) - SEP;
+    CGFloat roomUnderneath = containerFrame.size.height - BELOW(displayRect) - SEP;
 
     if (isiPhone || displayOption == TightDisplay) {
         // this rect overlays the bottom of the displayed image
@@ -109,16 +131,16 @@ NSString * __nullable displayOptionNames[] = {
         executeRect.origin.y = BELOW(displayRect) + SEP;
         if (roomUnderneath >= EXECUTE_FULL_H) {
             executeOverlayOK = NO;
-            executeRect.size.height = roomUnderneath;
+            executeRect.size.height = EXECUTE_FULL_H;
         } else {
             // it may overlap if it gets too tall
             executeOverlayOK = NO;
         }
-        executeRect.size.height = roomUnderneath;
+//        executeRect.size.height = roomUnderneath;
     }
 
-    BOOL wfits = scaledSize.width <= containerView.frame.size.width;
-    BOOL hfits = BELOW(executeRect) <= containerView.frame.size.height;
+    BOOL wfits = scaledSize.width <= containerFrame.size.width;
+    BOOL hfits = BELOW(executeRect) <= containerFrame.size.height;
     BOOL fits = wfits && hfits;
     
     if (!fits) {
@@ -126,13 +148,14 @@ NSString * __nullable displayOptionNames[] = {
         if (s != 1.0)
             NSLog(@"reject, too big:  %4.0f x %4.0f @ %.2f", cs.width, cs.height, s);
 #endif
-        return NO;
+        quality = LAYOUT_NO_GOOD;
+        return nil;
     }
 
     right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
-    right.size = CGSizeMake(containerView.frame.size.width - right.origin.x, containerView.frame.size.height);
+    right.size = CGSizeMake(containerFrame.size.width - right.origin.x, containerFrame.size.height);
     bottom.origin = CGPointMake(0, BELOW(executeRect) + SEP);
-    bottom.size = CGSizeMake(containerView.frame.size.width, containerView.frame.size.height - bottom.origin.y);
+    bottom.size = CGSizeMake(containerFrame.size.width, containerFrame.size.height - bottom.origin.y);
 
     CGSize bestDisplaySize;
     float bestDisplayAreaPct;
@@ -148,11 +171,11 @@ NSString * __nullable displayOptionNames[] = {
     
     // set up targets sizes and rules for the various display options
     switch (displayOption) {
-        case ControlDisplayOnly:
+        case NoDisplay:
             bestDisplayAreaPct = 0.0;
             // XXXX executeRect
             // just image plus (overlaid) execute, no thumbs unless there is spare room
-            thumbsPlacement = ThumbsUnderneath;
+            thumbsPlacement = ThumbsOnRight;
             thumbArrayRect = CGRectZero;
             break;
         case TightDisplay:
@@ -174,15 +197,14 @@ NSString * __nullable displayOptionNames[] = {
             if (isiPhone)
                 ;
             else
-                thumbsPlacement = ThumbsOnRight;
+                thumbsPlacement = ThumbsUndecided;
             break;
-        case LargestImageDisplay:
-            bestDisplaySize = containerView.frame.size;
+        case FullScreenDisplay:
+            bestDisplaySize = containerFrame.size;
             bestDisplayAreaPct = 100.0;
             // just image plus (overlaid) execute, no thumbs unless there is spare room
             thumbsPlacement = ThumbsOptional;
             break;
-        case FullScreenImage:
             ; // XXXXX not yet
     }
     
@@ -193,7 +215,7 @@ NSString * __nullable displayOptionNames[] = {
     int bottomRows = [self thumbsPerColIn:bottom.size];
     int bottomCols = [self thumbsPerRowIn:bottom.size];
     int bottomW = (firstThumbRect.size.width + SEP)*bottomCols;   // for centering
-
+    
 //    CGFloat rightArea = bottom.size.width * bottom.size.height;
 //     CGFloat bottomArea = bottom.size.width * bottom.size.height;
 
@@ -219,7 +241,7 @@ NSString * __nullable displayOptionNames[] = {
             thumbArrayRect.size.width = rightW;
             thumbFrac = rightThumbFrac;
             // with thumbs on the right, the execute can go to the bottom of the container
-            executeRect.size.height = containerView.frame.size.height - executeRect.origin.y;
+            executeRect.size.height = containerFrame.size.height - executeRect.origin.y;
             break;
         case ThumbsUnderneath:
             thumbArrayRect = bottom;
@@ -227,11 +249,11 @@ NSString * __nullable displayOptionNames[] = {
             thumbArrayRect.size.width = bottomW;
             thumbFrac = bottomThumbFrac;
             // with thumbs underneath, the execute can go to the right edge of the container
-            executeRect.size.width = containerView.frame.size.width;
+            executeRect.size.width = containerFrame.size.width;
             // and the transform display can be centered
-            displayRect.origin.x = (containerView.frame.size.width - displayRect.size.width)/2.0;
+            displayRect.origin.x = (containerFrame.size.width - displayRect.size.width)/2.0;
             // and so can the thumbs
-            thumbArrayRect.origin.x = (containerView.frame.size.width - thumbArrayRect.size.width)/2.0;
+            thumbArrayRect.origin.x = (containerFrame.size.width - thumbArrayRect.size.width)/2.0;
            break;
         default:
             thumbArrayRect = CGRectZero;
@@ -254,15 +276,33 @@ NSString * __nullable displayOptionNames[] = {
               rightThumbsOK ? CHECKMARK : @".",
               bottomThumbsOK ? CHECKMARK : @"."];
 #endif
+    if (quality == LAYOUT_NO_GOOD)
+        quality = 0;
+    
+    if (thumbFrac >= minThumbFrac) {
+        quality += 10;
+        if (displayFrac >= bestMinDisplayFrac) {
+            if (scale == 1.0) {
+                quality += 10;
+//                NSLog(@" ✓✓✓✓✓");
+            } else {
+//                NSLog(@" ✓✓✓✓");
+                quality += 8;
+            }
+        } else {
+//            NSLog(@" ✓✓");
+        }
+    }
     
 #ifdef DEBUG_LAYOUT
-    NSLog(@"    capture size: %4.0f x %4.0f  @ %.1f   fracs: %.3f  %.3f",
+    NSLog(@"    capture size: %4.0f x %4.0f  @ %.1f   fracs: %.3f  %.3f  q:%d",
           captureSize.width, captureSize.height, scale,
-          displayFrac, thumbFrac);
-    if (scale != 1.0)
-        NSLog(@"     scaled size: %4.0f x %4.0f", scaledSize.width, scaledSize.height);
+          displayFrac, thumbFrac, quality);
+//    if (scale != 1.0)
+//        NSLog(@"     scaled size: %4.0f x %4.0f", scaledSize.width, scaledSize.height);
 #endif
-    return YES;
+
+    return self;
 }
 
 - (float) aspectScaleToSize:(CGSize) targetSize {
@@ -279,6 +319,20 @@ NSString * __nullable displayOptionNames[] = {
 
 - (int) thumbsPerRowIn:(CGSize) area {
     return (area.width - SEP) / (firstThumbRect.size.width + SEP);
+}
+
+// I realize that this may give the wrong result if one dimension
+// is greater than the other, but the other is shorter.  It isn't
+// that important.
+
+- (NSComparisonResult) compare:(Layout *)layout {
+    if (displayRect.size.width > layout.displayRect.size.width ||
+        displayRect.size.height > layout.displayRect.size.height)
+        return NSOrderedAscending;
+    if (displayRect.size.width == layout.displayRect.size.width &&
+        displayRect.size.height == layout.displayRect.size.height)
+        return NSOrderedSame;
+    return NSOrderedDescending;
 }
 
 @end

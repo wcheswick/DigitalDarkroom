@@ -44,6 +44,7 @@
         captureDevice = nil;
         captureSession = nil;
         currentCamera = nil;
+        videoOrientation = -1;  // not initialized
     }
     return self;
 }
@@ -248,6 +249,9 @@
             w = dimensions.width;
             h = dimensions.height;
             break;
+        default:
+            NSLog(@"Unexpected video orientation: %ld", (long)videoOrientation);
+            NSLog(@"inconceivable!");
     }
     return CGSizeMake(w, h);
 }

@@ -44,15 +44,16 @@
     return taskGroup;
 }
 
-- (void) needLayout {
-    if (layingOut)
-        return;
-    assert(!layingOut);
-    layoutNeeded = YES;
-    [self layoutIfReady];
+- (void) idleForLayout {
+    if (!layingOut) {
+        reconfiguring++;
+        assert(!layingOut);
+        layoutNeeded = YES; // race?
+    }
+    [self reconfigureIfReady];
 }
 
-- (void) layoutIfReady {
+- (void) reconfigureIfReady {
     if (layingOut)
         return;
     TaskStatus_t newStatus = Stopped;
@@ -63,7 +64,7 @@
     if (newStatus == Stopped) {
         layingOut = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self->mainVC doLayout];
+            [self->mainVC idledForReconfiguration];
         });
     } else
         NSLog(@"  -- still busy to layout");
@@ -73,6 +74,7 @@
     layoutNeeded = NO;
     layingOut = NO;
     reconfiguring--;
+    NSLog(@" layout completed: %d", reconfiguring);
     if (reconfiguring < 0) {
         NSLog(@"** reconfiguring error: %d", reconfiguring);
         reconfiguring = 0;

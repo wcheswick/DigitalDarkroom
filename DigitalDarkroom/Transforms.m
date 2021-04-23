@@ -283,6 +283,46 @@ mostCommonColorInHist(Hist_t *hists) {
 }
 
 - (void) addTestTransforms {
+    lastTransform = [Transform areaTransform: @"Kaleidoscope"
+                                 description: @""
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long maxR = MIN(remapBuf.w, remapBuf.h)/2.0;
+        float theta = M_2_PI/(float)instance.value; // angle of one sector
+        float halfTheta = theta/2.0;
+        
+        // the incoming circle of pixels is divided into sectors. The original
+        // data is in the top half of the half sector at theta >= 0.  That live sector
+        // is mirrored on the half sector below theta = 0. Through the wonders of
+        // modular arithmetic, the original pixels are mapped, mirrored or not
+        // mirrored, to all the other pixels.
+        
+        // we fix out the remap ())or color) for each pixel
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                float xc = x - centerX;
+                float yc = y - centerY;
+                float r = hypot(xc, yc);
+                if (r > maxR || r == 0) {
+                    REMAP_COLOR(x, y, Remap_White);
+                    continue;
+                }
+                float a = atan2f(yc, xc);
+                float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
+                float sourceTheta = fabs(sourceSectorTheta);
+                int xs = centerX + cos(sourceTheta)*a;
+                int ys = centerY + sin(sourceTheta)*a;
+                UNSAFE_REMAP_TO(x, y, xs, ys);
+            }
+        }
+        UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
+    }];
+    lastTransform.low = 2;
+    lastTransform.value = 5;
+    lastTransform.high = 15;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
 
     /* timings for oil on digitalis:
      *

@@ -166,7 +166,6 @@ typedef enum {
 @property (nonatomic, strong)   InputSource *currentSource;
 @property (nonatomic, strong)   InputSource *cameraSource;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
-@property (nonatomic, strong)   InputSource *nextSource;
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign)              int availableCameraCount;
@@ -204,8 +203,6 @@ typedef enum {
 @property (assign)              BOOL isPortrait;
 @property (assign)              BOOL isiPhone;
 @property (nonatomic, strong)   Layout *layout;
-
-@property (assign)              DisplayOptions displayOption;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
 @property (nonatomic, strong)   DepthBuf *depthBuf;
@@ -250,7 +247,6 @@ typedef enum {
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 
-@synthesize nextSource;
 @synthesize availableCameraCount;
 
 @synthesize cameraController;
@@ -266,7 +262,6 @@ typedef enum {
 @synthesize hiresButton;
 @synthesize snapButton;
 @synthesize stopCamera, startCamera;
-@synthesize displayOption;
 
 @synthesize rowIsCollapsed;
 @synthesize depthBuf;
@@ -317,10 +312,7 @@ typedef enum {
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-        
-        // set some device defauls
-        displayOption = isiPhone ? TightDisplay : BestDisplay;
-        
+         
         cameraController = [[CameraController alloc] init];
         cameraController.delegate = self;
 
@@ -439,12 +431,14 @@ typedef enum {
 
 - (void) deviceRotated {
     deviceOrientation = [[UIDevice currentDevice] orientation];
-//    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
 #ifdef DEBUG_ORIENTATION
     NSLog(@"device rotated to %@", [CameraController
                                      dumpDeviceOrientationName:deviceOrientation]);
 //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
 #endif
+    [self configureScreenForOrientation];
+//    [self useSource:currentSource];
+//    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
 }
 
 #ifdef NOTUSED
@@ -460,37 +454,6 @@ static NSString * const imageOrientationName[] = {
 };
 #endif
 
-typedef enum {
-    CameraTypeSelect,
-    CameraFlip,
-    ChooseFile,
-} SourceSelectOptions;
-
-#define SOURCE_TYPE_TAG_OFFSET  30
-
-- (void) adjustSourceSelectionView {
-    NSString *cameraIconName = currentSource.threeDCamera ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
-    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
-    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
-    
-    [sourceSelectionView setImage:cameraIconView forSegmentAtIndex:CameraTypeSelect];
-    sourceSelectionView.selectedSegmentIndex = currentSource.threeDCamera ? CameraTypeSelect : ChooseFile;
-    [sourceSelectionView setNeedsDisplay];
-}
-
-- (UIImage *) barIconFrom:(NSString *) fileName {
-    NSString *fullName = [[@"images" stringByAppendingPathComponent:fileName] stringByAppendingPathExtension:@"png"];
-    NSString *imagePath = [[NSBundle mainBundle] pathForResource:fullName ofType:@""];
-    assert(imagePath);
-    UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
-    assert(image);
-    float scale = image.size.width / self.navigationController.navigationBar.frame.size.height;
-    UIImage *iconImage = [UIImage imageWithCGImage:image.CGImage
-                                             scale:scale
-                                       orientation:UIImageOrientationUp];
-    return iconImage;
-}
-
 - (void) viewDidLoad {
     [super viewDidLoad];
     
@@ -505,6 +468,189 @@ typedef enum {
                              nil];
     self.toolbarItems = toolBarItems;
     
+    sourceBarButton = [[UIBarButtonItem alloc]
+                                             initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
+                                             style:UIBarButtonItemStylePlain
+                                             target:self
+                                             action:@selector(selectSource:)];
+    
+    flipBarButton = [[UIBarButtonItem alloc]
+                                      initWithImage:[UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"]
+                                      style:UIBarButtonItemStylePlain
+                                      target:self
+                                      action:@selector(flipCamera:)];
+    
+    depthSelectBarButton = [[UIBarButtonItem alloc]
+                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
+                                       style:UIBarButtonItemStylePlain
+                                       target:self
+                                       action:@selector(chooseDepth:)];
+
+    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                   target:nil action:nil];
+    fixedSpace.width = 10;
+    
+    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                      target:nil action:nil];
+
+#ifdef DISABLED
+    UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
+                                        initWithImage:[UIImage systemImageNamed:@"ellipsis"]
+                                        style:UIBarButtonItemStylePlain
+                                        target:self
+                                        action:@selector(goSelectOptions:)];
+#endif
+    
+    trashBarButton = [[UIBarButtonItem alloc]
+                      initWithImage:[UIImage systemImageNamed:@"trash"]
+                      style:UIBarButtonItemStylePlain
+                   target:self
+                   action:@selector(doRemoveAllTransforms)];
+    
+    hiresButton = [[UIBarButtonItem alloc]
+                   initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
+                   target:self action:@selector(doToggleHires:)];
+    
+    saveBarButton = [[UIBarButtonItem alloc]
+                     initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
+                     style:UIBarButtonItemStylePlain
+                     target:self
+                     action:@selector(doSave)];
+    
+    undoBarButton = [[UIBarButtonItem alloc]
+                     initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
+                     style:UIBarButtonItemStylePlain
+                                      target:self
+                                      action:@selector(doRemoveLastTransform)];
+    
+    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                              sourceBarButton,
+                                              flexibleSpace,
+                                              flipBarButton,
+                                              flexibleSpace,
+                                              depthSelectBarButton,
+                                              nil];
+    
+    UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
+                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
+                                     style:UIBarButtonItemStylePlain
+                                     target:self
+                                     action:@selector(doHelp:)];
+
+    reticleBarButton = [[UIBarButtonItem alloc]
+                                        initWithImage:[UIImage systemImageNamed:@"squareshape.split.2x2.dotted"]
+                                        style:UIBarButtonItemStylePlain
+                                        target:self
+                                        action:@selector(toggleReticle:)];
+
+#ifdef NOTDEF
+    capturingButton = [UIButton systemButtonWithImage:[UIImage
+                                                       systemImageNamed:@"video.slash"]
+                                               target:self
+                                               action:@selector(toggleLiveCapture:)];
+//    capturingButton.enabled = YES;
+//    capturingButton.highlighted = !capturingButton.enabled;
+    
+    capturingBarButton = [[UIBarButtonItem alloc]
+                                           initWithCustomView:capturingButton];
+    [capturingBarButton setEnabled:YES];
+#endif
+    
+    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               docBarButton,
+                                               fixedSpace,
+                                               reticleBarButton,
+                                               nil];
+    
+#define TOOLBAR_H   self.navigationController.toolbar.frame.size.height
+    plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    plusButton.frame = CGRectMake(0, 0, TOOLBAR_H+SEP, TOOLBAR_H);
+    [plusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:BIGPLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
+                                                                               weight:UIFontWeightUltraLight],
+                                        //NSBaselineOffsetAttributeName: @-3
+                                    }] forState:UIControlStateNormal];
+    [plusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:BIGPLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
+                                                                               weight:UIFontWeightHeavy],
+                                        //NSBaselineOffsetAttributeName: @-3
+                                    }] forState:UIControlStateSelected];
+    [plusButton addTarget:self action:@selector(togglePlusMode)
+         forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:plusButton];
+
+#ifdef NOTDEF
+    doublePlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    doublePlusButton.frame = CGRectMake(0, 0, 1.5*toolBarH+SEP, toolBarH);
+    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:DOUBLE_PLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightUltraLight],
+                                        NSBaselineOffsetAttributeName: @3
+                                    }] forState:UIControlStateNormal];
+    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:DOUBLE_PLUS attributes:@{
+                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
+                                                                               weight:UIFontWeightHeavy],
+                                        NSBaselineOffsetAttributeName: @3
+                                    }] forState:UIControlStateSelected];
+    [doublePlusButton addTarget:self action:@selector(togglePlusLock)
+         forControlEvents:UIControlEventTouchUpInside];
+#endif
+    
+    plusLockButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    plusLockButton.selected = NO;
+    
+    plusLockButton.frame = CGRectMake(0, 0, 1.5*TOOLBAR_H+SEP, TOOLBAR_H);
+    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
+    NSLog(@" ****** %@", pLock);
+
+#define PLUS_LOCK_FONT_SIZE (TOOLBAR_H*0.6)
+#define PLUS_LOCK_KERN           (-TOOLBAR_H*0.3)
+#define PLUS_LOCK_SUPERSCRIPT   (TOOLBAR_H*0.1)
+#define OFFSET              0   // (TOOLBAR_H*0.1)
+ 
+    NSMutableAttributedString *littleRaisedPlus = [[NSMutableAttributedString alloc]
+                                           initWithString:BIGPLUS];
+    [littleRaisedPlus addAttribute: NSKernAttributeName value: @PLUS_LOCK_KERN range:NSMakeRange(0,1)];
+    [littleRaisedPlus addAttribute: (NSString*)NSBaselineOffsetAttributeName value: @PLUS_LOCK_SUPERSCRIPT range:NSMakeRange(0,1)];
+
+    NSMutableAttributedString *littleLock = [[NSMutableAttributedString alloc]
+                                           initWithString:LOCK];
+    //    [plusLock addAttribute: NSBaselineOffsetAttributeName value: @OFFSET range:NSMakeRange(0, 1)];
+
+    NSMutableAttributedString *plusLock = littleRaisedPlus;
+    [plusLock appendAttributedString:littleLock];
+    
+    [plusLockButton setAttributedTitle:plusLock forState:UIControlStateNormal];
+    plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
+
+    [plusLockButton addTarget:self action:@selector(togglePlusLock)
+             forControlEvents:UIControlEventTouchUpInside];
+    
+    UIBarButtonItem *plusLockBarButton = [[UIBarButtonItem alloc]
+                                      initWithCustomView:plusLockButton];
+
+    self.toolbarItems = [[NSArray alloc] initWithObjects:
+                         plusBarButton,
+                         fixedSpace,
+                         plusLockBarButton,
+                         flexibleSpace,
+                         trashBarButton,
+                         fixedSpace,
+                         undoBarButton,
+                         fixedSpace,
+                         saveBarButton,
+//                         fixedSpace,
+// disabled                         otherMenuButton,
+                         nil];
+
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
     containerView.userInteractionEnabled = YES;
@@ -634,209 +780,53 @@ typedef enum {
     self.view.backgroundColor = [UIColor whiteColor];
 }
 
-- (void) configureNavBar {
-//    [[UILabel appearanceWhenContainedInInstancesOfClasses:@[[UISegmentedControl class]]] setNumberOfLines:0];
-    
-    sourceBarButton = [[UIBarButtonItem alloc]
-                                             initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
-                                             style:UIBarButtonItemStylePlain
-                                             target:self
-                                             action:@selector(selectSource:)];
-    
-    flipBarButton = [[UIBarButtonItem alloc]
-                                      initWithImage:[UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"]
-                                      style:UIBarButtonItemStylePlain
-                                      target:self
-                                      action:@selector(flipCamera:)];
-    
-    depthSelectBarButton = [[UIBarButtonItem alloc]
-                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
-                                       style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(chooseDepth:)];
-
-    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
-                                   target:nil action:nil];
-    fixedSpace.width = 10;
-    
-    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
-                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                      target:nil action:nil];
-
-#ifdef DISABLED
-    UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
-                                        initWithImage:[UIImage systemImageNamed:@"ellipsis"]
-                                        style:UIBarButtonItemStylePlain
-                                        target:self
-                                        action:@selector(goSelectOptions:)];
+- (void) viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
 #endif
     
-    trashBarButton = [[UIBarButtonItem alloc]
-                      initWithImage:[UIImage systemImageNamed:@"trash"]
-                      style:UIBarButtonItemStylePlain
-                   target:self
-                   action:@selector(doRemoveAllTransforms)];
-    
-    hiresButton = [[UIBarButtonItem alloc]
-                   initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
-                   target:self action:@selector(doToggleHires:)];
-    
-    saveBarButton = [[UIBarButtonItem alloc]
-                     initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
-                     style:UIBarButtonItemStylePlain
-                     target:self
-                     action:@selector(doSave)];
-    
-    undoBarButton = [[UIBarButtonItem alloc]
-                     initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
-                     style:UIBarButtonItemStylePlain
-                                      target:self
-                                      action:@selector(doRemoveLastTransform)];
-    
-    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                              sourceBarButton,
-                                              flexibleSpace,
-                                              flipBarButton,
-                                              flexibleSpace,
-                                              depthSelectBarButton,
-                                              nil];
-    
-    if (!isiPhone || !isPortrait)
-        self.title = @"Digital Darkroom";
-    
-    UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
-                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
-                                     style:UIBarButtonItemStylePlain
-                                     target:self
-                                     action:@selector(doHelp:)];
-
-    reticleBarButton = [[UIBarButtonItem alloc]
-                                        initWithImage:[UIImage systemImageNamed:@"squareshape.split.2x2.dotted"]
-                                        style:UIBarButtonItemStylePlain
-                                        target:self
-                                        action:@selector(toggleReticle:)];
-
-#ifdef NOTDEF
-    capturingButton = [UIButton systemButtonWithImage:[UIImage
-                                                       systemImageNamed:@"video.slash"]
-                                               target:self
-                                               action:@selector(toggleLiveCapture:)];
-//    capturingButton.enabled = YES;
-//    capturingButton.highlighted = !capturingButton.enabled;
-    
-    capturingBarButton = [[UIBarButtonItem alloc]
-                                           initWithCustomView:capturingButton];
-    [capturingBarButton setEnabled:YES];
-#endif
-    
-    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               docBarButton,
-                                               fixedSpace,
-                                               reticleBarButton,
-                                               nil];
-    
-#define TOOLBAR_H   self.navigationController.toolbar.frame.size.height
-    plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusButton.frame = CGRectMake(0, 0, TOOLBAR_H+SEP, TOOLBAR_H);
-    [plusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
-                                                                               weight:UIFontWeightUltraLight],
-                                        //NSBaselineOffsetAttributeName: @-3
-                                    }] forState:UIControlStateNormal];
-    [plusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
-                                                                               weight:UIFontWeightHeavy],
-                                        //NSBaselineOffsetAttributeName: @-3
-                                    }] forState:UIControlStateSelected];
-    [plusButton addTarget:self action:@selector(togglePlusMode)
-         forControlEvents:UIControlEventTouchUpInside];
-    
-    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:plusButton];
-
-#ifdef NOTDEF
-    doublePlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    doublePlusButton.frame = CGRectMake(0, 0, 1.5*toolBarH+SEP, toolBarH);
-    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:DOUBLE_PLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                                               weight:UIFontWeightUltraLight],
-                                        NSBaselineOffsetAttributeName: @3
-                                    }] forState:UIControlStateNormal];
-    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:DOUBLE_PLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                                               weight:UIFontWeightHeavy],
-                                        NSBaselineOffsetAttributeName: @3
-                                    }] forState:UIControlStateSelected];
-    [doublePlusButton addTarget:self action:@selector(togglePlusLock)
-         forControlEvents:UIControlEventTouchUpInside];
-#endif
-    
-    plusLockButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusLockButton.selected = NO;
-    
-    plusLockButton.frame = CGRectMake(0, 0, 1.5*TOOLBAR_H+SEP, TOOLBAR_H);
-    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
-    NSLog(@" ****** %@", pLock);
-
-#define PLUS_LOCK_FONT_SIZE (TOOLBAR_H*0.6)
-#define PLUS_LOCK_KERN           (-TOOLBAR_H*0.3)
-#define PLUS_LOCK_SUPERSCRIPT   (TOOLBAR_H*0.1)
-#define OFFSET              0   // (TOOLBAR_H*0.1)
- 
-    NSMutableAttributedString *littleRaisedPlus = [[NSMutableAttributedString alloc]
-                                           initWithString:BIGPLUS];
-    [littleRaisedPlus addAttribute: NSKernAttributeName value: @PLUS_LOCK_KERN range:NSMakeRange(0,1)];
-    [littleRaisedPlus addAttribute: (NSString*)NSBaselineOffsetAttributeName value: @PLUS_LOCK_SUPERSCRIPT range:NSMakeRange(0,1)];
-
-    NSMutableAttributedString *littleLock = [[NSMutableAttributedString alloc]
-                                           initWithString:LOCK];
-    //    [plusLock addAttribute: NSBaselineOffsetAttributeName value: @OFFSET range:NSMakeRange(0, 1)];
-
-    NSMutableAttributedString *plusLock = littleRaisedPlus;
-    [plusLock appendAttributedString:littleLock];
-    
-    [plusLockButton setAttributedTitle:plusLock forState:UIControlStateNormal];
-    plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
-
-    [plusLockButton addTarget:self action:@selector(togglePlusLock)
-             forControlEvents:UIControlEventTouchUpInside];
-    
-    UIBarButtonItem *plusLockBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:plusLockButton];
-
-    self.toolbarItems = [[NSArray alloc] initWithObjects:
-                         plusBarButton,
-                         fixedSpace,
-                         plusLockBarButton,
-                         flexibleSpace,
-                         trashBarButton,
-                         fixedSpace,
-                         undoBarButton,
-                         fixedSpace,
-                         saveBarButton,
-//                         fixedSpace,
-// disabled                         otherMenuButton,
-                         nil];
+    [self useSource:currentSource];
+    [self reconfigure];
 }
 
-
-#ifdef NOTDEF
-UIImage *oneFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
-                                                           pathForResource:@"images/1sq.png"
-                                                           ofType:@""]];
-UIImage *threeFrameImage = [UIImage imageWithContentsOfFile:[[NSBundle mainBundle]
-                                                             pathForResource:@"images/3sq.png"
-                                                             ofType:@""]];
-stackingButton.userInteractionEnabled = YES;
-// maybe not so clear using these
-[stackingButton setBackgroundImage:oneFrameImage forState:UIControlStateNormal];
-[stackingButton setBackgroundImage:threeFrameImage forState:UIControlStateSelected];
+- (void) viewWillTransitionToSize:(CGSize)newSize
+        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
 #endif
+    [self reconfigure];
+}
+
+- (void) viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+#endif
+    
+    frameCount = depthCount = droppedCount = busyCount = 0;
+    [self.view setNeedsDisplay];
+    
+#define TICK_INTERVAL   0.1
+    statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
+                                                  target:self
+                                                selector:@selector(doTick:)
+                                                userInfo:NULL
+                                                 repeats:YES];
+    lastTime = [NSDate now];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    NSLog(@"********* viewWillDisappear *********");
+    
+    [super viewWillDisappear:animated];
+    if (currentSource && IS_CAMERA(currentSource)) {
+        [self cameraOn:NO];
+    }
+}
 
 - (void) createThumbArray {
     UITapGestureRecognizer *touch;
@@ -925,351 +915,6 @@ stackingButton.userInteractionEnabled = YES;
     [newThumbView addSubview:imageView];   // empty placeholder at the moment
     
     return newThumbView;
-}
-
-- (void) viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
-#endif
-    [self reconfigure];
-}
-
-- (void) viewWillTransitionToSize:(CGSize)newSize
-        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
-#ifdef DEBUG_LAYOUT
-    NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
-#endif
-    [self reconfigure];
-}
-
-- (void) reconfigure {
-    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
-    UIDeviceOrientationIsFlat(deviceOrientation);
-#ifdef DEBUG_LAYOUT
-    NSLog(@"== reconfigure for %@,    option %@",
-          isPortrait ? @"port" : @"land",
-          displayOptionNames[displayOption]);
-#endif
-    [self configureNavBar];
-    
-    taskCtrl.reconfiguring++;
-    [taskCtrl needLayout];
-}
-
-- (void) viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
-#endif
-    
-    frameCount = depthCount = droppedCount = busyCount = 0;
-    [self.view setNeedsDisplay];
-    
-#define TICK_INTERVAL   0.1
-    statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
-                                                  target:self
-                                                selector:@selector(doTick:)
-                                                userInfo:NULL
-                                                 repeats:YES];
-    lastTime = [NSDate now];
-}
-
-- (void)viewWillDisappear:(BOOL)animated {
-    NSLog(@"********* viewWillDisappear *********");
-    
-    [super viewWillDisappear:animated];
-    if (currentSource && IS_CAMERA(currentSource)) {
-        [self cameraOn:NO];
-    }
-}
-
-- (long) chooseLayoutFrom:(NSArray *)availableFormats {
-    long bestLayoutIndex = NO_LAYOUT_SELECTED;
-    long bestScaledLayoutIndex = NO_LAYOUT_SELECTED;
-    long bestSoSoLayoutIndex = NO_LAYOUT_SELECTED;
-    float minDisplayFrac, bestMinDisplayFrac;
-    float minThumbFrac, bestMinThumbFrac;
-
-    [layouts removeAllObjects];
-    CGSize lastAcceptedSize = CGSizeZero;
-    currentLayoutIndex = NO_LAYOUT_SELECTED;
-    
-    // these values are tweaked to satisfy the all the cameras on two
-    // different iPhones and two different iPads.
-    
-    if (isiPhone) {
-        bestMinDisplayFrac = 0.4;
-        minDisplayFrac = 0.3;
-        bestMinThumbFrac = 0.4;
-        minThumbFrac = 0.249;   // 0.3 for large iphones
-    } else {
-        bestMinDisplayFrac = 0.42;
-        minDisplayFrac = 0.4;
-        bestMinThumbFrac = 0.5;
-        minThumbFrac = 0.3;
-    }
-    
-    for (int i=0; i<availableFormats.count; i++) {
-        AVCaptureDeviceFormat *format = availableFormats[i];
-        Layout *candidateLayout = [[Layout alloc] initForOrientation:isPortrait
-                                                              iPhone:isiPhone
-                                                       displayOption:displayOption];
-        candidateLayout.containerView = containerView;
-        candidateLayout.thumbCount = transforms.transforms.count;
-        
-        NSArray *scales = @[@1.0, @0.8, @0.6, @0.4, @0.2];
-        BOOL fits = NO;
-        for (NSNumber *s in scales) {
-            fits = [candidateLayout layoutForFormat:format scale:[s floatValue]];
-            if (fits)
-                break;
-        }
-        if (!fits) {
-//            NSLog(@"*** no fit found for %.2f", candidateLayout.scale);
-            continue;
-        }
-        
-        candidateLayout.quality = candidateLayout.scale == 1.0 ? 2 : 1;
-        CGSize candidateSize = candidateLayout.displayRect.size;
-        if (candidateSize.width != lastAcceptedSize.width || candidateSize.height != lastAcceptedSize.height) {
-            [layouts addObject:candidateLayout];
-            currentLayoutIndex = layouts.count - 1;
-            lastAcceptedSize = candidateSize;
-        }
-        if (candidateLayout.displayFrac < minDisplayFrac)
-            continue;
-        candidateLayout.quality++;
-        
-        if (candidateLayout.thumbFrac >= minThumbFrac) {
-            candidateLayout.quality++;
-            if (candidateLayout.displayFrac >= bestMinDisplayFrac) {
-                if (candidateLayout.scale == 1.0) {
-                    bestLayoutIndex = currentLayoutIndex;
-                    candidateLayout.quality = 10;
-                    NSLog(@" ✓✓✓✓✓");
-                } else {
-                    NSLog(@" ✓✓✓✓");
-                    candidateLayout.quality = 8;
-                    bestScaledLayoutIndex = currentLayoutIndex;
-                }
-            } else {
-                NSLog(@" ✓✓");
-                if (bestSoSoLayoutIndex == NO_LAYOUT_SELECTED)
-                    bestSoSoLayoutIndex = currentLayoutIndex;
-            }
-
-        }
-        // the last candidate on the list is the same size as this one, and may
-        // even be the same as this one.  We keep the one with the best score.
-        Layout *lastCandidate = layouts[layouts.count - 1];
-        if (candidateLayout.quality > lastCandidate.quality)
-            layouts[currentLayoutIndex] = candidateLayout;
-    }
-    
-    if (bestLayoutIndex != NO_LAYOUT_SELECTED)
-        return bestLayoutIndex;
-    if (bestScaledLayoutIndex  != NO_LAYOUT_SELECTED)
-        return bestScaledLayoutIndex;
-    if (bestSoSoLayoutIndex != NO_LAYOUT_SELECTED)
-        return bestSoSoLayoutIndex;
-    NSLog(@"*** no good layout ***");
-    return NO_LAYOUT_SELECTED;
-}
-
-// this is called when we know the transforms are all Stopped.
-
-- (void) doLayout {
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
-    self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
-    self.navigationController.toolbar.opaque = YES;  // (uiMode == oliveUI);
-
-//    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
-    
-    // set up new source, if needed
-    if (nextSource) {
-        [self cameraOn:(currentSource && IS_CAMERA(currentSource))];
-        currentSource = nextSource;
-        nextSource = nil;
-        [currentSource save];
-        layout = nil;
-    }
-    assert(currentSource);
-    
-    // We have several image sizes to consider and process:
-    //
-    // currentSource.imageSize  is the size of the source image.  For images from files, it is
-    //      just the available size.  For cameras, we can adjust it by changing the capture parameters,
-    //      adjusting for the largest image we need, shown below.
-    //
-    // Each taskgroup runs an image through zero or more translation chains.  The task group shares
-    //      a common transform size and caches certain common transform processing computations.
-    //      The results of each task chain in a taskgroup goes to a UIImage of a certain size, based
-    //      on the size of the resulting image:
-    //
-    // - the displayed transformed image size (computed just below) is based on layout considerations
-    // for the device screen size and orientation.
-    //      size in screenTasks.transformSize
-    //
-    // - thumbnail outputs all must fit in THUMB_W x SOURCE_THUMB_H
-    //      size in thumbTasks.transformSize
-    //
-    // - the external window image size, if implemented and connected.
-    //      size in externalTasks.transformSize, if externalTasks exists
-    //
-    // - If "hidef" is selected, the full image possible is captured, transformed, and made available
-    // for saving.
-    //      size in hiresTasks.transformSize, iff hiresTasks exists
-    //
-    // - I suppose there will be a video capture option some day.  That would be another target.
-    
-    if (IS_CAMERA(currentSource)) {
-        [cameraController selectCamera:currentSource];
-        [cameraController setupSessionForOrientation:deviceOrientation];
-    } else {
-        NSLog(@"    file source size: %.0f x %.0f",
-              currentSource.imageSize.width, currentSource.imageSize.height);
-    }
-
-    containerView.translatesAutoresizingMaskIntoConstraints = NO;
-    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
-    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
-    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
-    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
-    
-    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
-    CGFloat bottomPadding = window.safeAreaInsets.bottom;
-    CGFloat leftPadding = window.safeAreaInsets.left;
-    CGFloat rightPadding = window.safeAreaInsets.right;
-    
-#ifdef DEBUG_LAYOUT
-    CGFloat topPadding = window.safeAreaInsets.top;
-    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f %0.f",
-          leftPadding, rightPadding, topPadding, bottomPadding);
-#endif
-    
-    CGRect f = self.view.frame;
-    f.origin.x = leftPadding; // + SEP;
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.size.height -= f.origin.y + bottomPadding;
-    f.size.height -= self.navigationController.toolbar.frame.size.height;
-    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
-    containerView.frame = f;
-#ifdef DEBUG_LAYOUT
-    NSLog(@"     containerview: %.0f,%.0f  %.0f x %.0f",
-          f.origin.x, f.origin.y, f.size.width, f.size.height);
-#endif
-    
-    if (IS_CAMERA(currentSource)) {   // select camera setting for available area
-        NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
-        if (!layout) {
-            currentLayoutIndex = [self chooseLayoutFrom:availableFormats];
-            assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
-            layout = layouts[currentLayoutIndex];
-            assert(layout); // could not layout camera image
-        }
-        [cameraController setupCameraWithFormat:layout.format];
-    } else {
-        if (!layout) {
-            layout = [[Layout alloc] initForOrientation:isPortrait
-                                                 iPhone:isiPhone
-                                          displayOption:displayOption];
-        }
-        layout.containerView = containerView;
-        layout.thumbCount = transforms.transforms.count;
-    }
-    
-    overlayView.frame = layout.displayRect;
-    if (reticleView) {
-        reticleView.frame = CGRectMake(0, 0,
-                                       overlayView.frame.size.width, overlayView.frame.size.height);
-        [reticleView setNeedsDisplay];
-    }
-    overlayDebugStatus = layout.status;
-    transformView.frame = overlayView.frame;
-    SET_VIEW_WIDTH(pausedLabel, transformView.frame.size.width);
-    thumbScrollView.frame = layout.thumbArrayRect;
-    thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
-    thumbScrollView.layer.borderWidth = 3.0;
-    
-    CGFloat below = BELOW(thumbScrollView.frame);
-    assert(below <= containerView.frame.size.height);
-    assert(below <= self.navigationController.toolbar.frame.origin.y);
-
-    thumbArrayView.frame = CGRectMake(0, 0,
-                                      thumbScrollView.frame.size.width,
-                                      thumbScrollView.frame.size.height);
-    
-    f = transformView.frame;
-    f.origin.x = 0;
-    executeView.frame = layout.executeRect;
-
-#ifdef DEBUG_LAYOUT
-    NSLog(@"layout selected:");
-
-    NSLog(@"        capture:               %4.0f x %4.0f\t @%.1f",
-          layout.captureSize.width, layout.captureSize.height, layout.scale);
-
-    NSLog(@"      container:               %4.0f x %4.0f",
-          containerView.frame.size.width,
-          containerView.frame.size.height);
-
-    NSLog(@" transform size:               %4.0f x %4.0f  @  %.2f",
-          layout.transformSize.width,
-          layout.transformSize.height,
-          layout.scale);
-
-    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f",
-          transformView.frame.origin.x,
-          transformView.frame.origin.y,
-          transformView.frame.size.width,
-          transformView.frame.size.height);
-
-    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
-          executeView.frame.origin.x,
-          executeView.frame.origin.y,
-          executeView.frame.size.width,
-          executeView.frame.size.height);
-
-    NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
-          thumbScrollView.frame.origin.x,
-          thumbScrollView.frame.origin.y,
-          thumbScrollView.frame.size.width,
-          thumbScrollView.frame.size.height);
-
-    NSLog(@"    display frac: %.3f", layout.displayFrac);
-    NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
-    NSLog(@"           scale: %.3f", layout.scale);
-#endif
-    
-    // layout.transformSize is what the tasks get to run.  They
-    // then display (possibly scaled) onto transformView.
-    
-    [screenTasks configureGroupForSize: layout.transformSize];
-    //    [externalTask configureForSize: processingSize];
-
-    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            // move views to where they need to be now.
-            [self placeThumbsForLayout: self->layout];
-        }];
-    }
-    
-    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
-    //cameraController.captureVideoPreviewLayer = previewLayer;
-    
-    [taskCtrl layoutCompleted];
-
-    [self doTransforms];
-    [self updateOverlayView];
-    [self updateExecuteView];
-    [self adjustBarButtons];
 }
 
 - (void) doTransforms {
@@ -1390,7 +1035,7 @@ CGFloat topOfNonDepthArray = 0;
             [self buttonsContinueOnNextRow];
             topOfNonDepthArray = nextButtonFrame.origin.y;
         } else
-            [self nextButtonPosition];
+            [self nextTransformButtonPosition];
     }
     
     SET_VIEW_HEIGHT(thumbArrayView, thumbsH);
@@ -1404,7 +1049,7 @@ CGFloat topOfNonDepthArray = 0;
         [thumbScrollView setContentOffset:CGPointMake(0, topOfNonDepthArray) animated:YES];
 }
 
-- (void) nextButtonPosition {
+- (void) nextTransformButtonPosition {
     CGRect f = nextButtonFrame;
     if (RIGHT(f) + SEP + f.size.width > thumbArrayView.frame.size.width) {   // on to next line
         [self buttonsContinueOnNextRow];
@@ -1512,7 +1157,7 @@ CGFloat topOfNonDepthArray = 0;
         plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
     else
         plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightHeavy];
-
+    
     [plusLockButton setNeedsDisplay];
     if (plusLockButton.selected && !plusButton.selected)
         [self togglePlusMode];
@@ -1546,23 +1191,6 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 #ifdef OLD
-    [fuitable.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    // show the list in reverse order
-    CGRect f = executeControlView.frame;
-    f.origin = CGPointMake(0, f.size.height);
-    f.size = CGSizeMake(f.size.width, EXECUTE_LABEL_H);
-    for (int i=0; i<EXECUTE_SHOWN && i < screenTask.transformList.count; i++) {
-        Transform *transform = screenTask.transformList[screenTask.transformList.count - 1 - i];
-        UILabel *label = [[UILabel alloc] initWithFrame:f];
-        label.text = [NSString stringWithFormat:@"%@", transform.name];
-        label.textAlignment = NSTextAlignmentCenter;
-        label.adjustsFontSizeToFitWidth = YES;
-        label.font = [UIFont systemFontOfSize:EXECUTE_LABEL_FONT];
-        label.opaque = YES;
-        [executeControlView addSubview:label];
-        f.origin.y -= f.size.height;
-    }
-    [executeControlView setNeedsDisplay];
 
 - (void) displayValueSlider: (int) executeIndex {
     if (executeIndex == SLIDER_OFF) {
@@ -1663,7 +1291,6 @@ CGFloat topOfNonDepthArray = 0;
     popController.barButtonItem = button;
 }
 
-
 - (IBAction) toggleReticle:(UIBarButtonItem *)reticleBarButton {
     if (reticleView) {  // turn it off by removing it
         [reticleView removeFromSuperview];
@@ -1736,7 +1363,7 @@ CGFloat topOfNonDepthArray = 0;
             currentLayoutIndex++;
             layout = layouts[currentLayoutIndex];
         }
-        [self reconfigure];
+        [self configureScreenForOrientation];
     } else if (recognizer.scale < 1.0) {
         // smaller display image
         if (currentLayoutIndex > 0) {
@@ -1791,22 +1418,6 @@ CGFloat topOfNonDepthArray = 0;
     UIGraphicsEndImageContext();
     return newImage;
 }
-
-#ifdef XXXX
-if captureDevice.position == AVCaptureDevicePosition.back {
-    if let image = context.createCGImage(ciImage, from: imageRect) {
-        return UIImage(cgImage: image, scale: UIScreen.main.scale, orientation: .right)
-    }
-        }
-
-if captureDevice.position == AVCaptureDevicePosition.front {
-    if let image = context.createCGImage(ciImage, from: imageRect) {
-        return UIImage(cgImage: image, scale: UIScreen.main.scale, orientation: .leftMirrored)
-        
-    }
-        }
-
-#endif
 
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
         didOutputDepthData:(AVDepthData *)rawDepthData
@@ -1957,7 +1568,7 @@ UIImageOrientation lastOrientation;
 
 - (void) doTick:(NSTimer *)sender {
     if (taskCtrl.layoutNeeded)
-        [taskCtrl layoutIfReady];
+        [taskCtrl reconfigureIfReady];
     
 #ifdef NOTYET
     NSDate *now = [NSDate now];
@@ -2073,11 +1684,10 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) chooseDepth:(UIButton *)button {
     InputSource *newSource = [currentSource copy];
-    newSource.threeDCamera = ! newSource.threeDCamera;
+    newSource.threeDCamera = !newSource.threeDCamera;
     if (![cameraController isCameraAvailable:newSource])
         return;
-    nextSource = newSource;
-    [self reconfigure];
+    [self useSource:newSource];
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
@@ -2085,8 +1695,7 @@ UIImageOrientation lastOrientation;
     newSource.frontCamera = ! newSource.frontCamera;
     if (![cameraController isCameraAvailable:newSource])
         return;
-    nextSource = newSource;
-    [self reconfigure];
+    [self useSource:newSource];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -2097,7 +1706,7 @@ UIImageOrientation lastOrientation;
                        animated:YES
                      completion:^{
         [self adjustBarButtons];
-        [self reconfigure];
+        [self configureScreenForOrientation];
     }];
 }
 
@@ -2267,16 +1876,16 @@ static NSString * const sourceSectionTitles[] = {
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     switch ((SourceTypes)indexPath.section) {
         case CameraSource:
-            nextSource = cameraSource;
+            [self useSource:cameraSource];
             break;
         case SampleSource:
-            nextSource = [inputSources objectAtIndex:indexPath.row];
+            [self useSource:[inputSources objectAtIndex:indexPath.row]];
             break;
         case LibrarySource:
             ; // XXX stub
     }
-    [self reconfigure];
     [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
+    [self reconfigure];
 }
 
 #define CELL_H  44
@@ -2290,8 +1899,371 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     oVC.view.frame = f;
     
     [self presentViewController:oVC animated:YES completion:^{
-        [self doLayout];
+        [self configureScreenForOrientation];
     }];
 }
+
+// setup new source and/or orientation
+- (void) useSource:(InputSource *) newSource {
+    currentSource = newSource;
+    [currentSource save];
+    [self reconfigure];
+}
+
+// use the one at currentLayoutIndex
+- (void) switchLayout {
+    NSLog(@"--- switch layout");
+    [self applyLayout];
+    if (IS_CAMERA(currentSource))
+        [cameraController setupCameraWithFormat:layout.format];
+}
+
+- (void) reconfigure {
+    [taskCtrl idleForLayout];
+    // will call idledForReconfiguration when idle
+}
+
+- (void) idledForReconfiguration {
+    NSLog(@"--- idledForReconfiguration ");
+    [self configureScreenForOrientation];
+}
+
+-(void) configureScreenForOrientation {
+    NSLog(@"--- configureScreenForOrientation ");
+    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
+        UIDeviceOrientationIsFlat(deviceOrientation);
+#ifdef DEBUG_LAYOUT
+    NSLog(@"== reconfigure for %@",
+          isPortrait ? @"port" : @"land");
+#endif
+    
+    if (!isiPhone || !isPortrait)
+        self.title = @"Digital Darkroom";
+
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
+    self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
+    self.navigationController.toolbar.opaque = YES;  // (uiMode == oliveUI);
+
+    containerView.translatesAutoresizingMaskIntoConstraints = NO;
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
+    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
+    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
+    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
+    
+    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
+    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+    CGFloat leftPadding = window.safeAreaInsets.left;
+    CGFloat rightPadding = window.safeAreaInsets.right;
+    
+#ifdef DEBUG_LAYOUT
+    CGFloat topPadding = window.safeAreaInsets.top;
+    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f %0.f",
+          leftPadding, rightPadding, topPadding, bottomPadding);
+#endif
+    
+    CGRect f = self.view.frame;
+    f.origin.x = leftPadding; // + SEP;
+    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
+    f.size.height -= f.origin.y + bottomPadding;
+    f.size.height -= self.navigationController.toolbar.frame.size.height;
+    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
+    containerView.frame = f;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"     containerview: %.0f,%.0f  %.0f x %.0f",
+          f.origin.x, f.origin.y, f.size.width, f.size.height);
+#endif
+    
+    if (IS_CAMERA(currentSource)) {   // select camera setting for available area
+        [cameraController selectCamera:currentSource];
+        [cameraController setupSessionForOrientation:deviceOrientation];
+        NSArray *availableFormats = [cameraController
+                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
+        currentLayoutIndex = [self chooseLayoutsFromFormatList:availableFormats];
+        assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
+// was here        [cameraController setupSessionForOrientation:deviceOrientation];
+    } else {
+        currentLayoutIndex = [self chooseLayoutsForSourceSize:currentSource.imageSize];
+        assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
+    }
+    [self switchLayout];
+}
+
+CGSize lastAcceptedSize;
+
+- (void) initForLayingOut {
+    [layouts removeAllObjects];
+    lastAcceptedSize = CGSizeZero;
+    currentLayoutIndex = NO_LAYOUT_SELECTED;
+}
+
+// save if this is the best candidate for this display size
+
+- (void) tryCandidate:(Layout * __nullable) layout {
+    if (!layout || layout.quality == LAYOUT_NO_GOOD)
+        return;
+    
+    if (layouts.count == 0) {   // accept the first one
+        [layouts addObject:layout];
+        return;
+    }
+    
+    int i;
+    for (i=0; i<layouts.count; i++) {   // find a match or do an insertion sort of this one
+        Layout *previousLayout = layouts[i];
+        switch ([layout compare:previousLayout]) {
+            case NSOrderedDescending:   // smaller than current one. insert it and done
+                [layouts insertObject:layout atIndex:i];
+                return;
+            case NSOrderedAscending:
+                continue;
+            case NSOrderedSame: {
+                if (layout.quality > previousLayout.quality)
+                    layouts[i]  = layout;
+                return;
+            }
+        }
+    }
+    [layouts addObject:layout];
+}
+
+- (long) chooseLayoutsForSourceSize:(CGSize) sourceSize {
+    [self initForLayingOut];
+    
+    Layout *candidateLayout = [[Layout alloc]
+                               initForOrientation:isPortrait
+                               iPhone:isiPhone
+                               containerRect:(CGRect) containerView.frame];
+    layout.thumbCount = transforms.transforms.count;
+    
+#ifdef NOTYET
+    [self tryCandidate:[candidateLayout
+                        layoutForSourceSize:sourceSize
+                        targetSize:CGSizeZero
+                        displayOption: NoDisplay]];
+#endif
+    
+    [self tryCandidate:[candidateLayout
+                        layoutForSourceSize:sourceSize
+                        targetSize:sourceSize
+                        displayOption: isiPhone ? TightDisplay : BestDisplay]];
+    
+#ifdef NOTYET
+    [self tryCandidate:[candidateLayout
+                        layoutForSourceSize:sourceSize
+                        targetSize:containerView.frame.size
+                        displayOption: FullScreenDisplay]];
+#endif
+    
+    return 0;   // XXXX
+}
+
+- (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
+    [self initForLayingOut];
+//    NSLog(@"screen size   %4.0f x %4.0f",
+//          containerView.frame.size.width, containerView.frame.size.height );
+
+    CGSize lastSize = CGSizeZero;
+    for (int i=0; i<availableFormats.count; i++) {
+        AVCaptureDeviceFormat *format = availableFormats[i];
+//        NSLog(@"FFF %@", format);
+        CGSize sourceSize = [cameraController sizeForFormat:format];
+        if (sourceSize.width == lastSize.width && sourceSize.height == lastSize.height)
+            continue;   // for now, only use the first of duplicate sizes
+        assert(sourceSize.width >= lastSize.width || sourceSize.height >= lastSize.height);
+
+        Layout *candidateLayout = [[Layout alloc]
+                                   initForOrientation:isPortrait
+                                   iPhone:isiPhone
+                                   containerRect:(CGRect) containerView.frame];
+        candidateLayout.thumbCount = transforms.transforms.count;
+        candidateLayout.format = format;
+        lastSize = sourceSize;
+        
+#ifdef NOTDEF
+        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
+                                                     targetSize:CGSizeZero
+                                                  displayOption:NoDisplay]];
+#endif
+        
+        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
+                                                     targetSize:sourceSize
+                                                  displayOption:isiPhone ? TightDisplay : BestDisplay]];
+        
+#ifdef NOTDEF
+        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
+                                                     targetSize:containerView.frame.size
+                                                  displayOption:FullScreenDisplay]];
+#endif
+    }
+    
+    int newLayoutIndex = LAYOUT_NO_GOOD;
+    int bestQuality = -1;
+    for (int i=0; i<layouts.count; i++) {
+        Layout *layout = layouts[i];
+        if (layout.quality < bestQuality)
+            continue;
+        newLayoutIndex = i;
+        bestQuality = layout.quality;
+    }
+    return newLayoutIndex;
+}
+
+// this is called when we know the transforms are all Stopped.
+
+- (void) applyLayout {
+    assert(currentLayoutIndex != LAYOUT_NO_GOOD); // previously selected
+    layout = layouts[currentLayoutIndex];
+    
+//    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
+    
+    // We have several image sizes to consider and process:
+    //
+    // currentSource.imageSize  is the size of the source image.  For images from files, it is
+    //      just the available size.  For cameras, we can adjust it by changing the capture parameters,
+    //      adjusting for the largest image we need, shown below.
+    //
+    // Each taskgroup runs an image through zero or more translation chains.  The task group shares
+    //      a common transform size and caches certain common transform processing computations.
+    //      The results of each task chain in a taskgroup goes to a UIImage of a certain size, based
+    //      on the size of the resulting image:
+    //
+    // - the displayed transformed image size (computed just below) is based on layout considerations
+    // for the device screen size and orientation.
+    //      size in screenTasks.transformSize
+    //
+    // - thumbnail outputs all must fit in THUMB_W x SOURCE_THUMB_H
+    //      size in thumbTasks.transformSize
+    //
+    // - the external window image size, if implemented and connected.
+    //      size in externalTasks.transformSize, if externalTasks exists
+    //
+    // - If "hidef" is selected, the full image possible is captured, transformed, and made available
+    // for saving.
+    //      size in hiresTasks.transformSize, iff hiresTasks exists
+    //
+    // - I suppose there will be a video file capture option some day.  That would be another target.
+    
+    overlayView.frame = layout.displayRect;
+    if (reticleView) {
+        reticleView.frame = CGRectMake(0, 0,
+                                       overlayView.frame.size.width, overlayView.frame.size.height);
+        [reticleView setNeedsDisplay];
+    }
+    overlayDebugStatus = layout.status;
+    transformView.frame = overlayView.frame;
+    SET_VIEW_WIDTH(pausedLabel, transformView.frame.size.width);
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
+    thumbScrollView.layer.borderWidth = 3.0;
+    
+    CGFloat below = BELOW(thumbScrollView.frame);
+    assert(below <= containerView.frame.size.height);
+    assert(below <= self.navigationController.toolbar.frame.origin.y);
+
+    thumbArrayView.frame = CGRectMake(0, 0,
+                                      thumbScrollView.frame.size.width,
+                                      thumbScrollView.frame.size.height);
+    
+    CGRect f = transformView.frame;
+    f.origin.x = 0;
+    executeView.frame = layout.executeRect;
+
+#ifdef DEBUG_LAYOUT
+    NSLog(@"layout selected:");
+
+    NSLog(@"        capture:               %4.0f x %4.0f\t @%.1f",
+          layout.captureSize.width, layout.captureSize.height, layout.scale);
+
+    NSLog(@"      container:               %4.0f x %4.0f",
+          containerView.frame.size.width,
+          containerView.frame.size.height);
+
+    NSLog(@" transform size:               %4.0f x %4.0f  @  %.2f",
+          layout.transformSize.width,
+          layout.transformSize.height,
+          layout.scale);
+
+    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f",
+          transformView.frame.origin.x,
+          transformView.frame.origin.y,
+          transformView.frame.size.width,
+          transformView.frame.size.height);
+
+    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
+          executeView.frame.origin.x,
+          executeView.frame.origin.y,
+          executeView.frame.size.width,
+          executeView.frame.size.height);
+
+    NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
+          thumbScrollView.frame.origin.x,
+          thumbScrollView.frame.origin.y,
+          thumbScrollView.frame.size.width,
+          thumbScrollView.frame.size.height);
+
+    NSLog(@"    display frac: %.3f", layout.displayFrac);
+    NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
+    NSLog(@"           scale: %.3f", layout.scale);
+#endif
+    
+    // layout.transformSize is what the tasks get to run.  They
+    // then display (possibly scaled) onto transformView.
+    
+    [screenTasks configureGroupForSize: layout.transformSize];
+    //    [externalTask configureForSize: processingSize];
+
+    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            // move views to where they need to be now.
+            [self placeThumbsForLayout: self->layout];
+        }];
+    }
+    
+    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
+    //cameraController.captureVideoPreviewLayer = previewLayer;
+    
+    [taskCtrl layoutCompleted];
+
+    [self doTransforms];
+    [self updateOverlayView];
+    [self updateExecuteView];
+    [self adjustBarButtons];
+}
+
+#ifdef notdef
+- (UIImage *) barIconFrom:(NSString *) fileName {
+    NSString *fullName = [[@"images" stringByAppendingPathComponent:fileName] stringByAppendingPathExtension:@"png"];
+    NSString *imagePath = [[NSBundle mainBundle] pathForResource:fullName ofType:@""];
+    assert(imagePath);
+    UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
+    assert(image);
+    float scale = image.size.width / self.navigationController.navigationBar.frame.size.height;
+    UIImage *iconImage = [UIImage imageWithCGImage:image.CGImage
+                                             scale:scale
+                                       orientation:UIImageOrientationUp];
+    return iconImage;
+}
+
+typedef enum {
+    CameraTypeSelect,
+    CameraFlip,
+    ChooseFile,
+} SourceSelectOptions;
+
+#define SOURCE_TYPE_TAG_OFFSET  30
+
+- (void) adjustSourceSelectionView {
+    NSString *cameraIconName = currentSource.threeDCamera ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
+    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
+    
+    [sourceSelectionView setImage:cameraIconView forSegmentAtIndex:CameraTypeSelect];
+    sourceSelectionView.selectedSegmentIndex = currentSource.threeDCamera ? CameraTypeSelect : ChooseFile;
+    [sourceSelectionView setNeedsDisplay];
+}
+
+#endif
 
 @end

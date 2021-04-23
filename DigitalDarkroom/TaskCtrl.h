@@ -44,10 +44,10 @@ typedef enum {
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 
-- (void) needLayout;
+- (void) idleForLayout;
 - (void) layoutCompleted;
 //- (void) executeTasksWithImage:(UIImage *) image;
-- (void) layoutIfReady;
+- (void) reconfigureIfReady;
 
 @end
 

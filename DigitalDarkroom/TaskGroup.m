@@ -218,7 +218,7 @@
         }
         // The are all stopped.  Inform the authorities
         tasksStatus = Stopped;
-//        STUB
+        [taskCtrl reconfigureIfReady];
         return;
     } else {
         for (Task *task in tasks) {

@@ -22,7 +22,8 @@
 }
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
-- (void) doLayout;
+
+- (void) idledForReconfiguration;
 - (void) deviceRotated;
 
 @end

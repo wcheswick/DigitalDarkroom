@@ -12,14 +12,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define REJECT_LAYOUT    (-1)
+#define LAYOUT_NO_GOOD    (-1)
 
 typedef enum {
-    ControlDisplayOnly,
-    TightDisplay,
-    BestDisplay,
-    LargestImageDisplay,
-    FullScreenImage,
+    NoDisplay,          // only controls
+    TightDisplay,       // iPhone and the like
+    BestDisplay,        // good standard iPad display
+    FullScreenDisplay,    // only the display
 } DisplayOptions;
 
 
@@ -33,10 +32,10 @@ typedef enum {
 } ThumbsPlacement;
 
 @interface Layout : NSObject {
-    AVCaptureDeviceFormat *format;
+    AVCaptureDeviceFormat * __nullable format;
     BOOL isPortrait, isiPhone;
-    DisplayOptions displayOption;
-    UIView *containerView;  // copied from the caller
+    CGRect containerFrame;  // copied from the caller
+    CGSize desiredDisplaySize;
     size_t thumbCount;        // copied from the caller
     
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
@@ -61,10 +60,10 @@ typedef enum {
     NSString *status;
 }
 
-@property (nonatomic, strong)   AVCaptureDeviceFormat *format;
-@property (assign)              DisplayOptions displayOption;
+@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
 @property (assign)              BOOL isPortrait, isiPhone;
-@property (nonatomic, strong)   UIView *containerView;  // the screen real estate we lay out in
+@property (assign)              CGRect containerFrame;
+@property (assign)              CGSize targetDisplaySize;
 
 @property (assign)              ThumbsPlacement thumbsPlacement;
 @property (assign)              float displayFrac, thumbFrac;
@@ -85,11 +84,14 @@ typedef enum {
 @property (nonatomic, strong)   NSString *status;
 
 - (id)initForOrientation:(BOOL) port
-               iPhone:(BOOL) isPhone
-              displayOption:(DisplayOptions) dopt;
+                  iPhone:(BOOL) isPhone
+           containerRect:(CGRect) containerRect;
 
-- (BOOL) layoutForFormat:(AVCaptureDeviceFormat *) f scale:(float) scale;
-- (BOOL) layoutForSize:(CGSize) cs scale:(float) scale;
+- (Layout *) layoutForSourceSize:(CGSize) cs
+                  targetSize:(CGSize) ts
+                   displayOption:(DisplayOptions) displayOption;
+
+- (NSComparisonResult) compare:(Layout *)layout;
 
 extern  NSString * __nullable displayOptionNames[];
 

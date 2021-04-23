@@ -33,6 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
 - (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format;
+- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
 - (void) startCamera;
 - (void) stopCamera;
