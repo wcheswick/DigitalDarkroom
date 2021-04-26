@@ -776,7 +776,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
-        float maxR = MAX(centerX, centerY);
+        float maxR = MIN(centerX, centerY);
         double r1 = sqrt(r*maxR);
         long sx = centerX + (int)(r1*cos(a));
         long sy = centerY + (int)(r1*sin(a));

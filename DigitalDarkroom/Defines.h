@@ -60,7 +60,8 @@ typedef long PixelIndex_t;
 #define BIGPLUS     @"＋"
 #define DOUBLE_PLUS @"⧺"
 #define LOCK        @"🔒"
-
+#define SOFT_HYPHEN @"­"
+­
 
 #define MIN_THUMB_COLS  4
 #define MIN_THUMB_ROWS  3
