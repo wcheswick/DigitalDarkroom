@@ -286,10 +286,10 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform = [Transform areaTransform: @"Kaleidoscope"
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        long maxR = MIN(remapBuf.w, remapBuf.h)/2.0;
-        float theta = M_2_PI/(float)instance.value; // angle of one sector
+        int centerX = (int)remapBuf.w/2;
+        int centerY = (int)remapBuf.h/2;
+        float maxR = MIN(remapBuf.w-1, remapBuf.h-1)/2.0;
+        float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
         float halfTheta = theta/2.0;
         
         // the incoming circle of pixels is divided into sectors. The original
@@ -299,21 +299,32 @@ mostCommonColorInHist(Hist_t *hists) {
         // mirrored, to all the other pixels.
         
         // we fix out the remap ())or color) for each pixel
-        for (int y=0; y<remapBuf.h; y++) {
+        for (int yi=0; yi<remapBuf.h; yi++) {
+            // for computation, it is easier to thing of the top of the image
+            // as y > 0.
+            int y = ((int)remapBuf.h - yi) - 1;
             for (int x=0; x<remapBuf.w; x++) {
                 float xc = x - centerX;
+                // we use standard cartesian angles, with y==0 on the bottom
                 float yc = y - centerY;
                 float r = hypot(xc, yc);
                 if (r > maxR || r == 0) {
                     REMAP_COLOR(x, y, Remap_White);
                     continue;
                 }
+#define RADEG(a)    ((a)* 180.0 / M_PI)     // for debugging
                 float a = atan2f(yc, xc);
+                a = fmod(a + 2.0*M_PI, 2*M_PI);     // 0 <= a <= 2*M_PI
+                //assert(a >= 0.0 && a < 2*M_PI);
                 float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
+                assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
                 float sourceTheta = fabs(sourceSectorTheta);
-                int xs = centerX + cos(sourceTheta)*a;
-                int ys = centerY + sin(sourceTheta)*a;
-                UNSAFE_REMAP_TO(x, y, xs, ys);
+                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
+                int scx = r * cos(sourceTheta);
+                int scy = r * sin(sourceTheta);
+                int xs = centerX + scx;
+                int ys = centerY + scy;
+                UNSAFE_REMAP_TO(x, yi, xs, ys);
             }
         }
         UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
