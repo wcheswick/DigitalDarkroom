@@ -702,6 +702,25 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
+    lastTransform = [Transform areaTransform: @"Twist left"        // old twist right
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double newa = a + ((float)instance.value/100.0)*r*(M_PI/180.0);
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(newa);
+        long sy = centerY + r*sin(newa);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 0;
+    lastTransform.value = 40;
+    lastTransform.high = 150;    // was 15
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+    
     lastTransform = [Transform areaTransform: @"Edvard Munch #1"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -716,7 +735,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             REMAP_COLOR(tX, tY, Remap_White);
     }];
     [self addTransform:lastTransform];
-    
+
     lastTransform = [Transform areaTransform: @"Edvard Munch #2"    // old Ken twist
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -1125,42 +1144,40 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 //    lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
     
-#ifdef NEW
     lastTransform = [Transform depthVis: @"3D level visualization"
-                                 description: @""
-                                depthVis: ^(const DepthBuf *depthBuf, Pixel *dest, int v) {
+                            description: @""
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
         for (int i=0; i< depthBuf.h * depthBuf.w; i++) {
-                Pixel p;
-                Distance z = depthBuf.db[i];
-                // closest to farthest, even v is dark blue to light blue,
-                // odd v is yellow to dark yellow
-                if (z >= MAX_DEPTH)
-                    p = Black;
-                else if (v <= MIN_DEPTH)
-                    p = Green;
-                else {
-                    if (v & 0x1) {  // odd luminance
-                        c = Z - (v/2);
-                        p = SETRGB(0,0,v);
-                    } else {
-                        c = Z/2 + v/2;
-                        p = SETRGB(c,c,0);
-                    }
+            Pixel p;
+            channel c;
+            Distance z = depthBuf.db[i];
+            // closest to farthest, even v is dark blue to light blue,
+            // odd v is yellow to dark yellow
+            if (z >= MAX_DEPTH)
+                p = Black;
+            else if (v <= MIN_DEPTH)
+                p = Green;
+            else {
+                if (v & 0x1) {  // odd luminance
+                    c = Z - (v/2);
+                    p = SETRGB(0,0,v);
+                } else {
+                    c = Z/2 + v/2;
+                    p = SETRGB(c,c,0);
                 }
-                dest.pb[i] = p;
             }
+            pixBuf.pb[i] = p;
         }
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
-#endif
-
-#ifdef broken
-#define mu (1/3.0)
-//#define E round(2.5*dpi)
+    
+#define MU (1.0/3.0)
+    
+    //#define E round(2.5*dpi)
 #define E round(dpi)
-#define separation(Z) round((1-mu*(Z))*E/(2-mu*(Z)))
+#define separation(Z) round((1.0-MU*(Z))*E/(2.0-MU*(Z)))
 #define FARAWAY separation(0)
     
     // SIDRS computation taken from
@@ -1185,8 +1202,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             else if (z < MIN_S_DEP)
                 z = MIN_S_DEP;
             float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
-            float dfz = mu - dz*mu;
-            assert(dfz <= mu && dfz >= 0);
+            float dfz = MU - dz*MU;
+            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
             depthBuf.db[i] = dfz;
         }
         
@@ -1211,7 +1228,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     Distance zt;       //  Z-coord of ray at these two points
                     
                     do {
-                        zt = DIST(x,y) + 2*(2 - mu*DIST(x,y))*t/(mu*E);
+                        zt = DIST(x,y) + 2*(2 - MU*DIST(x,y))*t/(MU*E);
                         BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
                         visible = inRange && DIST(x-t,y) < zt && DIST(x+t,y) < zt;  // false if obscured
                         t++;
@@ -1247,7 +1264,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 pixBuf.pa[y][x] = pix[x] ? Black : White;
             }
         }
-
+        
 #ifdef notdef
         for (int y=5; y<15; y++) {
             for (int x=10; x < W-10; x++) {
@@ -1267,10 +1284,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
         }
     }];
-//lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
-//lastTransform.hasParameters = YES;
-[self addTransform:lastTransform];
-#endif
+    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    //lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
     depthTransformCount = transforms.count;
 }
 
