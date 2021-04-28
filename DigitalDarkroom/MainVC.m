@@ -1367,8 +1367,8 @@ int startParam;
             CGPoint dist = [recognizer translationInView:recognizer.view];
             int paramDelta = dist.x/pixelsPerRange;
             int newParam = startParam + paramDelta;
-            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
-                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
+//            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
+//                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
             if ([screenTask updateParamOfLastTransformTo:newParam]) {
                 [self updateExecuteView];
             }
@@ -1996,7 +1996,19 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 
 // use the one at currentLayoutIndex
 - (void) switchLayout {
-    NSLog(@"--- switch layout");
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--- switch layout, list:");
+    for (int i=0; i<layouts.count; i++) {
+        Layout *layout = layouts[i];
+        NSLog(@"%@  %2d: %4.0fx%0.4f  %4.0fx%0.4f %4.0fx%0.4f  %3.1f  %3d",
+              i == currentLayoutIndex ? @">>>" : @"   ",
+              i,
+              layout.captureSize.width, layout.captureSize.height,
+              layout.transformSize.width, layout.transformSize.height,
+              layout.displayRect.size.width, layout.displayRect.size.height,
+              layout.scale, layout.quality);
+    }
+#endif
     [self applyLayout];
     if (IS_CAMERA(currentSource))
         [cameraController setupCameraWithFormat:layout.format];
