@@ -282,8 +282,13 @@ mostCommonColorInHist(Hist_t *hists) {
     return SETRGB(r,g,b);
 }
 
+// convert double hypens to soft hyphen
+- (NSString *) hyphenate:(NSString *) s {
+    return [s stringByReplacingOccurrencesOfString:@"--" withString:SHY];
+}
+
 - (void) addTestTransforms {
-    lastTransform = [Transform areaTransform: @"Kaleidoscope"
+    lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         int centerX = (int)remapBuf.w/2;
@@ -307,7 +312,7 @@ mostCommonColorInHist(Hist_t *hists) {
                 float xc = x - centerX;
                 // we use standard cartesian angles, with y==0 on the bottom
                 float yc = y - centerY;
-                float r = hypot(xc, yc);
+                float r = hypot(xc, yc) / 2.0;
                 if (r > maxR || r == 0) {
                     REMAP_COLOR(x, y, Remap_White);
                     continue;
@@ -318,8 +323,8 @@ mostCommonColorInHist(Hist_t *hists) {
                 //assert(a >= 0.0 && a < 2*M_PI);
                 float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
                 assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
-                float sourceTheta = fabs(sourceSectorTheta);
-                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
+                float sourceTheta = fabs(sourceSectorTheta) - M_PI;
+//                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
                 int scx = r * cos(sourceTheta);
                 int scy = r * sin(sourceTheta);
                 int xs = centerX + scx;
@@ -329,9 +334,9 @@ mostCommonColorInHist(Hist_t *hists) {
         }
         UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
     }];
-    lastTransform.low = 2;
+    lastTransform.low = 1;
     lastTransform.value = 5;
-    lastTransform.high = 15;
+    lastTransform.high = 12;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
@@ -451,7 +456,7 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Mono Sobel"
+    lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -471,7 +476,7 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
     
-    lastTransform = [Transform areaTransform: @"Negative Sobel"
+    lastTransform = [Transform areaTransform: @"Neg. Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -493,7 +498,7 @@ mostCommonColorInHist(Hist_t *hists) {
     [self addTransform:lastTransform];
     
     // channel-based
-    lastTransform = [Transform areaTransform: @"Color Sobel"
+    lastTransform = [Transform areaTransform: @"Color\nSobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -519,7 +524,7 @@ mostCommonColorInHist(Hist_t *hists) {
     [self addTransform:lastTransform];
     
     // channel-based
-    lastTransform = [Transform areaTransform: @"Negative Color Sobel"
+    lastTransform = [Transform areaTransform: @"Neg. Color Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -544,7 +549,7 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"convolution sobel filter "
+    lastTransform = [Transform areaTransform: @"conv. sobel filter "
                                 description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
@@ -878,7 +883,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     lastTransform.low = 4;
     lastTransform.value = 6;
-    lastTransform.high = 200;
+    lastTransform.high = 120;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
@@ -1491,7 +1496,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
-    lastTransform = [Transform areaTransform: @"Through a cylinder"
+    lastTransform = [Transform areaTransform: @"Cylinder"
                                   description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         long centerX = remapBuf.w/2;

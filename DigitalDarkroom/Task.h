@@ -44,13 +44,17 @@ NS_ASSUME_NONNULL_BEGIN
             inGroup:(TaskGroup *) tg
          usingDepth:(Transform *) dt;
 - (void) configureTaskForSize;
-- (void) configureTransformAtIndex:(size_t)ti;
+// UNNEEDED - (void) configureTransformAtIndex:(size_t)ti;
+- (BOOL) updateParamOfLastTransformTo:(int) newParam;
+- (int) valueForStep:(long) step;
+- (long) lastStep;
 
 - (long) appendTransformToTask:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
 - (void) useDepthTransform:(Transform *) transform;
+- (Transform *) lastTransform:(BOOL)doing3D;
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
 - (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;

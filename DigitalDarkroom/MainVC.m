@@ -152,6 +152,7 @@ typedef enum {
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
 @property (assign)              OverlayState overlayState;
 @property (nonatomic, strong)   ReticleView *reticleView;   // nil if reticle not selected
+@property (nonatomic, strong)   UILabel *paramView;
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UILabel *pausedLabel;       // shown if camera selected but not capturing
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
@@ -228,6 +229,7 @@ typedef enum {
 @synthesize overlayDebugStatus;
 @synthesize pausedLabel;
 @synthesize reticleView, reticleBarButton;
+@synthesize paramView;
 @synthesize thumbArrayView;
 @synthesize layouts, currentLayoutIndex;
 
@@ -680,6 +682,7 @@ static NSString * const imageOrientationName[] = {
     [transformView bringSubviewToFront:pausedLabel];
     
     reticleView = nil;      // defaults to off
+    paramView = nil;
     
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
@@ -719,7 +722,6 @@ static NSString * const imageOrientationName[] = {
                                          action:@selector(doUp:)];
     swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
     [overlayView addGestureRecognizer:swipeUp];
-#endif
 
     UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
                                            initWithTarget:self
@@ -732,7 +734,8 @@ static NSString * const imageOrientationName[] = {
                                          action:@selector(doLeft:)];
     swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
     [overlayView addGestureRecognizer:swipeLeft];
-    
+#endif
+
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPinch:)];
@@ -885,7 +888,8 @@ static NSString * const imageOrientationName[] = {
     transformLabel.numberOfLines = 0;
     //transformLabel.backgroundColor = [UIColor whiteColor];
     transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    transformLabel.text = transform.name;
+    transformLabel.text = [transform.name
+                           stringByAppendingString:transform.hasParameters ? BIGSTAR : @""];
     transformLabel.textColor = [UIColor blackColor];
     transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
     transformLabel.highlighted = NO;    // yes if selected
@@ -1295,6 +1299,8 @@ CGFloat topOfNonDepthArray = 0;
     if (reticleView) {  // turn it off by removing it
         [reticleView removeFromSuperview];
         reticleView = nil;
+        [paramView removeFromSuperview];
+        paramView = nil;
         [overlayView setNeedsDisplay];
         return;
     }
@@ -1306,7 +1312,22 @@ CGFloat topOfNonDepthArray = 0;
     reticleView.opaque = NO;
     reticleView.backgroundColor = [UIColor clearColor];
     [overlayView addSubview:reticleView];
+    
+    CGFloat paramH = round(f.size.height/10.0);
+    f.origin.y = f.size.height - paramH;
+    f.size.height = paramH;
+    paramView = [[UILabel alloc] initWithFrame:f];
+    paramView.font = [UIFont systemFontOfSize:paramH - 4
+                                       weight:UIFontWeightUltraLight];
+    paramView.textAlignment = NSTextAlignmentCenter;
+    paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    paramView.textColor = [UIColor blackColor];
+    paramView.text = @"Poot";
+    paramView.hidden = YES;
+    [overlayView addSubview:paramView];
+
     [reticleView setNeedsDisplay];
+    [self updateExecuteView];
 }
 
 #ifdef NOTDEEF
@@ -1328,7 +1349,34 @@ CGFloat topOfNonDepthArray = 0;
     [self updateExecuteView];
 }
 
+int startParam;
+
 - (IBAction) doPan:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
+    Transform *lastTransform = [screenTask lastTransform:DOING_3D];
+    if (!lastTransform)
+        return;
+    int currentParam = [screenTask valueForStep:screenTask.transformList.count - 1];
+    switch (recognizer.state) {
+        case UIGestureRecognizerStateBegan: {
+            startParam = currentParam;
+            break;
+        }
+        case UIGestureRecognizerStateChanged: {
+            int range = lastTransform.high - lastTransform.low + 1;
+            int pixelsPerRange = overlayView.frame.size.width / range;
+            CGPoint dist = [recognizer translationInView:recognizer.view];
+            int paramDelta = dist.x/pixelsPerRange;
+            int newParam = startParam + paramDelta;
+            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
+                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
+            if ([screenTask updateParamOfLastTransformTo:newParam]) {
+                [self updateExecuteView];
+            }
+            break;
+        }
+        default:
+            ;;
+    }
 }
 
 - (IBAction) doSave {
@@ -1619,17 +1667,40 @@ UIImageOrientation lastOrientation;
     return [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + transform.arrayIndex];
 }
 
+// The executeView is a list of transforms.  There is a regular list mode, and a compressed
+// mode for small, tight screens or long lists of transforms (which should be rare.)
+
 - (void) updateExecuteView {
     NSString *t = nil;
     size_t start = DOING_3D ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
     for (long step=start; step<screenTask.transformList.count; step++) {
         Transform *transform = screenTask.transformList[step];
+        NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
         if (!t)
-            t = transform.name;
+            t = name;
         else {
-            t = [NSString stringWithFormat:@"%@  +  %@", t, transform.name];
+            t = [NSString stringWithFormat:@"%@  +  %@", t, name];
+        }
+        
+        // append string showing the parameter value, if one is specified
+        if (transform.hasParameters) {
+            int value = [screenTask valueForStep:step];
+            t = [NSString stringWithFormat:@"%@ %@%d%@",
+                 t,
+                 value == transform.low ? @"[" : @"<",
+                 value,
+                 value == transform.high ? @"]" : @">"];
+            
+            if (paramView) {
+                paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
+                                  value == transform.low ? @"[" : @"<",
+                                  value,
+                                  value == transform.high ? @"]" : @">"];
+                [paramView setNeedsDisplay];
+            }
         }
     }
+    
     if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
@@ -1637,6 +1708,19 @@ UIImageOrientation lastOrientation;
     if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
     }
+    
+    // add big arrows if parameter can be changed on last transform
+    Transform *lastTransform = [screenTask lastTransform:DOING_3D];
+    if (lastTransform && lastTransform.hasParameters) {
+        int value = [screenTask valueForStep:[screenTask lastStep]];
+        paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
+                          value == lastTransform.low ? @"[" : @"<",
+                          value,
+                          value == lastTransform.high ? @"]" : @">"];
+        [paramView setNeedsDisplay];
+        paramView.hidden = NO;
+    } else
+        paramView.hidden = YES;
     
 #ifdef notdef
 //    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
@@ -2233,6 +2317,7 @@ CGSize lastAcceptedSize;
 }
 
 #ifdef notdef
+
 - (UIImage *) barIconFrom:(NSString *) fileName {
     NSString *fullName = [[@"images" stringByAppendingPathComponent:fileName] stringByAppendingPathExtension:@"png"];
     NSString *imagePath = [[NSBundle mainBundle] pathForResource:fullName ofType:@""];

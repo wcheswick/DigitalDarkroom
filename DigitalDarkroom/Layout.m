@@ -118,8 +118,8 @@ NSString * __nullable displayOptionNames[] = {
     else
         quality = 100 * displayFrac;
     
-    executeRect.origin = CGPointMake(0, BELOW(displayRect) + SEP);
-    executeRect.size.width = displayRect.size.width;
+    executeRect.origin = CGPointMake(SEP, BELOW(displayRect) + SEP);
+    executeRect.size.width = displayRect.size.width - 2*SEP;
     CGFloat roomUnderneath = containerFrame.size.height - BELOW(displayRect) - SEP;
 
     if (isiPhone || displayOption == TightDisplay) {

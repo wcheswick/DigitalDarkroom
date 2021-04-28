@@ -130,7 +130,7 @@
     }
     if (indexPath.row < OPTION_COUNT) {
         cell.accessoryType = UITableViewCellAccessoryCheckmark;
-        cell.selectionStyle = UITableViewCellStyleDefault;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
         cell.contentView.backgroundColor = [UIColor yellowColor];
         switch (indexPath.row) {
             case 0:

@@ -77,6 +77,12 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (Transform *) lastTransform:(BOOL)doing3D {
+    if (doing3D || transformList.count > DEPTH_TRANSFORM + 1)
+        return [transformList lastObject];
+    return nil;
+}
+
 // we may not reveal it, but it is always there
 
 - (void) useDepthTransform:(Transform *) transform {
@@ -153,6 +159,28 @@ static PixelIndex_t dPI(int x, int y) {
     for (int i=1; i<transformList.count; i++) { // XXX not depth viz
         [self configureTransformAtIndex:i];
     }
+}
+
+- (int) valueForStep:(long) step {
+    TransformInstance *instance = paramList[step];
+    return instance.value;
+}
+
+- (long) lastStep {
+    return paramList.count - 1;
+}
+
+- (BOOL) updateParamOfLastTransformTo:(int) newParam {
+    long index = paramList.count - 1;
+    Transform *lastTransform = transformList[index];
+    TransformInstance *lastInstance = paramList[index];
+    if (lastInstance.value == newParam)
+        return NO;
+    if (newParam > lastTransform.high || newParam < lastTransform.low)
+        return NO;
+    lastInstance.value = newParam;
+    [self configureTransformAtIndex:index];
+    return YES;
 }
 
 - (void) configureTransformAtIndex:(size_t)index {
