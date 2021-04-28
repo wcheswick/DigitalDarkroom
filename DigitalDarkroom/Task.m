@@ -190,7 +190,6 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
     assert(s.width > 0 && s.height > 0);
     //    assert(taskStatus == Stopped);
-    assert(index > DEPTH_TRANSFORM);
     Transform *transform = transformList[index];
     TransformInstance *instance = paramList[index];
 
