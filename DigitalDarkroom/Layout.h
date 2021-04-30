@@ -12,7 +12,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define LAYOUT_NO_GOOD    (-1)
+#define LAYOUT_IS_BAD(q)   (q < 0)
+
+#define LAYOUT_NO_GOOD          (-1)    // default whining
+#define LAYOUT_BAD_TOO_SMALL    (-2)    // if needs larger display screen
+#define LAYOUT_BAD_TOO_LARGE    (-3)    // if needs smaller display screen
 
 typedef enum {
     NoDisplay,          // only controls
@@ -39,7 +43,7 @@ typedef enum {
     size_t thumbCount;        // copied from the caller
     
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
-    float aspectRatio;
+    float aspectRatio;      // of the input source
     int quality;
 
     // layout stats and results:
@@ -88,7 +92,7 @@ typedef enum {
            containerRect:(CGRect) containerRect;
 
 - (Layout *) layoutForSourceSize:(CGSize) cs
-                  targetSize:(CGSize) ts
+                  displaySize:(CGSize) ds
                    displayOption:(DisplayOptions) displayOption;
 
 - (NSComparisonResult) compare:(Layout *)layout;

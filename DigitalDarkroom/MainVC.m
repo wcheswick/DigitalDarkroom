@@ -345,9 +345,12 @@ typedef enum {
             currentSource = [NSKeyedUnarchiver unarchivedObjectOfClass:[InputSource class]
                                                            fromData:lastSourceData error:&error];
         }
+        currentSource = nil;
         
-        if (!currentSource)
+        if (!currentSource) {
             currentSource = [[InputSource alloc] init];
+            [currentSource makeCameraSource];
+        }
     }
     return self;
 }
@@ -439,7 +442,6 @@ typedef enum {
 //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
 #endif
     [self configureScreenForOrientation];
-//    [self useSource:currentSource];
 //    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
 }
 
@@ -781,17 +783,6 @@ static NSString * const imageOrientationName[] = {
     //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
     
     self.view.backgroundColor = [UIColor whiteColor];
-}
-
-- (void) viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- viewwillappear: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
-#endif
-    
-    [self useSource:currentSource];
-    [self reconfigure];
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
@@ -1990,6 +1981,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // setup new source and/or orientation
 - (void) useSource:(InputSource *) newSource {
     currentSource = newSource;
+    NSLog(@"SSS using source %@", newSource.label);
     [currentSource save];
     [self reconfigure];
 }
@@ -2000,13 +1992,13 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     NSLog(@"--- switch layout, list:");
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
-        NSLog(@"%@  %2d: %4.0fx%0.4f  %4.0fx%0.4f %4.0fx%0.4f  %3.1f  %3d",
+        NSLog(@"%@  %2d: %4.0f x %4.0f  %4.0f x %4.0f %4.0f x %4.0f  %3.1f  %3d   %@",
               i == currentLayoutIndex ? @">>>" : @"   ",
               i,
               layout.captureSize.width, layout.captureSize.height,
               layout.transformSize.width, layout.transformSize.height,
               layout.displayRect.size.width, layout.displayRect.size.height,
-              layout.scale, layout.quality);
+              layout.scale, layout.quality, layout.status);
     }
 #endif
     [self applyLayout];
@@ -2025,7 +2017,11 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 -(void) configureScreenForOrientation {
-    NSLog(@"--- configureScreenForOrientation ");
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--------- configureScreenForOrientation: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+#endif
+
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
 #ifdef DEBUG_LAYOUT
@@ -2097,7 +2093,7 @@ CGSize lastAcceptedSize;
 // save if this is the best candidate for this display size
 
 - (void) tryCandidate:(Layout * __nullable) layout {
-    if (!layout || layout.quality == LAYOUT_NO_GOOD)
+    if (!layout || LAYOUT_IS_BAD(layout.quality))
         return;
     
     if (layouts.count == 0) {   // accept the first one
@@ -2142,7 +2138,7 @@ CGSize lastAcceptedSize;
     
     [self tryCandidate:[candidateLayout
                         layoutForSourceSize:sourceSize
-                        targetSize:sourceSize
+                        displaySize:sourceSize
                         displayOption: isiPhone ? TightDisplay : BestDisplay]];
     
 #ifdef NOTYET
@@ -2155,11 +2151,13 @@ CGSize lastAcceptedSize;
     return 0;   // XXXX
 }
 
+static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
+
 - (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
     [self initForLayingOut];
 //    NSLog(@"screen size   %4.0f x %4.0f",
 //          containerView.frame.size.width, containerView.frame.size.height );
-
+    
     CGSize lastSize = CGSizeZero;
     for (int i=0; i<availableFormats.count; i++) {
         AVCaptureDeviceFormat *format = availableFormats[i];
@@ -2182,10 +2180,18 @@ CGSize lastAcceptedSize;
                                                      targetSize:CGSizeZero
                                                   displayOption:NoDisplay]];
 #endif
-        
-        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
-                                                     targetSize:sourceSize
-                                                  displayOption:isiPhone ? TightDisplay : BestDisplay]];
+        int scaleIndex = 0;
+        CGSize targetSize = sourceSize;
+        do {
+            [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
+                                                        displaySize:targetSize
+                                                      displayOption:isiPhone ? TightDisplay : BestDisplay]];
+            if (candidateLayout.quality != LAYOUT_BAD_TOO_LARGE)
+                break;
+            float scale = scales[scaleIndex++];
+            targetSize = CGSizeMake(round(targetSize.width * scale),
+                                    round(targetSize.height * scale));
+        } while (scaleIndex < sizeof(scales)/sizeof(scales[0]));
         
 #ifdef NOTDEF
         [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
@@ -2271,34 +2277,29 @@ CGSize lastAcceptedSize;
 
     NSLog(@"        capture:               %4.0f x %4.0f\t @%.1f",
           layout.captureSize.width, layout.captureSize.height, layout.scale);
-
-    NSLog(@"      container:               %4.0f x %4.0f",
-          containerView.frame.size.width,
-          containerView.frame.size.height);
-
     NSLog(@" transform size:               %4.0f x %4.0f  @  %.2f",
           layout.transformSize.width,
           layout.transformSize.height,
           layout.scale);
-
     NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f",
           transformView.frame.origin.x,
           transformView.frame.origin.y,
           transformView.frame.size.width,
           transformView.frame.size.height);
 
+    NSLog(@"      container:               %4.0f x %4.0f",
+          containerView.frame.size.width,
+          containerView.frame.size.height);
     NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
           executeView.frame.origin.x,
           executeView.frame.origin.y,
           executeView.frame.size.width,
           executeView.frame.size.height);
-
     NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
           thumbScrollView.frame.origin.x,
           thumbScrollView.frame.origin.y,
           thumbScrollView.frame.size.width,
           thumbScrollView.frame.size.height);
-
     NSLog(@"    display frac: %.3f", layout.displayFrac);
     NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
     NSLog(@"           scale: %.3f", layout.scale);

@@ -13,6 +13,7 @@
 
 @property (assign)  float minDisplayFrac, bestMinDisplayFrac;
 @property (assign)  float minThumbFrac, bestMinThumbFrac;
+@property (assign)  int minThumbRows, minThumbCols;
 
 @end
 
@@ -30,6 +31,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize format;
 @synthesize minDisplayFrac, bestMinDisplayFrac;
 @synthesize minThumbFrac, bestMinThumbFrac;
+@synthesize minThumbRows, minThumbCols;
 @synthesize isPortrait, isiPhone;
 @synthesize containerFrame;
 @synthesize targetDisplaySize;
@@ -68,33 +70,51 @@ NSString * __nullable displayOptionNames[] = {
         if (isiPhone) {
             bestMinDisplayFrac = 0.4;
             minDisplayFrac = 0.3;
-            bestMinThumbFrac = 0.4;
+            bestMinThumbFrac = 0.4; // unused
             minThumbFrac = 0.249;   // 0.3 for large iphones
+            minThumbRows = MIN_IPHONE_THUMB_ROWS;
+            minThumbCols = MIN_IPHONE_THUMB_COLS;
         } else {
-            bestMinDisplayFrac = 0.42;
-            minDisplayFrac = 0.4;
+            bestMinDisplayFrac = 0.65;  // 0.42;
+            minDisplayFrac = 0.5;   // 0.40
             bestMinThumbFrac = 0.5;
             minThumbFrac = 0.3;
-        }
+            minThumbRows = MIN_THUMB_ROWS;
+            minThumbCols = MIN_THUMB_COLS;
+       }
     }
     return self;
 }
 
 // Can we make an acceptible layout with the given capture size and scaling?
-// return no if layout is bad.
+// return no if layout is bad. we return self for readability.
 
 - (Layout *) layoutForSourceSize:(CGSize) cs
-                   targetSize:(CGSize) ts
+                   displaySize:(CGSize) ds
                    displayOption:(DisplayOptions) displayOption {
     captureSize = cs;
-    targetDisplaySize = ts;
-    quality = LAYOUT_NO_GOOD;
-    aspectRatio = captureSize.width / captureSize.height;
-//    float targetAspectRatio = targetDisplaySize.width / targetDisplaySize.height;
-    // figure out the scaling.
-    scale = targetDisplaySize.width / captureSize.width;
-    CGSize scaledSize = CGSizeMake(targetDisplaySize.width*scale, targetDisplaySize.height*scale);
+    displayRect.size = ds;
+    quality = 0;    // assume doable
     
+    aspectRatio = captureSize.width / captureSize.height;
+
+    scale = displayRect.size.width / captureSize.width;
+    CGSize scaledSize = CGSizeMake(round(displayRect.size.width*scale),
+                                   round(displayRect.size.height*scale));
+
+    float captureArea = captureSize.width * captureSize.height;
+    float displayArea = displayRect.size.width * displayRect.size.height;
+
+    float captureScoreFrac;
+    if (captureArea <= displayArea)
+        captureScoreFrac = captureArea / displayArea;
+    else
+        captureScoreFrac = 1.0; //scale;
+    float captureScore = 100.0 * captureScoreFrac;
+    
+    quality = captureScore;
+    status = [NSString stringWithFormat:@"%3d (%.2f)", quality, captureScoreFrac];
+
     thumbArrayRect = CGRectZero;
     int minThumbCols = MIN_THUMB_COLS;
     int minThumbRows = MIN_THUMB_ROWS;
@@ -108,15 +128,10 @@ NSString * __nullable displayOptionNames[] = {
 
     float containerArea = containerFrame.size.width * containerFrame.size.height;
     
-//    float captureArea = captureSize.width * captureSize.height;
-    float transformArea = transformSize.width * transformSize.height;
+//    float transformArea = transformSize.width * transformSize.height;
     displayRect.origin = CGPointZero;
     displayRect.size = transformSize;
-    displayFrac = transformArea / containerArea;
-    if (displayOption == NoDisplay)
-        quality = captureSize.width;
-    else
-        quality = 100 * displayFrac;
+    displayFrac = displayArea / containerArea;
     
     executeRect.origin = CGPointMake(SEP, BELOW(displayRect) + SEP);
     executeRect.size.width = displayRect.size.width - 2*SEP;
@@ -148,8 +163,10 @@ NSString * __nullable displayOptionNames[] = {
         if (s != 1.0)
             NSLog(@"reject, too big:  %4.0f x %4.0f @ %.2f", cs.width, cs.height, s);
 #endif
-        quality = LAYOUT_NO_GOOD;
-        return nil;
+        quality = LAYOUT_BAD_TOO_LARGE;
+        status = [status stringByAppendingString:
+                  [NSString stringWithFormat:@" = BAD Doesn't fit"]];
+        return self;
     }
 
     right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
@@ -180,8 +197,6 @@ NSString * __nullable displayOptionNames[] = {
             break;
         case TightDisplay:
             bestDisplayAreaPct = 20.0;  // should depend on device and orientation
-            minThumbCols = MIN_IPHONE_THUMB_COLS;
-            minThumbRows = MIN_IPHONE_THUMB_ROWS;
             if (isiPhone) {
                 if (isPortrait) {
                     thumbsPlacement = ThumbsUnderneath;
@@ -200,6 +215,8 @@ NSString * __nullable displayOptionNames[] = {
                 thumbsPlacement = ThumbsUndecided;
             break;
         case FullScreenDisplay:
+            minThumbCols = 0;
+            minThumbRows = 0;
             bestDisplaySize = containerFrame.size;
             bestDisplayAreaPct = 100.0;
             // just image plus (overlaid) execute, no thumbs unless there is spare room
@@ -207,7 +224,7 @@ NSString * __nullable displayOptionNames[] = {
             break;
             ; // XXXXX not yet
     }
-    
+
     int rightRows = [self thumbsPerColIn:right.size];
     int rightCols = [self thumbsPerRowIn:right.size];
     int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
@@ -240,6 +257,12 @@ NSString * __nullable displayOptionNames[] = {
             thumbArrayRect.origin.x += (right.size.width - rightW)/2.0;
             thumbArrayRect.size.width = rightW;
             thumbFrac = rightThumbFrac;
+            if (displayOption != FullScreenDisplay && rightCols < minThumbCols) {
+                quality = LAYOUT_BAD_TOO_LARGE;
+                status = [status stringByAppendingString:
+                          [NSString stringWithFormat:@" = TRR"]];
+                return self;
+            }
             // with thumbs on the right, the execute can go to the bottom of the container
             executeRect.size.height = containerFrame.size.height - executeRect.origin.y;
             break;
@@ -248,6 +271,12 @@ NSString * __nullable displayOptionNames[] = {
             thumbArrayRect.origin.x += (bottom.size.width - bottomW)/2.0;
             thumbArrayRect.size.width = bottomW;
             thumbFrac = bottomThumbFrac;
+            if (displayOption != FullScreenDisplay && bottomRows < minThumbRows) {
+                quality = LAYOUT_BAD_TOO_LARGE;
+                status = [status stringByAppendingString:
+                          [NSString stringWithFormat:@" = TBR"]];
+                return self;
+            }
             // with thumbs underneath, the execute can go to the right edge of the container
             executeRect.size.width = containerFrame.size.width;
             // and the transform display can be centered
@@ -270,36 +299,37 @@ NSString * __nullable displayOptionNames[] = {
     
 //    BOOL rightThumbsOK = rightThumbs >= minThumbCols;
 //    BOOL bottomThumbsOK = bottomThumbs >= minThumbRows;
-    
+
 #ifdef notdef
     NSString *thumbStatus = [NSString stringWithFormat:@"%@%@",
               rightThumbsOK ? CHECKMARK : @".",
               bottomThumbsOK ? CHECKMARK : @"."];
 #endif
-    if (quality == LAYOUT_NO_GOOD)
-        quality = 0;
+    if (LAYOUT_IS_BAD(quality))
+        return self;
     
     if (thumbFrac >= minThumbFrac) {
         quality += 10;
-        if (displayFrac >= bestMinDisplayFrac) {
-            if (scale == 1.0) {
-                quality += 10;
-//                NSLog(@" ✓✓✓✓✓");
-            } else {
-//                NSLog(@" ✓✓✓✓");
-                quality += 8;
-            }
-        } else {
-//            NSLog(@" ✓✓");
-        }
+        status = [status stringByAppendingString:
+                  [NSString stringWithFormat:@" + 10 Tmf"]];
     }
     
+    if (displayFrac >= bestMinDisplayFrac) {
+        quality += 50;
+        status = [status stringByAppendingString:
+                  [NSString stringWithFormat:@" + 50 Dbf(%.2f)", displayFrac]];
+    } else {
+        if (displayFrac >= minDisplayFrac) {
+            quality += 10;
+            status = [status stringByAppendingString:
+                      [NSString stringWithFormat:@" + 10 Dmf (%.2f)", displayFrac]];
+        }
+    }
+
 #ifdef DEBUG_LAYOUT
-    NSLog(@"    capture size: %4.0f x %4.0f  @ %.1f   fracs: %.3f  %.3f  q:%d",
+    NSLog(@"LLLL: %4.0f x %4.0f @ %.1f  q:%3d  %@ ",
           captureSize.width, captureSize.height, scale,
-          displayFrac, thumbFrac, quality);
-//    if (scale != 1.0)
-//        NSLog(@"     scaled size: %4.0f x %4.0f", scaledSize.width, scaledSize.height);
+          quality, status);
 #endif
 
     return self;

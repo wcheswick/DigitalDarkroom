@@ -47,13 +47,13 @@
 - (void) idleForLayout {
     if (!layingOut) {
         reconfiguring++;
-        assert(!layingOut);
         layoutNeeded = YES; // race?
     }
     [self reconfigureIfReady];
 }
 
 - (void) reconfigureIfReady {
+    NSLog(@" reconfigureIfReady %d", reconfiguring);
     if (layingOut)
         return;
     TaskStatus_t newStatus = Stopped;
@@ -74,7 +74,7 @@
     layoutNeeded = NO;
     layingOut = NO;
     reconfiguring--;
-    NSLog(@" layout completed: %d", reconfiguring);
+    NSLog(@" layout completed: reconfiguring %d", reconfiguring);
     if (reconfiguring < 0) {
         NSLog(@"** reconfiguring error: %d", reconfiguring);
         reconfiguring = 0;
