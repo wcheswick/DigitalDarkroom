@@ -216,13 +216,21 @@ static PixelIndex_t dPI(int x, int y) {
 
 // first, apply depth vis on the depthdata, then run it through
 // the other transforms. Don't mess with the incoming DepthBuf,
+//
 
-- (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf {
+- (void) startTransformsWithDepthBuf:(DepthBuf *) depthBuf {
     assert(taskStatus == Ready);
     if (!enabled)   // not onscreen
         return;
     taskStatus = Running;
     assert(transformList.count > 0);
+    
+    // If we don't have depth range information (only on our first call),
+    // compute it and skip the transform.  After that, the transform uses
+    // the information from the previous scan, and updates it.
+    // NB: this means the transform might encounter current data that is
+    // out of range, and should clip it.
+
     Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
     TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
     transform.depthVisF(depthBuf, imBuf0, instance.value);

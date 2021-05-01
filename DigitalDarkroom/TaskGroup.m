@@ -295,23 +295,11 @@
             }
         }
         activeDepthBuf = depthBuf;
+        activeDepthBuf.minDepth = rawDepthBuf.minDepth;
+        activeDepthBuf.maxDepth = rawDepthBuf.maxDepth;
     }
-    
-#ifdef IFNEEDED
-    float min = MAX_DEPTH;
-    float max = MIN_DEPTH;
-    for (int i=0; i<bufferSize; i++) {
-        float f = depthImage.buf[i];
-        if (f < min)
-            min = f;
-        if (f > max)
-            max = f;
-    }
-    for (int i=0; i<100; i++)
-    NSLog(@"%2d   %.02f", i, depthImage.buf[i]);
-    NSLog(@" src min, max = %.2f %.2f", min, max);
-#endif
 
+    assert(activeDepthBuf.maxDepth != 0); // should have been done before now
     for (Task *task in tasks) {
         if (task.taskStatus == Running)
             continue;

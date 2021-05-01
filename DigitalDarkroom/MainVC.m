@@ -1393,7 +1393,36 @@ int startParam;
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
-- (IBAction) doPinch:(UIPinchGestureRecognizer *)recognizer {
+- (void) adjustDisplaySizeTo:(CGSize) newSize {
+    CGRect f = overlayView.frame;
+    f.size = newSize;
+    overlayView.frame = f;
+    transformView.frame = f;
+}
+
+static CGRect startingDisplayRect;
+
+- (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
+    switch (pinch.state) {
+        case UIGestureRecognizerStateBegan:
+            startingDisplayRect = overlayView.frame;
+            break;
+        case UIGestureRecognizerStateEnded:
+            //[self finalizeDisplayAdjustment];
+            break;
+        case UIGestureRecognizerStateChanged: {
+            CGSize newSize = CGSizeMake(startingDisplayRect.size.width*pinch.scale,
+                                        startingDisplayRect.size.height*pinch.scale);
+//            NSLog(@"pinch scale: %.3f   %4.0f x %4.0f", pinch.scale, newSize.width, newSize.height);
+            [UIView animateWithDuration:0.1 animations:^(void) {
+                [self adjustDisplaySizeTo:newSize];
+            }];
+            break;
+        }
+        default:
+            return;
+    }
+#ifdef NOTNEW
     if (recognizer.state != UIGestureRecognizerStateEnded)
         return;
     if (recognizer.scale > 1.0) {
@@ -1411,6 +1440,7 @@ int startParam;
         }
     }
     [self reconfigure];
+#endif
 }
 
 - (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
@@ -1492,6 +1522,19 @@ int startParam;
     memcpy(depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
     CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
     
+    if (depthBuf.maxDepth == 0.0) {     // if no previous depth range
+        depthBuf.minDepth = MAXFLOAT;
+        depthBuf.maxDepth = 0.0;
+        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
+            float z = depthBuf.db[i];
+            if (z > depthBuf.maxDepth)
+                depthBuf.maxDepth = z;
+            if (z < depthBuf.minDepth)
+                depthBuf.minDepth = z;
+        }
+//        return; // skip this frame, we spent enough time on it
+    }
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
         if (DISPLAYING_THUMBS)

@@ -18,6 +18,7 @@
 @implementation DepthBuf
 
 @synthesize da, db;
+@synthesize minDepth, maxDepth;
 @synthesize w, h;
 @synthesize buffer;
 
@@ -26,6 +27,7 @@
     if (self) {
         w = s.width;
         h = s.height;
+        minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
         size_t rowSize = sizeof(Distance) * w;
         size_t arraySize = sizeof(Distance *) * h;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];

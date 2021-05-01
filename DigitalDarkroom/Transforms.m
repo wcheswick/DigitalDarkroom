@@ -289,123 +289,6 @@ mostCommonColorInHist(Hist_t *hists) {
 
 - (void) addTestTransforms {
 
-#ifdef BROKEN
-#define MU (1.0/3.0)
-    
-    //#define E round(2.5*dpi)
-#define E round(dpi)
-#define separation(Z) round((1.0-MU*(Z))*E/(2.0-MU*(Z)))
-#define FARAWAY separation(0)
-    
-    // SIDRS computation taken from
-    // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
-    lastTransform = [Transform depthVis: @"SIRDS"
-                            description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
-        float scale = 1;
-        if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
-            scale = [[UIScreen mainScreen] scale];
-        }
-        float dpi = (640/8.3) * scale;
-        
-        // scale the distances from MIN - MAX to mu - 0, near to far.
-#define MAX_S_DEP MAX_DEPTH // 2.0
-#define MIN_S_DEP   0   // MIN_DEPTH
-        
-        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
-            float z = depthBuf.db[i];
-            if (z > MAX_S_DEP)
-                z = MAX_S_DEP;
-            else if (z < MIN_S_DEP)
-                z = MIN_S_DEP;
-            float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
-            float dfz = MU - dz*MU;
-            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
-            depthBuf.db[i] = dfz;
-        }
-        
-        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
-            channel pix[depthBuf.w];
-            //  Points to a pixel to the right ... */ /* ... that is constrained to be this color:
-            int same[depthBuf.w];
-            int s;  // stereo sep at this point
-            int left, right;    // x values for left and right eyes
-            
-            for (int x=0; x < depthBuf.w; x++ ) {  // link initial pixels with themselves
-                same[x] = x;
-            }
-            for (int x=0; x < depthBuf.w; x++ ) {
-                float z = DIST(x,y);
-                s = separation(z);
-                left = x - s/2;
-                right = left + s;   // pixels at left and right must be the same
-                if (left >= 0 && right < depthBuf.w) {
-                    int visible;    // first, perform hidden surface removal
-                    int t = 1;      // We will check the points (x-t,y) and (x+t,y)
-                    Distance zt;       //  Z-coord of ray at these two points
-                    
-                    do {
-                        zt = DIST(x,y) + 2*(2 - MU*DIST(x,y))*t/(MU*E);
-                        BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
-                        visible = inRange && DIST(x-t,y) < zt && DIST(x+t,y) < zt;  // false if obscured
-                        t++;
-                    } while (visible && zt < 1);    // end of hidden surface removal
-                    if (visible) {  // record that pixels at l and r are the same
-                        assert(left >= 0 && left < depthBuf.w);
-                        int l = same[left];
-                        assert(l >= 0 && l < depthBuf.w);
-                        while (l != left && l != right) {
-                            if (l < right) {    // first, jiggle the pointers...
-                                left = l;       // until either same[left] == left
-                                assert(left >= 0 && left < depthBuf.w);
-                                l = same[left]; // .. or same[left == right
-                                assert(l >= 0 && l < depthBuf.w);
-                            } else {
-                                assert(left >= 0 && left < depthBuf.w);
-                                same[left] = right;
-                                left = right;
-                                l = same[left];
-                                assert(l >= 0 && l < depthBuf.w);
-                                right = l;
-                            }
-                        }
-                        same[left] = right; // actually recorded here
-                    }
-                }
-            }
-            for (long x=depthBuf.w-1; x>=0; x--)    { // set the pixels in the scan line
-                if (same[x] == x)
-                    pix[x] = random()&1;  // free choice, do it randomly
-                else
-                    pix[x] = pix[same[x]];  // constrained choice, obey constraint
-                pixBuf.pa[y][x] = pix[x] ? Black : White;
-            }
-        }
-        
-#ifdef notdef
-        for (int y=5; y<15; y++) {
-            for (int x=10; x < W-10; x++) {
-                dest[PI(x,y)] = Green;
-            }
-        }
-#endif
-        
-#define NW      10
-#define BOTTOM_Y   (5)
-        int lx = depthBuf.w/2 - FARAWAY/2 - NW/2;
-        int rx = depthBuf.w/2 + FARAWAY/2 - NW/2;
-        for (int dy=0; dy<6; dy++) {
-            for (int dx=0; dx<NW; dx++) {
-                pixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
-                pixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
-            }
-        }
-    }];
-    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
-    //lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-#endif
-
     lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -1148,23 +1031,31 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define RGB_SPACE   ((float)((1<<24) - 1))
 
 - (void) addDepthVisualizations {
+#define VSCALE  10.0
+
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
-#define VSCALE  10.0
-        size_t bufSize = depthBuf.h * depthBuf.w;
-        float min = MAX_DEPTH;
-        float max = MIN_DEPTH;
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+
+        float min = depthBuf.maxDepth;
+        float max = depthBuf.minDepth;
         float selectedMax = v/VSCALE;
-        for (int i=0; i<bufSize; i++) {
+        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
             Distance d = depthBuf.db[i];
             if (d < min)
                 min = d;
             if (d > selectedMax)
                 max = d;
+            if (d > newMaxDepth)
+                newMaxDepth = d;
+            if (d < newMinDepth)
+                newMinDepth = d;
+
             Pixel p;
 #ifdef HSV
-            float frac = (d - MIN_DEPTH)/(selectedMax - MIN_DEPTH);
+            float frac = (d - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
             float hue = frac;
             float sat = 1.0;
             float bri = 1.0 - frac;
@@ -1174,12 +1065,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             [color getRed:&r green:&g blue:&b alpha:&a];
             p = CRGB(Z*r, Z*g, Z*b);
 #else
-            if (d < MIN_DEPTH)
+            if (d < depthBuf.minDepth)
                 p = Red;
             else if (d >= selectedMax)
                 p = Black;
             else {
-                float frac = (d - MIN_DEPTH)/(selectedMax - MIN_DEPTH);
+                float frac = (d - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
                 UInt32 cv = trunc(RGB_SPACE * frac);
                 p.b = cv % 256;
                 cv /= 256;
@@ -1192,10 +1083,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #endif
             pixBuf.pb[i] = p;
         }
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.low = 1*VSCALE;
     lastTransform.value = 5*VSCALE;
-    lastTransform.high = MAX_DEPTH*VSCALE;
+    lastTransform.high = 10.0*VSCALE;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
        
@@ -1205,38 +1098,193 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define DIST(x,y)  depthBuf.da[y][x]
 #endif
     
+    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
+    lastTransform = [Transform depthVis: @"Anaglyph"
+                            description: @"Complementary color anaglyph"
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+
+#ifdef NOTYET
+        // scale the distances from MIN - MAX to mu - 0, near to far.
+#define MAX_S_DEP MAX_DEPTH // 2.0
+#define MIN_S_DEP   0   // MIN_DEPTH
+        
+        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
+            float z = depthBuf.db[i];
+            if (z > MAX_S_DEP)
+                z = MAX_S_DEP;
+            else if (z < MIN_S_DEP)
+                z = MIN_S_DEP;
+            float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
+            float dfz = MU - dz*MU;
+            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
+            depthBuf.db[i] = dfz;
+        }
+#endif
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
+    }];
+    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    //lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+#ifdef BROKEN
+#define MU (1.0/3.0)
+    
+    //#define E round(2.5*dpi)
+#define E round(dpi)
+#define separation(Z) round((1.0-MU*(Z))*E/(2.0-MU*(Z)))
+#define FARAWAY separation(0)
+    
+    // SIDRS computation taken from
+    // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
+    lastTransform = [Transform depthVis: @"SIRDS"
+                            description: @""
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+        float scale = 1;
+        
+        if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
+            scale = [[UIScreen mainScreen] scale];
+        }
+        float dpi = (640/8.3) * scale;
+        
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+        // scale the distances from MIN - MAX to mu - 0, near to far.
+        // find
+#define MAX_S_DEP MAX_DEPTH // 2.0
+#define MIN_S_DEP   0   // MIN_DEPTH
+        
+        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
+            float z = depthBuf.db[i];
+            if (z > newMaxDepth)
+                newMaxDepth = z;
+            if (z < newMinDepth)
+                newMinDepth = z;
+            float dz = (z - depthBuf.minDepth)/(depthBuf.maxDepth - depthBuf.minDepth);
+            float dfz = MU - dz*MU;
+            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
+            depthBuf.db[i] = dfz;
+        }
+        
+        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
+            channel pix[depthBuf.w];
+            //  Points to a pixel to the right ... */ /* ... that is constrained to be this color:
+            int same[depthBuf.w];
+            int s;  // stereo sep at this point
+            int left, right;    // x values for left and right eyes
+            
+            for (int x=0; x < depthBuf.w; x++ ) {  // link initial pixels with themselves
+                same[x] = x;
+            }
+            for (int x=0; x < depthBuf.w; x++ ) {
+                float z = depthBuf.da[y][x]; // DIST(x,y);
+                s = separation(z);
+                left = x - s/2;
+                right = left + s;   // pixels at left and right must be the same
+                if (left >= 0 && right < depthBuf.w) {
+                    int visible;    // first, perform hidden surface removal
+                    int t = 1;      // We will check the points (x-t,y) and (x+t,y)
+                    Distance zt;       //  Z-coord of ray at these two points
+                    
+                    do {
+                        zt = depthBuf.da[y][x] + 2*(2 - MU*depthBuf.da[y][x])*t/(MU*E);
+                        BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
+                        visible = inRange && depthBuf.da[y][x-t] < zt && depthBuf.da[y][x+t] < zt;  // false if obscured
+                        t++;
+                    } while (visible && zt < 1);    // end of hidden surface removal
+                    if (visible) {  // record that pixels at l and r are the same
+                        assert(left >= 0 && left < depthBuf.w);
+                        int l = same[left];
+                        assert(l >= 0 && l < depthBuf.w);
+                        while (l != left && l != right) {
+                            if (l < right) {    // first, jiggle the pointers...
+                                left = l;       // until either same[left] == left
+                                assert(left >= 0 && left < depthBuf.w);
+                                l = same[left]; // .. or same[left == right
+                                assert(l >= 0 && l < depthBuf.w);
+                            } else {
+                                assert(left >= 0 && left < depthBuf.w);
+                                same[left] = right;
+                                left = right;
+                                l = same[left];
+                                assert(l >= 0 && l < depthBuf.w);
+                                right = l;
+                            }
+                        }
+                        same[left] = right; // actually recorded here
+                    }
+                }
+            }
+            for (long x=depthBuf.w-1; x>=0; x--)    { // set the pixels in the scan line
+                if (same[x] == x)
+                    pix[x] = random()&1;  // free choice, do it randomly
+                else
+                    pix[x] = pix[same[x]];  // constrained choice, obey constraint
+                pixBuf.pa[y][x] = pix[x] ? Black : White;
+            }
+        }
+        
+#ifdef notdef
+        for (int y=5; y<15; y++) {
+            for (int x=10; x < W-10; x++) {
+                dest[PI(x,y)] = Green;
+            }
+        }
+#endif
+        
+#define NW      10
+#define BOTTOM_Y   (5)
+        int lx = depthBuf.w/2 - FARAWAY/2 - NW/2;
+        int rx = depthBuf.w/2 + FARAWAY/2 - NW/2;
+        for (int dy=0; dy<6; dy++) {
+            for (int dx=0; dx<NW; dx++) {
+                pixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
+                pixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
+            }
+        }
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
+    }];
+    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
+    //lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+#endif
+    
     lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
-        size_t bufSize = depthBuf.h * depthBuf.w;
-        assert(depthBuf.h * depthBuf.w == bufSize);
-        assert(MIN_DEPTH >= 0.1);
-        float logMin = log(MIN_DEPTH);
-        float logMax = log(MAX_DEPTH);
-        for (int i=0; i<bufSize; i++) {
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+        
+        assert(depthBuf.minDepth > 0.0);    // no log of zero
+        float logMin = log(depthBuf.minDepth);
+        float logMax = log(depthBuf.maxDepth);
+        for (int i=0; i<depthBuf.w*depthBuf.h; i++) {
             Distance d = depthBuf.db[i];
-            if (d < MIN_DEPTH)
-                d = MIN_DEPTH;
-            else if (d > MAX_DEPTH)
-                d = MAX_DEPTH;
+            if (d > newMaxDepth)
+                newMaxDepth = d;
+            if (d < newMinDepth)
+                newMinDepth = d;
             float v = log(d);
             float frac = (v - logMin)/(logMax - logMin);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
             pixBuf.pb[i] = p;
         }
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
     }];
     [self addTransform:lastTransform];
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
-        size_t bufSize = depthBuf.h * depthBuf.w;
-        assert(depthBuf.h * depthBuf.w == bufSize);
         float mincm = 10.0;
         float maxcm = mincm + 100.0;
         float depthcm = maxcm - mincm;
-        for (int i=0; i<bufSize; i++) {
+        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
             Distance d = depthBuf.db[i];
             Distance dcm = d * 100.0;    // distance in centimeters
             Pixel p;
@@ -1268,15 +1316,23 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+        
         for (int i=0; i< depthBuf.h * depthBuf.w; i++) {
             Pixel p;
             channel c;
             Distance z = depthBuf.db[i];
+            if (z > newMaxDepth)
+                newMaxDepth = z;
+            if (z < newMinDepth)
+                newMinDepth = z;
+            
             // closest to farthest, even v is dark blue to light blue,
             // odd v is yellow to dark yellow
-            if (z >= MAX_DEPTH)
+            if (z >= depthBuf.maxDepth)
                 p = Black;
-            else if (v <= MIN_DEPTH)
+            else if (v <= depthBuf.minDepth)
                 p = Green;
             else {
                 if (v & 0x1) {  // odd luminance
@@ -1289,6 +1345,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
             pixBuf.pb[i] = p;
         }
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
