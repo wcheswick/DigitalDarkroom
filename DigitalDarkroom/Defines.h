@@ -90,4 +90,8 @@ typedef long PixelIndex_t;
 #define EXECUTE_MIN_H       (1*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
 #define EXECUTE_FULL_H           (6*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
 
+// There is always a bit of display available, for pinching
+#define MIN_DISPLAY_W   THUMB_W
+#define MIN_DISPLAY_H   THUMB_W
+
 #endif /* Defines_h */

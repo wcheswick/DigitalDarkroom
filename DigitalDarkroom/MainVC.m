@@ -1411,9 +1411,19 @@ static CGRect startingDisplayRect;
             //[self finalizeDisplayAdjustment];
             break;
         case UIGestureRecognizerStateChanged: {
-            CGSize newSize = CGSizeMake(startingDisplayRect.size.width*pinch.scale,
-                                        startingDisplayRect.size.height*pinch.scale);
-//            NSLog(@"pinch scale: %.3f   %4.0f x %4.0f", pinch.scale, newSize.width, newSize.height);
+            float newScale = pinch.scale;
+            // don't squeeze too far
+            if (layout.aspectRatio > 1.0) {
+                if (startingDisplayRect.size.height*newScale < MIN_DISPLAY_H)
+                    newScale = MIN_DISPLAY_H/startingDisplayRect.size.height;
+            } else {
+                if (startingDisplayRect.size.width*newScale < MIN_DISPLAY_W)
+                    newScale = MIN_DISPLAY_W/startingDisplayRect.size.width;
+            }
+            CGSize newSize = CGSizeMake(startingDisplayRect.size.width*newScale,
+                                        startingDisplayRect.size.height*newScale);
+//            NSLog(@"pinch scale: %.3f  %.03f  %4.0f x %4.0f", pinch.scale, layout.aspectRatio,
+ //                 newSize.width, newSize.height);
             [UIView animateWithDuration:0.1 animations:^(void) {
                 [self adjustDisplaySizeTo:newSize];
             }];
