@@ -233,7 +233,7 @@ static PixelIndex_t dPI(int x, int y) {
 
     Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
     TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
-    transform.depthVisF(depthBuf, imBuf0, instance.value);
+    transform.depthVisF(depthBuf, imBuf0, instance);
     [self executeTransformsStartingWithImBuf0];
 }
 

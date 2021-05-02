@@ -85,10 +85,12 @@ typedef long PixelIndex_t;
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
-#define EXECUTE_FONT_SIZE    (18)
+#define EXECUTE_FONT_SIZE   (18)
 #define EXECUTE_ROW_H       (EXECUTE_FONT_SIZE + SEP)
 #define EXECUTE_MIN_H       (1*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
-#define EXECUTE_FULL_H           (6*EXECUTE_ROW_H + 1*EXECUTE_BORDER_W)
+#define EXECUTE_H_FOR(n)    ((n)*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W)
+#define EXECUTE_FULL_H      EXECUTE_H_FOR(6)
+
 
 // There is always a bit of display available, for pinching
 #define MIN_DISPLAY_W   THUMB_W

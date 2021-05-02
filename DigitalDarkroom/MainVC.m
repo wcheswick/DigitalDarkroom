@@ -1393,39 +1393,67 @@ int startParam;
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
-- (void) adjustDisplaySizeTo:(CGSize) newSize {
-    CGRect f = overlayView.frame;
+- (void) adjustDisplayToSize:(CGSize) newSize {
+    CGRect f = layout.displayRect;
     f.size = newSize;
-    overlayView.frame = f;
-    transformView.frame = f;
+    layout.displayRect = f;
+    overlayView.frame = layout.displayRect;
+    transformView.frame = layout.displayRect;
+    if (reticleView) {
+        reticleView.frame = CGRectMake(0, 0,
+                                       layout.displayRect.size.width,
+                                       layout.displayRect.size.height);
+        [reticleView setNeedsDisplay];
+    }
+
+    [layout computeThumbsRect];
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbArrayView.frame = CGRectMake(0, 0,
+                                      thumbScrollView.frame.size.width,
+                                      thumbScrollView.frame.size.height);
+    [self placeThumbsForLayout: layout];
+    
+    [layout placeExecuteRect];
+    executeView.frame = layout.executeRect;
+    [self updateExecuteView];
 }
 
-static CGRect startingDisplayRect;
+- (void) adjustDisplayFromSize:(CGSize) startingSize  toScale:(float)newScale {
+    // constrain the size between smallest display (thumb size) to size of the containerView.
+    if (layout.aspectRatio > 1.0) {
+        if (startingSize.height*newScale < MIN_DISPLAY_H)
+            newScale = MIN_DISPLAY_H/startingSize.height;
+        else if (startingSize.height*newScale > containerView.frame.size.height)
+            newScale = containerView.frame.size.height/startingSize.height;
+    } else {
+        if (startingSize.width*newScale < MIN_DISPLAY_W)
+            newScale = MIN_DISPLAY_W/startingSize.width;
+        else if (startingSize.width*newScale > containerView.frame.size.width)
+            newScale = containerView.frame.size.width/startingSize.width;
+    }
+    
+    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
+                                round(startingSize.height*newScale));
+    if (newSize.width == layout.displayRect.size.width &&
+        newSize.height == layout.displayRect.size.height)
+        return;     // same size, nothing to do
+
+    [self adjustDisplayToSize:newSize];
+}
+
+static CGSize startingDisplaySize;
 
 - (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
     switch (pinch.state) {
         case UIGestureRecognizerStateBegan:
-            startingDisplayRect = overlayView.frame;
+            startingDisplaySize = overlayView.frame.size;
             break;
         case UIGestureRecognizerStateEnded:
             //[self finalizeDisplayAdjustment];
             break;
         case UIGestureRecognizerStateChanged: {
-            float newScale = pinch.scale;
-            // don't squeeze too far
-            if (layout.aspectRatio > 1.0) {
-                if (startingDisplayRect.size.height*newScale < MIN_DISPLAY_H)
-                    newScale = MIN_DISPLAY_H/startingDisplayRect.size.height;
-            } else {
-                if (startingDisplayRect.size.width*newScale < MIN_DISPLAY_W)
-                    newScale = MIN_DISPLAY_W/startingDisplayRect.size.width;
-            }
-            CGSize newSize = CGSizeMake(startingDisplayRect.size.width*newScale,
-                                        startingDisplayRect.size.height*newScale);
-//            NSLog(@"pinch scale: %.3f  %.03f  %4.0f x %4.0f", pinch.scale, layout.aspectRatio,
- //                 newSize.width, newSize.height);
-            [UIView animateWithDuration:0.1 animations:^(void) {
-                [self adjustDisplaySizeTo:newSize];
+            [UIView animateWithDuration:0.7 animations:^(void) {
+                [self adjustDisplayFromSize:startingDisplaySize toScale: pinch.scale];
             }];
             break;
         }
@@ -1717,13 +1745,18 @@ UIImageOrientation lastOrientation;
 - (void) updateExecuteView {
     NSString *t = nil;
     size_t start = DOING_3D ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
+    long displaySteps = screenTask.transformList.count - start;
+    CGFloat bestH = EXECUTE_H_FOR(displaySteps);
+    BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
+    NSString *sep = onePerLine ? @"\n" : @" ";
+    
     for (long step=start; step<screenTask.transformList.count; step++) {
         Transform *transform = screenTask.transformList[step];
         NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
         if (!t)
             t = name;
         else {
-            t = [NSString stringWithFormat:@"%@  +  %@", t, name];
+            t = [NSString stringWithFormat:@"%@  +%@%@", t, sep, name];
         }
         
         // append string showing the parameter value, if one is specified
@@ -1743,6 +1776,8 @@ UIImageOrientation lastOrientation;
                 [paramView setNeedsDisplay];
             }
         }
+        if (onePerLine && ![transform.description isEqual:@""])
+            t = [NSString stringWithFormat:@"%@   (%@)", t, transform.description];
     }
     
     if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)

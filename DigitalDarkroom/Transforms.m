@@ -1031,27 +1031,76 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define RGB_SPACE   ((float)((1<<24) - 1))
 
 - (void) addDepthVisualizations {
-#define VSCALE  10.0
+    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
+    
+#define EYE_SEP 62  // mm
+#define PDOT    0.4
+    
+    lastTransform = [Transform depthVis: @"Anaglyph"
+                            description: @"Complementary color anaglyph"
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
+        Distance newMinDepth = MAXFLOAT;
+        Distance newMaxDepth = 0.0;
+        
+        for (int i=0; i<pixBuf.w*pixBuf.h; i++)
+            pixBuf.pb[i] = White;
+        
+        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
+            for (int x=0; x<depthBuf.w; x++) {
+                float z = depthBuf.da[y][x];
+                if (z > newMaxDepth)
+                    newMaxDepth = z;
+                if (z < newMinDepth)
+                    newMinDepth = z;
+
+                float r = (rand() % 100) / 100.0;
+                if (r > PDOT) {
+//                    if (pixBuf.pa[y][x] == White)
+//                        pixBuf.pa[y][x] = Black;
+                    continue;
+                }
+                
+                float sep = (EYE_SEP/2.0) * ((depthBuf.maxDepth - z)/depthBuf.maxDepth);
+                int leftX = x - sep;
+                int rightX = x + sep;
+                if (leftX < 0 || rightX >= depthBuf.w)
+                    continue;
+                pixBuf.pa[y][leftX] = Cyan;
+                pixBuf.pa[y][rightX] = Red;
+            }
+        }
+        depthBuf.minDepth = newMinDepth;
+        depthBuf.maxDepth = newMaxDepth;
+    }];
+    lastTransform.hasParameters = YES;
+    lastTransform.low = 10;
+    lastTransform.value = 62;
+    lastTransform.high = 100;
+    [self addTransform:lastTransform];
+
 
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
 
         float min = depthBuf.maxDepth;
         float max = depthBuf.minDepth;
-        float selectedMax = v/VSCALE;
+#define VSCALE  10.0
+        float selectedMax = instance.value/VSCALE;
         for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
-            Distance d = depthBuf.db[i];
-            if (d < min)
-                min = d;
-            if (d > selectedMax)
-                max = d;
-            if (d > newMaxDepth)
-                newMaxDepth = d;
-            if (d < newMinDepth)
-                newMinDepth = d;
+            Distance z = depthBuf.db[i];
+            if (z < min)
+                min = z;
+            if (z > selectedMax)
+                max = z;
+            if (z > newMaxDepth)
+                newMaxDepth = z;
+            if (z < newMinDepth)
+                newMinDepth = z;
 
             Pixel p;
 #ifdef HSV
@@ -1065,12 +1114,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             [color getRed:&r green:&g blue:&b alpha:&a];
             p = CRGB(Z*r, Z*g, Z*b);
 #else
-            if (d < depthBuf.minDepth)
+            if (z < depthBuf.minDepth)
                 p = Red;
-            else if (d >= selectedMax)
+            else if (z >= selectedMax)
                 p = Black;
             else {
-                float frac = (d - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
+                float frac = (z - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
                 UInt32 cv = trunc(RGB_SPACE * frac);
                 p.b = cv % 256;
                 cv /= 256;
@@ -1097,37 +1146,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #else
 #define DIST(x,y)  depthBuf.da[y][x]
 #endif
-    
-    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
-    lastTransform = [Transform depthVis: @"Anaglyph"
-                            description: @"Complementary color anaglyph"
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
-        Distance newMinDepth = MAXFLOAT;
-        Distance newMaxDepth = 0.0;
-
-#ifdef NOTYET
-        // scale the distances from MIN - MAX to mu - 0, near to far.
-#define MAX_S_DEP MAX_DEPTH // 2.0
-#define MIN_S_DEP   0   // MIN_DEPTH
-        
-        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
-            float z = depthBuf.db[i];
-            if (z > MAX_S_DEP)
-                z = MAX_S_DEP;
-            else if (z < MIN_S_DEP)
-                z = MIN_S_DEP;
-            float dz = (z - MIN_DEPTH)/(MAX_S_DEP - MIN_S_DEP);
-            float dfz = MU - dz*MU;
-            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
-            depthBuf.db[i] = dfz;
-        }
-#endif
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
-    }];
-    //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
-    //lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
 
 #ifdef BROKEN
 #define MU (1.0/3.0)
@@ -1141,7 +1159,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
     lastTransform = [Transform depthVis: @"SIRDS"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
         float scale = 1;
         
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
@@ -1254,7 +1273,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
         
@@ -1280,7 +1300,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
         float mincm = 10.0;
         float maxcm = mincm + 100.0;
         float depthcm = maxcm - mincm;
@@ -1315,7 +1336,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
-                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf, int v) {
+                               depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
+                                           TransformInstance *instance) {
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
         
@@ -1332,14 +1354,14 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             // odd v is yellow to dark yellow
             if (z >= depthBuf.maxDepth)
                 p = Black;
-            else if (v <= depthBuf.minDepth)
+            else if (instance.value <= depthBuf.minDepth)
                 p = Green;
             else {
-                if (v & 0x1) {  // odd luminance
-                    c = Z - (v/2);
-                    p = SETRGB(0,0,v);
+                if (instance.value & 0x1) {  // odd luminance
+                    c = Z - (instance.value/2);
+                    p = SETRGB(0,0,instance.value);
                 } else {
-                    c = Z/2 + v/2;
+                    c = Z/2 + instance.value/2;
                     p = SETRGB(c,c,0);
                 }
             }
@@ -1363,7 +1385,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
 - (void) addPointTransforms {
     lastTransform = [Transform colorTransform: @"Negative"
-                                 description: @"Negative"
+                                 description: @""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];

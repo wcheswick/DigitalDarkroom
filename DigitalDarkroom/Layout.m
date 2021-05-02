@@ -40,7 +40,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize displayFrac, thumbFrac;
 @synthesize thumbsPlacement;
 @synthesize thumbArrayRect;
-@synthesize executeRect, executeOverlayOK;
+@synthesize executeRect, executeOverlayOK, executeIsTight;
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize thumbCount;
@@ -225,6 +225,7 @@ NSString * __nullable displayOptionNames[] = {
             ; // XXXXX not yet
     }
 
+    [self computeThumbsRect];
     int rightRows = [self thumbsPerColIn:right.size];
     int rightCols = [self thumbsPerRowIn:right.size];
     int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
@@ -333,6 +334,87 @@ NSString * __nullable displayOptionNames[] = {
 #endif
 
     return self;
+}
+
+- (void) computeThumbsRect {
+    CGRect right;
+    CGRect bottom;
+
+    right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
+    right.size = CGSizeMake(containerFrame.size.width - right.origin.x,
+                            containerFrame.size.height);
+    bottom.origin = CGPointMake(0, BELOW(displayRect) + SEP);
+    bottom.size = CGSizeMake(containerFrame.size.width,
+                             containerFrame.size.height - bottom.origin.y);
+
+    int rightRows = [self thumbsPerColIn:right.size];
+    int rightCols = [self thumbsPerRowIn:right.size];
+    int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
+
+    int bottomRows = [self thumbsPerColIn:bottom.size];
+    int bottomCols = [self thumbsPerRowIn:bottom.size];
+    int bottomW = (firstThumbRect.size.width + SEP)*bottomCols;   // for centering
+    
+//    CGFloat rightArea = bottom.size.width * bottom.size.height;
+//     CGFloat bottomArea = bottom.size.width * bottom.size.height;
+
+    int rightThumbCount = rightRows * rightCols;
+    int bottomThumbCount = bottomRows * bottomCols;
+    
+    float rightThumbFrac = (float)rightThumbCount/(float)thumbCount;
+    float bottomThumbFrac = (float)bottomThumbCount/(float)thumbCount;
+    
+    thumbsPlacement = rightThumbFrac > bottomThumbFrac ? ThumbsOnRight : ThumbsUnderneath;
+     
+    switch (thumbsPlacement) {
+        case ThumbsOnRight:
+            thumbArrayRect = right;
+            thumbArrayRect.origin.x += (right.size.width - rightW)/2.0;
+            thumbArrayRect.size.width = rightW;
+            thumbFrac = rightThumbFrac;
+            break;
+        case ThumbsUnderneath:
+            thumbArrayRect = bottom;
+            thumbArrayRect.origin.x += (bottom.size.width - bottomW)/2.0;
+            thumbArrayRect.size.width = bottomW;
+            thumbFrac = bottomThumbFrac;
+            thumbArrayRect.origin.x = (containerFrame.size.width - thumbArrayRect.size.width)/2.0;
+           break;
+        default:
+            thumbArrayRect = CGRectZero;
+    }
+}
+
+- (void) placeExecuteRect {
+    if (thumbsPlacement == ThumbsUnderneath) {
+        executeOverlayOK = YES;
+        executeIsTight = YES;
+        executeRect.origin.x = SEP;
+        executeRect.size.width = containerFrame.size.width - 2*SEP;
+        executeRect.size.height = EXECUTE_MIN_H;
+        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
+    } else {
+        executeRect.size.width = displayRect.size.width;
+        executeRect.origin.x = displayRect.origin.x;
+        
+        float roomUnderneath = containerFrame.size.height - BELOW(displayRect) - SEP;
+        if (roomUnderneath >= EXECUTE_FULL_H) {
+            executeOverlayOK = NO;
+            executeIsTight = NO;
+            executeRect.size.height = EXECUTE_FULL_H;
+            executeRect.origin.y = BELOW(displayRect) + SEP;
+        } else if (roomUnderneath >= EXECUTE_MIN_H) {
+            executeOverlayOK = YES;
+            executeIsTight = YES;
+            executeRect.size.height = roomUnderneath;
+            executeRect.origin.y = BELOW(displayRect) + SEP;
+        } else {
+            executeOverlayOK = YES;
+            executeIsTight = YES;
+            executeRect.size.height = EXECUTE_MIN_H;
+            executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
+        }
+    }
 }
 
 - (float) aspectScaleToSize:(CGSize) targetSize {
