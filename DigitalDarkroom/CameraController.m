@@ -154,7 +154,6 @@
 #endif
     if (captureSession) {
         [captureSession stopRunning];
-        captureSession = nil;
     }
     
     captureSession = [[AVCaptureSession alloc] init];
@@ -338,18 +337,13 @@
 }
 
 - (void) startCamera {
-#ifdef DEBUG_CAMERA
-    NSLog(@">>>>> startCamera");
-#endif
+    assert(captureSession);
     if (![self isCameraOn])
         [captureSession startRunning];
 }
 
 - (void) stopCamera {
     if ([self isCameraOn]) {
-#ifdef DEBUG_CAMERA
-        NSLog(@"<<<<< stopCamera");
-#endif
         [captureSession stopRunning];
     }
 }

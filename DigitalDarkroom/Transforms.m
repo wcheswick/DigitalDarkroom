@@ -827,6 +827,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         else
             REMAP_COLOR(tX, tY, Remap_White);
     }];
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
 }
 
@@ -1266,6 +1267,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         depthBuf.minDepth = newMinDepth;
         depthBuf.maxDepth = newMaxDepth;
     }];
+    lastTransform.broken = YES;
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
@@ -1372,6 +1374,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
 
     depthTransformCount = transforms.count;
@@ -1572,6 +1575,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             buf[i] = CRGB(r,g,b);
         }
     }];
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
 }
 

@@ -11,6 +11,7 @@
 @implementation Transform
 
 @synthesize name, description;
+@synthesize broken;
 @synthesize arrayIndex;
 @synthesize type;
 @synthesize hasParameters;
@@ -29,6 +30,7 @@
     if (self) {
         arrayIndex = -1;    // assigned in transforms
         ipPointF = nil;
+        broken = NO;
 //        pointF = nil;
         areaF = nil;
         remapImageF = nil;

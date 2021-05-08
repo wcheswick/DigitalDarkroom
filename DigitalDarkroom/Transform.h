@@ -62,6 +62,7 @@ typedef void (^ __nullable __unsafe_unretained
 
 @interface Transform : NSObject {
     NSString *name, *description;
+    BOOL broken;
     long arrayIndex;
     transform_t type;
     BOOL hasParameters;
@@ -76,6 +77,7 @@ typedef void (^ __nullable __unsafe_unretained
 @property (nonatomic, strong)   NSString *name, *description;
 @property (assign)              long arrayIndex;  // in the transforms array
 @property (assign)              inPlacePtFunc_t ipPointF;
+@property (assign)              BOOL broken;
 //@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
