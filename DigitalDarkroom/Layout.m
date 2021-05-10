@@ -396,7 +396,9 @@ NSString * __nullable displayOptionNames[] = {
     } else {
         executeRect.size.width = displayRect.size.width;
         executeRect.origin.x = displayRect.origin.x;
-        
+        executeRect.size.height = EXECUTE_FULL_H;
+        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
+#ifdef NOTYET
         float roomUnderneath = containerFrame.size.height - BELOW(displayRect) - SEP;
         if (roomUnderneath >= EXECUTE_FULL_H) {
             executeOverlayOK = NO;
@@ -414,6 +416,7 @@ NSString * __nullable displayOptionNames[] = {
             executeRect.size.height = EXECUTE_MIN_H;
             executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
         }
+#endif
     }
 }
 

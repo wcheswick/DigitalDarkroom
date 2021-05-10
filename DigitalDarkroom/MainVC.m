@@ -659,8 +659,8 @@ static NSString * const imageOrientationName[] = {
     executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
     executeView.textColor = [UIColor blackColor];
     executeView.layer.borderWidth = 1.0;
-    executeView.layer.borderColor = [UIColor blackColor].CGColor;
-    executeView.text = @"pooooooooot";
+    executeView.layer.borderColor = [UIColor magentaColor].CGColor;
+    executeView.text = @"";
     executeView.opaque = YES;
 
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
@@ -1703,9 +1703,11 @@ UIImageOrientation lastOrientation;
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     
+#ifdef EXECUTERECT
     if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
     }
+#endif
     
     // add big arrows if parameter can be changed on last transform
     Transform *lastTransform = [screenTask lastTransform:DOING_3D];
