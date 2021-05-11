@@ -41,6 +41,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize thumbsPlacement;
 @synthesize thumbArrayRect;
 @synthesize executeRect, executeOverlayOK, executeIsTight;
+@synthesize executeRectBottom;
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize thumbCount;
@@ -387,37 +388,21 @@ NSString * __nullable displayOptionNames[] = {
 
 - (void) placeExecuteRect {
     if (thumbsPlacement == ThumbsUnderneath) {
-        executeOverlayOK = YES;
-        executeIsTight = YES;
+        executeRectBottom = thumbArrayRect.origin.y - SEP;
         executeRect.origin.x = SEP;
         executeRect.size.width = containerFrame.size.width - 2*SEP;
-        executeRect.size.height = EXECUTE_MIN_H;
-        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
     } else {
-        executeRect.size.width = displayRect.size.width;
+        executeRectBottom = containerFrame.size.height - SEP;
         executeRect.origin.x = displayRect.origin.x;
-        executeRect.size.height = EXECUTE_FULL_H;
-        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
-#ifdef NOTYET
-        float roomUnderneath = containerFrame.size.height - BELOW(displayRect) - SEP;
-        if (roomUnderneath >= EXECUTE_FULL_H) {
-            executeOverlayOK = NO;
-            executeIsTight = NO;
-            executeRect.size.height = EXECUTE_FULL_H;
-            executeRect.origin.y = BELOW(displayRect) + SEP;
-        } else if (roomUnderneath >= EXECUTE_MIN_H) {
-            executeOverlayOK = YES;
-            executeIsTight = YES;
-            executeRect.size.height = roomUnderneath;
-            executeRect.origin.y = BELOW(displayRect) + SEP;
-        } else {
-            executeOverlayOK = YES;
-            executeIsTight = YES;
-            executeRect.size.height = EXECUTE_MIN_H;
-            executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
-        }
-#endif
+        executeRect.size.width = displayRect.size.width;
     }
+    executeRect.size.height = executeRectBottom - BELOW(displayRect) - SEP;
+    executeOverlayOK = executeRect.size.height < EXECUTE_MIN_H;
+    executeIsTight = executeOverlayOK;
+    if (executeOverlayOK) {
+        executeRect.size.height = EXECUTE_MIN_H;
+    }
+    executeRect.origin.y = executeRectBottom - executeRect.size.height;
 }
 
 - (float) aspectScaleToSize:(CGSize) targetSize {

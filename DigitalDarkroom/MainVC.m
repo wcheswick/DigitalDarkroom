@@ -626,7 +626,7 @@ static NSString * const imageOrientationName[] = {
     containerView.clipsToBounds = YES;  // this shouldn't be needed
 #ifdef DEBUG_LAYOUT
     containerView.layer.borderWidth = 1.0;
-    containerView.layer.borderColor = [UIColor greenColor].CGColor;
+    containerView.layer.borderColor = [UIColor blueColor].CGColor;
 #endif
     
     transformView = [[UIImageView alloc] init];
@@ -658,8 +658,6 @@ static NSString * const imageOrientationName[] = {
     executeView.userInteractionEnabled = NO;
     executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
     executeView.textColor = [UIColor blackColor];
-    executeView.layer.borderWidth = 1.0;
-    executeView.layer.borderColor = [UIColor magentaColor].CGColor;
     executeView.text = @"";
     executeView.opaque = YES;
 
@@ -1735,6 +1733,11 @@ UIImageOrientation lastOrientation;
                           lineBreakMode:NSLineBreakByWordWrapping];
 //    float numberOfLines = size.height / font.lineHeight;
 #endif
+#ifdef DEBUG_LAYOUT
+    executeView.layer.borderWidth = 2.0;
+    executeView.layer.borderColor = layout.executeIsTight ?
+        [UIColor redColor].CGColor : [UIColor greenColor].CGColor;
+#endif
     [executeView setNeedsDisplay];
 }
 
@@ -2316,10 +2319,6 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     thumbArrayView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-    
-    CGRect f = transformView.frame;
-    f.origin.x = 0;
-    executeView.frame = layout.executeRect;
 
 #ifdef DEBUG_LAYOUT
     NSLog(@"layout selected:");
@@ -2360,6 +2359,8 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     [screenTasks configureGroupForSize: layout.transformSize];
     //    [externalTask configureForSize: processingSize];
 
+    [layout placeExecuteRect];
+    executeView.frame = layout.executeRect;
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {
             // move views to where they need to be now.

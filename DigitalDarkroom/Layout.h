@@ -61,6 +61,7 @@ typedef enum {
     CGRect executeRect;     // where the description text goes
     BOOL executeOverlayOK;  // if execute can creep up onto the transform display
     BOOL executeIsTight;    // if save verticle space
+    CGFloat executeRectBottom;
     NSString *status;
 }
 
@@ -76,8 +77,9 @@ typedef enum {
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
 @property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
-@property (assign)              CGRect executeRect;     // text list location
-@property (assign)              BOOL executeOverlayOK, executeIsTight;
+@property (assign)              CGRect executeRect;     // total area available for the execute list
+@property (assign)              BOOL executeOverlayOK, executeIsTight;  // text placement guidance
+@property (assign)              CGFloat executeRectBottom;
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 @property (assign)              size_t thumbCount;
