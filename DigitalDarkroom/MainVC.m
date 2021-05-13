@@ -160,6 +160,8 @@ typedef enum {
 @property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
 @property (assign)              long currentLayoutIndex;       // index into layouts
 
+@property (nonatomic, strong)   UINavigationController *helpNavVC;
+
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
@@ -229,6 +231,7 @@ typedef enum {
 @synthesize thumbArrayView;
 @synthesize layouts, currentLayoutIndex;
 @synthesize lastSourceImage;
+@synthesize helpNavVC;
 
 @synthesize executeView;
 @synthesize plusButton, plusButtonLocked;
@@ -276,6 +279,7 @@ typedef enum {
         currentTransformIndex = NO_TRANSFORM;
         lastSourceImage = nil;
         layout = nil;
+        helpNavVC = nil;
         layouts = [[NSMutableArray alloc] init];
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
@@ -471,7 +475,7 @@ static NSString * const imageOrientationName[] = {
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
-    fixedSpace.width = 10;
+    fixedSpace.width = isiPhone ? 10 : 20;
     
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
@@ -516,7 +520,8 @@ static NSString * const imageOrientationName[] = {
                                               nil];
     
     UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
-                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
+//                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
+                                     initWithTitle:@"?"
                                      style:UIBarButtonItemStylePlain
                                      target:self
                                      action:@selector(doHelp:)];
@@ -995,6 +1000,11 @@ CGFloat topOfNonDepthArray = 0;
         thumbImage.frame = layout.thumbImageRect;
         UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
         label.frame = CGRectMake(0, BELOW(thumbImage.frame), thumb.frame.size.width, OLIVE_LABEL_H);
+        
+        UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
+                                                         initWithTarget:self action:@selector(doHelp:)];
+        thumbHelp.minimumPressDuration = 1.0;
+        [thumb addGestureRecognizer:thumbHelp];
 
         atStartOfRow = NO;
         thumbsH = BELOW(thumb.frame);
@@ -1177,24 +1187,58 @@ CGFloat topOfNonDepthArray = 0;
     NSLog(@"did two-tap screen");
 }
 
-- (IBAction) doHelp:(UIBarButtonItem *)button {
-    NSURL *helpURL = [NSURL fileURLWithPath:
-                      [[NSBundle mainBundle] pathForResource:@"help.html" ofType:@""]];
-    assert(helpURL);
-    HelpVC *hvc __block = [[HelpVC alloc] initWithURL:helpURL];
-    hvc.modalPresentationStyle = UIModalPresentationPopover;
-    [self presentViewController:hvc animated:YES completion:^{
-//        [hvc.view removeFromSuperview];
-        hvc = nil;
-    }];
-
-//    hvc.preferredContentSize = CGSizeMake(100, 200);
+- (IBAction) doHelp:(UIView *)caller {
+    UIView *sourceView = nil;
+    NSString *sourceName = nil;
     
-    UIPopoverPresentationController *popController = hvc.popoverPresentationController;
-    //    popvc.sourceRect = CGRectMake(100, 100, 100, 100);
-    //    popvc.sourceView = hvc.view;
+    if ([caller isKindOfClass:[UILongPressGestureRecognizer class]]) {
+        UILongPressGestureRecognizer *press = (UILongPressGestureRecognizer *)caller;
+        if (press.state != UIGestureRecognizerStateBegan)
+            return;
+        sourceView = press.view;
+        UILabel *thumbView = [sourceView viewWithTag:THUMB_LABEL_TAG];
+        if (thumbView) {
+            NSCharacterSet *nonAlphas = [[NSCharacterSet alphanumericCharacterSet]
+                                         invertedSet];
+            sourceName = [[thumbView.text componentsSeparatedByCharactersInSet:nonAlphas] componentsJoinedByString:@""];
+        }
+    }
+    
+    HelpVC *hvc = [[HelpVC alloc] initWithSection:sourceName];
+    //    hvc.preferredContentSize = CGSizeMake(100, 200);
+    
+    UINavigationController *helpNavVC = [[UINavigationController alloc]
+                                                 initWithRootViewController:hvc];
+    helpNavVC.navigationController.navigationBarHidden = NO;
+    helpNavVC.modalPresentationStyle = UIModalPresentationPopover;
+
+    UIPopoverPresentationController *popController = helpNavVC.popoverPresentationController;
     popController.delegate = self;
-    popController.barButtonItem = button;
+    
+    if (sourceView) {
+        popController.sourceView = sourceView;
+    } else {
+        popController.barButtonItem = (UIBarButtonItem *)caller;
+    }
+    [self presentViewController:helpNavVC animated:YES completion:nil];
+    
+#ifdef OLD
+    popController.sourceRect = CGRectMake(100, 100, 100, 100);
+    popController.sourceView = helpNavVC.view;
+    if ([caller isKindOfClass:[UIBarButtonItem class]]) {
+        popController.barButtonItem = (UIBarButtonItem *)caller;
+    } else if ([caller isKindOfClass:[UIView class]]) {
+        popController.sourceView = caller;
+    } else {
+        NSLog(@"*** unexpected button class: %@ ***", [caller class]);
+    }
+    
+    [self presentViewController:helpNavVC animated:YES completion:^{
+        //        [helpNavVC.view removeFromSuperview];
+        helpNavVC = nil;
+        return;  //???
+    }];
+#endif
 }
 
 - (IBAction) toggleReticle:(UIBarButtonItem *)reticleBarButton {

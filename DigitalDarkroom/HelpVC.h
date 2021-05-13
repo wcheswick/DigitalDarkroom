@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface HelpVC : UIViewController <WKNavigationDelegate>
 
-- (id)initWithURL:(NSURL *) startURL;
+- (id)initWithSection:(NSString * __nullable)section;
 
 @end
 

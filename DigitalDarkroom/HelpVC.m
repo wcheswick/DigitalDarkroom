@@ -10,6 +10,8 @@
 #import <WebKit/WKWebView.h>
 #import <WebKit/WKWebViewConfiguration.h>
 
+#define HELP_FN @"help.html"
+
 @interface HelpVC ()
 
 @property (nonatomic, strong)   WKWebView *webView;
@@ -24,10 +26,21 @@
 @synthesize startURL;
 @synthesize lastPresentedController;
 
-- (id)initWithURL:(NSURL *) sURL {
+- (id)initWithSection:(NSString * __nullable)section {
     self = [super init];
     if (self) {
-        startURL = sURL;
+        NSString *lastComponent;
+        if (section) {
+            lastComponent = [NSString stringWithFormat:@"%@#%@", HELP_FN, section];
+        } else
+            lastComponent = HELP_FN;
+        lastComponent = HELP_FN;
+
+        NSString *path = [[NSBundle mainBundle] pathForResource:lastComponent ofType:@""];
+        NSURL *url = [NSURL URLWithString:path];
+        assert(url);
+        NSLog(@"help URL: %@", url);
+        
         WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
 //        config.ignoresViewportScaleLimits = YES;
         webView = [[WKWebView alloc] initWithFrame:self.view.frame configuration:config];
