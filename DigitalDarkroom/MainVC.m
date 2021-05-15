@@ -673,8 +673,13 @@ static NSString * const imageOrientationName[] = {
 
     UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTwoTapSceen:)];
-    [twoTap setNumberOfTouchesRequired:2];
+    [tap setNumberOfTouchesRequired:2];
     [overlayView addGestureRecognizer:twoTap];
+
+    UITapGestureRecognizer *threeTap = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(didThreeTapSceen:)];
+    [tap setNumberOfTouchesRequired:3];
+    [overlayView addGestureRecognizer:threeTap];
 
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                                      initWithTarget:self action:@selector(doLeft:)];
@@ -1172,19 +1177,43 @@ CGFloat topOfNonDepthArray = 0;
     });
 }
 
+// pause/unpause video
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
     if (!IS_CAMERA(currentSource))
         return;
     // We don't stop the camera, just stop the processing of incoming data,
-    // when paused.
+    // when paused. This makes it resume faster.
     pausedLabel.hidden = !pausedLabel.hidden;
     NSLog(@"%@", pausedLabel.hidden ? @"NOT PAUSED" : @"PAUSED");
     [pausedLabel setNeedsDisplay];
 }
 
-// freeze/unfreeze video
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
     NSLog(@"did two-tap screen");
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+}
+
+- (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"did three-tap screen");
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+    
+    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
+    UIWindow* keyWindow = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
+            if (wScene.activationState == UISceneActivationStateForegroundActive) {
+                keyWindow = wScene.windows.firstObject;
+                break;
+            }
+        }
+    }
+    CGRect rect = [keyWindow bounds];
+    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    [keyWindow.layer renderInContext:context];
+    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
 - (IBAction) doHelp:(UIView *)caller {
@@ -1333,6 +1362,7 @@ int startParam;
     }
 }
 
+// this should be copy to paste buffer, or the send-it-out option
 - (IBAction) doSave {
     NSLog(@"saving");   // XXX need full image for a save
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
