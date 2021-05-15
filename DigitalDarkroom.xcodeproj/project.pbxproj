@@ -18,6 +18,7 @@
 		FB9BBAE0260A366B0026C4E4 /* help.html in Resources */ = {isa = PBXBuildFile; fileRef = FB9BBADF260A366B0026C4E4 /* help.html */; };
 		FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9E2A752592267C00BD7E1E /* TaskGroup.m */; };
 		FBA1F16925EEE97800434E2F /* Layout.m in Sources */ = {isa = PBXBuildFile; fileRef = FBA1F16825EEE97800434E2F /* Layout.m */; };
+		FBAA82FD264EA351000F56B0 /* newhelp.html in Resources */ = {isa = PBXBuildFile; fileRef = FBAA82FC264EA351000F56B0 /* newhelp.html */; };
 		FBB1D9CC232EBD7200845DF1 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */; };
 		FBB1D9D0232EBD9C00845DF1 /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */; };
 		FBB1D9D1232EBD9C00845DF1 /* CoreVideo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB1D9CE232EBD9C00845DF1 /* CoreVideo.framework */; };
@@ -75,6 +76,7 @@
 		FB9E2A752592267C00BD7E1E /* TaskGroup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TaskGroup.m; sourceTree = "<group>"; };
 		FBA1F16725EEE97800434E2F /* Layout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Layout.h; sourceTree = "<group>"; };
 		FBA1F16825EEE97800434E2F /* Layout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Layout.m; sourceTree = "<group>"; };
+		FBAA82FC264EA351000F56B0 /* newhelp.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = newhelp.html; sourceTree = "<group>"; };
 		FBB16D63232EB49B0026F789 /* Defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Defines.h; sourceTree = "<group>"; };
 		FBB1D9CB232EBD7200845DF1 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		FBB1D9CD232EBD9C00845DF1 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
@@ -274,6 +276,7 @@
 				FBF5B3B2232E974000DDFC4E /* Assets.xcassets */,
 				FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */,
 				FB9BBADF260A366B0026C4E4 /* help.html */,
+				FBAA82FC264EA351000F56B0 /* newhelp.html */,
 				FBF5B3B7232E974000DDFC4E /* Info.plist */,
 				FBF5B3B8232E974000DDFC4E /* main.m */,
 			);
@@ -339,6 +342,7 @@
 			files = (
 				FBB1D9FA232FE56700845DF1 /* Links in Resources */,
 				FB9BBAE0260A366B0026C4E4 /* help.html in Resources */,
+				FBAA82FD264EA351000F56B0 /* newhelp.html in Resources */,
 				FBB1D9F6232FE56700845DF1 /* spectrum.pbm;t=p in Resources */,
 				FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */,
 				FBB1D9F7232FE56700845DF1 /* colorfilter.wickline.org.htm in Resources */,

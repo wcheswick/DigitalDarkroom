@@ -62,6 +62,7 @@ typedef void (^ __nullable __unsafe_unretained
 
 @interface Transform : NSObject {
     NSString *name, *description;
+    NSString *helpPath;     // URL tags, slash-separated, general to specific
     BOOL broken;
     long arrayIndex;
     transform_t type;
@@ -74,7 +75,7 @@ typedef void (^ __nullable __unsafe_unretained
     ComputePolarRemap_t polarRemapF;
 }
 
-@property (nonatomic, strong)   NSString *name, *description;
+@property (nonatomic, strong)   NSString *name, *description, *helpPath;
 @property (assign)              long arrayIndex;  // in the transforms array
 @property (assign)              inPlacePtFunc_t ipPointF;
 @property (assign)              BOOL broken;

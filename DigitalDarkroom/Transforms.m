@@ -54,12 +54,14 @@ static PixelIndex_t dPI(int x, int y) {
 @interface Transforms ()
 
 @property (strong, nonatomic)   Transform *lastTransform;
+@property (strong, nonatomic)   NSString *helpPath;
 
 @end
 
 @implementation Transforms
 
 @synthesize lastTransform;
+@synthesize helpPath;
 @synthesize depthTransformCount;
 @synthesize debugTransforms;
 @synthesize transforms;
@@ -80,15 +82,32 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (void) addTransform:(Transform *)transform {
+    transform.arrayIndex = transforms.count;
+    if (!helpPath)
+        transform.helpPath = transform.name;
+    else {
+        transform.helpPath = [helpPath stringByAppendingPathComponent:transform.name];
+    }
+    [transforms addObject:transform];
+}
+
 - (void) buildTransformList {
+    helpPath = @"Depth";
     [self addDepthVisualizations];
+    helpPath = @"Test";
     [self addTestTransforms];
     
+    helpPath = @"Geometric/polar";
     [self addPolarTransforms];
 
+    helpPath = @"Geometric";
     [self addGeometricTransforms];
+    helpPath = @"Art";
     [self addArtTransforms];
+    helpPath = @"Area";
     [self addAreaTransforms];   // manu unimplemented
+    helpPath = @"Point";
     [self addPointTransforms];  // working:
 }
 
@@ -147,7 +166,7 @@ void convolution(ChBuf *in, ChBuf *out,
     }
 }
 
-// derived from Gerard's original code
+// kernel derived from Gerard's original code
 void
 sobel(ChBuf *s, ChBuf *d) {
     long H = s.h;
@@ -170,7 +189,7 @@ sobel(ChBuf *s, ChBuf *d) {
     }
 }
 
-// Gerard's original code
+// Gerard's original focus kernel
 void
 focus(ChBuf *s, ChBuf *d) {
     long H = s.h;
@@ -202,6 +221,7 @@ typedef struct {
     u_int rh[Z+1], gh[Z+1], bh[Z+1];
 } Hist_t;
 
+// Gerard's histogram code for oil paint
 void
 setHistAround(PixelArray_t srcpa, int x, int y, int range, Hist_t *hists) {
     for (int dy=y-range; dy <= y+range; dy++) {
@@ -634,11 +654,6 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 #endif
-}
-
-- (void) addTransform:(Transform *)transform {
-    transform.arrayIndex = transforms.count;
-    [transforms addObject:transform];
 }
 
 // For Tom's logo algorithm
@@ -1832,7 +1847,6 @@ irand(int i) {
     lastTransform.high = 250;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
-    
 }
 
 @end

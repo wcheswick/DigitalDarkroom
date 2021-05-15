@@ -10,7 +10,7 @@
 
 @implementation Transform
 
-@synthesize name, description;
+@synthesize name, description, helpPath;
 @synthesize broken;
 @synthesize arrayIndex;
 @synthesize type;
@@ -31,6 +31,7 @@
         arrayIndex = -1;    // assigned in transforms
         ipPointF = nil;
         broken = NO;
+        helpPath = nil;
 //        pointF = nil;
         areaF = nil;
         remapImageF = nil;

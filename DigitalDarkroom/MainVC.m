@@ -1189,22 +1189,30 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction) doHelp:(UIView *)caller {
     UIView *sourceView = nil;
-    NSString *sourceName = nil;
+    NSString *helpPath = nil;
     
     if ([caller isKindOfClass:[UILongPressGestureRecognizer class]]) {
-        UILongPressGestureRecognizer *press = (UILongPressGestureRecognizer *)caller;
-        if (press.state != UIGestureRecognizerStateBegan)
+        UILongPressGestureRecognizer *gesture = (UILongPressGestureRecognizer *)caller;
+        if (gesture.state != UIGestureRecognizerStateBegan)
             return;
-        sourceView = press.view;
-        UILabel *thumbView = [sourceView viewWithTag:THUMB_LABEL_TAG];
-        if (thumbView) {
-            NSCharacterSet *nonAlphas = [[NSCharacterSet alphanumericCharacterSet]
-                                         invertedSet];
-            sourceName = [[thumbView.text componentsSeparatedByCharactersInSet:nonAlphas] componentsJoinedByString:@""];
+        UIView *thumbView = gesture.view;
+        sourceView = thumbView;
+        
+        long transformIndex = thumbView.tag - TRANSFORM_BASE_TAG;
+        assert(transformIndex >= 0 && transformIndex < transforms.transforms.count);
+        Transform *transform = [transforms transformAtIndex:transformIndex];
+        helpPath = transform.helpPath;
+        if (!helpPath) {
+            UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
+            if (thumbLabel) {
+                helpPath = thumbLabel.text;
+            }
         }
+    } else {    // calleed from the "?" bar button
+        helpPath = nil;
     }
     
-    HelpVC *hvc = [[HelpVC alloc] initWithSection:sourceName];
+    HelpVC *hvc = [[HelpVC alloc] initWithSection:helpPath];
     //    hvc.preferredContentSize = CGSizeMake(100, 200);
     
     UINavigationController *helpNavVC = [[UINavigationController alloc]

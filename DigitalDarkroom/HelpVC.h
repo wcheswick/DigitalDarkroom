@@ -8,11 +8,15 @@
 
 #import <UIKit/UIKit.h>
 #import <WebKit/WKNavigationDelegate.h>
-
+#import <WebKit/WKUIdelegate.h>
+#import <WebKit/WKFrameInfo.h>
+#import <WebKit/WKNavigationAction.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface HelpVC : UIViewController <WKNavigationDelegate>
+@interface HelpVC : UIViewController
+    <WKNavigationDelegate,
+    WKUIDelegate>
 
 - (id)initWithSection:(NSString * __nullable)section;
 
