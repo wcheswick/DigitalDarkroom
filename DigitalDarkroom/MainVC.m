@@ -1242,7 +1242,7 @@ CGFloat topOfNonDepthArray = 0;
     }
     
     HelpVC *hvc = [[HelpVC alloc] initWithSection:helpPath];
-    //    hvc.preferredContentSize = CGSizeMake(100, 200);
+//    hvc.preferredContentSize = CGSizeMake(100, 200);
     
     UINavigationController *helpNavVC = [[UINavigationController alloc]
                                                  initWithRootViewController:hvc];
@@ -1362,78 +1362,6 @@ int startParam;
     }
 }
 
-// this should be copy to paste buffer, or the send-it-out option
-- (IBAction) doSave {
-    NSLog(@"saving");   // XXX need full image for a save
-    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
-    
-    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
-    UIWindow* keyWindow = nil;
-    if (@available(iOS 13.0, *)) {
-        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
-            if (wScene.activationState == UISceneActivationStateForegroundActive) {
-                keyWindow = wScene.windows.firstObject;
-                break;
-            }
-        }
-    }
-    CGRect rect = [keyWindow bounds];
-    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    [keyWindow.layer renderInContext:context];
-    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
-    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
-}
-
-- (void) adjustDisplayToSize:(CGSize) newSize {
-    CGRect f = layout.displayRect;
-    f.size = newSize;
-    layout.displayRect = f;
-    overlayView.frame = layout.displayRect;
-    transformView.frame = layout.displayRect;
-    if (reticleView) {
-        reticleView.frame = CGRectMake(0, 0,
-                                       layout.displayRect.size.width,
-                                       layout.displayRect.size.height);
-        [reticleView setNeedsDisplay];
-    }
-
-    [layout computeThumbsRect];
-    thumbScrollView.frame = layout.thumbArrayRect;
-    thumbArrayView.frame = CGRectMake(0, 0,
-                                      thumbScrollView.frame.size.width,
-                                      thumbScrollView.frame.size.height);
-    [self placeThumbsForLayout: layout];
-    
-    [layout placeExecuteRect];
-    executeView.frame = layout.executeRect;
-    [self updateExecuteView];
-}
-
-- (void) adjustDisplayFromSize:(CGSize) startingSize  toScale:(float)newScale {
-    // constrain the size between smallest display (thumb size) to size of the containerView.
-    if (layout.aspectRatio > 1.0) {
-        if (startingSize.height*newScale < MIN_DISPLAY_H)
-            newScale = MIN_DISPLAY_H/startingSize.height;
-        else if (startingSize.height*newScale > containerView.frame.size.height)
-            newScale = containerView.frame.size.height/startingSize.height;
-    } else {
-        if (startingSize.width*newScale < MIN_DISPLAY_W)
-            newScale = MIN_DISPLAY_W/startingSize.width;
-        else if (startingSize.width*newScale > containerView.frame.size.width)
-            newScale = containerView.frame.size.width/startingSize.width;
-    }
-    
-    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
-                                round(startingSize.height*newScale));
-    if (newSize.width == layout.displayRect.size.width &&
-        newSize.height == layout.displayRect.size.height)
-        return;     // same size, nothing to do
-
-    [self adjustDisplayToSize:newSize];
-}
-
 static CGSize startingDisplaySize;
 
 - (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
@@ -1472,6 +1400,76 @@ static CGSize startingDisplaySize;
     }
     [self reconfigure];
 #endif
+}
+
+// this should be copy to paste buffer, or the send-it-out option
+- (IBAction) doSave {
+    NSLog(@"saving");   // XXX need full image for a save
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+    
+    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
+    UIWindow* keyWindow = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
+            if (wScene.activationState == UISceneActivationStateForegroundActive) {
+                keyWindow = wScene.windows.firstObject;
+                break;
+            }
+        }
+    }
+    CGRect rect = [keyWindow bounds];
+    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    [keyWindow.layer renderInContext:context];
+    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
+}
+
+- (void) adjustDisplayToSize:(CGSize) newSize {
+    [layout adjustForDisplaySize:newSize];
+    assert(layout.displayRect.size.width == layout.executeRect.size.width);
+    overlayView.frame = layout.displayRect;
+    transformView.frame = layout.displayRect;
+    executeView.frame = layout.executeRect;
+    if (reticleView) {
+        reticleView.frame = CGRectMake(0, 0,
+                                       layout.displayRect.size.width,
+                                       layout.displayRect.size.height);
+        [reticleView setNeedsDisplay];
+    }
+
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbArrayView.frame = CGRectMake(0, 0,
+                                      thumbScrollView.frame.size.width,
+                                      thumbScrollView.frame.size.height);
+    [self placeThumbsForLayout: layout];
+    assert(layout.displayRect.size.width == layout.executeRect.size.width);
+    [self updateExecuteView];
+}
+
+- (void) adjustDisplayFromSize:(CGSize) startingSize  toScale:(float)newScale {
+    // constrain the size between smallest display (thumb size) to size of the containerView.
+    if (layout.aspectRatio > 1.0) {
+        if (startingSize.height*newScale < MIN_DISPLAY_H)
+            newScale = MIN_DISPLAY_H/startingSize.height;
+        else if (startingSize.height*newScale > containerView.frame.size.height)
+            newScale = containerView.frame.size.height/startingSize.height;
+    } else {
+        if (startingSize.width*newScale < MIN_DISPLAY_W)
+            newScale = MIN_DISPLAY_W/startingSize.width;
+        else if (startingSize.width*newScale > containerView.frame.size.width)
+            newScale = containerView.frame.size.width/startingSize.width;
+    }
+    
+    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
+                                round(startingSize.height*newScale));
+    if (newSize.width == layout.displayRect.size.width &&
+        newSize.height == layout.displayRect.size.height)
+        return;     // same size, nothing to do
+
+    assert(layout.displayRect.size.width == layout.executeRect.size.width);
+    [self adjustDisplayToSize:newSize];
 }
 
 - (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
@@ -2441,7 +2439,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     [screenTasks configureGroupForSize: layout.transformSize];
     //    [externalTask configureForSize: processingSize];
 
-    [layout placeExecuteRect];
+// no longer?    [layout positionExecuteRect];
     executeView.frame = layout.executeRect;
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {

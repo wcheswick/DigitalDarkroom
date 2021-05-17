@@ -39,8 +39,8 @@ typedef enum {
     AVCaptureDeviceFormat * __nullable format;
     BOOL isPortrait, isiPhone;
     CGRect containerFrame;  // copied from the caller
-    CGSize desiredDisplaySize;
     size_t thumbCount;        // copied from the caller
+    DisplayOptions currentDisplayOption;
     
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
     float aspectRatio;      // of the input source
@@ -69,6 +69,8 @@ typedef enum {
 @property (assign)              BOOL isPortrait, isiPhone;
 @property (assign)              CGRect containerFrame;
 @property (assign)              CGSize targetDisplaySize;
+@property (assign)              DisplayOptions currentDisplayOption;
+
 
 @property (assign)              ThumbsPlacement thumbsPlacement;
 @property (assign)              float displayFrac, thumbFrac;
@@ -97,9 +99,7 @@ typedef enum {
                   displaySize:(CGSize) ds
                    displayOption:(DisplayOptions) displayOption;
 
-- (void) computeThumbsRect;
-- (void) placeExecuteRect;
-
+- (void) adjustForDisplaySize:(CGSize) ds;
 - (NSComparisonResult) compare:(Layout *)layout;
 
 extern  NSString * __nullable displayOptionNames[];
