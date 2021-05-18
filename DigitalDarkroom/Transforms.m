@@ -95,20 +95,24 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) buildTransformList {
     helpPath = @"Depth";
     [self addDepthVisualizations];
-    helpPath = @"Test";
-    [self addTestTransforms];
     
     helpPath = @"Geometric/polar";
     [self addPolarTransforms];
 
     helpPath = @"Geometric";
     [self addGeometricTransforms];
-    helpPath = @"Art";
-    [self addArtTransforms];
+    
     helpPath = @"Area";
     [self addAreaTransforms];   // manu unimplemented
+
     helpPath = @"Point";
     [self addPointTransforms];  // working:
+    
+    helpPath = @"Art";
+    [self addArtTransforms];
+
+    helpPath = @"Test";
+    [self addTestTransforms];
 }
 
 // transform at given index, or nil if NO_TRANSFORM
@@ -361,122 +365,6 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
-    /* timings for oil on digitalis:
-     *
-     *                  Z    param    f/s
-     * original oil     31    3    ~7.0
-     *
-     * original oil     255    3    1.2
-     *
-     * new oil        255    3    2.5
-     * new oil        255    2    2.7
-     * new oil        255    1    2.7    seurat-like
-     *
-     * new oil        31    3    5.8    notable loss of detail
-     * new oil        31    2    6.5    better detail than N==3
-     * new oil        31    1    7.2    looks more like seurat
-     *
-     * new oil        15    2    7.6    isophots visible
-     */
-    lastTransform = [Transform areaTransform: @"Oil paint"
-                                 description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        int x, y;
-        int oilD = 1 << instance.value; // powers of two
-        Hist_t hists;
-
-        long W = src.w;
-        long H = src.h;
-
-        // set the border
-        for (y=0; y<H; y++) {
-            for (x=0; x<oilD; x++) {
-                dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
-            }
-            if (y < oilD || y > H - oilD)
-                for (int x=0; x < W; x++)
-                    dest.pa[y][x] = White;
-        }
-        
-        x = y = oilD;   // start in the upper left corner
-        BOOL goingRight = YES;
-        memset(&hists, 0, sizeof(hists));   // clear the histograms
-        setHistAround(src.pa, x, y, oilD, &hists);
-        do {
-            dest.pa[y][x] = mostCommonColorInHist(&hists);
-            if (goingRight) {
-                if (x + oilD - 1 < W) {
-                    x++;
-                    moveHistRight(src.pa, x, y, oilD, &hists);
-                } else {
-                    // go down one pixel and change directions
-                    y++;
-                    if (y + oilD == H)
-                        break;  // hit the bottom
-                    goingRight = NO;
-                    moveHistDown(src.pa, x, y, oilD, &hists);
-                }
-            } else {    // going left
-                if (x > oilD) {
-                    x--;
-                    moveHistLeft(src.pa, x, y, oilD, &hists);
-                } else {
-                    y++;
-                    if (y + oilD == H)
-                        break;  // hit the bottom
-                    moveHistDown(src.pa, x, y, oilD, &hists);
-                    goingRight = YES;
-                }}
-        } while (1);
-
-#ifdef SIMPLEST
-        // simplest loop: compute and analyze the full histogram around each point.
-        // speeds for oilD:
-        // 0    4.3
-        // 1    4.8
-        // 2    6.264
-        // 3    11.6
-        // 4    31.9
-        for (y=oilD; y<H-oilD; y++) {
-            for (x=oilD; x<W-oilD; x++) {
-                memset(&hists, 0, sizeof(hists));   // clear the histograms
-                setHistAround(src.pa, x, y, oilD, &hists);
-                dest.pa[y][x] = mostCommonColorAround(src.pa, x, y, oilD, &hists);
-            }
-        }
-#endif
-    }];
-    lastTransform.low = 1;      // 2^1
-    lastTransform.value = 2;    // 2^2.  2^3 is MUCH shower
-    lastTransform.high = 4;     // 2^4
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Charcoal sketch"
-                                 description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        // monochrome sobel...
-        long N = src.w * src.h;
-        for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = LUM(src.pb[i]);
-        }
-        // gerard's sobol, which is right
-        sobel(chBuf0, chBuf1);
-
-        // ... negate and high contrast...
-        // ... + negative + high contrast...
-        
-        for (int i=0; i<N; i++) {
-            channel c = chBuf1.cb[i];
-            channel nc = Z - CLIP((c-HALF_Z)*2+HALF_Z);
-            Pixel p = SETRGB(nc, nc, nc);
-            dest.pb[i] = p;
-        }
-    }];
-    [self addTransform:lastTransform];
-
     lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -680,48 +568,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 
 - (void) addPolarTransforms {
-    lastTransform = [Transform areaTransform: @"Can"    // WTF?
+    
+    lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        // I am not sure this matches the original, or that the original didn't
-        // have a bug:
-        //    return frame[CENTER_Y+(short)(r*cos(a))]
-        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        long sx = centerX + a*5.0/2.0;
-        long sy = centerY + r*5.0/2.0;
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Skrunch"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        // I am not sure this matches the original, or that the original didn't
-        // have a bug:
-        //    return frame[CENTER_Y+(short)(r*cos(a))]
-        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        long sx = centerX + (r-(cos(a)/300.0)*sin(a));
-        long sy = centerY + r*sin(a);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Twist left"        // old twist right
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        double newa = a + ((float)instance.value/100.0)*r*(M_PI/180.0);
+        double newa = a + DEGRAD((float)instance.value);
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
         long sx = centerX + r*cos(newa);
@@ -731,16 +582,17 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         else
             REMAP_COLOR(tX, tY, Remap_White);
     }];
-    lastTransform.low = 0;
-    lastTransform.value = 40;
-    lastTransform.high = 150;    // was 15
+    lastTransform.low = -180;
+    lastTransform.value = 45;
+    lastTransform.high = 180;    // was 15
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Edvard Munch #1"        // old twist right
+
+    lastTransform = [Transform areaTransform: @"Twist"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        double newa = a + (r/3.0)*(M_PI/180.0);
+        double newa = a + ((float)instance.value/50.0)*r*(M_PI/180.0);
+//        double newa = a + DEGRAD((float)instance.value/100.0)((float)instance.value/100.0)*r*(M_PI/180.0);
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
         long sx = centerX + r*cos(newa);
@@ -750,49 +602,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         else
             REMAP_COLOR(tX, tY, Remap_White);
     }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Edvard Munch #2"    // old Ken twist
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        long sx = centerX + r*cos(a);
-        long sy = centerY + r*sin(a + r/30.0);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Dali"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        long sx = centerX + r*cos(a);
-        long sy = centerY + r*sin(a);
-        sx = centerX + (r*cos(a + (sy*sx/(16*17000.0))));
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Andrew"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
-        int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_TO(tX, tY, centerX + r*cos(a), centerX + r*sin(a));
-    }];
+    lastTransform.low = -360;
+    lastTransform.value = 50;
+    lastTransform.high = 360;    // was 15
+    lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Fish eye"
@@ -827,6 +640,40 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
+
+    lastTransform = [Transform areaTransform: @"Skrunch"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + (r-(cos(a)/300.0)*sin(a));
+        long sy = centerY + r*sin(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Andrew"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_TO(tX, tY, centerX + r*cos(a), centerX + r*sin(a));
+    }];
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Paul"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -844,128 +691,29 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     lastTransform.broken = YES;
     [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Can"    // WTF?
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + a*5.0/2.0;
+        long sy = centerY + r*5.0/2.0;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
 }
 
 - (void) addAreaTransforms {
-    lastTransform = [Transform areaTransform: @"O no!"
-                                 description: @"Reflect the right half of the screen on the left"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long centerX = remapBuf.w/2;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                if (x < centerX)
-                    REMAP_TO(x, y, remapBuf.w - x - 1, y);
-                else
-                    REMAP_TO(x, y, x, y);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Mirror"
-                                  description: @"Reflect the image"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x, y, remapBuf.w - x - 1, y);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Wavy shower"
-                                 description: @"Through wavy glass"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        int cpp = instance.value;   // pixels per cycle
-        int ncyc = (int)remapBuf.w / cpp;
-        for (int y=0; y<remapBuf.h; y++) { // why is this loop needed?
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x,y, x,y);
-            }
-        }
-        for (int y=0; y<remapBuf.h; y++) {  // XX thumbnail not very wavy
-            for (int x=0; x<remapBuf.w; x++) {
-                int dx = (int)(ncyc*sin(cpp*x*2*M_PI/remapBuf.w));
-                    REMAP_TO(x,y, x+dx,y);
-            }
-        }
-    }];
-    lastTransform.low = 10;
-    lastTransform.value = 18;
-    lastTransform.high = 50;
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Flip"
-                                  description: @"vertical reflection"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x, y, x, remapBuf.h - y - 1);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Pixelate"
-                                  description: @"Giant pixels"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        int pixSize = instance.value;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x, y, (x/pixSize)*pixSize, (y/pixSize)*pixSize);
-            }
-        }
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 6;
-    lastTransform.high = 120;
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Terry's kite"
-                                 description: @"Designed by an 8-year old"
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        assert(remapBuf.w > 0 && remapBuf.h > 0);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-//        NSLog(@" kite %zu x %zu", remapBuf.w, remapBuf.h);
-        for (int y=0; y<remapBuf.h; y++) {
-            size_t ndots;
-            
-            if (y <= centerY)
-                ndots = (y*(remapBuf.w-1))/remapBuf.h;
-            else
-                ndots = ((remapBuf.h-y-1)*(remapBuf.w))/remapBuf.h;
-            
-//            NSLog(@" kite %d, %zu", y, ndots);
-
-            assert(y>= 0 && y < remapBuf.h);
-            REMAP_TO(centerX,y, centerX, y);
-            REMAP_TO(centerX,y, centerX, y);
-            REMAP_COLOR(0,y, Remap_White);
-            
-            for (int x=1; x<=ndots; x++) {
-                size_t dist = (x*(centerX-1))/ndots;
-                assert(centerX - dist >= 0 && centerX - dist < remapBuf.w);
-                assert(centerX + dist >= 0 && centerX + dist < remapBuf.w);
-                REMAP_TO(centerX+x,y, centerX + dist,y);
-                REMAP_TO(centerX-x,y, centerX - dist,y);
-            }
-            for (size_t x=ndots; x<centerX; x++) {
-                assert(centerX - x >= 0 && centerX - x < remapBuf.w);
-                assert(centerX + x >= 0 && centerX + x < remapBuf.w);
-                REMAP_COLOR(centerX+x,y, Remap_White);
-                REMAP_COLOR(centerX-x,y, Remap_White);
-             }
-//            NSLog(@" kite %d done", y);
-        }
-//        NSLog(@" kite verifying");
-        [remapBuf verify];
-//        NSLog(@" kite Z");
-    }];
-    [self addTransform:lastTransform];
-//    NSLog(@" post kite");
 
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
@@ -1595,6 +1343,84 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 }
 
 - (void) addGeometricTransforms {
+    
+    lastTransform = [Transform areaTransform: @"Mirror"
+                                  description: @"Reflect the image"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, remapBuf.w - x - 1, y);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Flip"
+                                  description: @"vertical reflection"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, x, remapBuf.h - y - 1);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Horizontal shift"
+                                  description: @"shift left/right"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long xPixelShift = remapBuf.w * (instance.value/100.0);
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                long sx = x - xPixelShift;
+                if (REMAPBUF_IN_RANGE(sx, y))
+                    REMAP_TO(x, y, x - xPixelShift, y);
+                else
+                    REMAP_COLOR(x, y, Remap_White);
+            }
+        }
+    }];
+    lastTransform.low = -100;   // percent of screen width
+    lastTransform.value = 10;
+    lastTransform.high = 100;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Vertical shift"
+                                  description: @"shift up/down"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long yPixelShift = remapBuf.h * (instance.value/100.0);
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                long sy = y + yPixelShift;
+                if (REMAPBUF_IN_RANGE(x, sy))
+                    REMAP_TO(x, y, x, sy);
+                else
+                    REMAP_COLOR(x, y, Remap_White);
+            }
+        }
+    }];
+    lastTransform.low = -100;   // percent of screen width
+    lastTransform.value = 10;
+    lastTransform.high = 100;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"O no!"
+                                 description: @"Reflect the right half of the screen on the left"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long centerX = remapBuf.w/2;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                if (x < centerX)
+                    REMAP_TO(x, y, remapBuf.w - x - 1, y);
+                else
+                    REMAP_TO(x, y, x, y);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Zoom"
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -1617,6 +1443,89 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Wavy shower"
+                                 description: @"Through wavy glass"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        int cpp = instance.value;   // pixels per cycle
+        int ncyc = (int)remapBuf.w / cpp;
+        for (int y=0; y<remapBuf.h; y++) { // why is this loop needed?
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x,y, x,y);
+            }
+        }
+        for (int y=0; y<remapBuf.h; y++) {  // XX thumbnail not very wavy
+            for (int x=0; x<remapBuf.w; x++) {
+                int dx = (int)(ncyc*sin(cpp*x*2*M_PI/remapBuf.w));
+                    REMAP_TO(x,y, x+dx,y);
+            }
+        }
+    }];
+    lastTransform.low = 10;
+    lastTransform.value = 18;
+    lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Pixelate"
+                                  description: @"Giant pixels"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        int pixSize = instance.value;
+        for (int y=0; y<remapBuf.h; y++) {
+            for (int x=0; x<remapBuf.w; x++) {
+                REMAP_TO(x, y, (x/pixSize)*pixSize, (y/pixSize)*pixSize);
+            }
+        }
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 6;
+    lastTransform.high = 120;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Terry's kite"
+                                 description: @"Designed by an 8-year old"
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        assert(remapBuf.w > 0 && remapBuf.h > 0);
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+//        NSLog(@" kite %zu x %zu", remapBuf.w, remapBuf.h);
+        for (int y=0; y<remapBuf.h; y++) {
+            size_t ndots;
+            
+            if (y <= centerY)
+                ndots = (y*(remapBuf.w-1))/remapBuf.h;
+            else
+                ndots = ((remapBuf.h-y-1)*(remapBuf.w))/remapBuf.h;
+            
+//            NSLog(@" kite %d, %zu", y, ndots);
+
+            assert(y>= 0 && y < remapBuf.h);
+            REMAP_TO(centerX,y, centerX, y);
+            REMAP_TO(centerX,y, centerX, y);
+            REMAP_COLOR(0,y, Remap_White);
+            
+            for (int x=1; x<=ndots; x++) {
+                size_t dist = (x*(centerX-1))/ndots;
+                assert(centerX - dist >= 0 && centerX - dist < remapBuf.w);
+                assert(centerX + dist >= 0 && centerX + dist < remapBuf.w);
+                REMAP_TO(centerX+x,y, centerX + dist,y);
+                REMAP_TO(centerX-x,y, centerX - dist,y);
+            }
+            for (size_t x=ndots; x<centerX; x++) {
+                assert(centerX - x >= 0 && centerX - x < remapBuf.w);
+                assert(centerX + x >= 0 && centerX + x < remapBuf.w);
+                REMAP_COLOR(centerX+x,y, Remap_White);
+                REMAP_COLOR(centerX-x,y, Remap_White);
+             }
+//            NSLog(@" kite %d done", y);
+        }
+//        NSLog(@" kite verifying");
+        [remapBuf verify];
+//        NSLog(@" kite Z");
+    }];
+    [self addTransform:lastTransform];
+//    NSLog(@" post kite");
 
     lastTransform = [Transform areaTransform: @"Cylinder"
                                   description: @""
@@ -1728,8 +1637,124 @@ irand(int i) {
 }
 
 - (void) addArtTransforms {
+     /* timings for oil on digitalis:
+     *
+     *                  Z    param    f/s
+     * original oil     31    3    ~7.0
+     *
+     * original oil     255    3    1.2
+     *
+     * new oil        255    3    2.5
+     * new oil        255    2    2.7
+     * new oil        255    1    2.7    seurat-like
+     *
+     * new oil        31    3    5.8    notable loss of detail
+     * new oil        31    2    6.5    better detail than N==3
+     * new oil        31    1    7.2    looks more like seurat
+     *
+     * new oil        15    2    7.6    isophots visible
+     */
+    lastTransform = [Transform areaTransform: @"Oil paint"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        int x, y;
+        int oilD = 1 << instance.value; // powers of two
+        Hist_t hists;
+
+        long W = src.w;
+        long H = src.h;
+
+        // set the border
+        for (y=0; y<H; y++) {
+            for (x=0; x<oilD; x++) {
+                dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
+            }
+            if (y < oilD || y > H - oilD)
+                for (int x=0; x < W; x++)
+                    dest.pa[y][x] = White;
+        }
+        
+        x = y = oilD;   // start in the upper left corner
+        BOOL goingRight = YES;
+        memset(&hists, 0, sizeof(hists));   // clear the histograms
+        setHistAround(src.pa, x, y, oilD, &hists);
+        do {
+            dest.pa[y][x] = mostCommonColorInHist(&hists);
+            if (goingRight) {
+                if (x + oilD - 1 < W) {
+                    x++;
+                    moveHistRight(src.pa, x, y, oilD, &hists);
+                } else {
+                    // go down one pixel and change directions
+                    y++;
+                    if (y + oilD == H)
+                        break;  // hit the bottom
+                    goingRight = NO;
+                    moveHistDown(src.pa, x, y, oilD, &hists);
+                }
+            } else {    // going left
+                if (x > oilD) {
+                    x--;
+                    moveHistLeft(src.pa, x, y, oilD, &hists);
+                } else {
+                    y++;
+                    if (y + oilD == H)
+                        break;  // hit the bottom
+                    moveHistDown(src.pa, x, y, oilD, &hists);
+                    goingRight = YES;
+                }}
+        } while (1);
+
+#ifdef SIMPLEST
+        // simplest loop: compute and analyze the full histogram around each point.
+        // speeds for oilD:
+        // 0    4.3
+        // 1    4.8
+        // 2    6.264
+        // 3    11.6
+        // 4    31.9
+        for (y=oilD; y<H-oilD; y++) {
+            for (x=oilD; x<W-oilD; x++) {
+                memset(&hists, 0, sizeof(hists));   // clear the histograms
+                setHistAround(src.pa, x, y, oilD, &hists);
+                dest.pa[y][x] = mostCommonColorAround(src.pa, x, y, oilD, &hists);
+            }
+        }
+#endif
+    }];
+    lastTransform.low = 1;      // 2^1
+    lastTransform.value = 2;    // 2^2.  2^3 is MUCH shower
+    lastTransform.high = 4;     // 2^4
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Charcoal sketch"
+                                 description: @""
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        // monochrome sobel...
+        long N = src.w * src.h;
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = LUM(src.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+        
+        // ... negate and high contrast...
+        // ... + negative + high contrast...
+        
+        for (int i=0; i<N; i++) {
+            channel c = chBuf1.cb[i];
+            channel nc = Z - CLIP((c-HALF_Z)*2+HALF_Z);
+            Pixel p = SETRGB(nc, nc, nc);
+            dest.pb[i] = p;
+        }
+    }];
+    [self addTransform:lastTransform];
+    
     lastTransform = [Transform colorTransform: @"Warhol"
-                                 description: @"cartoon colors"
+                                  description: @"cartoon colors"
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
         int ave_r=0, ave_g=0, ave_b=0;
         
@@ -1847,6 +1872,51 @@ irand(int i) {
     lastTransform.high = 250;
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Edvard Munch #1"        // old twist right
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double newa = a + (r/3.0)*(M_PI/180.0);
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(newa);
+        long sy = centerY + r*sin(newa);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Edvard Munch #2"    // old Ken twist
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(a);
+        long sy = centerY + r*sin(a + r/30.0);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Dali"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(a);
+        long sy = centerY + r*sin(a);
+        sx = centerX + (r*cos(a + (sy*sx/(16*17000.0))));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
 }
 
 @end

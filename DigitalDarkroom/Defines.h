@@ -9,7 +9,7 @@
 #ifndef Defines_h
 #define Defines_h
 
-#define DEBUG_LAYOUT    1
+//#define DEBUG_LAYOUT    1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
@@ -95,5 +95,7 @@ typedef long PixelIndex_t;
 // There is always a bit of display available, for pinching
 #define MIN_DISPLAY_W   THUMB_W
 #define MIN_DISPLAY_H   THUMB_W
+
+#define DEGRAD(d)   (((d)/180.0) * M_PI)
 
 #endif /* Defines_h */
