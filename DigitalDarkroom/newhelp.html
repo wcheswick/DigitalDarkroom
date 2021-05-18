@@ -13,20 +13,63 @@
       <menu>
         <li><a href="#depth">Depth visualizations</a> </li>
         <li><a href="#geometric">Geometric transforms</a> </li>
-        <li><a href="#polargeometric">Polar geometric transforms</a> </li>
-        <li><a href="#areatransforms">Area transforms</a> </li>
-        <li><a href="#pointtransforms">Point Transforms</a> </li>
+        <li><a href="#polar geometric">Polar geometric transforms</a> </li>
+        <li><a href="#area">Area transforms</a> </li>
+        <li><a href="#point">Point Transforms</a> </li>
       </menu>
       <li><a href="#history">History</a> </li>
       <li><a href="#remarks">Remarks</a> </li>
     </menu>
     <p> </p>
-    <h1 tag="features">Features</h1>
-    <h1 tag="transforms">Transforms</h1>
+    <h1 id="features">Features</h1>
+    
+    <h1 id="transforms">Transforms</h1>
+    This app will perform one or more transforms on still and video images.  An image
+    consists of many colored squares, called pixels.  These transforms can move the
+    pixels around and change their color in specific ways.
+    <p>
+    
+    In addition, modern iOS devices can report the distance from the camera for each
+    pixel in the image.
+
+    <h2 id="depth">Depth visualizations</h2>
+    When the camera's depth mode is available and selected, several visualizations
+    of distance to the subject are available.
+    
+    <h3 id="SIRDS">SIRDS</h3>
+    SIRDS stands for single image random dot stereograms.  After staring at one of these
+    for a while, most people can see a 3D image. This app creates these on the fly,
+    giving the possibility of seeing these 3D images live.  I guess these would
+    be better called Video Image Random Dot Stereograms.
+    <p>
+    
+    This is an experiment.  The screen has to be large enough, and some people can't
+    see the effect at all.  It can give some headaches.
+    <p>
+    
+    Others cross their eyes to see these.  You can drag left
+    or right on the image to switch between straight- and cross-eyed images. Don't
+    bother trying this on a small display: the image should probably be wider than
+    the distance between your eyes.
+    
+    <a href="https://en.wikipedia.org/wiki/Autostereogram">Wikipedia</a> has
+    more information.  Last I checked, a Google search for
+    "SIRDS" gave almost a million hits.  Now you can make your own.
+    
+    <h3 id="anaglyph">Anaglyphs</h3>
+    Anaglyphs are color-coded 2D images that show depth when viewed with special glasses.  These
+    usually have a cyan filter over the right eye, and a red filter over the left eye.  Cheap
+    ones are widely available on the Internet.
+ 
+    <h2 id="geometric">Geometric transforms</h2>
+    <h2 id="polar geometric">Polar geometrics</h2>
+    <h2 id="area">Area transforms</h2>
+    <h2 id="point">Point transforms</h2>
+
     <h1 id="userinterface">User interface</h1>
     <p><br>
     </p>
-    <h1 tag="remarks">Remarks</h1>
+    <h1 id="remarks">Remarks</h1>
     <h2>Seen it before?</h2>
     You have probably seen a lot of programs that transform video
     images, and some have much fancier modifications available. Why
@@ -72,7 +115,7 @@
       those that simulate art styles, can be quite striking and
       beautiful.<br>
     </p>
-    <h1 id="#history">History</h1>
+    <h1 id="history">History</h1>
     <h2>The Digital Darkroom at the Liberty Science Center</h2>
     <p><a href="#history"> <img src="i-lsc.jpg"> </a><a
         href="http://www.cs.bell-labs.com/~gerard/">Gerard Holzmann</a>
@@ -81,6 +124,8 @@
       software was written to bring some of Gerard's early work on image
       processing to the museum members. A simplification of this
       software, the <a href="http://www.creative.org/art_studio.html">Portrait
+
+
 
 
 

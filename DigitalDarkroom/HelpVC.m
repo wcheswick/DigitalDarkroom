@@ -36,10 +36,11 @@
             NSMutableCharacterSet *okChars = [NSMutableCharacterSet alphanumericCharacterSet];
             [okChars addCharactersInString:@"/"];
             NSCharacterSet *discardChars = [okChars invertedSet];
-            NSString *cleanTags = [[tags componentsSeparatedByCharactersInSet:discardChars]
-                                   componentsJoinedByString:@""];
+            NSString *cleanTags = [[[tags componentsSeparatedByCharactersInSet:discardChars]
+                                   componentsJoinedByString:@""]
+                                   lowercaseString];
+            NSLog(@"HHHHHHH help: section list:  %@", cleanTags);
             sectionTags = [[cleanTags pathComponents] mutableCopy];
-            NSLog(@"help: section tags are:  %@", sectionTags);
         }
     }
     return self;
@@ -62,6 +63,7 @@
     webView = [[WKWebView alloc] initWithFrame:self.view.frame];
     webView.navigationDelegate = self;
 //    webView.UIDelegate = self;
+    webView.scrollView.contentSize = self.view.frame.size;
     [self.view addSubview:webView];
     [self startLoadingTag];
 }
