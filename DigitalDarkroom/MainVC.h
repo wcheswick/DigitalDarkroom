@@ -9,6 +9,7 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import "InputSource.h"
+#import "ThumbView.h"
 
 @interface MainVC : UIViewController
 <UICollectionViewDelegate,
@@ -23,7 +24,7 @@
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
-- (void) idledForReconfiguration;
+- (void) updateLayoutForDeviceChange;
 - (void) deviceRotated;
 
 @end

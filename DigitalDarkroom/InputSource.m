@@ -10,15 +10,15 @@
 
 #define LAST_SOURCE_ARCHIVE   @"LastSource.archive"
 
-#define kLabel                  @"Label"
-#define kImagePath              @"ImagePath"
-#define kFrontCameraSelected    @"FrontCameraSelected"
-#define kThreeDCamera           @"ThreeDCamera"
+#define kLabel      @"Label"
+#define kImagePath  @"ImagePath"
+#define kSide       @"UseFrontCamera"
+#define kDepth      @"UseDepthMode"
 
 @implementation InputSource
 
 @synthesize label;
-@synthesize frontCamera, threeDCamera;
+@synthesize currentSide, usingDepthCamera;
 @synthesize imagePath;
 @synthesize thumbImageCache;
 @synthesize imageSize;
@@ -30,19 +30,17 @@
         imagePath = nil;
         imageSize = CGSizeZero;
         thumbImageCache = nil;
-        frontCamera = YES;
-        threeDCamera = NO;
     }
     return self;
 }
 
-- (void) makeCameraSource {
+- (void) makeCameraSourceOnSide:(CameraSide) side threeD:(BOOL) threeD {
     label = @"Cameras";
     imagePath = nil;   // signifies camera input
-    frontCamera = YES;
-    threeDCamera = NO;
     imageSize = CGSizeZero;
     thumbImageCache = nil;
+    self.currentSide = side;
+    self.usingDepthCamera = threeD;
 }
 
 - (id) initWithCoder: (NSCoder *)coder {
@@ -50,8 +48,8 @@
     if (self) {
         self.label = [coder decodeObjectForKey:kLabel];
         self.imagePath = [coder decodeObjectForKey: kImagePath];
-        self.frontCamera = [coder decodeBoolForKey: kFrontCameraSelected];
-        self.threeDCamera = [coder decodeBoolForKey: kThreeDCamera];
+        self.currentSide = [coder decodeIntForKey: kSide];
+        self.usingDepthCamera = [coder decodeBoolForKey: kDepth];
         thumbImageCache = nil;
     }
     return self;
@@ -60,8 +58,8 @@
 - (void)encodeWithCoder:(NSCoder *)coder {
     [coder encodeObject:label forKey:kLabel];
     [coder encodeObject:imagePath forKey:kImagePath];
-    [coder encodeBool:frontCamera forKey:kFrontCameraSelected];
-    [coder encodeBool:threeDCamera forKey:kThreeDCamera];
+    [coder encodeInt:currentSide forKey:kSide];
+    [coder encodeBool:usingDepthCamera forKey:kDepth];
 }
 
 - (void) setUpImageAt:(NSString *)path {
@@ -91,8 +89,8 @@
     InputSource *copy = [[InputSource alloc] init];
     copy.label = label;
     copy.imagePath = imagePath;
-    copy.frontCamera = frontCamera;
-    copy.threeDCamera = threeDCamera;
+    copy.currentSide = currentSide;
+    copy.usingDepthCamera = usingDepthCamera;
     copy.imageSize = imageSize;
     copy.thumbImageCache = thumbImageCache;
     return copy;

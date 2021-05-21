@@ -12,7 +12,7 @@
 
 @synthesize name, description, helpPath;
 @synthesize broken;
-@synthesize arrayIndex;
+@synthesize transformsArrayIndex;
 @synthesize type;
 @synthesize hasParameters;
 @synthesize ipPointF;
@@ -28,7 +28,7 @@
 - (id)init {
     self = [super init];
     if (self) {
-        arrayIndex = -1;    // assigned in transforms
+        transformsArrayIndex = -1;    // assigned in transforms
         ipPointF = nil;
         broken = NO;
         helpPath = nil;
@@ -111,6 +111,7 @@
     Transform *copy = [[Transform alloc] init];
     copy.name = name;
     copy.type = type;
+    copy.transformsArrayIndex = transformsArrayIndex;
     copy.description = description;
 //    copy.pointF = pointF;
     copy.areaF = areaF;

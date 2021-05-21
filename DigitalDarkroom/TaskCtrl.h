@@ -32,22 +32,21 @@ typedef enum {
     MainVC *mainVC;
     Transforms *transforms;
     NSMutableArray *taskGroups;
-    volatile BOOL layoutNeeded;
+    volatile BOOL reconfigurationNeeded;
     volatile int reconfiguring;
 }
 
 @property (nonatomic, strong)   MainVC *mainVC;
 @property (nonatomic, strong)   NSMutableArray *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
-@property (assign, atomic)      BOOL layoutNeeded;
+@property (assign, atomic)      volatile BOOL reconfigurationNeeded;
 @property (assign, atomic)      int reconfiguring;
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 
-- (void) idleForLayout;
 - (void) layoutCompleted;
 //- (void) executeTasksWithImage:(UIImage *) image;
-- (void) reconfigureIfReady;
+- (void) reconfigureWhenReady;
 
 @end
 

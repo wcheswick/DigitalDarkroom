@@ -37,8 +37,6 @@
 
 #define CURRENT_VALUE_LABEL_TAG     1
 #define TRANSFORM_BASE_TAG          100
-#define THUMB_LABEL_TAG         98
-#define THUMB_IMAGE_TAG         97
 
 #define CONTROL_H   45
 #define TRANSFORM_LIST_W    280
@@ -98,7 +96,7 @@
 #define NO_STEP_SELECTED    -1
 #define NO_LAYOUT_SELECTED   (-1)
 
-#define DOING_3D    (IS_CAMERA(self->currentSource) && self->currentSource.threeDCamera)
+#define DEPTH_AVAILABLE (IS_CAMERA(self->currentSource) && self->currentSource.cameraHasDepthMode)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 typedef enum {
@@ -142,10 +140,11 @@ typedef enum {
 
 @property (nonatomic, strong)   UIView *containerView;
 
-@property (nonatomic, strong)   UIBarButtonItem *depthSelectBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *reticleBarButton;
+
+@property (nonatomic, strong)   UISwitch *depthSwitch;
 
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
@@ -155,7 +154,8 @@ typedef enum {
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UILabel *pausedLabel;       // if camera capture is paused. Use .hidden as flag
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
-@property (nonatomic, strong)   UIView *thumbArrayView;     // transform thumb selection array
+@property (nonatomic, strong)   NSMutableArray *thumbViewsArray;         // views that go into thumbsView
+@property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
 @property (nonatomic, strong)   UITextView *executeView;        // active transform list
 @property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
 @property (assign)              long currentLayoutIndex;       // index into layouts
@@ -165,8 +165,7 @@ typedef enum {
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
-@property (nonatomic, strong)   InputSource *currentSource;
-@property (nonatomic, strong)   InputSource *cameraSource;
+@property (nonatomic, strong)   InputSource *currentSource, *nextSource;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
 @property (nonatomic, strong)   UIImage *lastSourceImage;
 @property (nonatomic, strong)   InputSource *fileSource;
@@ -201,6 +200,9 @@ typedef enum {
 @property (assign)              UIDeviceOrientation deviceOrientation;
 @property (assign)              BOOL isPortrait;
 @property (assign)              BOOL isiPhone;
+@property (assign)              BOOL hasFrontCamera;    // assume no front camera means no cameras at all
+@property (assign)              BOOL hasRearCamera;
+@property (assign)              BOOL hasFrontDepthCamera, hasRearDepthCamera;
 @property (nonatomic, strong)   Layout *layout;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
@@ -222,13 +224,13 @@ typedef enum {
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize depthSelectBarButton, flipBarButton, sourceBarButton;
+@synthesize depthSwitch, flipBarButton, sourceBarButton;
 @synthesize transformView, overlayView, overlayState;
 @synthesize overlayDebugStatus;
 @synthesize pausedLabel;
 @synthesize reticleView, reticleBarButton;
 @synthesize paramView;
-@synthesize thumbArrayView;
+@synthesize thumbViewsArray, thumbsView;
 @synthesize layouts, currentLayoutIndex;
 @synthesize lastSourceImage;
 @synthesize helpNavVC;
@@ -240,12 +242,14 @@ typedef enum {
 @synthesize deviceOrientation;
 @synthesize isPortrait;
 @synthesize isiPhone;
+@synthesize hasFrontCamera, hasRearCamera;
+@synthesize hasFrontDepthCamera, hasRearDepthCamera;
 
 @synthesize sourcesNavVC;
 @synthesize options;
 
-@synthesize currentSource, inputSources;
-@synthesize cameraSource, cameraSourceThumb;
+@synthesize currentSource, nextSource, inputSources;
+@synthesize cameraSourceThumb;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 
@@ -283,7 +287,7 @@ typedef enum {
         layouts = [[NSMutableArray alloc] init];
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
-                                   stringForKey:LAST_DEPTH_TRANSFORM];
+                                        stringForKey:LAST_DEPTH_TRANSFORM];
         assert(transforms.depthTransformCount > 0);
         currentDepthTransformIndex = 0; // gotta have a default, use first one
         for (int i=0; i < transforms.depthTransformCount; i++) {
@@ -303,7 +307,7 @@ typedef enum {
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
         depthThumbTasks = [taskCtrl newTaskGroupNamed:@"DepthThumbs"];
         //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
-
+        
         transformTotalElapsed = 0;
         transformCount = 0;
         depthBuf = nil;
@@ -316,15 +320,19 @@ typedef enum {
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-         
+        
         cameraController = [[CameraController alloc] init];
-        cameraController.delegate = self;
-
-        cameraSource = [[InputSource alloc] init];
-        [cameraSource makeCameraSource];
-        cameraSourceThumb = nil;
+        if (cameraController)
+            cameraController.delegate = self;
+        else
+            NSLog(@"No camera");
 
         inputSources = [[NSMutableArray alloc] init];
+        cameraSourceThumb = nil;
+        
+        if (cameraController) {
+            [self addCameraSource];
+        }
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
 #ifdef wrongformat
@@ -339,22 +347,86 @@ typedef enum {
         [self addFileSource:@"ishihara56.jpeg" label:@"Ishihara 56"];
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
-
+        
         currentSource = nil;
+        nextSource = nil;
         NSData *lastSourceData = [InputSource lastSourceArchive];
         if (lastSourceData) {
             NSError *error;
-            currentSource = [NSKeyedUnarchiver unarchivedObjectOfClass:[InputSource class]
-                                                           fromData:lastSourceData error:&error];
+            nextSource = [NSKeyedUnarchiver
+                             unarchivedObjectOfClass:[InputSource class]
+                             fromData:lastSourceData error:&error];
         }
-        currentSource = nil;
-        
-        if (!currentSource) {
-            currentSource = [[InputSource alloc] init];
-            [currentSource makeCameraSource];
+        nextSource = nil;    // DEBUG
+        if (!nextSource) {  // select default source
+            NSLog(@"using default source");
+            nextSource = inputSources[0];
         }
     }
     return self;
+}
+
+- (void) createThumbArray {
+    NSString *brokenPath = [[NSBundle mainBundle] pathForResource:@"images/brokenTransform.png" ofType:@""];
+    UIImage *brokenImage = [UIImage imageNamed:brokenPath];
+
+    thumbViewsArray = [[NSMutableArray alloc] init];
+
+    UITapGestureRecognizer *touch;
+    
+    NSString *lastSection = nil;
+    for (size_t ti=0; ti<transforms.transforms.count; ti++) {
+        ThumbView *thumbView = [[ThumbView alloc] init];
+
+        Transform *transform = [transforms.transforms objectAtIndex:ti];
+        NSString *section = [transform.helpPath pathComponents][0];
+        if (!lastSection || ![section isEqualToString:section]) {   // new section
+            [thumbView configureSectionThumbNamed:section
+                                       withSwitch:!lastSection ? depthSwitch : nil];
+            thumbView.tag = THUMB_SECTION_TAG;     // encode the index of this transform
+            [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
+            thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
+        }
+        [thumbView configureForTransform:transform];
+        thumbView.transformIndex = ti;     // encode the index of this transform
+        
+        [self adjustThumbView:thumbView selected:NO];
+        if (transform.type == DepthVis) {
+            touch = [[UITapGestureRecognizer alloc]
+                     initWithTarget:self
+                     action:@selector(doTapDepthVis:)];
+                touch.enabled = cameraController.usingDepthCamera;
+        } else {
+            touch = [[UITapGestureRecognizer alloc]
+                     initWithTarget:self
+                     action:@selector(doTapThumb:)];
+            UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+            if (transform.broken) {
+                imageView.image = brokenImage;
+            } else {
+                Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
+                                                                named:transform.name
+                                                       depthTransform:transform];
+                // these thumbs display their own transform of the depth input only, and don't
+                // change when they are used.
+                task.depthLocked = YES;
+            }
+        }
+        [thumbView addGestureRecognizer:touch];
+        UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
+                                                         initWithTarget:self action:@selector(doHelp:)];
+        thumbHelp.minimumPressDuration = 1.0;
+        [thumbView addGestureRecognizer:thumbHelp];
+
+        [thumbViewsArray addObject:thumbView];
+    }
+
+    // contains transform thumbs and sections.  Positions and sizes decided
+    // as needed.
+    
+    for (ThumbView *thumbView in thumbViewsArray) {
+        [thumbsView addSubview:thumbView];
+    }
 }
 
 - (void) saveDepthTransformName {
@@ -365,55 +437,11 @@ typedef enum {
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
-#ifdef notdef
-- (void) loadImageWithURL: (NSURL *)URL {
-    NSString *path = [URL absoluteString];
-    NSLog(@"startNewDocumentWithURL: LibVC starting document %@", path);
-    if (![URL isFileURL]) {
-        DownloadVC *dVC = [[DownloadVC alloc]
-                           initWithURL: URL
-                           from: self];
-        dVC.modalPresentationStyle = UIModalPresentationFormSheet;
-        dVC.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
-        [self presentViewController:dVC animated:YES completion:NULL];
-        // download will call back to processIncomingFile when
-        // the download is complete
-        return;
-    }
-    
-    NSString *newPath = [URL path];
-    [self processIncomingFile:newPath
-                suggestedName:[newPath lastPathComponent]
-                      fromURL:nil];
+- (void) addCameraSource {
+    InputSource *newSource = [[InputSource alloc] init];
+    [newSource makeCameraSourceOnSide:Front threeD:NO];
+    [inputSources addObject:newSource];
 }
-#endif
-
-#ifdef notdef
-- (void) newDisplayMode:(DisplayMode_t) newMode {
-    switch (newMode) {
-        case fullScreen:
-        case alternateScreen:
-        case small:
-            break;
-        case medium:    // iPad size, but never for iPhone
-            switch ([UIDevice currentDevice].userInterfaceIdiom) {
-                case UIUserInterfaceIdiomMac:
-                case UIUserInterfaceIdiomPad:
-                    newMode = medium;
-                    break;
-                case UIUserInterfaceIdiomPhone:
-                    newMode = small;
-                    break;
-                case UIUserInterfaceIdiomUnspecified:
-                case UIUserInterfaceIdiomTV:
-                case UIUserInterfaceIdiomCarPlay:
-                    newMode = medium;
-            }
-            break;
-    }
-    displayMode = newMode;
-}
-#endif
 
 - (void) addFileSource:(NSString *)fn label:(NSString *)l {
     InputSource *source = [[InputSource alloc] init];
@@ -429,13 +457,15 @@ typedef enum {
 
 - (void) deviceRotated {
     deviceOrientation = [[UIDevice currentDevice] orientation];
+    if (cameraController)
+        [cameraController updateOrientationTo:deviceOrientation];
 #ifdef DEBUG_ORIENTATION
     NSLog(@"device rotated to %@", [CameraController
                                      dumpDeviceOrientationName:deviceOrientation]);
 //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
 #endif
-    [self configureScreenForOrientation];
-//    imageOrientation = UIImageOrientationUp; // not needed [self imageOrientationForDeviceOrientation];
+    if (layout) // this can be called before we are ready
+        [taskCtrl reconfigureWhenReady];
 }
 
 #ifdef NOTUSED
@@ -453,6 +483,15 @@ static NSString * const imageOrientationName[] = {
 
 - (void) viewDidLoad {
     [super viewDidLoad];
+    
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"viewDidLoad");
+#endif
+    
+    self.navigationController.navigationBarHidden = NO;
+    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
+    self.navigationController.navigationBar.opaque = YES;
+    self.navigationController.toolbar.opaque = YES;
 
     sourceBarButton = [[UIBarButtonItem alloc]
                                              initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
@@ -466,12 +505,12 @@ static NSString * const imageOrientationName[] = {
                                       target:self
                                       action:@selector(flipCamera:)];
     
-    depthSelectBarButton = [[UIBarButtonItem alloc]
-                                       initWithImage:[UIImage systemImageNamed:@"view.3d"]
-                                       style:UIBarButtonItemStylePlain
-                                       target:self
-                                       action:@selector(chooseDepth:)];
-
+    depthSwitch = [[UISwitch alloc] init];  // this is placed later in the Depth thumb section header'
+    [depthSwitch addTarget:self action:@selector(processDepthSwitch:)
+          forControlEvents:UIControlEventValueChanged];
+    depthSwitch.on = NO;
+    depthSwitch.enabled = NO;
+    
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
@@ -515,8 +554,6 @@ static NSString * const imageOrientationName[] = {
                                               sourceBarButton,
                                               flexibleSpace,
                                               flipBarButton,
-                                              flexibleSpace,
-                                              depthSelectBarButton,
                                               nil];
     
     UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
@@ -673,44 +710,18 @@ static NSString * const imageOrientationName[] = {
 
     UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTwoTapSceen:)];
-    [tap setNumberOfTouchesRequired:2];
+    [twoTap setNumberOfTouchesRequired:2];
     [overlayView addGestureRecognizer:twoTap];
 
     UITapGestureRecognizer *threeTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didThreeTapSceen:)];
-    [tap setNumberOfTouchesRequired:3];
+    [threeTap setNumberOfTouchesRequired:3];
     [overlayView addGestureRecognizer:threeTap];
 
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
                                                      initWithTarget:self action:@selector(doLeft:)];
     longPressScreen.minimumPressDuration = 1.0;
     [overlayView addGestureRecognizer:longPressScreen];
-    
-#ifdef NOTUSED
-    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                           action:@selector(doDown:)];
-    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
-    [overlayView addGestureRecognizer:swipeDown];
-    
-    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                         action:@selector(doUp:)];
-    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
-    [overlayView addGestureRecognizer:swipeUp];
-
-    UISwipeGestureRecognizer *swipeRight = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                         action:@selector(doRight:)];
-    swipeRight.direction = UISwipeGestureRecognizerDirectionRight;
-    [overlayView addGestureRecognizer:swipeRight];
-    
-    UISwipeGestureRecognizer *swipeLeft = [[UISwipeGestureRecognizer alloc]
-                                           initWithTarget:self
-                                         action:@selector(doLeft:)];
-    swipeLeft.direction = UISwipeGestureRecognizerDirectionLeft;
-    [overlayView addGestureRecognizer:swipeLeft];
-#endif
 
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
@@ -727,10 +738,12 @@ static NSString * const imageOrientationName[] = {
     [containerView addSubview:executeView];
     [containerView bringSubviewToFront:overlayView];
     
-    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-    screenTask = [screenTasks createTaskForTargetImageView:transformView
-                                                     named:@"main"
-                                            depthTransform:depthTransform];
+    if (cameraController) {
+        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
+        screenTask = [screenTasks createTaskForTargetImageView:transformView
+                                                         named:@"main"
+                                                depthTransform:depthTransform];
+    }
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -745,19 +758,20 @@ static NSString * const imageOrientationName[] = {
     thumbScrollView.scrollEnabled = YES;
     [containerView addSubview:thumbScrollView];
     
-    thumbArrayView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
-    [thumbScrollView addSubview:thumbArrayView];
+    thumbsView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
+    [thumbScrollView addSubview:thumbsView];
     [containerView addSubview:thumbScrollView];
 
     [self createThumbArray];    // animate to correct positions later
     
-    [self.view layoutIfNeeded];
     [self.view addSubview:containerView];
     
     //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
     
     self.view.backgroundColor = [UIColor whiteColor];
-    [self useSource:currentSource];
+    
+    [self createThumbArray];
+    [taskCtrl reconfigureWhenReady];
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
@@ -765,17 +779,36 @@ static NSString * const imageOrientationName[] = {
 #ifdef DEBUG_LAYOUT
     NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
 #endif
-    [self reconfigure];
+    [taskCtrl reconfigureWhenReady];
+}
+
+- (void) viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    
+    [self updateLayoutForDeviceChange];
+    [self updateSource];
+}
+
+- (void) updateSource {
+    if (!nextSource)
+        return;
+    currentSource = nextSource;
+    if (IS_CAMERA(currentSource)) {
+        [cameraController setupSession];
+        [self startCamera];
+    }
+    nextSource = nil;
 }
 
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    
+
+#ifdef OLD
     if (IS_CAMERA(currentSource)) {
         [self startCamera];
         [self set3D:DOING_3D];
     }
-
+#endif
 
 #ifdef DEBUG_LAYOUT
     NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
@@ -799,109 +832,6 @@ static NSString * const imageOrientationName[] = {
     
     [super viewWillDisappear:animated];
     [self stopCamera];
-}
-
-- (void) createThumbArray {
-    NSString *brokenPath = [[NSBundle mainBundle] pathForResource:@"images/brokenTransform.png" ofType:@""];
-    UIImage *brokenImage = [UIImage imageNamed:brokenPath];
-
-    UITapGestureRecognizer *touch;
-    for (size_t i=0; i<transforms.depthTransformCount; i++) {
-        Transform *transform = [transforms.transforms objectAtIndex:i];
-        UIView *thumbView = [self makeThumbForTransform:transform];
-        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
-        
-        [self adjustThumbView:thumbView selected:NO];
-        touch = [[UITapGestureRecognizer alloc]
-                 initWithTarget:self
-                 action:@selector(doTapDepthVis:)];
-        [thumbView addGestureRecognizer:touch];
-        
-        // a depth thumb always has only its own depth transform in the task transform list.
-        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        if (transform.broken) {
-            touch.enabled = NO;
-            imageView.image = brokenImage;
-        } else {
-            Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
-                                                            named:transform.name
-                                                   depthTransform:transform];
-            // these thumbs display their own transform of the depth input only, and don't
-            // change when they are used.
-            task.depthLocked = YES;
-        }
-        
-        [thumbArrayView addSubview:thumbView];
-    }
-    
-    Transform *depthTransform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
-    for (size_t i=transforms.depthTransformCount; i<transforms.transforms.count; i++) {
-        Transform *transform = [transforms.transforms objectAtIndex:i];
-        UIView *thumbView = [self makeThumbForTransform:transform];
-        thumbView.tag = TRANSFORM_BASE_TAG + i;     // encode the index of this transform
-
-        touch = [[UITapGestureRecognizer alloc]
-                 initWithTarget:self
-                 action:@selector(doTapThumb:)];
-        [thumbView addGestureRecognizer:touch];
-        
-        UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        if (transform.broken) {
-            touch.enabled = NO;
-            imageView.image = brokenImage;
-        } else {
-            Task *task = [thumbTasks createTaskForTargetImageView:imageView
-                                                            named:transform.name
-                                                   depthTransform:depthTransform];
-            [task appendTransformToTask:transform];
-        }
-        [thumbArrayView addSubview:thumbView];
-   }
-}
-
-- (UIView *) makeThumbForTransform:(Transform *)transform {
-    UIView *newThumbView = [[UIView alloc] initWithFrame:CGRectMake(LATER, LATER, LATER, LATER)];
-    newThumbView.layer.cornerRadius = 1.0;
-    [thumbArrayView addSubview:newThumbView];
-
-    UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
-    transformLabel.tag = THUMB_LABEL_TAG;
-    transformLabel.textAlignment = NSTextAlignmentCenter;
-    transformLabel.adjustsFontSizeToFitWidth = YES;
-    transformLabel.numberOfLines = 0;
-    //transformLabel.backgroundColor = [UIColor whiteColor];
-    transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    transformLabel.text = [transform.name
-                           stringByAppendingString:transform.hasParameters ? BIGSTAR : @""];
-    transformLabel.textColor = [UIColor blackColor];
-    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-    transformLabel.highlighted = NO;    // yes if selected
-#ifdef NOTDEF
-    transformLabel.attributedText = [[NSMutableAttributedString alloc]
-                                     initWithString:transform.name
-                                     attributes:labelAttributes];
-    CGSize labelSize =  [transformLabel.text
-                         boundingRectWithSize:f.size
-                         options:NSStringDrawingUsesLineFragmentOrigin
-                         attributes:@{
-                             NSFontAttributeName : transformLabel.font,
-                             NSShadowAttributeName: shadow
-                         }
-                         context:nil].size;
-    transformLabel.contentMode = NSLayoutAttributeTop;
-#endif
-    transformLabel.opaque = NO;
-    transformLabel.layer.borderWidth = 0.5;
-    [newThumbView addSubview:transformLabel];
-
-    UIImageView *imageView = [[UIImageView alloc] initWithFrame:CGRectMake(LATER, LATER, LATER, LATER)];
-    imageView.tag = THUMB_IMAGE_TAG;
-    imageView.backgroundColor = [UIColor whiteColor];
-    imageView.contentMode = UIViewContentModeScaleAspectFit;
-    imageView.opaque = YES;
-    [newThumbView addSubview:imageView];   // empty placeholder at the moment
-    
-    return newThumbView;
 }
 
 #define DEBUG_FONT_SIZE 16
@@ -941,8 +871,7 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) adjustBarButtons {
-    depthSelectBarButton.enabled = [cameraController isDepthAvailable:currentSource];
-    flipBarButton.enabled = [cameraController isFlipAvailable:currentSource];
+     flipBarButton.enabled = IS_CAMERA(currentSource) && [cameraController isFlipAvailable];
 
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
@@ -960,78 +889,95 @@ CGRect nextButtonFrame;
 BOOL atStartOfRow;
 CGFloat topOfNonDepthArray = 0;
 
-// layout the 3d transforms.  If the input isn't a 3D source, these will always be
-// scrolled off the top of the view.
+// Transform thumb layout needs to be checked at
+// - every display size change
+// - device rotation
+// - 3D selection change
+//
+//  The ordered list of transform and section thumbs are in thumbViewsArray,
+//  and are subViews of thumbsView.  Their positions need adjustment. If there
+//  no current 3D selected, hide those thumbs behind the section header.
 
-- (void) placeThumbsForLayout:(Layout *)layout {
+
+- (void) layoutThumbs:(Layout *)layout {
     nextButtonFrame = layout.firstThumbRect;
     assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
+    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
+        [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
     atStartOfRow = YES;
 
-    // Run through all the transforms, computing the corresponding thumb sizes and
-    // positions for the current situation. Skip to a new row after depth transforms,
-    // which are first.
+    // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
+    // positions for the current situation. These thumbs come in section, each of which has
+    // their own section header thumb display. This header starts on a new line (if vertical
+    // thumb placement) or after a space on horizontal placements.
     
     CGFloat thumbsH = 0;
+    NSString *lastSection = nil;
     
+#ifdef NOTDEF       // they don't appear any more if no 3D
     UIImage *noCameraImage = nil;
-    if (!DOING_3D)
+    if (!cameraController.usingDepthCamera)
         noCameraImage = [UIImage imageNamed:[[NSBundle mainBundle]
                                              pathForResource:@"images/no3Dcamera.png"
                                              ofType:@""]];
+#endif
     
-    for (size_t i=0; i<transforms.transforms.count; i++) {   // position depth transforms
-        Transform *transform = [transforms.transforms objectAtIndex:i];
-        UIView *thumb = [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + i];
-        assert(thumb);  // gotta be there
-        thumb.userInteractionEnabled = !transform.broken;
+    // run through the thumbview array
+    for (ThumbView *thumbView in thumbViewsArray) {
+        if (thumbView.tag == THUMB_SECTION_TAG) {   // new section
+            if (lastSection) {  // not our first section, make space
+                if (layout.thumbsPlacement == ThumbsOnRight) {  // new line for each section
+                    if (!atStartOfRow)
+                        [self buttonsContinueOnNextRow];
+                } else {    // buttons on bottom, need a preceeding space
+                    if (!atStartOfRow) {
+                        [self nextTransformButtonPosition];
+                    }
+                }
+            }
+            thumbView.frame = nextButtonFrame;  // this is a little incomplete
+            
+            lastSection = thumbView.sectionName;
+            continue;
+        }
+        
+        Transform *transform = [transforms.transforms objectAtIndex:thumbView.transformIndex];
+        thumbView.userInteractionEnabled = !transform.broken;
 
-        UIImageView *thumbImage = [thumb viewWithTag:THUMB_IMAGE_TAG];
+        UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
         
         if (transform.type == DepthVis) {
-            if (!DOING_3D) {
-                if (!transform.broken)
-                    thumbImage.image = noCameraImage;
-                thumb.userInteractionEnabled = NO;
+            if (!cameraController.usingDepthCamera) {
+                continue;     // we don't advance
             } else {
-                [self adjustThumbView:thumb selected:(i == currentDepthTransformIndex)];
+                [self adjustThumbView:thumbView
+                             selected:(thumbView.transformIndex == currentDepthTransformIndex)];
             }
         }
         
-        thumb.frame = nextButtonFrame;
+        thumbView.frame = nextButtonFrame;
         thumbImage.frame = layout.thumbImageRect;
-        UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
-        label.frame = CGRectMake(0, BELOW(thumbImage.frame), thumb.frame.size.width, OLIVE_LABEL_H);
-        
-        UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
-                                                         initWithTarget:self action:@selector(doHelp:)];
-        thumbHelp.minimumPressDuration = 1.0;
-        [thumb addGestureRecognizer:thumbHelp];
+//        UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+        thumbView.frame = CGRectMake(0, BELOW(thumbImage.frame), thumbView.frame.size.width, OLIVE_LABEL_H);
 
         atStartOfRow = NO;
-        thumbsH = BELOW(thumb.frame);
+        thumbsH = BELOW(thumbView.frame);
         
-        // next thumb position.  On a new line, if this is the end of the depthvis
-        if (DOING_3D && i == transforms.depthTransformCount - 1) {  // end of depth transforms
-            [self buttonsContinueOnNextRow];
-            topOfNonDepthArray = nextButtonFrame.origin.y;
-        } else
-            [self nextTransformButtonPosition];
+        [self nextTransformButtonPosition];
     }
     
-    SET_VIEW_HEIGHT(thumbArrayView, thumbsH);
-    thumbScrollView.contentSize = thumbArrayView.frame.size;
-    thumbScrollView.contentOffset = thumbArrayView.frame.origin;
+    SET_VIEW_HEIGHT(thumbsView, thumbsH);
+    thumbScrollView.contentSize = thumbsView.frame.size;
+    thumbScrollView.contentOffset = thumbsView.frame.origin;
     
     [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
 }
 
 - (void) nextTransformButtonPosition {
     CGRect f = nextButtonFrame;
-    if (RIGHT(f) + SEP + f.size.width > thumbArrayView.frame.size.width) {   // on to next line
+    if (RIGHT(f) + SEP + f.size.width > thumbsView.frame.size.width) {   // on to next line
         [self buttonsContinueOnNextRow];
     } else {
         f.origin.x = RIGHT(f) + SEP;
@@ -1052,15 +998,15 @@ CGFloat topOfNonDepthArray = 0;
 
 // select a new depth visualization.
 - (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
-    UIView *newView = recognizer.view;
-    long newTransformIndex = newView.tag - TRANSFORM_BASE_TAG;
+    ThumbView *newThumbView = (ThumbView *)recognizer.view;
+    long newTransformIndex = newThumbView.transformIndex;
     assert(newTransformIndex >= 0 && newTransformIndex < transforms.transforms.count);
     if (newTransformIndex == currentDepthTransformIndex)
         return;
 
-    UIView *oldSelectedDepthThumb = [thumbArrayView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
+    ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
     [self adjustThumbView:oldSelectedDepthThumb selected:NO];
-    [self adjustThumbView:newView selected:YES];
+    [self adjustThumbView:newThumbView selected:YES];
 
     currentDepthTransformIndex = newTransformIndex;
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
@@ -1068,7 +1014,7 @@ CGFloat topOfNonDepthArray = 0;
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
-    if (DISPLAYING_THUMBS)
+    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
         [depthThumbTasks configureGroupWithNewDepthTransform:depthTransform];
 }
 
@@ -1335,7 +1281,7 @@ CGFloat topOfNonDepthArray = 0;
 int startParam;
 
 - (IBAction) doPan:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
-    Transform *lastTransform = [screenTask lastTransform:DOING_3D];
+    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
     if (!lastTransform)
         return;
     int currentParam = [screenTask valueForStep:screenTask.transformList.count - 1];
@@ -1440,10 +1386,10 @@ static CGSize startingDisplaySize;
     }
 
     thumbScrollView.frame = layout.thumbArrayRect;
-    thumbArrayView.frame = CGRectMake(0, 0,
+    thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-    [self placeThumbsForLayout: layout];
+    [self layoutThumbs: layout];
     assert(layout.displayRect.size.width == layout.executeRect.size.width);
     [self updateExecuteView];
 }
@@ -1522,7 +1468,7 @@ static CGSize startingDisplaySize;
         timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
     if (!pausedLabel.hidden)    // PAUSED displayed means no new images
         return;
-    if (!DOING_3D)
+    if (!cameraController.usingDepthCamera)
         return;
     if (taskCtrl.reconfiguring)
         return;
@@ -1566,10 +1512,10 @@ static CGSize startingDisplaySize;
 //        return; // skip this frame, we spent enough time on it
     }
 
-    assert(DOING_3D);
+    assert(cameraController.usingDepthCamera);
     dispatch_async(dispatch_get_main_queue(), ^{
         [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
-        if (DISPLAYING_THUMBS)
+        if (self->cameraController.usingDepthCamera)
             [self->depthThumbTasks executeTasksWithDepthBuf:self->depthBuf];
         self->busy = NO;
     });
@@ -1595,7 +1541,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     frameCount++;
     if (!pausedLabel.hidden)    // PAUSED displayed means no new images
         return;
-    if (taskCtrl.layoutNeeded)
+    if (taskCtrl.reconfigurationNeeded)
         return;
     if (taskCtrl.reconfiguring)
         return;
@@ -1666,7 +1612,8 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
-    for (UIView *thumbView in thumbArrayView.subviews) { // deselect all selected thumbs
+    for (ThumbView *thumbView in thumbViewsArray) {
+        // deselect all selected thumbs
         UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
         if (thumbLabel.highlighted) {
             [self adjustThumbView:thumbView selected:NO];
@@ -1684,8 +1631,8 @@ UIImageOrientation lastOrientation;
 }
 
 - (void) doTick:(NSTimer *)sender {
-    if (taskCtrl.layoutNeeded)
-        [taskCtrl reconfigureIfReady];
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl reconfigureWhenReady];
     
 #ifdef NOTYET
     NSDate *now = [NSDate now];
@@ -1732,8 +1679,8 @@ UIImageOrientation lastOrientation;
     }
 }
 
-- (UIView *) thumbForTransform:(Transform *) transform {
-    return [thumbArrayView viewWithTag:TRANSFORM_BASE_TAG + transform.arrayIndex];
+- (ThumbView *) thumbForTransform:(Transform *) transform {
+    return [thumbsView viewWithTag:TRANSFORM_BASE_TAG + transform.transformsArrayIndex];
 }
 
 // The executeView is a list of transforms.  There is a regular list mode, and a compressed
@@ -1741,7 +1688,7 @@ UIImageOrientation lastOrientation;
 
 - (void) updateExecuteView {
     NSString *t = nil;
-    size_t start = DOING_3D ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
+    size_t start = cameraController.usingDepthCamera ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
     long displaySteps = screenTask.transformList.count - start;
     CGFloat bestH = EXECUTE_H_FOR(displaySteps);
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
@@ -1788,7 +1735,7 @@ UIImageOrientation lastOrientation;
 #endif
     
     // add big arrows if parameter can be changed on last transform
-    Transform *lastTransform = [screenTask lastTransform:DOING_3D];
+    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
     if (lastTransform && lastTransform.hasParameters) {
         int value = [screenTask valueForStep:[screenTask lastStep]];
         paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
@@ -1849,20 +1796,35 @@ UIImageOrientation lastOrientation;
 }
 #endif
 
-- (IBAction) chooseDepth:(UIButton *)button {
+- (IBAction) processDepthSwitch:(UISwitch *)depthsw {
+#ifdef NOTYET
+    assert(IS_CAMERA(currentSource));
+    BOOL depthWanted = depthsw.on;
     InputSource *newSource = [currentSource copy];
+    assert(depthWanted != cameraController.usingDepthCamera);
+    if (depthWanted)
+        assert([cameraController hasDepthCameraOnSide:currentSource.currentSide]);
+     switch (cameraController.currentSide) {
+        case Front:
+        case Rear:
+    }
+    if (cameraController.usingDepthCamera) {    // if we are using depth, we have a regular
+        
+    }
     newSource.threeDCamera = !newSource.threeDCamera;
     if (![cameraController isCameraAvailable:newSource])
         return;
     [self useSource:newSource];
+#endif
+    [taskCtrl reconfigureWhenReady];
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
-    InputSource *newSource = [currentSource copy];
-    newSource.frontCamera = ! newSource.frontCamera;
-    if (![cameraController isCameraAvailable:newSource])
+    if (![cameraController isFlipAvailable])
         return;
-    [self useSource:newSource];
+    InputSource *newSource = [currentSource copy];
+    newSource.currentSide = FLIP_SIDE((newSource.currentSide));
+    [taskCtrl reconfigureWhenReady];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -1873,7 +1835,7 @@ UIImageOrientation lastOrientation;
                        animated:YES
                      completion:^{
         [self adjustBarButtons];
-        [self configureScreenForOrientation];
+         [self->taskCtrl reconfigureWhenReady];
     }];
 }
 
@@ -2043,16 +2005,14 @@ static NSString * const sourceSectionTitles[] = {
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     switch ((SourceTypes)indexPath.section) {
         case CameraSource:
-            [self useSource:cameraSource];
-            break;
         case SampleSource:
-            [self useSource:[inputSources objectAtIndex:indexPath.row]];
+            nextSource = [inputSources objectAtIndex:indexPath.row];
             break;
         case LibrarySource:
             ; // XXX stub
     }
     [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
-    [self reconfigure];
+    [taskCtrl reconfigureWhenReady];
 }
 
 #define CELL_H  44
@@ -2066,16 +2026,24 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     oVC.view.frame = f;
     
     [self presentViewController:oVC animated:YES completion:^{
-        [self configureScreenForOrientation];
+        [self->taskCtrl reconfigureWhenReady];
     }];
 }
 
+#ifdef GONE
 // setup new source and/or orientation
+
 - (void) useSource:(InputSource *) newSource {
  //   if (currentSource && IS_CAMERA(currentSource))
   //      [self stopCamera];
     
     currentSource = newSource;
+    if (IS_CAMERA(currentSource)) {
+        [cameraController selectCameraOnSide:currentSource.currentSide
+                                      threeD:currentSource.usingDepthCamera];
+        [cameraController startCamera];
+    }
+    
     pausedLabel.hidden = YES;
     [pausedLabel setNeedsDisplay];
     
@@ -2083,6 +2051,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [currentSource save];
     [self reconfigure];
 }
+#endif
 
 - (void) startCamera {
     if (!IS_CAMERA(currentSource))
@@ -2117,58 +2086,19 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-// use the one at currentLayoutIndex
-- (void) switchLayout {
+-(void) updateLayoutForDeviceChange {
 #ifdef DEBUG_LAYOUT
-    NSLog(@"--- switch layout, list:");
-    for (int i=0; i<layouts.count; i++) {
-        Layout *layout = layouts[i];
-        NSLog(@"%@  %2d: %4.0f x %4.0f  %4.0f x %4.0f %4.0f x %4.0f  %3.1f  %3d   %@",
-              i == currentLayoutIndex ? @">>>" : @"   ",
-              i,
-              layout.captureSize.width, layout.captureSize.height,
-              layout.transformSize.width, layout.transformSize.height,
-              layout.displayRect.size.width, layout.displayRect.size.height,
-              layout.scale, layout.quality, layout.status);
-    }
-#endif
-    [self applyLayout];
-    if (IS_CAMERA(currentSource)) {
-        [cameraController setupCameraWithFormat:layout.format];
-    }
-}
-
-- (void) reconfigure {
-    [taskCtrl idleForLayout];
-    // will call idledForReconfiguration when idle
-}
-
-- (void) idledForReconfiguration {
-    NSLog(@"--- idledForReconfiguration ");
-    [self configureScreenForOrientation];
-}
-
--(void) configureScreenForOrientation {
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- configureScreenForOrientation: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
+    NSLog(@"--------- updateLayout: %.0f x %.0f, %@ --------",
+          self.view.frame.size.width, self.view.frame.size.height,
+          isPortrait ? @"port" : @"land");
 #endif
 
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
-#ifdef DEBUG_LAYOUT
-    NSLog(@"== reconfigure for %@",
-          isPortrait ? @"port" : @"land");
-#endif
     
     if (!isiPhone || !isPortrait)
         self.title = @"Digital Darkroom";
-
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
-    self.navigationController.navigationBar.opaque = YES;  // (uiMode == oliveUI);
-    self.navigationController.toolbar.opaque = YES;  // (uiMode == oliveUI);
-
+    
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
@@ -2177,14 +2107,14 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
     
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
-    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
 #ifdef DEBUG_LAYOUT
     CGFloat topPadding = window.safeAreaInsets.top;
-    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f %0.f",
-          leftPadding, rightPadding, topPadding, bottomPadding);
+    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f",
+          leftPadding, rightPadding, topPadding);
 #endif
     
     CGRect f = self.view.frame;
@@ -2199,19 +2129,35 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 #endif
     
     if (IS_CAMERA(currentSource)) {   // select camera setting for available area
-        [cameraController selectCamera:currentSource];
-        [cameraController setupSessionForOrientation:deviceOrientation];
+        assert(cameraController);
+        [cameraController selectCameraOnSide:currentSource.currentSide
+                                      threeD:currentSource.usingDepthCamera];
         NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(currentSource)];
+                                     formatsForSelectedCameraNeeding3D:currentSource.usingDepthCamera];
         currentLayoutIndex = [self chooseLayoutsFromFormatList:availableFormats];
         assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
-// was here        [cameraController setupSessionForOrientation:deviceOrientation];
-        [self startCamera];
     } else {
         currentLayoutIndex = [self chooseLayoutsForSourceSize:currentSource.imageSize];
         assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
     }
-    [self switchLayout];
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--- switch layout, list:");
+    for (int i=0; i<layouts.count; i++) {
+        Layout *layout = layouts[i];
+        NSLog(@"%@  %2d: %4.0f x %4.0f  %4.0f x %4.0f %4.0f x %4.0f  %3.1f  %3d   %@",
+              i == currentLayoutIndex ? @">>>" : @"   ",
+              i,
+              layout.captureSize.width, layout.captureSize.height,
+              layout.transformSize.width, layout.transformSize.height,
+              layout.displayRect.size.width, layout.displayRect.size.height,
+              layout.scale, layout.quality, layout.status);
+    }
+#endif
+    [self applyLayout];
+    [self updateSource];
+//    if (IS_CAMERA(currentSource)) {
+//        [cameraController setupCameraWithFormat:layout.format];
+//    }
 }
 
 CGSize lastAcceptedSize;
@@ -2344,8 +2290,6 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     return newLayoutIndex;
 }
 
-// this is called when we know the transforms are all Stopped.
-
 - (void) applyLayout {
     assert(currentLayoutIndex != LAYOUT_NO_GOOD); // previously selected
     layout = layouts[currentLayoutIndex];
@@ -2396,7 +2340,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     assert(below <= containerView.frame.size.height);
     assert(below <= self.navigationController.toolbar.frame.origin.y);
 
-    thumbArrayView.frame = CGRectMake(0, 0,
+    thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
 
@@ -2444,7 +2388,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {
             // move views to where they need to be now.
-            [self placeThumbsForLayout: self->layout];
+            [self layoutThumbs: self->layout];
         }];
     }
     
@@ -2492,6 +2436,29 @@ typedef enum {
     [sourceSelectionView setNeedsDisplay];
 }
 
+#endif
+
+#ifdef notdef
+- (void) loadImageWithURL: (NSURL *)URL {
+    NSString *path = [URL absoluteString];
+    NSLog(@"startNewDocumentWithURL: LibVC starting document %@", path);
+    if (![URL isFileURL]) {
+        DownloadVC *dVC = [[DownloadVC alloc]
+                           initWithURL: URL
+                           from: self];
+        dVC.modalPresentationStyle = UIModalPresentationFormSheet;
+        dVC.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+        [self presentViewController:dVC animated:YES completion:NULL];
+        // download will call back to processIncomingFile when
+        // the download is complete
+        return;
+    }
+    
+    NSString *newPath = [URL path];
+    [self processIncomingFile:newPath
+                suggestedName:[newPath lastPathComponent]
+                      fromURL:nil];
+}
 #endif
 
 @end

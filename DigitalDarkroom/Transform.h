@@ -64,7 +64,7 @@ typedef void (^ __nullable __unsafe_unretained
     NSString *name, *description;
     NSString *helpPath;     // URL tags, slash-separated, general to specific
     BOOL broken;
-    long arrayIndex;
+    long transformsArrayIndex;
     transform_t type;
     BOOL hasParameters;
     inPlacePtFunc_t ipPointF;
@@ -76,7 +76,7 @@ typedef void (^ __nullable __unsafe_unretained
 }
 
 @property (nonatomic, strong)   NSString *name, *description, *helpPath;
-@property (assign)              long arrayIndex;  // in the transforms array
+@property (assign)              long transformsArrayIndex; 
 @property (assign)              inPlacePtFunc_t ipPointF;
 @property (assign)              BOOL broken;
 //@property (assign)              pointFunction_t pointF;

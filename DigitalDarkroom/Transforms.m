@@ -83,7 +83,7 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) addTransform:(Transform *)transform {
-    transform.arrayIndex = transforms.count;
+    transform.transformsArrayIndex = transforms.count;
     if (!helpPath)
         transform.helpPath = transform.name;
     else {

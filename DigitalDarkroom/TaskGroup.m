@@ -172,7 +172,7 @@
 }
 
 - (BOOL) isReadyForLayout {
-    assert(taskCtrl.layoutNeeded);
+    assert(taskCtrl.reconfigurationNeeded);
     if (tasksStatus == Stopped)
         return YES;
     for (Task *task in tasks) {
@@ -210,7 +210,7 @@
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
 
-    if (taskCtrl.layoutNeeded && tasksStatus != Stopped) {
+    if (taskCtrl.reconfigurationNeeded && tasksStatus != Stopped) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
                 return;
@@ -218,7 +218,7 @@
         }
         // The are all stopped.  Inform the authorities
         tasksStatus = Stopped;
-        [taskCtrl reconfigureIfReady];
+        [taskCtrl reconfigureWhenReady];
         return;
     } else {
         for (Task *task in tasks) {

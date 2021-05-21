@@ -14,22 +14,35 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef enum {
+    Front,
+    Rear,
+} CameraSide;
+
+#define FLIP_SIDE(s)    (CameraSide)(Rear - s)
+
 @interface CameraController : NSObject {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
-            AVCaptureDepthDataOutputDelegate>delegate;
+        AVCaptureDepthDataOutputDelegate>delegate;
+    CameraSide currentSide;
+    BOOL usingDepthCamera;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
+@property (assign)  CameraSide currentSide;
+@property (assign)  BOOL usingDepthCamera;
 
-- (BOOL) isCameraAvailable:(InputSource *)source;
-- (BOOL) isDepthAvailable:(InputSource *)source;
-- (BOOL) isFlipAvailable:(InputSource *)source;
+- (BOOL) hasCameraOnSide:(CameraSide) side;
+- (BOOL) hasDepthCameraOnSide:(CameraSide) side;
+- (BOOL) isFlipAvailable;
 
-- (void) selectCamera:(InputSource *)source;
-- (void) setupSessionForOrientation: (UIDeviceOrientation) deviceOrientation;
+- (void) selectCameraOnSide:(CameraSide) side threeD:(BOOL)usingDepthCamera;
+
+- (void) updateOrientationTo:(UIDeviceOrientation) devo;
+- (void) setupSession;
 
 - (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
 - (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format;

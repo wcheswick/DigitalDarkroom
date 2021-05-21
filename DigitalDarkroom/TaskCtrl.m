@@ -20,7 +20,7 @@
 @synthesize mainVC;
 @synthesize transforms;
 @synthesize taskGroups;
-@synthesize layoutNeeded;
+@synthesize reconfigurationNeeded;
 @synthesize layingOut;
 @synthesize reconfiguring;
 
@@ -30,7 +30,7 @@
         mainVC = nil;
         taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
         assert(taskGroups);
-        layoutNeeded = YES;
+        reconfigurationNeeded = NO;
         layingOut = NO;
         reconfiguring = 0;
     }
@@ -44,18 +44,11 @@
     return taskGroup;
 }
 
-- (void) idleForLayout {
-    if (!layingOut) {
-        reconfiguring++;
-        layoutNeeded = YES; // race?
-    }
-    [self reconfigureIfReady];
-}
-
-- (void) reconfigureIfReady {
-    NSLog(@" reconfigureIfReady %d", reconfiguring);
-    if (layingOut)
+- (void) reconfigureWhenReady {
+    if (reconfigurationNeeded)
         return;
+    
+    reconfigurationNeeded = YES;
     TaskStatus_t newStatus = Stopped;
     for (TaskGroup *taskGroup in taskGroups) {
         if (![taskGroup isReadyForLayout])
@@ -63,15 +56,15 @@
     }
     if (newStatus == Stopped) {
         layingOut = YES;
+        reconfigurationNeeded = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self->mainVC idledForReconfiguration];
+            [self->mainVC updateLayoutForDeviceChange];
         });
     } else
         NSLog(@"  -- still busy to layout");
 }
 
 - (void) layoutCompleted {
-    layoutNeeded = NO;
     layingOut = NO;
     reconfiguring--;
     NSLog(@" layout completed: reconfiguring %d", reconfiguring);

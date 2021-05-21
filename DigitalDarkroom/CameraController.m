@@ -21,7 +21,6 @@
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
 
-@property (nonatomic, strong)   InputSource *currentCamera;
 @end
 
 @implementation CameraController
@@ -29,11 +28,12 @@
 @synthesize captureSession;
 @synthesize delegate;
 
+@synthesize currentSide, usingDepthCamera;
+
 @synthesize captureDevice;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
-@synthesize currentCamera;
 
 
 - (id)init {
@@ -43,74 +43,74 @@
         delegate = nil;
         captureDevice = nil;
         captureSession = nil;
-        currentCamera = nil;
+        usingDepthCamera = NO;
+        currentSide = Front;
         videoOrientation = -1;  // not initialized
     }
     return self;
 }
 
-- (AVCaptureDevice *) captureDeviceForCamera:(BOOL)frontCamera threeD:(BOOL)threeD {
+- (AVCaptureDevice *) cameraDeviceOnSide:(CameraSide)side threeD:(BOOL)threeD {
     if (threeD) {
-        if (frontCamera) {
-            return [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
-                             mediaType: AVMediaTypeDepthData
-                             position: AVCaptureDevicePositionFront];
-        } else {
-            return [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                             mediaType: AVMediaTypeDepthData
-                             position: AVCaptureDevicePositionBack];
+        switch (side) {
+            case Front:
+                return [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
+                                 mediaType: AVMediaTypeDepthData
+                                 position: AVCaptureDevicePositionFront];
+            case Rear:
+                return [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                                 mediaType: AVMediaTypeDepthData
+                                 position: AVCaptureDevicePositionBack];
+        }
+    } else {
+        AVCaptureDevice *testDevice;
+        switch (side) {
+            case Front:
+               testDevice = [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                                 mediaType: AVMediaTypeVideo
+                                 position: AVCaptureDevicePositionFront];
+                if (!testDevice) {
+                    testDevice = [AVCaptureDevice
+                                     defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                     mediaType: AVMediaTypeVideo
+                                     position: AVCaptureDevicePositionFront];
+                }
+                return testDevice;
+            case Rear:
+                testDevice = [AVCaptureDevice
+                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
+                                 mediaType: AVMediaTypeVideo
+                                 position: AVCaptureDevicePositionBack];
+                if (!testDevice)
+                    testDevice = [AVCaptureDevice
+                                     defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                     mediaType: AVMediaTypeVideo
+                                     position: AVCaptureDevicePositionBack];
+                return testDevice;
         }
     }
-    
-    AVCaptureDevice *captureDevice = nil;
-    if (frontCamera) {
-        captureDevice = [AVCaptureDevice
-                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                         mediaType: AVMediaTypeVideo
-                         position: AVCaptureDevicePositionFront];
-        if (!captureDevice) {
-            captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                             mediaType: AVMediaTypeVideo
-                             position: AVCaptureDevicePositionFront];
-        }
-    } else {    // rear camera
-        captureDevice = [AVCaptureDevice
-                         defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                         mediaType: AVMediaTypeVideo
-                         position: AVCaptureDevicePositionBack];
-        if (!captureDevice)
-            captureDevice = [AVCaptureDevice
-                             defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                             mediaType: AVMediaTypeVideo
-                             position: AVCaptureDevicePositionBack];
-    }
-    return captureDevice;
 }
 
-- (BOOL) isCameraAvailable:(InputSource *)source {
-    return [self captureDeviceForCamera:source.frontCamera threeD:source.threeDCamera] != nil;
+- (BOOL) hasCameraOnSide:(CameraSide) side {
+    return [self cameraDeviceOnSide: side threeD:NO] != nil;
 }
 
-- (BOOL) isDepthAvailable: (InputSource *)source {
-    if (!IS_CAMERA(source))
-        return NO;
-    return [self captureDeviceForCamera:source.frontCamera threeD:YES] != nil;
+- (BOOL) hasDepthCameraOnSide:(CameraSide) side {
+    return [self cameraDeviceOnSide: side threeD:YES] != nil;
 }
 
-- (BOOL) isFlipAvailable:(InputSource *)source {
-    if (!IS_CAMERA(source))
-        return NO;
-    return [self captureDeviceForCamera:!source.frontCamera threeD:source.threeDCamera] != nil;
+- (BOOL) isFlipAvailable {
+    return [self cameraDeviceOnSide: FLIP_SIDE(currentSide) threeD:usingDepthCamera] != nil;
 }
 
-- (void) selectCamera:(InputSource *)source {
-    assert(IS_CAMERA(source));
-    captureDevice = [self captureDeviceForCamera:source.frontCamera threeD:source.threeDCamera];
+- (void) selectCameraOnSide:(CameraSide) side threeD:(BOOL)depth {
+    captureDevice = [self cameraDeviceOnSide:side threeD:depth];
     assert(captureDevice);
-    currentCamera = source;
+    currentSide = side;
+    usingDepthCamera = depth;
 }
 
 // I really have no idea what is going on here.  Values were determined by
@@ -136,13 +136,15 @@
     }
 }
 
-// need an up-to-date deviceorientation
-- (void) setupSessionForOrientation: (UIDeviceOrientation) devo {
-    NSError *error;
-    assert(captureDevice);
-    
+- (void) updateOrientationTo:(UIDeviceOrientation) devo {
     deviceOrientation = devo;
     videoOrientation = [self videoOrientationForDeviceOrientation];
+}
+
+// need an up-to-date deviceorientation
+- (void) setupSession {
+    NSError *error;
+    assert(captureDevice);
     
 #ifdef DEBUG_ORIENTATION
     NSLog(@" +++ setupSession: device orientation (%ld): %@",
@@ -177,7 +179,7 @@
         NSLog(@"**** could not add camera input");
     }
 
-    if (currentCamera.threeDCamera) {   // XXX i.e. depth available ?!        
+    if (usingDepthCamera) {   // XXX i.e. depth available ?!
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
@@ -188,7 +190,7 @@
         AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(depthConnection);
         [depthConnection setVideoOrientation:videoOrientation];
-        depthConnection.videoMirrored = currentCamera.threeDCamera;
+        depthConnection.videoMirrored = usingDepthCamera;
 #ifdef DEBUG_DEPTH
         NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
               captureOrientationNames[videoOrientation]);
@@ -209,7 +211,7 @@
         // depthDataByApplyingExifOrientation
         AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
         [videoConnection setVideoOrientation:videoOrientation];
-        videoConnection.videoMirrored = !currentCamera.threeDCamera;
+        videoConnection.videoMirrored = !usingDepthCamera;
 #ifdef DEBUG_ORIENTATION
         NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
               deviceOrientationNames[videoOrientation]);
@@ -235,7 +237,7 @@
     // I cannot seem to get the format data adjusted for device orientation.  So we
     // swap them here, if portrait.
     CMVideoDimensions dimensions = CMVideoFormatDescriptionGetDimensions(ref);
-    CGFloat w, h;
+    CGFloat w=0, h=0;
     
     switch (videoOrientation) {
         case AVCaptureVideoOrientationPortrait:
@@ -247,6 +249,9 @@
         case AVCaptureVideoOrientationLandscapeRight:
             w = dimensions.width;
             h = dimensions.height;
+            break;
+        case -1:
+            NSLog(@"inconceivable: orientation not initialized");
             break;
         default:
             NSLog(@"Unexpected video orientation: %ld", (long)videoOrientation);
@@ -337,7 +342,10 @@
 }
 
 - (void) startCamera {
-    assert(captureSession);
+    if (!captureSession) {
+        NSLog(@"startcamera: no capture session yet");
+        return;
+    }
     if (![self isCameraOn])
         [captureSession startRunning];
 }

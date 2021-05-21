@@ -266,7 +266,7 @@ static PixelIndex_t dPI(int x, int y) {
     size_t destIndex;
 
     for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
-        if (taskGroup.taskCtrl.layoutNeeded) {  // abort our processing
+        if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
             taskStatus = Stopped;
             return;
         }

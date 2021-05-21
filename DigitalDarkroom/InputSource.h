@@ -8,29 +8,30 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import "CameraController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 #define IS_CAMERA(i)        ((i).imagePath == nil)
-#define IS_3D_CAMERA(i)     (IS_CAMERA(i) && i.threeDCamera)
 
 @interface InputSource : NSObject {
     NSString *label;
     NSString *__nullable imagePath;        // if file set, then not a camera
-    BOOL frontCamera;           // if imagePath == nil, which camera is selected
-    BOOL threeDCamera;          // ... and it it the depth camera
+    CameraSide currentSide;
+    BOOL usingDepthCamera;
     CGSize imageSize;
     UIImage *__nullable thumbImageCache;
 }
 
 @property (nonatomic, strong)   NSString *label;
-@property (assign)              BOOL frontCamera, threeDCamera;
+@property (assign)              CameraSide currentSide;
+@property (assign)              BOOL usingDepthCamera;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
 @property (assign)              CGSize imageSize;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 
-- (void) makeCameraSource;
+- (void) makeCameraSourceOnSide:(CameraSide) side threeD:(BOOL) threeD;
 - (void) setUpImageAt:(NSString *)path;
 + (NSData *) lastSourceArchive;
 - (void) save;
