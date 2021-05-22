@@ -32,6 +32,7 @@ typedef enum {
     AreaTrans,
     DepthVis,
     EtcTrans,
+    NullTrans,
 } transform_t;
 
 
@@ -112,6 +113,8 @@ typedef void (^ __nullable __unsafe_unretained
                 depthVis:(depthVis_t) f;
 
 - (void) clearRemap;
+
+extern  Transform *nullTransform;
 
 @end
 

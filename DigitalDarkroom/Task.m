@@ -56,15 +56,16 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskStatus;
 @synthesize enabled, depthLocked;
 
-- (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg usingDepth:(Transform *) dt {
+- (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg {
     self = [super init];
     if (self) {
         taskName = n;
         taskGroup = tg;
         taskIndex = UNASSIGNED_TASK;
+        // create list, with empty depth transform
         transformList = [[NSMutableArray alloc] init];
         paramList = [[NSMutableArray alloc] init];
-        [self useDepthTransform:dt];
+        [self appendTransformToTask:nullTransform]; // empty depth transform
         enabled = YES;
         depthLocked = NO;
         taskStatus = Stopped;
@@ -83,29 +84,16 @@ static PixelIndex_t dPI(int x, int y) {
     return nil;
 }
 
-// we may not reveal it, but it is always there
+// we may not reveal it, but it is always there. May be nullTransform
 
 - (void) useDepthTransform:(Transform *) transform {
-    assert(transform);
-    assert(transform.type = DepthVis);
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
-    if (transformList.count == 0) {
-        // starting up.  first entry is always depth transform needed
-        assert(DEPTH_TRANSFORM == 0);
-        [transformList addObject:transform];
-        [paramList addObject:instance];
-    } else {
-        [transformList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:transform];
-        [paramList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:instance];
-    }
+    [transformList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:transform];
+    [paramList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:instance];
 }
 
 - (long) appendTransformToTask:(Transform *) transform {
-    assert(transformList.count > 0);    // depth has to be there already
-    assert(transform.type != DepthVis); // we have depth, don't add another one
-//    if (taskGroup.taskCtrl.layoutNeeded)
-//        return; // nope, busy
     [transformList addObject:transform];
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
@@ -156,7 +144,7 @@ static PixelIndex_t dPI(int x, int y) {
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
     assert(chBuf0);
     assert(chBuf1);
-    for (int i=1; i<transformList.count; i++) { // XXX not depth viz
+    for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
         [self configureTransformAtIndex:i];
     }
 }
@@ -173,6 +161,8 @@ static PixelIndex_t dPI(int x, int y) {
 - (BOOL) updateParamOfLastTransformTo:(int) newParam {
     long index = paramList.count - 1;
     Transform *lastTransform = transformList[index];
+    if (lastTransform.type == NullTrans)
+        return NO;
     TransformInstance *lastInstance = paramList[index];
     if (lastInstance.value == newParam)
         return NO;
@@ -232,6 +222,7 @@ static PixelIndex_t dPI(int x, int y) {
     // out of range, and should clip it.
 
     Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
+    assert(transform.type == DepthVis); // Could be NullTrans, inconceivable
     TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
     transform.depthVisF(depthBuf, imBuf0, instance);
     [self executeTransformsStartingWithImBuf0];
@@ -322,6 +313,8 @@ static PixelIndex_t dPI(int x, int y) {
     PixBuf *dst = imBufs[destIndex];        // we may not use this: transform may be in place
     
     switch (transform.type) {
+        case NullTrans:
+            assert(NO); // should never try a null, it is a placeholder for inactive stuff
         case ColorTrans:
             transform.ipPointF(src.pb, src.w*src.h, instance.value);
             return sourceIndex;     // was done in place

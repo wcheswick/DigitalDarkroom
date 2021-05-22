@@ -280,6 +280,8 @@ typedef enum {
     self = [super init];
     if (self) {
         transforms = [[Transforms alloc] init];
+        nullTransform = [[Transform alloc] init];
+        
         currentTransformIndex = NO_TRANSFORM;
         lastSourceImage = nil;
         layout = nil;
@@ -373,29 +375,39 @@ typedef enum {
     thumbViewsArray = [[NSMutableArray alloc] init];
 
     UITapGestureRecognizer *touch;
-    
     NSString *lastSection = nil;
+    
     for (size_t ti=0; ti<transforms.transforms.count; ti++) {
         ThumbView *thumbView = [[ThumbView alloc] init];
 
         Transform *transform = [transforms.transforms objectAtIndex:ti];
         NSString *section = [transform.helpPath pathComponents][0];
-        if (!lastSection || ![section isEqualToString:section]) {   // new section
+        if (!lastSection || ![lastSection isEqualToString:section]) {   // new section
             [thumbView configureSectionThumbNamed:section
                                        withSwitch:!lastSection ? depthSwitch : nil];
             thumbView.tag = THUMB_SECTION_TAG;     // encode the index of this transform
             [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
+            
             thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
+            lastSection = section;
         }
         [thumbView configureForTransform:transform];
         thumbView.transformIndex = ti;     // encode the index of this transform
-        
+        thumbView.tag = ti + TRANSFORM_BASE_TAG;
+
         [self adjustThumbView:thumbView selected:NO];
         if (transform.type == DepthVis) {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapDepthVis:)];
-                touch.enabled = cameraController.usingDepthCamera;
+            touch.enabled = cameraController.usingDepthCamera;
+            UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+            Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
+                                                                 named:transform.name];
+            [thumbView addSubview:imageView];
+            // these thumbs display their own transform of the depth input only, and don't
+            // change when they are used.
+            task.depthLocked = YES;
         } else {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
@@ -404,13 +416,12 @@ typedef enum {
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
-                Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
-                                                                named:transform.name
-                                                       depthTransform:transform];
-                // these thumbs display their own transform of the depth input only, and don't
-                // change when they are used.
+                Task *task = [thumbTasks createTaskForTargetImageView:imageView
+                                                                named:transform.name];
+                [task appendTransformToTask:transform];
                 task.depthLocked = YES;
             }
+            [thumbView addSubview:imageView];
         }
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
@@ -427,6 +438,125 @@ typedef enum {
     for (ThumbView *thumbView in thumbViewsArray) {
         [thumbsView addSubview:thumbView];
     }
+}
+
+// A thumb can have three states:
+//  - disabled
+//  - enabled, but not selected
+//  - selected
+//
+// This information is stored in the touch and view properties of each thumb.
+
+CGRect imageRect;
+CGRect nextButtonFrame;
+BOOL atStartOfRow;
+CGFloat topOfNonDepthArray = 0;
+
+// Transform thumb layout needs to be checked at
+// - every display size change
+// - device rotation
+// - 3D selection change
+//
+//  The ordered list of transform and section thumbs are in thumbViewsArray,
+//  and are subViews of thumbsView.  Their positions need adjustment. If there
+//  no current 3D selected, hide those thumbs behind the section header.
+
+
+- (void) layoutThumbArray:(Layout *)layout {
+    nextButtonFrame = layout.firstThumbRect;
+    assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
+    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
+    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
+        [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
+
+    CGRect transformNameRect;
+    transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect)+SEP);
+    transformNameRect.size = CGSizeMake(nextButtonFrame.size.width, THUMB_LABEL_H);
+    
+    CGRect switchRect = CGRectMake((nextButtonFrame.size.width - SECTION_SWITCH_W)/2, nextButtonFrame.size.height-SECTION_SWITCH_H - SEP,
+                                   SECTION_SWITCH_W, SECTION_SWITCH_H);
+    CGRect sectionNameRect = CGRectMake(0, 0,
+                                        nextButtonFrame.size.width, nextButtonFrame.size.height - switchRect.origin.y);
+    
+    // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
+    // positions for the current situation. These thumbs come in section, each of which has
+    // their own section header thumb display. This header starts on a new line (if vertical
+    // thumb placement) or after a space on horizontal placements.
+    
+    atStartOfRow = YES;
+    CGFloat thumbsH = 0;
+    NSString *lastSection = nil;
+    
+#ifdef NOTDEF       // they don't appear any more if no 3D
+    UIImage *noCameraImage = nil;
+    if (!cameraController.usingDepthCamera)
+        noCameraImage = [UIImage imageNamed:[[NSBundle mainBundle]
+                                             pathForResource:@"images/no3Dcamera.png"
+                                             ofType:@""]];
+#endif
+    
+    // run through the thumbview array
+    for (ThumbView *thumbView in thumbViewsArray) {
+        if (thumbView.tag == THUMB_SECTION_TAG) {   // new section
+            NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Section %@",
+                  nextButtonFrame.origin.x, nextButtonFrame.origin.y,
+                  nextButtonFrame.size.width, nextButtonFrame.size.height,
+                  thumbView.sectionName);
+            if (lastSection) {  // not our first section, make space
+                if (!atStartOfRow) {
+                    [self nextTransformButtonPosition];
+                }
+#ifdef NOTDEF
+//                if (layout.thumbsPlacement == ThumbsOnRight) {  // new line for each section
+//                    if (!atStartOfRow)
+//                        [self buttonsContinueOnNextRow];
+///                } else {    // buttons on bottom, need a preceeding space
+//                }
+#endif
+            }
+            
+            UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+            label.frame = sectionNameRect;
+            UISwitch *sw = [thumbView viewWithTag:THUMB_SWITCH_TAG];
+            sw.frame = switchRect;
+            
+            thumbView.frame = nextButtonFrame;  // this is a little incomplete
+            lastSection = thumbView.sectionName;
+        } else {
+            Transform *transform = [transforms.transforms objectAtIndex:thumbView.transformIndex];
+            thumbView.userInteractionEnabled = !transform.broken;
+            NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
+                  nextButtonFrame.origin.x, nextButtonFrame.origin.y,
+                  nextButtonFrame.size.width, nextButtonFrame.size.height,
+                  transform.name);
+
+            UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+            
+//            if (transform.type == DepthVis) {
+//                if (!cameraController.usingDepthCamera) {
+//                    continue;     // we don't advance
+//                } else {
+                    [self adjustThumbView:thumbView
+                                 selected:(thumbView.transformIndex == currentDepthTransformIndex)];
+//                }
+ //           }
+            
+            thumbImage.frame = layout.thumbImageRect;
+            UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+            label.frame = transformNameRect;
+            thumbView.frame = nextButtonFrame;
+        }
+        atStartOfRow = NO;
+        thumbsH = BELOW(thumbView.frame);
+        
+        [self nextTransformButtonPosition];
+    }
+    
+    SET_VIEW_HEIGHT(thumbsView, thumbsH);
+    thumbScrollView.contentSize = thumbsView.frame.size;
+    thumbScrollView.contentOffset = thumbsView.frame.origin;
+    
+    [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
 }
 
 - (void) saveDepthTransformName {
@@ -739,10 +869,8 @@ static NSString * const imageOrientationName[] = {
     [containerView bringSubviewToFront:overlayView];
     
     if (cameraController) {
-        Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
         screenTask = [screenTasks createTaskForTargetImageView:transformView
-                                                         named:@"main"
-                                                depthTransform:depthTransform];
+                                                         named:@"main"];
     }
     
     thumbScrollView = [[UIScrollView alloc] init];
@@ -762,8 +890,6 @@ static NSString * const imageOrientationName[] = {
     [thumbScrollView addSubview:thumbsView];
     [containerView addSubview:thumbScrollView];
 
-    [self createThumbArray];    // animate to correct positions later
-    
     [self.view addSubview:containerView];
     
     //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
@@ -877,104 +1003,6 @@ static NSString * const imageOrientationName[] = {
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
 }
 
-// A thumb can have three states:
-//  - disabled
-//  - enabled, but not selected
-//  - selected
-//
-// This information is stored in the touch and view properties of each thumb.
-
-CGRect imageRect;
-CGRect nextButtonFrame;
-BOOL atStartOfRow;
-CGFloat topOfNonDepthArray = 0;
-
-// Transform thumb layout needs to be checked at
-// - every display size change
-// - device rotation
-// - 3D selection change
-//
-//  The ordered list of transform and section thumbs are in thumbViewsArray,
-//  and are subViews of thumbsView.  Their positions need adjustment. If there
-//  no current 3D selected, hide those thumbs behind the section header.
-
-
-- (void) layoutThumbs:(Layout *)layout {
-    nextButtonFrame = layout.firstThumbRect;
-    assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
-    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
-        [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
-
-    atStartOfRow = YES;
-
-    // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
-    // positions for the current situation. These thumbs come in section, each of which has
-    // their own section header thumb display. This header starts on a new line (if vertical
-    // thumb placement) or after a space on horizontal placements.
-    
-    CGFloat thumbsH = 0;
-    NSString *lastSection = nil;
-    
-#ifdef NOTDEF       // they don't appear any more if no 3D
-    UIImage *noCameraImage = nil;
-    if (!cameraController.usingDepthCamera)
-        noCameraImage = [UIImage imageNamed:[[NSBundle mainBundle]
-                                             pathForResource:@"images/no3Dcamera.png"
-                                             ofType:@""]];
-#endif
-    
-    // run through the thumbview array
-    for (ThumbView *thumbView in thumbViewsArray) {
-        if (thumbView.tag == THUMB_SECTION_TAG) {   // new section
-            if (lastSection) {  // not our first section, make space
-                if (layout.thumbsPlacement == ThumbsOnRight) {  // new line for each section
-                    if (!atStartOfRow)
-                        [self buttonsContinueOnNextRow];
-                } else {    // buttons on bottom, need a preceeding space
-                    if (!atStartOfRow) {
-                        [self nextTransformButtonPosition];
-                    }
-                }
-            }
-            thumbView.frame = nextButtonFrame;  // this is a little incomplete
-            
-            lastSection = thumbView.sectionName;
-            continue;
-        }
-        
-        Transform *transform = [transforms.transforms objectAtIndex:thumbView.transformIndex];
-        thumbView.userInteractionEnabled = !transform.broken;
-
-        UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        
-        if (transform.type == DepthVis) {
-            if (!cameraController.usingDepthCamera) {
-                continue;     // we don't advance
-            } else {
-                [self adjustThumbView:thumbView
-                             selected:(thumbView.transformIndex == currentDepthTransformIndex)];
-            }
-        }
-        
-        thumbView.frame = nextButtonFrame;
-        thumbImage.frame = layout.thumbImageRect;
-//        UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
-        thumbView.frame = CGRectMake(0, BELOW(thumbImage.frame), thumbView.frame.size.width, OLIVE_LABEL_H);
-
-        atStartOfRow = NO;
-        thumbsH = BELOW(thumbView.frame);
-        
-        [self nextTransformButtonPosition];
-    }
-    
-    SET_VIEW_HEIGHT(thumbsView, thumbsH);
-    thumbScrollView.contentSize = thumbsView.frame.size;
-    thumbScrollView.contentOffset = thumbsView.frame.origin;
-    
-    [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
-}
-
 - (void) nextTransformButtonPosition {
     CGRect f = nextButtonFrame;
     if (RIGHT(f) + SEP + f.size.width > thumbsView.frame.size.width) {   // on to next line
@@ -1025,16 +1053,13 @@ CGFloat topOfNonDepthArray = 0;
         transforms.sequenceChanged = YES;
     }
 #endif
-    UIView *tappedThumb = [recognizer view];
+    ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     [self transformThumbTapped: tappedThumb];
 }
 
 
-#define EXECUTE_ROW_COUNT   (self->executeListView.subviews.count)
-
-- (void) transformThumbTapped: (UIView *) tappedThumb {
-    long tappedTransformIndex = tappedThumb.tag - TRANSFORM_BASE_TAG;
-    Transform *tappedTransform = [transforms.transforms objectAtIndex:tappedTransformIndex];
+- (void) transformThumbTapped: (ThumbView *) tappedThumb {
+    Transform *tappedTransform = transforms.transforms[tappedThumb.transformIndex];
 
     size_t lastTransformIndex = screenTask.transformList.count - 1; // depth transform (#0) doesn't count
     Transform *lastTransform = nil;
@@ -1052,7 +1077,7 @@ CGFloat topOfNonDepthArray = 0;
         if (lastTransform) {
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
             [screenTask removeLastTransform];
-            UIView *oldThumb = [self thumbForTransform:lastTransform];
+            ThumbView *oldThumb = [self thumbForTransform:lastTransform];
             [self adjustThumbView:oldThumb selected:NO];
             if (reTap) {
                 // retapping a transform in not plus mode means just remove it, and we are done
@@ -1091,15 +1116,15 @@ CGFloat topOfNonDepthArray = 0;
     [self updateExecuteView];
 }
 
-- (void) adjustThumbView:(UIView *) thumb selected:(BOOL)selected {
+- (void) adjustThumbView:(ThumbView *) thumb selected:(BOOL)selected {
     UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
     if (selected) {
-        label.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+        label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
         thumb.layer.borderWidth = 5.0;
-        currentTransformIndex = thumb.tag - TRANSFORM_BASE_TAG;
+        currentTransformIndex = thumb.transformIndex;
         label.highlighted = YES;    // this doesn't seem to do anything
     } else {
-        label.font = [UIFont systemFontOfSize:OLIVE_FONT_SIZE];
+        label.font = [UIFont systemFontOfSize:THUMB_FONT_SIZE];
         thumb.layer.borderWidth = 1.0;
         label.highlighted = NO;
     }
@@ -1170,10 +1195,10 @@ CGFloat topOfNonDepthArray = 0;
         UILongPressGestureRecognizer *gesture = (UILongPressGestureRecognizer *)caller;
         if (gesture.state != UIGestureRecognizerStateBegan)
             return;
-        UIView *thumbView = gesture.view;
+        ThumbView *thumbView = (ThumbView *)gesture.view;
         sourceView = thumbView;
         
-        long transformIndex = thumbView.tag - TRANSFORM_BASE_TAG;
+        long transformIndex = thumbView.transformIndex;
         assert(transformIndex >= 0 && transformIndex < transforms.transforms.count);
         Transform *transform = [transforms transformAtIndex:transformIndex];
         helpPath = transform.helpPath;
@@ -1389,7 +1414,7 @@ static CGSize startingDisplaySize;
     thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-    [self layoutThumbs: layout];
+    [self layoutThumbArray: layout];
     assert(layout.displayRect.size.width == layout.executeRect.size.width);
     [self updateExecuteView];
 }
@@ -1671,7 +1696,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveLastTransform {
     if (screenTask.transformList.count > 1) {
         Transform *lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
-        UIView *thumbView = [self thumbForTransform:lastTransform];
+        ThumbView *thumbView = [self thumbForTransform:lastTransform];
         [self adjustThumbView:thumbView selected:NO];
         [screenTask removeLastTransform];
         [self updateExecuteView];
@@ -2388,7 +2413,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {
             // move views to where they need to be now.
-            [self layoutThumbs: self->layout];
+            [self layoutThumbArray: self->layout];
         }];
     }
     

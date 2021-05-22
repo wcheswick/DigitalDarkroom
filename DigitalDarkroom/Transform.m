@@ -8,6 +8,8 @@
 
 #import "Transform.h"
 
+Transform *nullTransform = nil;
+
 @implementation Transform
 
 @synthesize name, description, helpPath;
@@ -29,6 +31,7 @@
     self = [super init];
     if (self) {
         transformsArrayIndex = -1;    // assigned in transforms
+        type = NullTrans;
         ipPointF = nil;
         broken = NO;
         helpPath = nil;

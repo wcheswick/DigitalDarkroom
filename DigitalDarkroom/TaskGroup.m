@@ -26,6 +26,7 @@
 @synthesize srcPix;
 @synthesize depthBuf;
 @synthesize tasksStatus;
+@synthesize depthTransform;
 
 @synthesize tasks;
 @synthesize remapCache;
@@ -81,10 +82,10 @@
 }
 
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn
-                         depthTransform:(Transform *)dt {
+                                  named:(NSString *)tn {
 //    assert(transformSize.width > 0);    // group must be configured for a size already
-    Task *newTask = [[Task alloc] initTaskNamed:tn inGroup:self usingDepth:dt];
+    Task *newTask = [[Task alloc] initTaskNamed:tn
+                                        inGroup:self];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
 //    [newTask configureTaskForSize];

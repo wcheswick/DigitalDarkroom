@@ -10,7 +10,7 @@
 #define Defines_h
 
 #define DEBUG_LAYOUT    1
-#define DEBUG_ORIENTATION 1
+//#define DEBUG_ORIENTATION 1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
@@ -74,8 +74,8 @@ typedef long PixelIndex_t;
 
 #define PAUSE_FONT_SIZE 18
 #define PAUSE_W         (PAUSE_FONT_SIZE*12)
-#define OLIVE_FONT_SIZE 14
-#define OLIVE_LABEL_H   (2.0*(OLIVE_FONT_SIZE+4))
+#define THUMB_FONT_SIZE 14
+#define THUMB_LABEL_H   (2.0*(THUMB_FONT_SIZE+4))
 
 #define SECTION_HEADER_FONT_SIZE    24
 

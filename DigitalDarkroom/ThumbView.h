@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define THUMB_SECTION_TAG   (-1)
 
+#define SECTION_NAME_FONT_SIZE  14
+#define SECTION_SWITCH_H    31
+#define SECTION_SWITCH_W    51  // apparently fixed?
+
 @interface ThumbView : UIView {
     NSString *sectionName;
     long transformIndex;

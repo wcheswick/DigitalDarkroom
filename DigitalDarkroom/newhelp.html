@@ -71,8 +71,17 @@
 
     <h2 id="geometric">Geometric transforms</h2>
     <h2 id="polar geometric">Polar geometrics</h2>
+    
     <h2 id="area">Area transforms</h2>
+    In area transforms, a particular pixel's value is based on the pixels around it.  The math of the
+    surrounding pixels is called a kernel, and the kernel is moved over the whole image, one pixel at
+    a time.  This can take a fair amount of computer time.  By the way this process is a form of what
+    is called a convolution.
+    
     <h2 id="point">Point transforms</h2>
+    Point processes change the value of individual pixels based on some aspect of their color.  Perhaps only
+    the red channel is shown, or a color is converted to luminance (brightness). Colors can be changed
+    to simulate colorblindness, or create artistic effects.
 
     <h1 id="userinterface">User interface</h1>
     <p><br>

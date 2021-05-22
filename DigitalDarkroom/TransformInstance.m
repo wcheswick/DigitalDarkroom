@@ -21,10 +21,12 @@
     self = [super init];
     if (self) {
         remapBuf = nil;
-        hasParams = transform.hasParameters;
-        value = transform.value;
         timesCalled = 0;
         elapsedProcessingTime = 0;
+        if (transform.type != NullTrans) {
+            hasParams = transform.hasParameters;
+            value = transform.value;
+        }
     }
     return self;
 }

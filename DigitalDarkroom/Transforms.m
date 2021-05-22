@@ -313,58 +313,6 @@ mostCommonColorInHist(Hist_t *hists) {
 
 - (void) addTestTransforms {
 
-    lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
-                                 description: @""
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        int centerX = (int)remapBuf.w/2;
-        int centerY = (int)remapBuf.h/2;
-        float maxR = MIN(remapBuf.w-1, remapBuf.h-1)/2.0;
-        float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
-        float halfTheta = theta/2.0;
-        
-        // the incoming circle of pixels is divided into sectors. The original
-        // data is in the top half of the half sector at theta >= 0.  That live sector
-        // is mirrored on the half sector below theta = 0. Through the wonders of
-        // modular arithmetic, the original pixels are mapped, mirrored or not
-        // mirrored, to all the other pixels.
-        
-        // we fix out the remap ())or color) for each pixel
-        for (int yi=0; yi<remapBuf.h; yi++) {
-            // for computation, it is easier to thing of the top of the image
-            // as y > 0.
-            int y = ((int)remapBuf.h - yi) - 1;
-            for (int x=0; x<remapBuf.w; x++) {
-                float xc = x - centerX;
-                // we use standard cartesian angles, with y==0 on the bottom
-                float yc = y - centerY;
-                float r = hypot(xc, yc) / 2.0;
-                if (r > maxR || r == 0) {
-                    REMAP_COLOR(x, y, Remap_White);
-                    continue;
-                }
-#define RADEG(a)    ((a)* 180.0 / M_PI)     // for debugging
-                float a = atan2f(yc, xc);
-                a = fmod(a + 2.0*M_PI, 2*M_PI);     // 0 <= a <= 2*M_PI
-                //assert(a >= 0.0 && a < 2*M_PI);
-                float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
-                assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
-                float sourceTheta = fabs(sourceSectorTheta) - M_PI;
-//                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
-                int scx = r * cos(sourceTheta);
-                int scy = r * sin(sourceTheta);
-                int xs = centerX + scx;
-                int ys = centerY + scy;
-                UNSAFE_REMAP_TO(x, yi, xs, ys);
-            }
-        }
-        UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
-    }];
-    lastTransform.low = 1;
-    lastTransform.value = 5;
-    lastTransform.high = 12;
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-
     lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -640,6 +588,58 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
+    lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
+                                 description: @""
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        int centerX = (int)remapBuf.w/2;
+        int centerY = (int)remapBuf.h/2;
+        float maxR = MIN(remapBuf.w-1, remapBuf.h-1)/2.0;
+        float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
+        float halfTheta = theta/2.0;
+        
+        // the incoming circle of pixels is divided into sectors. The original
+        // data is in the top half of the half sector at theta >= 0.  That live sector
+        // is mirrored on the half sector below theta = 0. Through the wonders of
+        // modular arithmetic, the original pixels are mapped, mirrored or not
+        // mirrored, to all the other pixels.
+        
+        // we fix out the remap ())or color) for each pixel
+        for (int yi=0; yi<remapBuf.h; yi++) {
+            // for computation, it is easier to thing of the top of the image
+            // as y > 0.
+            int y = ((int)remapBuf.h - yi) - 1;
+            for (int x=0; x<remapBuf.w; x++) {
+                float xc = x - centerX;
+                // we use standard cartesian angles, with y==0 on the bottom
+                float yc = y - centerY;
+                float r = hypot(xc, yc) / 2.0;
+                if (r > maxR || r == 0) {
+                    REMAP_COLOR(x, y, Remap_White);
+                    continue;
+                }
+#define RADEG(a)    ((a)* 180.0 / M_PI)     // for debugging
+                float a = atan2f(yc, xc);
+                a = fmod(a + 2.0*M_PI, 2*M_PI);     // 0 <= a <= 2*M_PI
+                //assert(a >= 0.0 && a < 2*M_PI);
+                float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
+                assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
+                float sourceTheta = fabs(sourceSectorTheta) - M_PI;
+//                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
+                int scx = r * cos(sourceTheta);
+                int scy = r * sin(sourceTheta);
+                int xs = centerX + scx;
+                int ys = centerY + scy;
+                UNSAFE_REMAP_TO(x, yi, xs, ys);
+            }
+        }
+        UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 5;
+    lastTransform.high = 12;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
 
     lastTransform = [Transform areaTransform: @"Skrunch"
                                  description: @""
@@ -747,49 +747,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
     
-    // this destroys src
-    lastTransform = [Transform areaTransform: @"Old AT&T logo"
-                                 description: @"Tom Duff's logo transform"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        size_t h = src.h;
-        size_t w = src.w;
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = LUM(src.pa[y][x]);
-                src.pa[y][x] = SETRGB(c,c,c);
-            }
-        }
-        
-        int hgt = instance.value;
-        assert(hgt > 0);
-        int c;
-        int y0, y1;
-        
-        for (int y=0; y<h; y+= hgt) {
-            if (y+hgt>h)
-                hgt = (int)h-(int)y;
-            for (int x=0; x < w; x++) {
-                c=0;
-                for(y0=0; y0<hgt; y0++)
-                c += src.pa[y+y0][x].r;
-                y0 = y+(hgt-1)/2;
-                y1 = y+(hgt-1-(hgt-1)/2);
-                for (; y0 >= y; --y0, ++y1)
-                c = stripe(src.pa, x, y0, y1, c);
-            }
-        }
-        
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = src.pa[y][x].r;
-                dest.pa[y][x] = SETRGB(c, c, c);
-            }
-        }
-    }];
-    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
+#ifdef UNDEBUGGED
+#endif
+    
 }
 
 #define RGB_SPACE   ((float)((1<<24) - 1))
@@ -1063,6 +1023,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
+#ifdef NOTDEF
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
@@ -1098,6 +1059,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
+#endif
     
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
@@ -1572,6 +1534,51 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         }
     }];
     [self addTransform:lastTransform];
+    
+    // this destroys src
+    lastTransform = [Transform areaTransform: @"Old AT&T logo"
+                                 description: @"Tom Duff's logo transform"
+                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        size_t h = src.h;
+        size_t w = src.w;
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = LUM(src.pa[y][x]);
+                src.pa[y][x] = SETRGB(c,c,c);
+            }
+        }
+        
+        int hgt = instance.value;
+        assert(hgt > 0);
+        int c;
+        int y0, y1;
+        
+        for (int y=0; y<h; y+= hgt) {
+            if (y+hgt>h)
+                hgt = (int)h-(int)y;
+            for (int x=0; x < w; x++) {
+                c=0;
+                for(y0=0; y0<hgt; y0++)
+                c += src.pa[y+y0][x].r;
+                y0 = y+(hgt-1)/2;
+                y1 = y+(hgt-1-(hgt-1)/2);
+                for (; y0 >= y; --y0, ++y1)
+                c = stripe(src.pa, x, y0, y1, c);
+            }
+        }
+        
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = src.pa[y][x].r;
+                dest.pa[y][x] = SETRGB(c, c, c);
+            }
+        }
+    }];
+    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+
 }
 
 

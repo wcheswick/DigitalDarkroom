@@ -29,6 +29,7 @@ typedef enum {
 @interface TaskGroup : NSObject {
     TaskCtrl *taskCtrl;
     TaskStatus_t tasksStatus;
+    Transform * __nullable depthTransform;
     NSMutableArray *tasks;
     CGSize transformSize;
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
@@ -38,6 +39,7 @@ typedef enum {
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
+@property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
 @property (atomic, assign)      TaskStatus_t tasksStatus;
 @property (assign, atomic)      CGSize transformSize;
@@ -48,8 +50,7 @@ typedef enum {
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn
-                         depthTransform:(Transform *)dt;
+                                  named:(NSString *)tn;
 - (void) configureGroupForSize:(CGSize) s;
 - (void) executeTasksWithImage:(UIImage *) image;
 - (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf;

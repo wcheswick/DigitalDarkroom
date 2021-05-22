@@ -208,7 +208,7 @@ NSString * __nullable displayOptionNames[] = {
     thumbImageRect.size.height = thumbImageRect.size.width / aspectRatio;
     
     firstThumbRect = thumbImageRect;
-    firstThumbRect.size.height += OLIVE_LABEL_H;
+    firstThumbRect.size.height += THUMB_LABEL_H;
     
     // set up targets sizes and rules for the various display options
     switch (currentDisplayOption) {

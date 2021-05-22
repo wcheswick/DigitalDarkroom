@@ -41,8 +41,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              BOOL enabled, depthLocked;
 
 - (id)initTaskNamed:(NSString *) n
-            inGroup:(TaskGroup *) tg
-         usingDepth:(Transform *) dt;
+            inGroup:(TaskGroup *) tg;
 - (void) configureTaskForSize;
 // UNNEEDED - (void) configureTransformAtIndex:(size_t)ti;
 - (BOOL) updateParamOfLastTransformTo:(int) newParam;

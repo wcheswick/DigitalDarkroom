@@ -35,7 +35,7 @@
     transformLabel.text = [transform.name
                            stringByAppendingString:transform.hasParameters ? BIGSTAR : @""];
     transformLabel.textColor = [UIColor blackColor];
-    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
+    transformLabel.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
     transformLabel.highlighted = NO;    // yes if selected
 #ifdef NOTDEF
     transformLabel.attributedText = [[NSMutableAttributedString alloc]
@@ -61,27 +61,29 @@
     imageView.contentMode = UIViewContentModeScaleAspectFit;
     imageView.opaque = YES;
     [self addSubview:imageView];   // empty placeholder at the moment
+    self.layer.borderColor = [UIColor blueColor].CGColor;
+    self.layer.borderWidth = 1.0;
 }
 
 - (void) configureSectionThumbNamed:(NSString *)sn
                          withSwitch:(UISwitch *__nullable) sw {
     sectionName = sn;
     
-    UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
-    transformLabel.tag = THUMB_LABEL_TAG;
-    transformLabel.textAlignment = NSTextAlignmentCenter;
-    transformLabel.adjustsFontSizeToFitWidth = YES;
-    transformLabel.numberOfLines = 0;
-    transformLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    transformLabel.text = sectionName;
-    transformLabel.textColor = [UIColor blackColor];
-    transformLabel.font = [UIFont boldSystemFontOfSize:OLIVE_FONT_SIZE];
-    transformLabel.highlighted = NO;    // yes if selected
+    UILabel *sectionLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+    sectionLabel.tag = THUMB_LABEL_TAG;
+    sectionLabel.textAlignment = NSTextAlignmentCenter;
+    sectionLabel.adjustsFontSizeToFitWidth = YES;
+    sectionLabel.numberOfLines = 3;
+    sectionLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    sectionLabel.text = sectionName;
+    sectionLabel.textColor = [UIColor blackColor];
+    sectionLabel.font = [UIFont boldSystemFontOfSize:SECTION_NAME_FONT_SIZE];
+    sectionLabel.highlighted = NO;    // yes if selected
 #ifdef NOTDEF
-    transformLabel.attributedText = [[NSMutableAttributedString alloc]
+    sectionLabel.attributedText = [[NSMutableAttributedString alloc]
                                      initWithString:transform.name
                                      attributes:labelAttributes];
-    CGSize labelSize =  [transformLabel.text
+    CGSize labelSize =  [sectionLabel.text
                          boundingRectWithSize:f.size
                          options:NSStringDrawingUsesLineFragmentOrigin
                          attributes:@{
@@ -89,14 +91,19 @@
                              NSShadowAttributeName: shadow
                          }
                          context:nil].size;
-    transformLabel.contentMode = NSLayoutAttributeTop;
+    sectionLabel.contentMode = NSLayoutAttributeTop;
 #endif
-    transformLabel.opaque = NO;
-    transformLabel.layer.borderWidth = 0.5;
-    [self addSubview:transformLabel];
+    sectionLabel.opaque = NO;
+    sectionLabel.layer.borderWidth = 0.5;
+    [self addSubview:sectionLabel];
+    
+    self.layer.borderColor = [UIColor redColor].CGColor;
+    self.layer.borderWidth = 1.0;
     
     if (sw) {
+        [self addSubview:sw];
         sw.tag = THUMB_SWITCH_TAG;    // Not used
+        sw.frame = CGRectMake(0, LATER, LATER, SECTION_SWITCH_H);
         [self addSubview:sw];
     }
 }
