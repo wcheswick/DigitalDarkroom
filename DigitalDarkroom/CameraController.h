@@ -26,14 +26,14 @@ typedef enum {
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
         AVCaptureDepthDataOutputDelegate>delegate;
     CameraSide currentSide;
-    BOOL usingDepthCamera;
+    volatile BOOL usingDepthCamera;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
 @property (assign)  CameraSide currentSide;
-@property (assign)  BOOL usingDepthCamera;
+@property (assign)  volatile BOOL usingDepthCamera;
 
 - (BOOL) hasCameraOnSide:(CameraSide) side;
 - (BOOL) hasDepthCameraOnSide:(CameraSide) side;

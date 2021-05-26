@@ -369,7 +369,8 @@ typedef enum {
 }
 
 - (void) createThumbArray {
-    NSString *brokenPath = [[NSBundle mainBundle] pathForResource:@"images/brokenTransform.png" ofType:@""];
+    NSString *brokenPath = [[NSBundle mainBundle]
+                            pathForResource:@"images/brokenTransform.png" ofType:@""];
     UIImage *brokenImage = [UIImage imageNamed:brokenPath];
 
     thumbViewsArray = [[NSMutableArray alloc] init];
@@ -400,10 +401,10 @@ typedef enum {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapDepthVis:)];
-            touch.enabled = cameraController.usingDepthCamera;
             UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
                                                                  named:transform.name];
+            [task useDepthTransform:transform];
             [thumbView addSubview:imageView];
             // these thumbs display their own transform of the depth input only, and don't
             // change when they are used.
@@ -462,7 +463,7 @@ CGFloat topOfNonDepthArray = 0;
 //  no current 3D selected, hide those thumbs behind the section header.
 
 
-- (void) layoutThumbArray:(Layout *)layout {
+- (void) layoutThumbs:(Layout *)layout {
     nextButtonFrame = layout.firstThumbRect;
     assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
@@ -498,21 +499,16 @@ CGFloat topOfNonDepthArray = 0;
     // run through the thumbview array
     for (ThumbView *thumbView in thumbViewsArray) {
         if (thumbView.tag == THUMB_SECTION_TAG) {   // new section
+#ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Section %@",
                   nextButtonFrame.origin.x, nextButtonFrame.origin.y,
                   nextButtonFrame.size.width, nextButtonFrame.size.height,
                   thumbView.sectionName);
+#endif
             if (lastSection) {  // not our first section, make space
                 if (!atStartOfRow) {
                     [self nextTransformButtonPosition];
                 }
-#ifdef NOTDEF
-//                if (layout.thumbsPlacement == ThumbsOnRight) {  // new line for each section
-//                    if (!atStartOfRow)
-//                        [self buttonsContinueOnNextRow];
-///                } else {    // buttons on bottom, need a preceeding space
-//                }
-#endif
             }
             
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
@@ -525,22 +521,24 @@ CGFloat topOfNonDepthArray = 0;
         } else {
             Transform *transform = [transforms.transforms objectAtIndex:thumbView.transformIndex];
             thumbView.userInteractionEnabled = !transform.broken;
+#ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
                   nextButtonFrame.origin.x, nextButtonFrame.origin.y,
                   nextButtonFrame.size.width, nextButtonFrame.size.height,
                   transform.name);
-
+#endif
+            if (transform.type == DepthVis) {
+                [thumbView enable: cameraController.usingDepthCamera];
+                if (cameraController.usingDepthCamera) {
+                    BOOL selected = thumbView.transformIndex == currentDepthTransformIndex;
+                    [self adjustThumbView:thumbView selected:selected];
+                    if (selected) {
+                        [screenTasks configureGroupWithNewDepthTransform:transform];
+                    }
+                }
+            }
+            
             UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-            
-//            if (transform.type == DepthVis) {
-//                if (!cameraController.usingDepthCamera) {
-//                    continue;     // we don't advance
-//                } else {
-                    [self adjustThumbView:thumbView
-                                 selected:(thumbView.transformIndex == currentDepthTransformIndex)];
-//                }
- //           }
-            
             thumbImage.frame = layout.thumbImageRect;
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = transformNameRect;
@@ -749,8 +747,7 @@ static NSString * const imageOrientationName[] = {
     plusLockButton.selected = NO;
     
     plusLockButton.frame = CGRectMake(0, 0, 1.5*TOOLBAR_H+SEP, TOOLBAR_H);
-    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
-    NSLog(@" ****** %@", pLock);
+//    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
 
 #define PLUS_LOCK_FONT_SIZE (TOOLBAR_H*0.6)
 #define PLUS_LOCK_KERN           (-TOOLBAR_H*0.3)
@@ -920,8 +917,12 @@ static NSString * const imageOrientationName[] = {
         return;
     currentSource = nextSource;
     if (IS_CAMERA(currentSource)) {
+        depthSwitch.enabled  = [cameraController hasDepthCameraOnSide:currentSource.currentSide];
+        depthSwitch.on = currentSource.usingDepthCamera;
         [cameraController setupSession];
         [self startCamera];
+    } else {
+        depthSwitch.enabled = NO;
     }
     nextSource = nil;
 }
@@ -1373,9 +1374,20 @@ static CGSize startingDisplaySize;
 #endif
 }
 
+-(void) flash {
+    overlayView.opaque = NO;
+    overlayView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:1.0];
+    [UIView animateWithDuration:0.40 animations:^(void) {
+        self->overlayView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.0];
+    }];
+    overlayView.backgroundColor = [UIColor clearColor];
+    overlayView.opaque = NO;
+}
+
 // this should be copy to paste buffer, or the send-it-out option
 - (IBAction) doSave {
     NSLog(@"saving");   // XXX need full image for a save
+    [self flash];
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
@@ -1399,7 +1411,6 @@ static CGSize startingDisplaySize;
 
 - (void) adjustDisplayToSize:(CGSize) newSize {
     [layout adjustForDisplaySize:newSize];
-    assert(layout.displayRect.size.width == layout.executeRect.size.width);
     overlayView.frame = layout.displayRect;
     transformView.frame = layout.displayRect;
     executeView.frame = layout.executeRect;
@@ -1414,8 +1425,7 @@ static CGSize startingDisplaySize;
     thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-    [self layoutThumbArray: layout];
-    assert(layout.displayRect.size.width == layout.executeRect.size.width);
+    [self layoutThumbs: layout];
     [self updateExecuteView];
 }
 
@@ -1439,7 +1449,6 @@ static CGSize startingDisplaySize;
         newSize.height == layout.displayRect.size.height)
         return;     // same size, nothing to do
 
-    assert(layout.displayRect.size.width == layout.executeRect.size.width);
     [self adjustDisplayToSize:newSize];
 }
 
@@ -1822,26 +1831,26 @@ UIImageOrientation lastOrientation;
 #endif
 
 - (IBAction) processDepthSwitch:(UISwitch *)depthsw {
-#ifdef NOTYET
+    NSLog(@"Depth %@", depthsw.on ? @"ON" : @"OFF");
     assert(IS_CAMERA(currentSource));
-    BOOL depthWanted = depthsw.on;
-    InputSource *newSource = [currentSource copy];
-    assert(depthWanted != cameraController.usingDepthCamera);
-    if (depthWanted)
-        assert([cameraController hasDepthCameraOnSide:currentSource.currentSide]);
-     switch (cameraController.currentSide) {
-        case Front:
-        case Rear:
-    }
-    if (cameraController.usingDepthCamera) {    // if we are using depth, we have a regular
-        
-    }
-    newSource.threeDCamera = !newSource.threeDCamera;
-    if (![cameraController isCameraAvailable:newSource])
-        return;
-    [self useSource:newSource];
-#endif
+    [cameraController stopCamera];
+    currentSource.usingDepthCamera = depthsw.on;
+    [self adjustDepthThumbsToStatus:depthsw.on];
+    [cameraController selectCameraOnSide:currentSource.currentSide threeD:depthsw.on];
+    [cameraController setupSession];
+    [cameraController startCamera];
     [taskCtrl reconfigureWhenReady];
+}
+
+- (void) adjustDepthThumbsToStatus:(BOOL) on {
+    for (ThumbView *thumbView in thumbViewsArray) {
+        if (thumbView.tag == THUMB_SECTION_TAG)
+            continue;
+        Transform *transform = transforms.transforms[thumbView.transformIndex];
+        if (transform.type != DepthVis)
+            continue;
+        [thumbView enable:on];
+    }
 }
 
 - (IBAction) flipCamera:(UIButton *)button {
@@ -2149,8 +2158,9 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
-    NSLog(@"     containerview: %.0f,%.0f  %.0f x %.0f",
-          f.origin.x, f.origin.y, f.size.width, f.size.height);
+    NSLog(@"     containerview: %.0f,%.0f  %.0fx%.0f (%4.2f)",
+          f.origin.x, f.origin.y, f.size.width, f.size.height,
+          f.size.width/f.size.height);
 #endif
     
     if (IS_CAMERA(currentSource)) {   // select camera setting for available area
@@ -2169,12 +2179,14 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     NSLog(@"--- switch layout, list:");
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
-        NSLog(@"%@  %2d: %4.0f x %4.0f  %4.0f x %4.0f %4.0f x %4.0f  %3.1f  %3d   %@",
-              i == currentLayoutIndex ? @">>>" : @"   ",
-              i,
+        NSLog(@"%@ %2d: %4.0fx%4.0f (%4.2f)  %4.0fx%4.0f (%4.2f)  %4.0fx%4.0f (%4.2f)  %3.1f  %3d   %@",
+              i == currentLayoutIndex ? @">>>" : @"   ", i,
               layout.captureSize.width, layout.captureSize.height,
+              layout.captureSize.width/layout.captureSize.height,
               layout.transformSize.width, layout.transformSize.height,
+              layout.transformSize.width/layout.transformSize.height,
               layout.displayRect.size.width, layout.displayRect.size.height,
+              layout.displayRect.size.width/layout.displayRect.size.height,
               layout.scale, layout.quality, layout.status);
     }
 #endif
@@ -2318,6 +2330,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 - (void) applyLayout {
     assert(currentLayoutIndex != LAYOUT_NO_GOOD); // previously selected
     layout = layouts[currentLayoutIndex];
+    [cameraController setupCameraWithFormat:layout.format];
     
 //    multipleViewLabel.frame = stackingModeBarButton.customView.frame;
     
@@ -2372,21 +2385,25 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 #ifdef DEBUG_LAYOUT
     NSLog(@"layout selected:");
 
-    NSLog(@"        capture:               %4.0f x %4.0f\t @%.1f",
-          layout.captureSize.width, layout.captureSize.height, layout.scale);
-    NSLog(@" transform size:               %4.0f x %4.0f  @  %.2f",
+    NSLog(@"        capture:               %4.0f x %4.0f (%4.2f)  @%.1f",
+          layout.captureSize.width, layout.captureSize.height,
+          layout.captureSize.width/layout.captureSize.height, layout.scale);
+    NSLog(@" transform size:               %4.0f x %4.0f (%4.2f)  @%.1f",
           layout.transformSize.width,
           layout.transformSize.height,
+          layout.transformSize.width/layout.transformSize.height,
           layout.scale);
-    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f",
+    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f (%4.2f)",
           transformView.frame.origin.x,
           transformView.frame.origin.y,
           transformView.frame.size.width,
-          transformView.frame.size.height);
+          transformView.frame.size.height,
+          transformView.frame.size.width/transformView.frame.size.height);
 
-    NSLog(@"      container:               %4.0f x %4.0f",
+    NSLog(@"      container:               %4.0f x %4.0f (%4.2f)",
           containerView.frame.size.width,
-          containerView.frame.size.height);
+          containerView.frame.size.height,
+          containerView.frame.size.width/containerView.frame.size.height);
     NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
           executeView.frame.origin.x,
           executeView.frame.origin.y,
@@ -2413,7 +2430,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
         [UIView animateWithDuration:0.5 animations:^(void) {
             // move views to where they need to be now.
-            [self layoutThumbArray: self->layout];
+            [self layoutThumbs: self->layout];
         }];
     }
     

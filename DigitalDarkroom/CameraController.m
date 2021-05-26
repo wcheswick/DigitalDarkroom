@@ -107,6 +107,10 @@
 }
 
 - (void) selectCameraOnSide:(CameraSide) side threeD:(BOOL)depth {
+#ifdef DEBUG_CAMERA
+    NSLog(@"CCC selecting camera on side %d, %@", side,
+          depth ? @"3D" : @"2D");
+#endif
     captureDevice = [self cameraDeviceOnSide:side threeD:depth];
     assert(captureDevice);
     currentSide = side;
@@ -180,6 +184,9 @@
     }
 
     if (usingDepthCamera) {   // XXX i.e. depth available ?!
+#ifdef DEBUG_CAMERA
+        NSLog(@"starting DEPTH camera");
+#endif
         AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
         assert(depthOutput);
         if ([captureSession canAddOutput:depthOutput]) {
@@ -201,6 +208,9 @@
         [depthOutput setDelegate:delegate callbackQueue:queue];
         depthOutput.filteringEnabled = YES;
     } else {
+#ifdef DEBUG_CAMERA
+        NSLog(@"starting VIDEO camera");
+#endif
         AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
         assert(dataOutput);
         if ([captureSession canAddOutput:dataOutput]) {
@@ -329,6 +339,10 @@
 
 - (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format {
     NSError *error;
+    
+#ifdef DEBUG_CAMERA
+    NSLog(@" setupCameraWithFormat: %@", format);
+#endif
     
     [captureDevice lockForConfiguration:&error];
     captureDevice.activeFormat = format;

@@ -55,7 +55,7 @@ typedef enum {
     CGSize captureSize;     // what we get from the input source
     CGSize transformSize;   // what we give the transform chain
     CGRect displayRect;     // what we give to the main display
-    CGRect thumbArrayRect;  // where the thumbs go
+    CGRect thumbArrayRect;  // space for the thumb array, to be placed according thumbsPlacement later
     CGRect firstThumbRect;  // thumb size for device, orientation, and aspect ratio
     CGRect thumbImageRect;  // image sample size in the thumb
     CGRect executeRect;     // where the description text goes

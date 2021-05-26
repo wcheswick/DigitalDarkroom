@@ -32,6 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureSectionThumbNamed:(NSString *)sectionName
                          withSwitch:(UISwitch *__nullable) sw;
 - (void) configureForTransform:(Transform *) transform;
+- (void) enable:(BOOL) enable;
 
 @end
 

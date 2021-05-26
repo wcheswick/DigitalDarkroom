@@ -100,7 +100,9 @@ NSString * __nullable displayOptionNames[] = {
     return self;
 }
 
+
 - (void) adjustForDisplaySize:(CGSize) ds {
+    float bestDisplayAreaPct;
     displayRect.size = ds;
     quality = 0;    // assume doable
     
@@ -122,60 +124,16 @@ NSString * __nullable displayOptionNames[] = {
     
     quality = captureScore;
     status = [NSString stringWithFormat:@"%3d (%.2f)", quality, captureScoreFrac];
-
-    thumbArrayRect = CGRectZero;
-    int minThumbCols = MIN_THUMB_COLS;
-    int minThumbRows = MIN_THUMB_ROWS;
-
-    CGRect right = CGRectZero;
-    CGRect bottom = CGRectZero;
     
     transformSize = scaledSize;
     if (currentDisplayOption == NoDisplay)
         transformSize.width = captureSize.width;        // width on an empty screen...needs thought XXX
-
     float containerArea = containerFrame.size.width * containerFrame.size.height;
     
 //    float transformArea = transformSize.width * transformSize.height;
 //    displayRect.origin = CGPointZero;
 //    displayRect.size = transformSize;
     displayFrac = displayArea / containerArea;
-    
-    // Always have at least one line of the executeRect below the transform to make the current
-    // transform name (maybe plus others) visible
-    
-    executeRect.size.width = displayRect.size.width;
-    executeRect.size.height = EXECUTE_H_FOR(1);
-    executeRect.origin.y = BELOW(displayRect) + SEP;
-    CGFloat availableHeight = containerFrame.size.height - BELOW(displayRect);
-    if (availableHeight < EXECUTE_FULL_H) {
-        if (availableHeight > EXECUTE_MIN_H)
-            executeRect.size.height = availableHeight;
-        else {
-            executeRect.size.height = EXECUTE_MIN_H;
-            executeRect.origin.y = containerFrame.size.height - executeRect.size.height;
-        }
-    }
-    
-#ifdef OLD
-    CGFloat roomUnderneath = containerFrame.size.height - BELOW(executeRect) - SEP;
-
-    if (isiPhone || displayOption == TightDisplay) {
-        executeRect.size.height = EXECUTE_MIN_H;
-        executeRect.origin.y = BELOW(displayRect) - executeRect.size.height;
-        executeOverlayOK = YES;
-    } else {
-        executeRect.origin.y = BELOW(displayRect) + SEP;
-        if (roomUnderneath >= EXECUTE_FULL_H) {
-            executeOverlayOK = NO;
-            executeRect.size.height = EXECUTE_FULL_H;
-        } else {
-            // it may overlap if it gets too tall
-            executeOverlayOK = NO;
-        }
-//        executeRect.size.height = roomUnderneath;
-    }
-#endif
     
     BOOL wfits = scaledSize.width <= containerFrame.size.width;
     BOOL hfits = BELOW(executeRect) <= containerFrame.size.height;
@@ -191,14 +149,15 @@ NSString * __nullable displayOptionNames[] = {
                   [NSString stringWithFormat:@" = BAD Doesn't fit"]];
         return;
     }
+    
+    
+    // displayRect has the display size, and it fits in containerRect somewhere.
+    // Figure out this: thumbs on right, or thumbs underneath?  this is the
+    // hardest part of the layout
 
-    right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
-    right.size = CGSizeMake(containerFrame.size.width - right.origin.x, containerFrame.size.height);
-    bottom.origin = CGPointMake(0, BELOW(executeRect) + SEP);
-    bottom.size = CGSizeMake(containerFrame.size.width, containerFrame.size.height - bottom.origin.y);
-
-    CGSize bestDisplaySize;
-    float bestDisplayAreaPct;
+    thumbArrayRect = CGRectZero;
+    int minThumbCols = MIN_THUMB_COLS;
+    int minThumbRows = MIN_THUMB_ROWS;
     
     firstThumbRect = thumbImageRect = CGRectZero;
     
@@ -209,15 +168,20 @@ NSString * __nullable displayOptionNames[] = {
     
     firstThumbRect = thumbImageRect;
     firstThumbRect.size.height += THUMB_LABEL_H;
-    
+    thumbsPlacement = ThumbsUndecided;
+#ifdef DEBUG_THUMB_PLACEMENT
+            NSLog(@"-1 thumbsPlacement -> Undecided");
+#endif
+
     // set up targets sizes and rules for the various display options
     switch (currentDisplayOption) {
         case NoDisplay:
             bestDisplayAreaPct = 0.0;
-            // XXXX executeRect
             // just image plus (overlaid) execute, no thumbs unless there is spare room
-            thumbsPlacement = ThumbsOnRight;
-            thumbArrayRect = CGRectZero;
+            thumbsPlacement = ThumbsUnderneath;
+#ifdef DEBUG_THUMB_PLACEMENT
+            NSLog(@"0 thumbsPlacement -> Underneath");
+#endif
             executeOverlayOK = NO;
             break;
         case TightDisplay:
@@ -225,38 +189,49 @@ NSString * __nullable displayOptionNames[] = {
             if (isiPhone) {
                 if (isPortrait) {
                     thumbsPlacement = ThumbsUnderneath;
+#ifdef DEBUG_THUMB_PLACEMENT
+                    NSLog(@"1 thumbsPlacement -> Underneath");
+#endif
                 } else {
                     thumbsPlacement = ThumbsOnRight;
+#ifdef DEBUG_THUMB_PLACEMENT
+                    NSLog(@"1 thumbsPlacement -> Right");
+#endif
                 }
             } else {
                 thumbsPlacement = ThumbsUndecided;
+#ifdef DEBUG_THUMB_PLACEMENT
+                    NSLog(@"1 thumbsPlacement -> Undecided");
+#endif
             }
             break;
         case BestDisplay:
             bestDisplayAreaPct = 50.0;  // should depend on device and orientation
-            if (isiPhone)
-                ;
-            else
-                thumbsPlacement = ThumbsUndecided;
+            thumbsPlacement = ThumbsUndecided;
+#ifdef DEBUG_THUMB_PLACEMENT
+                    NSLog(@"2 thumbsPlacement -> Unknown");
+#endif
             break;
         case FullScreenDisplay:
             minThumbCols = 0;
             minThumbRows = 0;
-            bestDisplaySize = containerFrame.size;
             bestDisplayAreaPct = 100.0;
             // just image plus (overlaid) execute, no thumbs unless there is spare room
             thumbsPlacement = ThumbsOptional;
+#ifdef DEBUG_THUMB_PLACEMENT
+                    NSLog(@"3 thumbsPlacement -> Optional");
+#endif
             break;
-            ; // XXXXX not yet
     }
 
-    [self computeThumbsRect];
-    int rightRows = [self thumbsPerColIn:right.size];
-    int rightCols = [self thumbsPerRowIn:right.size];
+    CGSize possibleRightSize = CGSizeMake(containerFrame.size.width - displayRect.size.width, containerFrame.size.height);
+    int rightRows = [self thumbsPerColIn:possibleRightSize];
+    int rightCols = [self thumbsPerRowIn:possibleRightSize];
     int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
 
-    int bottomRows = [self thumbsPerColIn:bottom.size];
-    int bottomCols = [self thumbsPerRowIn:bottom.size];
+    CGSize possibleBottomSize = CGSizeMake(containerFrame.size.width, containerFrame.size.height - BELOW(displayRect));
+    int bottomRows = [self thumbsPerColIn:possibleBottomSize];
+    int bottomCols = [self thumbsPerRowIn:possibleBottomSize];
     int bottomW = (firstThumbRect.size.width + SEP)*bottomCols;   // for centering
     
 //    CGFloat rightArea = bottom.size.width * bottom.size.height;
@@ -272,16 +247,27 @@ NSString * __nullable displayOptionNames[] = {
         case ThumbsUnderAndRight:
         case ThumbsUndecided:
             thumbsPlacement = rightThumbFrac > bottomThumbFrac ? ThumbsOnRight : ThumbsUnderneath;
+#ifdef DEBUG_THUMB_PLACEMENT
+            NSLog(@"4 %3d %4.1f  %3d %4.1f  ->%@",
+                  rightThumbCount, rightThumbFrac,
+                  bottomThumbCount, bottomThumbFrac,
+                  thumbsPlacement == ThumbsOnRight ? @"Right" : @"Underneath");
+#endif
             break;
         default:
             ;
     }
-    
+
+    // layout stuff based on thumb position.  Display...
     switch (thumbsPlacement) {
         case ThumbsOnRight:
-            thumbArrayRect = right;
-            thumbArrayRect.origin.x += (right.size.width - rightW)/2.0;
-            thumbArrayRect.size.width = rightW;
+#ifdef DEBUG_THUMB_PLACEMENT
+            NSLog(@"placing thumbs on right");
+#endif
+            displayRect.origin.x = 0;
+            
+            thumbArrayRect = CGRectMake(RIGHT(displayRect)+SEP, displayRect.origin.y,
+                                             rightW, containerFrame.size.height);
             thumbFrac = rightThumbFrac;
             if (currentDisplayOption != FullScreenDisplay && rightCols < minThumbCols) {
                 quality = LAYOUT_BAD_TOO_LARGE;
@@ -290,12 +276,39 @@ NSString * __nullable displayOptionNames[] = {
                 return;
             }
             // with thumbs on the right, the execute can go to the bottom of the container
-            executeRect.size.height = containerFrame.size.height - executeRect.origin.y;
+            executeRect.origin.y = BELOW(displayRect) + SEP;
+            executeRect.size.height = containerFrame.size.height - executeRect.origin.y - SEP;
+            assert(executeRect.size.height > 0);
+            executeRect.origin.x = displayRect.origin.x;
+            executeRect.size.width = displayRect.size.width;
             break;
         case ThumbsUnderneath:
-            thumbArrayRect = bottom;
-            thumbArrayRect.origin.x += (bottom.size.width - bottomW)/2.0;
-            thumbArrayRect.size.width = bottomW;
+#ifdef DEBUG_THUMB_PLACEMENT
+            NSLog(@"placing thumbs underneath");
+#endif
+            // Always have at least one line of the executeRect below the transform to make the current
+            // transform name (maybe plus others) visible
+            
+            executeRect.size.width = containerFrame.size.width;
+            executeRect.size.height = EXECUTE_H_FOR(1);
+            executeRect.origin = CGPointMake(0, BELOW(displayRect) + SEP);
+            CGFloat availableHeight = containerFrame.size.height - BELOW(displayRect);
+            if (availableHeight < EXECUTE_FULL_H) {
+                if (availableHeight > EXECUTE_MIN_H)
+                    executeRect.size.height = availableHeight;
+                else {
+                    executeRect.size.height = EXECUTE_MIN_H;
+                    executeRect.origin.y = containerFrame.size.height - executeRect.size.height;
+                }
+            }
+
+            displayRect.origin.x = (containerFrame.size.width - displayRect.size.width)/2.0;
+            CGRect f = CGRectMake(LATER, LATER, bottomW, LATER);
+            f.size.height = containerFrame.size.height - BELOW(executeRect) - SEP;
+            f.origin.y = containerFrame.size.height - f.size.height;
+            f.origin.x = (containerFrame.size.width - f.size.width)/2.0;
+            thumbArrayRect = f;
+            
             thumbFrac = bottomThumbFrac;
             if (currentDisplayOption != FullScreenDisplay && bottomRows < minThumbRows) {
                 quality = LAYOUT_BAD_TOO_LARGE;
@@ -303,17 +316,22 @@ NSString * __nullable displayOptionNames[] = {
                           [NSString stringWithFormat:@" = TBR"]];
                 return;
             }
-            // with thumbs underneath, the execute can go to the right edge of the container
-            executeRect.size.width = containerFrame.size.width;
-             // and so can the thumbs
-            thumbArrayRect.origin.x = (containerFrame.size.width - thumbArrayRect.size.width)/2.0;
            break;
         default:
+            NSLog(@"no thumb placement");
             thumbArrayRect = CGRectZero;
     }
+
+#ifdef NOTDEF
+    executeRect.size.height = executeRectBottom - BELOW(displayRect) - SEP;
+    executeOverlayOK = executeRect.size.height < EXECUTE_MIN_H;
+    executeIsTight = executeOverlayOK;
+    if (executeOverlayOK) {
+        executeRect.size.height = EXECUTE_MIN_H;
+    }
+    executeRect.origin.y = executeRectBottom - executeRect.size.height;
     
-    [self positionDisplayRect];
-    [self positionExecuteRect];
+#endif
 
 #ifdef notdef
     NSString *thumbStatus = [NSString stringWithFormat:@"%@%@",
@@ -343,102 +361,15 @@ NSString * __nullable displayOptionNames[] = {
 //    assert(self.displayRect.size.width == self.executeRect.size.width);
 
 #ifdef DEBUG_LAYOUT
-    NSLog(@"LLLL: %4.0f x %4.0f @ %.1f  q:%3d  %@ ",
-          captureSize.width, captureSize.height, scale,
+    NSLog(@"LLLL: %4.0f x %4.0f @ %.1f (%4.2f)  q:%3d  %@ ",
+          captureSize.width, captureSize.height, scale, aspectRatio,
           quality, status);
 #endif
     return;
 }
 
-- (void) positionDisplayRect {
-    switch (thumbsPlacement) {
-        case ThumbsOnRight:
-            displayRect.origin.x = 0;
-            break;
-        case ThumbsUnderneath:
-            displayRect.origin.x = (containerFrame.size.width - displayRect.size.width)/2.0;
-           break;
-        default:
-            thumbArrayRect = CGRectZero;
-    }
-}
-
-- (void) computeThumbsRect {
-    CGRect right;
-    CGRect bottom;
-
-    right.origin = CGPointMake(RIGHT(displayRect) + SEP, displayRect.origin.y);
-    right.size = CGSizeMake(containerFrame.size.width - right.origin.x,
-                            containerFrame.size.height);
-    bottom.origin = CGPointMake(0, BELOW(executeRect) + SEP);
-    bottom.size = CGSizeMake(containerFrame.size.width,
-                             containerFrame.size.height - bottom.origin.y);
-
-    int rightRows = [self thumbsPerColIn:right.size];
-    int rightCols = [self thumbsPerRowIn:right.size];
-    int rightW = (firstThumbRect.size.width + SEP)*rightCols;   // for centering
-
-    int bottomRows = [self thumbsPerColIn:bottom.size];
-    int bottomCols = [self thumbsPerRowIn:bottom.size];
-    int bottomW = (firstThumbRect.size.width + SEP)*bottomCols;   // for centering
-    
-//    CGFloat rightArea = bottom.size.width * bottom.size.height;
-//     CGFloat bottomArea = bottom.size.width * bottom.size.height;
-
-    int rightThumbCount = rightRows * rightCols;
-    int bottomThumbCount = bottomRows * bottomCols;
-    
-    float rightThumbFrac = (float)rightThumbCount/(float)thumbCount;
-    float bottomThumbFrac = (float)bottomThumbCount/(float)thumbCount;
-    
-    thumbsPlacement = rightThumbFrac > bottomThumbFrac ? ThumbsOnRight : ThumbsUnderneath;
-     
-    switch (thumbsPlacement) {
-        case ThumbsOnRight:
-            thumbArrayRect = right;
-            thumbArrayRect.origin.x += (right.size.width - rightW)/2.0;
-            thumbArrayRect.size.width = rightW;
-            thumbFrac = rightThumbFrac;
-            break;
-        case ThumbsUnderneath:
-            thumbArrayRect = bottom;
-            thumbArrayRect.origin.x += (bottom.size.width - bottomW)/2.0;
-            thumbArrayRect.size.width = bottomW;
-            thumbFrac = bottomThumbFrac;
-            thumbArrayRect.origin.x = (containerFrame.size.width - thumbArrayRect.size.width)/2.0;
-           break;
-        default:
-            thumbArrayRect = CGRectZero;
-    }
-}
-
-- (void) positionExecuteRect {
-    if (thumbsPlacement == ThumbsUnderneath) {
-        executeRectBottom = thumbArrayRect.origin.y - SEP;
-        executeRect.origin.x = SEP;
-        executeRect.size.width = containerFrame.size.width - 2*SEP;
-    } else {
-        executeRectBottom = containerFrame.size.height - SEP;
-        executeRect.origin.x = displayRect.origin.x;
-        executeRect.size.width = displayRect.size.width;
-    }
-    executeRect.size.height = executeRectBottom - BELOW(displayRect) - SEP;
-    executeOverlayOK = executeRect.size.height < EXECUTE_MIN_H;
-    executeIsTight = executeOverlayOK;
-    if (executeOverlayOK) {
-        executeRect.size.height = EXECUTE_MIN_H;
-    }
-    executeRect.origin.y = executeRectBottom - executeRect.size.height;
-}
-
-- (float) aspectScaleToSize:(CGSize) targetSize {
-    float hScale = targetSize.width / captureSize.width;
-    float vScale = targetSize.height / captureSize.height;
-    return MIN(hScale, vScale);
-}
 
 // c.f nextButtonPosition and buttonsContinueOnNextRow in MainVC.m
-
 - (int) thumbsPerColIn:(CGSize) area {
     return (area.height - SEP) / (firstThumbRect.size.height + SEP);
 }
@@ -447,7 +378,7 @@ NSString * __nullable displayOptionNames[] = {
     return (area.width - SEP) / (firstThumbRect.size.width + SEP);
 }
 
-// I realize that this may give the wrong result if one dimension
+// I realize that teh following may give the wrong result if one dimension
 // is greater than the other, but the other is shorter.  It isn't
 // that important.
 

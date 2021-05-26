@@ -9,13 +9,15 @@
 #ifndef Defines_h
 #define Defines_h
 
-#define DEBUG_LAYOUT    1
+//#define DEBUG_LAYOUT    1
+#define DEBUG_CAMERA  1
 //#define DEBUG_ORIENTATION 1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
-//#define DEBUG_CAMERA  1
+//#define DEBUG_THUMB_PLACEMENT 1
 //#define DEBUG_EXECUTE 1
+//#define DEBUG_THUMB_LAYOUT 1
 //#define ONLY_RED    1   // process pure red input only
 
 #define POINTING_HAND_CHAR  @"☞"
@@ -68,7 +70,6 @@ typedef long PixelIndex_t;
 #define MIN_IPHONE_THUMB_COLS  3
 #define MIN_IPHONE_THUMB_ROWS  2
 
-#define SMALL_THUMB_W   64  // must be an even multiple of sizeof(int)
 #define THUMB_W         80
 #define TIGHT_THUMB_W   60
 

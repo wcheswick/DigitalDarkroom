@@ -24,6 +24,18 @@
     return self;
 }
 
+- (void) enable:(BOOL) enable {
+    self.userInteractionEnabled = enable;
+    if (enable) {
+        self.alpha = 1.0f;
+        self.backgroundColor = [UIColor whiteColor];
+    } else {
+        self.alpha = 0.3f;
+        self.backgroundColor = [UIColor grayColor];
+    }
+}
+
+
 - (void) configureForTransform:(Transform *) transform {
     UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     transformLabel.tag = THUMB_LABEL_TAG;

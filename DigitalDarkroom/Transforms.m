@@ -1061,6 +1061,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     [self addTransform:lastTransform];
 #endif
     
+#ifdef NOTDEF
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
@@ -1101,7 +1102,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.hasParameters = YES;
     lastTransform.broken = YES;
     [self addTransform:lastTransform];
-
+#endif
+    
     depthTransformCount = transforms.count;
 }
 
