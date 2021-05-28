@@ -45,8 +45,8 @@
 }
 
 - (void) reconfigureWhenReady {
-    if (reconfigurationNeeded)
-        return;
+//    if (reconfigurationNeeded)
+//       return;
     
     reconfigurationNeeded = YES;
     TaskStatus_t newStatus = Stopped;
@@ -58,7 +58,7 @@
         layingOut = YES;
         reconfigurationNeeded = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self->mainVC updateLayoutForDeviceChange];
+            [self->mainVC tasksReadyForLayoutChange];
         });
     } else
         NSLog(@"  -- still busy to layout");

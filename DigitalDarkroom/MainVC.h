@@ -24,7 +24,7 @@
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
-- (void) updateLayoutForDeviceChange;
-- (void) deviceRotated;
+- (void) tasksReadyForLayoutChange;
+- (void) newDeviceOrientation;
 
 @end

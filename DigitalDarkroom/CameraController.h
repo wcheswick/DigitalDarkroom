@@ -38,8 +38,9 @@ typedef enum {
 - (BOOL) hasCameraOnSide:(CameraSide) side;
 - (BOOL) hasDepthCameraOnSide:(CameraSide) side;
 - (BOOL) isFlipAvailable;
+- (BOOL) isDepthAvailable;
 
-- (void) selectCameraOnSide:(CameraSide) side threeD:(BOOL)usingDepthCamera;
+- (BOOL) selectCameraOnSide:(CameraSide) side threeD:(BOOL)usingDepthCamera;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
 - (void) setupSession;

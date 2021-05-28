@@ -1580,3 +1580,61 @@ min3(Pixel p) {
 
 #endif
        
+
+#ifdef notdef
+
+- (UIImage *) barIconFrom:(NSString *) fileName {
+    NSString *fullName = [[@"images" stringByAppendingPathComponent:fileName] stringByAppendingPathExtension:@"png"];
+    NSString *imagePath = [[NSBundle mainBundle] pathForResource:fullName ofType:@""];
+    assert(imagePath);
+    UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
+    assert(image);
+    float scale = image.size.width / self.navigationController.navigationBar.frame.size.height;
+    UIImage *iconImage = [UIImage imageWithCGImage:image.CGImage
+                                             scale:scale
+                                       orientation:UIImageOrientationUp];
+    return iconImage;
+}
+
+typedef enum {
+    CameraTypeSelect,
+    CameraFlip,
+    ChooseFile,
+} SourceSelectOptions;
+
+#define SOURCE_TYPE_TAG_OFFSET  30
+
+- (void) adjustSourceSelectionView {
+    NSString *cameraIconName = currentSource.threeDCamera ? @"images/3Dcamera.png" : @"images/2Dcamera.png";
+    NSString *cameraIconPath = [[NSBundle mainBundle] pathForResource:cameraIconName ofType:@""];
+    UIImage *cameraIconView = [UIImage imageNamed:cameraIconPath];
+    
+    [sourceSelectionView setImage:cameraIconView forSegmentAtIndex:CameraTypeSelect];
+    sourceSelectionView.selectedSegmentIndex = currentSource.threeDCamera ? CameraTypeSelect : ChooseFile;
+    [sourceSelectionView setNeedsDisplay];
+}
+
+#endif
+
+#ifdef notdef
+- (void) loadImageWithURL: (NSURL *)URL {
+    NSString *path = [URL absoluteString];
+    NSLog(@"startNewDocumentWithURL: LibVC starting document %@", path);
+    if (![URL isFileURL]) {
+        DownloadVC *dVC = [[DownloadVC alloc]
+                           initWithURL: URL
+                           from: self];
+        dVC.modalPresentationStyle = UIModalPresentationFormSheet;
+        dVC.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+        [self presentViewController:dVC animated:YES completion:NULL];
+        // download will call back to processIncomingFile when
+        // the download is complete
+        return;
+    }
+    
+    NSString *newPath = [URL path];
+    [self processIncomingFile:newPath
+                suggestedName:[newPath lastPathComponent]
+                      fromURL:nil];
+}
+#endif

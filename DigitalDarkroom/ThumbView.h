@@ -13,16 +13,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define THUMB_LABEL_TAG         198
 #define THUMB_IMAGE_TAG         197
-#define THUMB_SWITCH_TAG        196
-
-#define THUMB_SECTION_TAG   (-1)
 
 #define SECTION_NAME_FONT_SIZE  14
 #define SECTION_SWITCH_H    31
 #define SECTION_SWITCH_W    51  // apparently fixed?
 
+#define IS_SECTION_HEADER(t)    ((t).sectionName != nil)
+
 @interface ThumbView : UIView {
-    NSString *sectionName;
+    NSString *sectionName;  // nil if thumb, else section header
     long transformIndex;
 }
 

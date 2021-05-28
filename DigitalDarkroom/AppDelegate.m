@@ -34,7 +34,7 @@
                      initWithRootViewController:mainVC];
     
     [[NSNotificationCenter defaultCenter] addObserver:mainVC
-                                             selector:@selector(deviceRotated)
+                                             selector:@selector(newDeviceOrientation)
                                                  name:UIDeviceOrientationDidChangeNotification
                                                object:nil];
     

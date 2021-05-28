@@ -106,15 +106,21 @@
     return [self cameraDeviceOnSide: FLIP_SIDE(currentSide) threeD:usingDepthCamera] != nil;
 }
 
-- (void) selectCameraOnSide:(CameraSide) side threeD:(BOOL)depth {
+- (BOOL) isDepthAvailable {
+    return [self cameraDeviceOnSide: currentSide threeD:YES] != nil;
+}
+
+- (BOOL) selectCameraOnSide:(CameraSide) side threeD:(BOOL)depth {
 #ifdef DEBUG_CAMERA
     NSLog(@"CCC selecting camera on side %d, %@", side,
           depth ? @"3D" : @"2D");
 #endif
     captureDevice = [self cameraDeviceOnSide:side threeD:depth];
-    assert(captureDevice);
+    if (!captureDevice)
+        return NO;
     currentSide = side;
     usingDepthCamera = depth;
+    return YES;
 }
 
 // I really have no idea what is going on here.  Values were determined by

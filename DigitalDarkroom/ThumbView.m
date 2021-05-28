@@ -114,7 +114,6 @@
     
     if (sw) {
         [self addSubview:sw];
-        sw.tag = THUMB_SWITCH_TAG;    // Not used
         sw.frame = CGRectMake(0, LATER, LATER, SECTION_SWITCH_H);
         [self addSubview:sw];
     }
