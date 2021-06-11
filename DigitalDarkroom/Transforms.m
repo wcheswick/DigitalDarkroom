@@ -764,20 +764,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                             description: @"Complementary color anaglyph"
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
                                            TransformInstance *instance) {
-        Distance newMinDepth = MAXFLOAT;
-        Distance newMaxDepth = 0.0;
-        
         for (int i=0; i<pixBuf.w*pixBuf.h; i++)
             pixBuf.pb[i] = White;
         
         for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
             for (int x=0; x<depthBuf.w; x++) {
                 float z = depthBuf.da[y][x];
-                if (z > newMaxDepth)
-                    newMaxDepth = z;
-                if (z < newMinDepth)
-                    newMinDepth = z;
-
                 float r = (rand() % 100) / 100.0;
                 if (r > PDOT) {
 //                    if (pixBuf.pa[y][x] == White)
@@ -794,8 +786,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 pixBuf.pa[y][rightX] = Red;
             }
         }
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.hasParameters = YES;
     lastTransform.low = 10;

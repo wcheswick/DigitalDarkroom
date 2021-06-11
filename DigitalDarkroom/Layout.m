@@ -102,6 +102,10 @@ NSString * __nullable displayOptionNames[] = {
 
 
 - (void) adjustForDisplaySize:(CGSize) ds {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"adjustForDisplaySize %.0f x %.0f (%4.2f)", ds.width, ds.height, ds.width/ds.height);
+#endif
+
     float bestDisplayAreaPct;
     displayRect.size = ds;
     quality = 0;    // assume doable
@@ -149,7 +153,6 @@ NSString * __nullable displayOptionNames[] = {
                   [NSString stringWithFormat:@" = BAD Doesn't fit"]];
         return;
     }
-    
     
     // displayRect has the display size, and it fits in containerRect somewhere.
     // Figure out this: thumbs on right, or thumbs underneath?  this is the

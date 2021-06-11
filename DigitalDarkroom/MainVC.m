@@ -325,11 +325,13 @@ typedef enum {
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
         
+#if TARGET_OS_SIMULATOR
+        cameraController = nil;
+        NSLog(@"No camera on simulator");
+#else
         cameraController = [[CameraController alloc] init];
-        if (HAVE_CAMERA)
-            cameraController.delegate = self;
-        else
-            NSLog(@"No camera");
+        cameraController.delegate = self;
+#endif
 
         inputSources = [[NSMutableArray alloc] init];
         cameraSourceThumb = nil;
@@ -337,6 +339,7 @@ typedef enum {
         if (HAVE_CAMERA) {
             [self addCameraSource];
         }
+        [self addFileSource:@"olive640.png" label:@"Ches"];
         [self addFileSource:@"ches-1024.jpeg" label:@"Ches"];
         [self addFileSource:@"PM5644-1920x1080.gif" label:@"Color test pattern"];
 #ifdef wrongformat
@@ -363,8 +366,23 @@ typedef enum {
         }
         firstSource = nil;    // DEBUG
         if (!firstSource) {  // select default source
-            NSLog(@"using default source");
-            firstSource = inputSources[0];
+            for (InputSource *source in inputSources)
+                if (HAVE_CAMERA) {
+                    if (IS_CAMERA(source)) {
+                        firstSource = source;
+                        NSLog(@"first source is default camera");
+
+                        break;
+                    }
+                } else {
+                    if (!IS_CAMERA(source)) {
+                        firstSource = source;
+                        NSLog(@"first source is file '%@'", firstSource.label);
+                        break;
+                    }
+                }
+            if (!firstSource)
+                assert(NO); // inconceivable, no sources available
         }
     }
     return self;
@@ -473,7 +491,7 @@ CGFloat topOfNonDepthArray = 0;
         [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
     CGRect transformNameRect;
-    transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect)+SEP);
+    transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect));
     transformNameRect.size = CGSizeMake(nextButtonFrame.size.width, THUMB_LABEL_H);
     
     CGRect switchRect = CGRectMake((nextButtonFrame.size.width - SECTION_SWITCH_W)/2, nextButtonFrame.size.height-SECTION_SWITCH_H - SEP,
@@ -596,7 +614,7 @@ static NSString * const imageOrientationName[] = {
 - (void) viewDidLoad {
     [super viewDidLoad];
     
-#ifdef DEBUG_ORIENTATION
+#ifdef DEBUG_LAYOUT
     NSLog(@"viewDidLoad");
 #endif
     
@@ -849,10 +867,8 @@ static NSString * const imageOrientationName[] = {
     [containerView addSubview:executeView];
     [containerView bringSubviewToFront:overlayView];
     
-    if (HAVE_CAMERA) {
-        screenTask = [screenTasks createTaskForTargetImageView:transformView
+    screenTask = [screenTasks createTaskForTargetImageView:transformView
                                                          named:@"main"];
-    }
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -878,7 +894,6 @@ static NSString * const imageOrientationName[] = {
     self.view.backgroundColor = [UIColor whiteColor];
     
     [self createThumbArray];
-    [taskCtrl reconfigureWhenReady];
 }
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
@@ -892,6 +907,45 @@ static NSString * const imageOrientationName[] = {
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
+#ifdef DEBUG_LAYOUT
+    NSLog(@"viewWillAppear");
+#endif
+    
+    containerView.translatesAutoresizingMaskIntoConstraints = NO;
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
+    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
+    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
+    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
+    
+    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
+//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
+    CGFloat leftPadding = window.safeAreaInsets.left;
+    CGFloat rightPadding = window.safeAreaInsets.right;
+    
+#ifdef DEBUG_LAYOUT
+    CGFloat topPadding = window.safeAreaInsets.top;
+    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f",
+          leftPadding, rightPadding, topPadding);
+#endif
+    
+    CGRect f = self.view.frame;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"                in: %.0f,%.0f  %.0fx%.0f (%4.2f)",
+          f.origin.x, f.origin.y, f.size.width, f.size.height,
+          f.size.width/f.size.height);
+#endif
+    f.origin.x = leftPadding; // + SEP;
+    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
+    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
+    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
+    containerView.frame = f;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"     containerview: %.0f,%.0f  %.0fx%.0f (%4.2f)",
+          f.origin.x, f.origin.y, f.size.width, f.size.height,
+          f.size.width/f.size.height);
+#endif
+ 
     [self changeSourceTo:firstSource];
 }
 
@@ -903,16 +957,16 @@ static NSString * const imageOrientationName[] = {
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+#endif
+
 #ifdef OLD
     if (IS_CAMERA(currentSource)) {
         [self startCamera];
         [self set3D:DOING_3D];
     }
-#endif
-
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
 #endif
     
     frameCount = depthCount = droppedCount = busyCount = 0;
@@ -928,8 +982,11 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
-    NSLog(@"********* viewWillDisappear *********");
-    
+#ifdef DEBUG_LAYOUT
+    NSLog(@"--------- viewWillDisappear: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+#endif
+
     [super viewWillDisappear:animated];
     [self stopCamera];
 }
@@ -1057,11 +1114,13 @@ static NSString * const imageOrientationName[] = {
                 // retapping a transform in not plus mode means just remove it, and we are done
                 [self updateExecuteView];
                 [self adjustBarButtons];
-                return;
+                tappedTransform = nil;
             }
         }
-        [screenTask appendTransformToTask:tappedTransform];
-        [self adjustThumbView:tappedThumb selected:YES];
+        if (tappedTransform) {
+            [screenTask appendTransformToTask:tappedTransform];
+            [self adjustThumbView:tappedThumb selected:YES];
+        }
         [screenTask configureTaskForSize];
     }
     [self doTransformsOn:lastSourceImage];
@@ -1298,6 +1357,7 @@ int startParam;
 //            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
 //                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
             if ([screenTask updateParamOfLastTransformTo:newParam]) {
+                [self doTransformsOn:lastSourceImage];
                 [self updateExecuteView];
             }
             break;
@@ -2082,6 +2142,9 @@ CGSize lastAcceptedSize;
 }
 
 - (void) applyScreenLayout {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"applyScreenLayout");
+#endif
     // We have several image sizes to consider and process:
     //
     // currentSource.imageSize  is the size of the source image.  For images from files, it is
@@ -2123,7 +2186,7 @@ CGSize lastAcceptedSize;
     thumbScrollView.layer.borderWidth = 3.0;
     
     CGFloat below = BELOW(thumbScrollView.frame);
-    assert(below <= containerView.frame.size.height);
+    assert(below <= BELOW(containerView.frame));
     assert(below <= self.navigationController.toolbar.frame.origin.y);
 
     thumbsView.frame = CGRectMake(0, 0,
@@ -2189,7 +2252,6 @@ CGSize lastAcceptedSize;
     
     [taskCtrl layoutCompleted];
 
-    [self doTransformsOn:lastSourceImage];
     [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -2211,75 +2273,42 @@ NSLog(@"adjusting for orientation: %@", [CameraController
 
     if (!isiPhone || !isPortrait)
         self.title = @"Digital Darkroom";
-    
-    containerView.translatesAutoresizingMaskIntoConstraints = NO;
-    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
-    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
-    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
-    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
-    
-    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
-//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
-    CGFloat leftPadding = window.safeAreaInsets.left;
-    CGFloat rightPadding = window.safeAreaInsets.right;
-    
-#ifdef DEBUG_LAYOUT
-    CGFloat topPadding = window.safeAreaInsets.top;
-    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f",
-          leftPadding, rightPadding, topPadding);
-#endif
-    
-    CGRect f = self.view.frame;
-    f.origin.x = leftPadding; // + SEP;
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
-    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
-    containerView.frame = f;
-#ifdef DEBUG_LAYOUT
-    NSLog(@"     containerview: %.0f,%.0f  %.0fx%.0f (%4.2f)",
-          f.origin.x, f.origin.y, f.size.width, f.size.height,
-          f.size.width/f.size.height);
-#endif
-    
+   
     if (layout) // this can be called before we are ready
         [self changeSourceTo:currentSource];
 }
 
 - (long) chooseLayoutsForSourceSize:(CGSize) sourceSize {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"choose layoutfor image source");
+#endif
     [self initForLayingOut];
     
-    Layout *candidateLayout = [[Layout alloc]
-                               initForOrientation:isPortrait
-                               iPhone:isiPhone
-                               containerRect:(CGRect) containerView.frame];
+    layout = [[Layout alloc]
+              initForOrientation:isPortrait
+              iPhone:isiPhone
+              containerRect:(CGRect) containerView.frame];
     layout.thumbCount = transforms.transforms.count;
+    layout.format = nil;
     
-#ifdef NOTYET
-    [self tryCandidate:[candidateLayout
-                        layoutForSourceSize:sourceSize
-                        targetSize:CGSizeZero
-                        displayOption: NoDisplay]];
+    [self tryCandidate:[layout layoutForSourceSize:sourceSize
+                                                displaySize:sourceSize
+                                              displayOption:isiPhone ? TightDisplay : BestDisplay]];
+#ifdef NOTDEF
+    float scale = scales[scaleIndex++];
+    targetSize = CGSizeMake(round(targetSize.width * scale),
+                            round(targetSize.height * scale));
 #endif
-    
-    [self tryCandidate:[candidateLayout
-                        layoutForSourceSize:sourceSize
-                        displaySize:sourceSize
-                        displayOption: isiPhone ? TightDisplay : BestDisplay]];
-    
-#ifdef NOTYET
-    [self tryCandidate:[candidateLayout
-                        layoutForSourceSize:sourceSize
-                        targetSize:containerView.frame.size
-                        displayOption: FullScreenDisplay]];
-#endif
-    
-    return 0;   // XXXX
+    [layouts addObject:layout];
+    return 0;   // first and only layout
 }
 
 static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 
 - (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"chooseLayoutsFromFormatList");
+#endif
     [self initForLayingOut];
 //    NSLog(@"screen size   %4.0f x %4.0f",
 //          containerView.frame.size.width, containerView.frame.size.height );
@@ -2318,12 +2347,6 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
             targetSize = CGSizeMake(round(targetSize.width * scale),
                                     round(targetSize.height * scale));
         } while (scaleIndex < sizeof(scales)/sizeof(scales[0]));
-        
-#ifdef NOTDEF
-        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
-                                                     targetSize:containerView.frame.size
-                                                  displayOption:FullScreenDisplay]];
-#endif
     }
     
     int newLayoutIndex = LAYOUT_NO_GOOD;
@@ -2341,6 +2364,9 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 - (void) changeSourceTo:(InputSource *)nextSource {
     if (!nextSource)
         return;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"changeSourceTo %@", nextSource);
+#endif
     if (IS_CAMERA(currentSource)) {
         [cameraController stopCamera];
     }
@@ -2356,29 +2382,30 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
         layout = layouts[currentLayoutIndex];
         [cameraController setupCameraWithFormat:layout.format];
     } else {
-        currentLayoutIndex = [self chooseLayoutsForSourceSize:currentSource.imageSize];
+        currentLayoutIndex = [self chooseLayoutsForSourceSize:nextSource.imageSize];
         assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
     }
     currentSource = nextSource;
-    [taskCtrl reconfigureWhenReady];
+    [self->taskCtrl reconfigureWhenReady];
 }
 
 - (void) tasksReadyForLayoutChange {
+#ifdef DEBUG_LAYOUT
+    NSLog(@"tasksReadyForLayoutChange");
+#endif
     [self applyScreenLayout];
     
     if (IS_CAMERA(currentSource)) {
         [cameraController setupSession];
         [self startCamera];
+    } else {
+        UIImage *image = [UIImage imageWithContentsOfFile:currentSource.imagePath];
+        assert(image);
+        [self doTransformsOn:image];
     }
 }
 
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- updateLayout: %.0f x %.0f, %@ --------",
-          self.view.frame.size.width, self.view.frame.size.height,
-          isPortrait ? @"port" : @"land");
-#endif
-
-#ifdef DEBUG_LAYOUT
+#ifdef NOTUSED
     NSLog(@"--- switch layout, list:");
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
@@ -2415,7 +2442,6 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
                                   threeD:NO];
     [cameraController setupSession];
     [cameraController startCamera];
-    [taskCtrl reconfigureWhenReady];
     [taskCtrl reconfigureWhenReady];
     
 #endif
