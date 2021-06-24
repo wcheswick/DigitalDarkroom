@@ -25,7 +25,6 @@
 @synthesize taskCtrl;
 @synthesize srcPix;
 @synthesize depthBuf;
-@synthesize tasksStatus;
 @synthesize depthTransform;
 
 @synthesize tasks;
@@ -35,6 +34,7 @@
 @synthesize bytesInImage;
 @synthesize transformSize;
 @synthesize groupName;
+@synthesize busyCount;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -47,7 +47,7 @@
         depthBuf = nil;
         bytesPerRow = 0;    // no current configuration
         transformSize = CGSizeZero; // unconfigured group
-        tasksStatus = Stopped;
+        busyCount = 0;
     }
     return self;
 }
@@ -59,7 +59,7 @@
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
 #endif
-
+    assert(busyCount == 0);
     assert(s.width > 0 && s.height > 0);
     transformSize = s;
     
@@ -174,28 +174,16 @@
 
 - (BOOL) isReadyForLayout {
     assert(taskCtrl.reconfigurationNeeded);
-    if (tasksStatus == Stopped)
-        return YES;
     for (Task *task in tasks) {
-        switch (task.taskStatus) {
-            case Running:
-                return NO;
-            case Ready:
-                task.taskStatus = Stopped;
-                //  FALLTHROUGH
-            case Stopped:
-                ;
-        }
+        if (task.taskStatus != Stopped)
+            return NO;
     }
-    tasksStatus = Stopped;
     return YES;
 }
 
-- (void) layoutCompleted {
-    tasksStatus = Ready;
+- (void) enable {
     for (Task *task in tasks) {
-//        assert(task.taskStatus == Stopped);
-        task.taskStatus = Ready;
+        [task enable];
     }
 }
 
@@ -211,24 +199,16 @@
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
 
-    if (taskCtrl.reconfigurationNeeded && tasksStatus != Stopped) {
+    if (taskCtrl.reconfigurationNeeded) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
                 return;
             }
         }
         // The are all stopped.  Inform the authorities
-        tasksStatus = Stopped;
-        [taskCtrl reconfigureWhenReady];
+        [taskCtrl idleForReconfiguration];
         return;
-    } else {
-        for (Task *task in tasks) {
-            if (task.taskStatus == Stopped) {   // still waiting for this one
-                task.taskStatus = Ready;
-            }
-        }
     }
-    tasksStatus = Running;
 
     UIImage *scaledImage;
     if (srcPix.h != srcImage.size.height || srcPix.w != srcImage.size.width) {  // scale
@@ -272,9 +252,18 @@
         for (Task *task in tasks) {
             if (task.taskStatus == Running)
                 continue;
+            busyCount++;
             [task executeTransformsFromPixBuf:srcPix];
+            busyCount--;
+            assert(busyCount >= 0);
         }
     }
+    [self checkForReconfigure];
+}
+
+- (void) checkForReconfigure {
+    if (busyCount == 0 && taskCtrl.reconfigurationNeeded)
+        [taskCtrl checkReadyForReconfiguration];
 }
 
 // same idea as image tasks, but convert the depth buffer
@@ -304,8 +293,12 @@
     for (Task *task in tasks) {
         if (task.taskStatus == Running)
             continue;
+        busyCount++;
         [task startTransformsWithDepthBuf:activeDepthBuf];
+        busyCount--;
+        assert(busyCount >= 0);
     }
+    [self checkForReconfigure];
 }
 
 @end

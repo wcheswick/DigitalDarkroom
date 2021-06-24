@@ -99,7 +99,7 @@ typedef enum {
                   displaySize:(CGSize) ds
                    displayOption:(DisplayOptions) displayOption;
 
-- (void) adjustForDisplaySize:(CGSize) ds;
+- (void) configureLayoutForDisplaySize:(CGSize) ds;
 - (NSComparisonResult) compare:(Layout *)layout;
 
 extern  NSString * __nullable displayOptionNames[];

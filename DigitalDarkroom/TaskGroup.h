@@ -20,17 +20,11 @@ NS_ASSUME_NONNULL_BEGIN
 @class Task;
 @class TaskCtrl;
 
-typedef enum {
-    Ready,
-    Running,
-    Stopped,
-} TaskStatus_t;
-
 @interface TaskGroup : NSObject {
     TaskCtrl *taskCtrl;
-    TaskStatus_t tasksStatus;
     Transform * __nullable depthTransform;
     NSMutableArray *tasks;
+    volatile int busyCount;
     CGSize transformSize;
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
     size_t bytesInImage;
@@ -41,8 +35,8 @@ typedef enum {
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   Transform * __nullable depthTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
-@property (atomic, assign)      TaskStatus_t tasksStatus;
 @property (assign, atomic)      CGSize transformSize;
+@property (assign, atomic)      volatile int busyCount;
 @property (assign)          size_t bytesPerRow, pixelsInImage, pixelsPerRow;
 @property (assign)          size_t bitsPerComponent;
 @property (assign)          size_t bytesInImage;
@@ -63,7 +57,7 @@ typedef enum {
 - (void) removeLastTransform;
 
 - (BOOL) isReadyForLayout;
-- (void) layoutCompleted;
+- (void) enable;
 
 @end
 

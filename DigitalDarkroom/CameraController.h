@@ -43,10 +43,9 @@ typedef enum {
 - (BOOL) selectCameraOnSide:(CameraSide) side threeD:(BOOL)usingDepthCamera;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
-- (void) setupSession;
 
 - (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
-- (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format;
+- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format;
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
 - (void) startCamera;

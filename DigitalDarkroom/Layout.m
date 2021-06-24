@@ -96,14 +96,13 @@ NSString * __nullable displayOptionNames[] = {
                    displayOption:(DisplayOptions) displayOption {
     captureSize = cs;
     currentDisplayOption = displayOption;
-    [self adjustForDisplaySize:ds];
+    [self configureLayoutForDisplaySize:ds];
     return self;
 }
 
-
-- (void) adjustForDisplaySize:(CGSize) ds {
+- (void) configureLayoutForDisplaySize:(CGSize) ds {
 #ifdef DEBUG_LAYOUT
-    NSLog(@"adjustForDisplaySize %.0f x %.0f (%4.2f)", ds.width, ds.height, ds.width/ds.height);
+    NSLog(@"configureLayoutForDisplaySize %.0f x %.0f (%4.2f)", ds.width, ds.height, ds.width/ds.height);
 #endif
 
     float bestDisplayAreaPct;
@@ -111,8 +110,11 @@ NSString * __nullable displayOptionNames[] = {
     quality = 0;    // assume doable
     
     aspectRatio = captureSize.width / captureSize.height;
-
-    scale = displayRect.size.width / captureSize.width;
+    
+    if (aspectRatio < 1.0)
+        scale = displayRect.size.height / captureSize.height;
+    else
+        scale = displayRect.size.width / captureSize.width;
     CGSize scaledSize = CGSizeMake(round(displayRect.size.width*scale),
                                    round(displayRect.size.height*scale));
 

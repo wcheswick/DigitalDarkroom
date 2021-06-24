@@ -78,6 +78,11 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (void) enable {
+    //assert(taskStatus == Stopped);
+    taskStatus = Idle;
+}
+
 - (Transform *) lastTransform:(BOOL)doing3D {
     if (doing3D || transformList.count > DEPTH_TRANSFORM + 1)
         return [transformList lastObject];
@@ -133,6 +138,7 @@ static PixelIndex_t dPI(int x, int y) {
     NSLog(@"   TTT %@  configureTaskForSize: %.0f x %.0f", taskName,
           taskGroup.transformSize.width, taskGroup.transformSize.height);
 #endif
+// maybe ok    assert(taskStatus == Stopped);
     imBuf0 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     imBuf1 = [[PixBuf alloc] initWithSize:taskGroup.transformSize];
     assert(imBuf0);
@@ -178,8 +184,8 @@ static PixelIndex_t dPI(int x, int y) {
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    TT %-15@   configureTransform  %zu size %.0f x %.0f", taskName, index, s.width, s.height);
 #endif
+// maybe ok    assert(taskStatus == Stopped);
     assert(s.width > 0 && s.height > 0);
-    //    assert(taskStatus == Stopped);
     Transform *transform = transformList[index];
     TransformInstance *instance = paramList[index];
 
@@ -209,9 +215,12 @@ static PixelIndex_t dPI(int x, int y) {
 //
 
 - (void) startTransformsWithDepthBuf:(DepthBuf *) depthBuf {
-    assert(taskStatus == Ready);
-    if (!enabled)   // not onscreen
+    if (taskStatus == Stopped || !enabled)
+        return;     // not now
+    if (taskGroup.taskCtrl.reconfigurationNeeded) {
+        taskStatus = Stopped;
         return;
+    }
     taskStatus = Running;
     assert(transformList.count > 0);
     
@@ -233,9 +242,12 @@ static PixelIndex_t dPI(int x, int y) {
 // source.
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf {
-    assert(taskStatus == Ready);
-    if (!enabled)   // not onscreen
+    if (taskStatus == Stopped || !enabled)
+        return;     // not now
+    if (taskGroup.taskCtrl.reconfigurationNeeded) {
+        taskStatus = Stopped;
         return;
+    }
     taskStatus = Running;
     
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
@@ -279,9 +291,11 @@ static PixelIndex_t dPI(int x, int y) {
     PixBuf *outBuf = imBufs[sourceIndex];
 //    [outBuf verify];
     [self updateTargetWith:outBuf];
+    taskStatus = Idle;
 }
 
 - (void) updateTargetWith:(const PixBuf *)pixBuf {
+    // XXXXXX taskStatus?
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
     NSUInteger bytesPerRow = bytesPerPixel * pixBuf.w;
@@ -301,7 +315,7 @@ static PixelIndex_t dPI(int x, int y) {
     dispatch_async(dispatch_get_main_queue(), ^{
         self->targetImageView.image = transformed;
         [self->targetImageView setNeedsDisplay];
-        self->taskStatus = Ready;
+        self->taskStatus = Idle;
      });
 }
 

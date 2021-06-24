@@ -18,10 +18,16 @@ NS_ASSUME_NONNULL_BEGIN
 #define UNASSIGNED_TASK (-1)
 #define DEPTH_TRANSFORM 0
 
+typedef enum {
+    Idle,
+    Running,
+    Stopped,
+} TaskStatus_t;
+
 @interface Task : NSObject {
     NSString *taskName;
     TaskGroup *taskGroup;
-    TaskStatus_t taskStatus;
+    TaskStatus_t taskStatus;        // only this routine changes this
     NSMutableArray *transformList;  // first transform is the depth transform
     NSMutableArray *paramList;
 
@@ -47,6 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL) updateParamOfLastTransformTo:(int) newParam;
 - (int) valueForStep:(long) step;
 - (long) lastStep;
+- (void) enable;    // task must be stopped when calling this
 
 - (long) appendTransformToTask:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;

@@ -152,9 +152,10 @@
 }
 
 // need an up-to-date deviceorientation
-- (void) setupSession {
+// need capturedevice set
+- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format {
     NSError *error;
-    assert(captureDevice);
+    assert(captureDevice);  // must have been selected, but not configured, before
 
 #ifdef DEBUG_ORIENTATION
     NSLog(@" +++ setupSession: device orientation (%ld): %@",
@@ -169,11 +170,6 @@
     }
     
     captureSession = [[AVCaptureSession alloc] init];
-    if (error) {
-        NSLog(@"startSession: could not lock camera: %@",
-              [error localizedDescription]);
-        return;
-    }
     
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
                                         deviceInputWithDevice:captureDevice
@@ -184,6 +180,25 @@
         return;
     }
     
+#ifdef DEBUG_CAMERA
+    NSLog(@" setupCameraWithFormat: %@", captureDevice.activeFormat);
+#endif
+
+    [captureDevice lockForConfiguration:&error];
+    if (error) {
+        NSLog(@"startSession: could not lock camera: %@",
+              [error localizedDescription]);
+        return;
+    }
+    captureDevice.activeFormat = format;
+
+    // these must be after the activeFormat is set.  there are other conditions, see
+    // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
+    
+    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    [captureDevice unlockForConfiguration];
+
     // insist on our activeFormat selection:
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
     if ([captureSession canAddInput:videoInput]) {
@@ -346,24 +361,6 @@
         [formatList addObject:format];
     }
     return [NSArray arrayWithArray:formatList];
-}
-
-- (void) setupCameraWithFormat:(AVCaptureDeviceFormat *) format {
-    NSError *error;
-    
-    [captureDevice lockForConfiguration:&error];
-    captureDevice.activeFormat = format;
-    
-#ifdef DEBUG_CAMERA
-    NSLog(@" setupCameraWithFormat: %@", captureDevice.activeFormat);
-#endif
-
-    // these must be after the activeFormat is set.  there are other conditions, see
-    // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
-    
-    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    [captureDevice unlockForConfiguration];
 }
 
 - (void) startCamera {

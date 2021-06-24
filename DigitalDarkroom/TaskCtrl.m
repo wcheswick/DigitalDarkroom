@@ -22,7 +22,6 @@
 @synthesize taskGroups;
 @synthesize reconfigurationNeeded;
 @synthesize layingOut;
-@synthesize reconfiguring;
 
 - (id)init {
     self = [super init];
@@ -32,7 +31,6 @@
         assert(taskGroups);
         reconfigurationNeeded = NO;
         layingOut = NO;
-        reconfiguring = 0;
     }
     return self;
 }
@@ -44,43 +42,46 @@
     return taskGroup;
 }
 
-- (void) reconfigureWhenReady {
-//    if (reconfigurationNeeded)
-//       return;
-    
-    reconfigurationNeeded = YES;
-    TaskStatus_t newStatus = Stopped;
+- (BOOL) tasksIdledForLayout {
     for (TaskGroup *taskGroup in taskGroups) {
         if (![taskGroup isReadyForLayout])
-            newStatus = Running;
+            return NO;
     }
-    if (newStatus == Stopped) {
-        layingOut = YES;
-        reconfigurationNeeded = NO;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self->mainVC tasksReadyForLayoutChange];
-        });
-    } else
-        NSLog(@"  -- still busy to layout");
+    return YES;
 }
 
-- (void) layoutCompleted {
-    layingOut = NO;
-    reconfiguring--;
-    NSLog(@" layout completed: reconfiguring %d", reconfiguring);
-    if (reconfiguring < 0) {
-        NSLog(@"** reconfiguring error: %d", reconfiguring);
-        reconfiguring = 0;
+- (void) idleForReconfiguration {
+#ifdef DEBUG_TASK_BUSY
+    NSLog(@"TTT idling tasks");
+#endif
+    reconfigurationNeeded = YES;
+    [self checkReadyForReconfiguration];
+}
+
+- (void) checkReadyForReconfiguration {
+    for (TaskGroup *taskGroup in taskGroups) {
+        if (taskGroup.busyCount)
+            return;
     }
+    dispatch_async(dispatch_get_main_queue(), ^{
+#ifdef DEBUG_TASK_BUSY
+        NSLog(@"TTT    tasks now idle");
+#endif
+        [self->mainVC tasksAreIdle];
+    });
+}
+
+- (void) enableTasks {
+    reconfigurationNeeded = NO;
     for (TaskGroup *taskGroup in taskGroups)
-        [taskGroup layoutCompleted];
+        [taskGroup enable];
 }
 
 // not used, taskStatus needs to be right
 - (void) executeTasksWithImage:(UIImage *)image {
+    if (reconfigurationNeeded)
+        return;
     for (TaskGroup *taskGroup in taskGroups) {
-        if (taskGroup.tasksStatus != Ready)
-            continue;
         [taskGroup executeTasksWithImage: image];
     }
 }
