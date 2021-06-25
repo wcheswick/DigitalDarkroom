@@ -1287,30 +1287,11 @@ static NSString * const imageOrientationName[] = {
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
     NSLog(@"two-tap screen: save image");
-    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+    [self doSave];
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
     NSLog(@"did three-tap screen: save image and screen");
-    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
-    
-    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
-    UIWindow* keyWindow = nil;
-    if (@available(iOS 13.0, *)) {
-        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
-            if (wScene.activationState == UISceneActivationStateForegroundActive) {
-                keyWindow = wScene.windows.firstObject;
-                break;
-            }
-        }
-    }
-    CGRect rect = [keyWindow bounds];
-    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    [keyWindow.layer renderInContext:context];
-    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
-    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
 - (IBAction) doHelp:(UIView *)caller {
