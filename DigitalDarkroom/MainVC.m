@@ -957,10 +957,16 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) newDeviceOrientation {
+    UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
+    if (nextOrientation == UIDeviceOrientationUnknown)
+        return; // weird, ignore it
+    if (nextOrientation == deviceOrientation)
+        return; // nothing new to see here, folks
+    deviceOrientation = nextOrientation;
 #ifdef DEBUG_ORIENTATION
-NSLog(@"adjusting for orientation: %@", [CameraController
-                                 dumpDeviceOrientationName:deviceOrientation]);
-//    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
+    NSLog(@"adjusting for orientation: %@", [CameraController
+                                             dumpDeviceOrientationName:deviceOrientation]);
+    //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
 #endif
     if (layout) // already layed out, adjust it
         [taskCtrl idleForReconfiguration];
@@ -979,7 +985,6 @@ NSLog(@"adjusting for orientation: %@", [CameraController
 #ifdef DEBUG_LAYOUT
     NSLog(@"********* newLayout");
 #endif
-    deviceOrientation = [[UIDevice currentDevice] orientation];
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
@@ -1048,8 +1053,28 @@ NSLog(@"adjusting for orientation: %@", [CameraController
         [self startCamera];
         [taskCtrl enableTasks];
     } else {
-        currentLayoutIndex = [self chooseLayoutsForSourceSize:currentSource.imageSize];
-        assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
+#ifdef DEBUG_LAYOUT
+        NSLog(@"choose layout for image source size %.0f x %.0f (%5.2f",
+              currentSource.imageSize.width, currentSource.imageSize.height, currentSource.imageSize.width/currentSource.imageSize.height);
+#endif
+        [self initForLayingOut];
+        
+        layout = [[Layout alloc]
+                  initForOrientation:isPortrait
+                  iPhone:isiPhone
+                  containerRect:containerView.frame];
+        layout.thumbCount = transforms.transforms.count;
+        layout.format = nil;
+        layout.captureSize = currentSource.imageSize;
+        [layout configureLayoutWithDisplayOption:isiPhone ? TightDisplay : BestDisplay];
+#ifdef NOTDEF
+        float scale = scales[scaleIndex++];
+        targetSize = CGSizeMake(round(targetSize.width * scale),
+                                round(targetSize.height * scale));
+#endif
+        assert(layout.quality >= 0);
+        [layouts addObject:layout];
+        currentLayoutIndex = 0;
         UIImage *image = [UIImage imageWithContentsOfFile:currentSource.imagePath];
         assert(image);
         [self applyScreenLayout];
@@ -1261,12 +1286,12 @@ NSLog(@"adjusting for orientation: %@", [CameraController
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"did two-tap screen");
+    NSLog(@"two-tap screen: save image");
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"did three-tap screen");
+    NSLog(@"did three-tap screen: save image and screen");
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
     
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
@@ -1446,9 +1471,9 @@ static CGSize startingDisplaySize;
             //[self finalizeDisplayAdjustment];
             break;
         case UIGestureRecognizerStateChanged: {
-            [UIView animateWithDuration:0.7 animations:^(void) {
-                [self adjustDisplayFromSize:startingDisplaySize toScale: pinch.scale];
-            }];
+//            [UIView animateWithDuration:0.7 animations:^(void) {
+//                [self adjustDisplayFromSize:startingDisplaySize toScale: pinch.scale];
+//            }];
             break;
         }
         default:
@@ -1510,6 +1535,7 @@ static CGSize startingDisplaySize;
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
 
+#ifdef NOTYET
 - (void) adjustDisplayFromSize:(CGSize) startingSize toScale:(float)newScale {
     // constrain the size between smallest display (thumb size) to size of the containerView.
     if (layout.aspectRatio > 1.0) {
@@ -1552,26 +1578,13 @@ static CGSize startingDisplaySize;
     [self layoutThumbs: layout];
     [self updateExecuteView];
 }
-
-- (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
-    float xScale = size.width/srcSize.width;
-    float yScale = size.height/srcSize.height;
-    return MIN(xScale,yScale);
-}
-
-- (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size {
-    CGFloat scale = [self scaleToFitSize:srcSize toSize:size];
-    CGSize scaledSize;
-    scaledSize.width = scale*srcSize.width;
-    scaledSize.height = scale*srcSize.height;
-    return scaledSize;
-}
+#endif
 
 - (UIImage *)fitImage:(UIImage *)image
                toSize:(CGSize)size
              centered:(BOOL) centered {
     CGRect scaledRect;
-    scaledRect.size = [self fitSize:image.size toSize:size];
+    scaledRect.size = [Layout fitSize:image.size toSize:size];
     scaledRect.origin = CGPointZero;
     if (centered) {
         scaledRect.origin.x = (size.width - scaledRect.size.width)/2.0;
@@ -2324,31 +2337,6 @@ CGSize lastAcceptedSize;
     [self adjustBarButtons];
 }
 
-- (long) chooseLayoutsForSourceSize:(CGSize) sourceSize {
-#ifdef DEBUG_LAYOUT
-    NSLog(@"choose layoutfor image source");
-#endif
-    [self initForLayingOut];
-    
-    layout = [[Layout alloc]
-              initForOrientation:isPortrait
-              iPhone:isiPhone
-              containerRect:containerView.frame];
-    layout.thumbCount = transforms.transforms.count;
-    layout.format = nil;
-    
-    [self tryCandidate:[layout layoutForSourceSize:sourceSize
-                                                displaySize:containerView.frame.size
-                                              displayOption:isiPhone ? TightDisplay : BestDisplay]];
-#ifdef NOTDEF
-    float scale = scales[scaleIndex++];
-    targetSize = CGSizeMake(round(targetSize.width * scale),
-                            round(targetSize.height * scale));
-#endif
-    [layouts addObject:layout];
-    return 0;   // first and only layout
-}
-
 static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 
 - (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
@@ -2356,26 +2344,44 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     NSLog(@"chooseLayoutsFromFormatList");
 #endif
     [self initForLayingOut];
-//    NSLog(@"screen size   %4.0f x %4.0f",
-//          containerView.frame.size.width, containerView.frame.size.height );
+    //    NSLog(@"screen size   %4.0f x %4.0f",
+    //          containerView.frame.size.width, containerView.frame.size.height );
     
     CGSize lastSize = CGSizeZero;
     for (int i=0; i<availableFormats.count; i++) {
         AVCaptureDeviceFormat *format = availableFormats[i];
-//        NSLog(@"FFF %@", format);
+        //        NSLog(@"FFF %@", format);
         CGSize sourceSize = [cameraController sizeForFormat:format];
         if (sourceSize.width == lastSize.width && sourceSize.height == lastSize.height)
             continue;   // for now, only use the first of duplicate sizes
         assert(sourceSize.width >= lastSize.width || sourceSize.height >= lastSize.height);
-
+        
         Layout *candidateLayout = [[Layout alloc]
                                    initForOrientation:isPortrait
                                    iPhone:isiPhone
                                    containerRect:containerView.frame];
         candidateLayout.thumbCount = transforms.transforms.count;
         candidateLayout.format = format;
-        lastSize = sourceSize;
+        candidateLayout.captureSize = sourceSize;
         
+        [candidateLayout configureLayoutWithDisplayOption: BestDisplay];
+        if (candidateLayout.quality < 0)
+            continue;
+        [layouts addObject:candidateLayout];
+    }
+    int bestQuality = -1;
+    int newLayoutIndex = 0;
+    for (int i=0; i<layouts.count; i++) {
+        Layout *layout = layouts[i];
+        if (layout.quality < bestQuality)
+            continue;
+        newLayoutIndex = i;
+        bestQuality = layout.quality;
+    }
+    return newLayoutIndex;
+}
+        
+#ifdef OLD
 #ifdef NOTDEF
         [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
                                                      targetSize:CGSizeZero
@@ -2393,9 +2399,9 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
             targetSize = CGSizeMake(round(targetSize.width * scale),
                                     round(targetSize.height * scale));
         } while (scaleIndex < sizeof(scales)/sizeof(scales[0]));
-    }
-    
-    int newLayoutIndex = LAYOUT_NO_GOOD;
+
+        
+        int newLayoutIndex = LAYOUT_NO_GOOD;
     int bestQuality = -1;
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
@@ -2404,8 +2410,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
         newLayoutIndex = i;
         bestQuality = layout.quality;
     }
-    return newLayoutIndex;
-}
+#endif
 
 - (void) changeSourceTo:(InputSource *)next {
     if (!next)

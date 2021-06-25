@@ -95,12 +95,9 @@ typedef enum {
                   iPhone:(BOOL) isPhone
            containerRect:(CGRect) containerRect;
 
-- (Layout *) layoutForSourceSize:(CGSize) cs
-                  displaySize:(CGSize) ds
-                   displayOption:(DisplayOptions) displayOption;
-
-- (void) configureLayoutForDisplaySize:(CGSize) ds;
+- (void) configureLayoutWithDisplayOption:(DisplayOptions) displayOption;
 - (NSComparisonResult) compare:(Layout *)layout;
++ (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size;
 
 extern  NSString * __nullable displayOptionNames[];
 
