@@ -1286,15 +1286,21 @@ static NSString * const imageOrientationName[] = {
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
     if (!IS_CAMERA(currentSource))
         return;
-    // We don't stop the camera, just stop the processing of incoming data,
-    // when paused. This makes it resume faster.
-    pausedLabel.hidden = !pausedLabel.hidden;
-    NSLog(@"%@", pausedLabel.hidden ? @"NOT PAUSED" : @"PAUSED");
-    [pausedLabel setNeedsDisplay];
-    if (pausedLabel.hidden)
-        currentSourceImage = nil;
-    else
+    if (PAUSED)
+        [self goLive];
+    else {
+        pausedLabel.hidden = NO;
         currentSourceImage = previousSourceImage;
+        [pausedLabel setNeedsDisplay];
+    }
+}
+
+- (void) goLive {
+    currentSourceImage = nil;
+    previousSourceImage = nil;
+    pausedLabel.hidden = YES;
+    [pausedLabel setNeedsDisplay];
+    [taskCtrl idleForReconfiguration];
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -1947,6 +1953,8 @@ UIImageOrientation lastOrientation;
 - (IBAction) processDepthSwitch:(UISwitch *)depthsw {
     InputSource *newSource = [currentSource copy];
     newSource.usingDepthCamera = !currentSource.usingDepthCamera;
+    if (PAUSED)
+        [self goLive];
     [self changeSourceTo:newSource];
 }
 

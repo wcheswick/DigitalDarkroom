@@ -161,7 +161,7 @@ NSString * __nullable displayOptionNames[] = {
                 displayRect.size = [Layout fitSize:captureSize toSize:
                                     CGSizeMake(containerFrame.size.width,
                                                round(containerFrame.size.height -
-                                                     (firstThumbRect.size.height + minExecH)))];
+                                                     (2.5*firstThumbRect.size.height + minExecH)))];
             } else {
                 thumbsPlacement = ThumbsOnRight;
                 executeIsTight = NO;
