@@ -14,6 +14,7 @@
 #define kImagePath  @"ImagePath"
 #define kSide       @"UseFrontCamera"
 #define kDepth      @"UseDepthMode"
+#define kIsCamera   @"IsCamera"
 
 @implementation InputSource
 
@@ -21,23 +22,25 @@
 @synthesize currentSide, usingDepthCamera;
 @synthesize imagePath;
 @synthesize thumbImageCache;
-@synthesize imageSize;
+@synthesize isCamera;
+@synthesize capturedImage;
 
 - (id)init {
     self = [super init];
     if (self) {
         label = @"";
         imagePath = nil;
-        imageSize = CGSizeZero;
         thumbImageCache = nil;
+        isCamera = NO;
+        capturedImage = nil;
     }
     return self;
 }
 
 - (void) makeCameraSourceOnSide:(CameraSide) side threeD:(BOOL) threeD {
     label = @"Cameras";
-    imagePath = nil;   // signifies camera input
-    imageSize = CGSizeZero;
+    isCamera = YES;
+    capturedImage = nil;
     thumbImageCache = nil;
     self.currentSide = side;
     self.usingDepthCamera = threeD;
@@ -50,6 +53,7 @@
         self.imagePath = [coder decodeObjectForKey: kImagePath];
         self.currentSide = [coder decodeIntForKey: kSide];
         self.usingDepthCamera = [coder decodeBoolForKey: kDepth];
+        self.isCamera = [coder decodeBoolForKey:kIsCamera];
         thumbImageCache = nil;
     }
     return self;
@@ -60,6 +64,7 @@
     [coder encodeObject:imagePath forKey:kImagePath];
     [coder encodeInt:currentSide forKey:kSide];
     [coder encodeBool:usingDepthCamera forKey:kDepth];
+    [coder encodeBool:isCamera forKey:kIsCamera];
 }
 
 - (void) setUpImageAt:(NSString *)path {
@@ -67,10 +72,7 @@
     label = [[path lastPathComponent] stringByDeletingPathExtension];
     UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
     if (!image) {
-        imageSize = CGSizeZero;
         label = [label stringByAppendingString:@" (missing)"];
-    } else {
-        imageSize = image.size;
     }
 }
 
@@ -91,8 +93,9 @@
     copy.imagePath = imagePath;
     copy.currentSide = currentSide;
     copy.usingDepthCamera = usingDepthCamera;
-    copy.imageSize = imageSize;
     copy.thumbImageCache = thumbImageCache;
+    copy.isCamera = isCamera;
+    copy.capturedImage = capturedImage;
     return copy;
 }
 

@@ -16,18 +16,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface InputSource : NSObject {
     NSString *label;
-    NSString *__nullable imagePath;        // if file set, then not a camera
+    BOOL isCamera;
+    NSString *__nullable imagePath; // where a file image is
     CameraSide currentSide;
     BOOL usingDepthCamera;
-    CGSize imageSize;
     UIImage *__nullable thumbImageCache;
 }
 
 @property (nonatomic, strong)   NSString *label;
+@property (assign)              BOOL isCamera;
+@property (nonatomic, strong)   UIImage *capturedImage;
 @property (assign)              CameraSide currentSide;
 @property (assign)              BOOL usingDepthCamera;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
-@property (assign)              CGSize imageSize;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 

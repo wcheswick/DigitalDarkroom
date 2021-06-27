@@ -212,14 +212,15 @@ static PixelIndex_t dPI(int x, int y) {
 
 // first, apply depth vis on the depthdata, then run it through
 // the other transforms. Don't mess with the incoming DepthBuf,
-//
+// Return the first post-depth image for possible future use.
 
-- (void) startTransformsWithDepthBuf:(DepthBuf *) depthBuf {
+- (UIImage * __nullable) startTransformsWithDepthBuf:(DepthBuf *) depthBuf {
+    UIImage *startingImage = nil;
     if (taskStatus == Stopped || !enabled)
-        return;     // not now
+        return nil;     // not now
     if (taskGroup.taskCtrl.reconfigurationNeeded) {
         taskStatus = Stopped;
-        return;
+        return nil;
     }
     taskStatus = Running;
     assert(transformList.count > 0);
@@ -234,7 +235,9 @@ static PixelIndex_t dPI(int x, int y) {
     assert(transform.type == DepthVis); // Could be NullTrans, inconceivable
     TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
     transform.depthVisF(depthBuf, imBuf0, instance);
+    startingImage = [self pixbufToImage:imBuf0];
     [self executeTransformsStartingWithImBuf0];
+    return startingImage;
 }
 
 // run the srcBuf image through the transforms. We need to make our own
@@ -259,7 +262,8 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) executeTransformsStartingWithImBuf0 {
     assert(taskStatus == Running);
     if (transformList.count == 0) { // just display the input
-        [self updateTargetWith:imBuf0];
+        UIImage *unmodifiedSourceImage = [self pixbufToImage:imBufs[0]];
+        [self updateTargetWith:unmodifiedSourceImage];
         return;
     }
     
@@ -288,14 +292,12 @@ static PixelIndex_t dPI(int x, int y) {
 
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
     
-    PixBuf *outBuf = imBufs[sourceIndex];
-//    [outBuf verify];
-    [self updateTargetWith:outBuf];
+    UIImage *finalImage = [self pixbufToImage:imBufs[sourceIndex]];
+    [self updateTargetWith:finalImage];
     taskStatus = Idle;
 }
 
-- (void) updateTargetWith:(const PixBuf *)pixBuf {
-    // XXXXXX taskStatus?
+- (UIImage *) pixbufToImage:(const PixBuf *) pixBuf {
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     NSUInteger bytesPerPixel = sizeof(Pixel);
     NSUInteger bytesPerRow = bytesPerPixel * pixBuf.w;
@@ -307,13 +309,16 @@ static PixelIndex_t dPI(int x, int y) {
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
 
-    UIImage *transformed = [UIImage imageWithCGImage:quartzImage
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
                                          scale:1.0
                                    orientation:UIImageOrientationUp];
     CGImageRelease(quartzImage);
-    
+    return image;
+}
+
+- (void) updateTargetWith:(UIImage *)image {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self->targetImageView.image = transformed;
+        self->targetImageView.image = image;
         [self->targetImageView setNeedsDisplay];
         self->taskStatus = Idle;
      });

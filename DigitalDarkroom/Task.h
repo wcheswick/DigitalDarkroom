@@ -63,7 +63,7 @@ typedef enum {
 - (Transform *) lastTransform:(BOOL)doing3D;
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
-- (void) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
+- (UIImage * __nullable) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 

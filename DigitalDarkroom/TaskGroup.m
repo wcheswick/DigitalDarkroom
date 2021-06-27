@@ -267,9 +267,11 @@
 }
 
 // same idea as image tasks, but convert the depth buffer
-// into an image first.
+// into an image first. Return the first non-depth image
+// for possible capture, etc.
 
-- (void) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf {
+- (UIImage *) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf {
+    UIImage *sourceImage = nil;   // after depth processing
     DepthBuf *activeDepthBuf = rawDepthBuf;
     if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
         // cheap scaling: XXXX use the hardware
@@ -294,11 +296,12 @@
         if (task.taskStatus == Running)
             continue;
         busyCount++;
-        [task startTransformsWithDepthBuf:activeDepthBuf];
+        sourceImage = [task startTransformsWithDepthBuf:activeDepthBuf];
         busyCount--;
         assert(busyCount >= 0);
     }
     [self checkForReconfigure];
+    return sourceImage;
 }
 
 @end

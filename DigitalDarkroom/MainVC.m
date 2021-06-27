@@ -101,6 +101,9 @@
 #define DEPTH_AVAILABLE (IS_CAMERA(self->currentSource) && self->currentSource.cameraHasDepthMode)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
+#define PAUSED      (IS_CAMERA(currentSource) && !pausedLabel.hidden)
+#define LIVE        (currentSource && !PAUSED)
+
 typedef enum {
     TransformTable,
     ActiveTable,
@@ -169,7 +172,8 @@ typedef enum {
 
 @property (nonatomic, strong)   InputSource *currentSource, *firstSource, *nextSource;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
-@property (nonatomic, strong)   UIImage *lastSourceImage;
+@property (nonatomic, strong)   UIImage *currentSourceImage;    // what we are transforming, or nil if get an image from the camera
+@property (nonatomic, strong)   UIImage *previousSourceImage;   // last used
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign)              int availableCameraCount;
@@ -234,7 +238,6 @@ typedef enum {
 @synthesize paramView;
 @synthesize thumbViewsArray, thumbsView;
 @synthesize layouts, currentLayoutIndex;
-@synthesize lastSourceImage;
 @synthesize helpNavVC;
 
 @synthesize executeView;
@@ -254,6 +257,7 @@ typedef enum {
 @synthesize cameraSourceThumb;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
+@synthesize currentSourceImage, previousSourceImage;
 
 @synthesize availableCameraCount;
 
@@ -285,7 +289,7 @@ typedef enum {
         nullTransform = [[Transform alloc] init];
         
         currentTransformIndex = NO_TRANSFORM;
-        lastSourceImage = nil;
+        currentSourceImage = nil;
         layout = nil;
         helpNavVC = nil;
         layouts = [[NSMutableArray alloc] init];
@@ -990,16 +994,20 @@ static NSString * const imageOrientationName[] = {
     
     if (!isiPhone || !isPortrait)
         self.title = @"Digital Darkroom";
-
+    
     // close down any currentSource stuff
-    if (currentSource) {
-        if (IS_CAMERA(currentSource)) {
+    if (nextSource) {   // change sources
+        if (LIVE) {
             [cameraController stopCamera];
         }
-    }
-    if (nextSource) {
         currentSource = nextSource;
         nextSource = nil;
+        if (currentSource.isCamera) {
+            previousSourceImage = nil;
+            currentSourceImage = nil;
+        } else {    // source is a file, it is our source image
+            currentSourceImage = [UIImage imageNamed: currentSource.imagePath];
+        }
     }
     assert(currentSource);
     
@@ -1038,7 +1046,35 @@ static NSString * const imageOrientationName[] = {
           f.size.width/f.size.height);
 #endif
     
-    if (IS_CAMERA(currentSource)) {   // select camera setting for available area
+    if (currentSourceImage) { // file or captured image input
+#ifdef DEBUG_LAYOUT
+        NSLog(@"choose layout for image source size %.0f x %.0f (%5.2f",
+              currentSourceImage.size.width, currentSourceImage.size.height,
+              currentSourceImage.size.width/currentSourceImage.size.height);
+#endif
+        [self initForLayingOut];
+        
+        layout = [[Layout alloc]
+                  initForOrientation:isPortrait
+                  iPhone:isiPhone
+                  containerRect:containerView.frame];
+        layout.thumbCount = transforms.transforms.count;
+        layout.format = nil;
+        layout.captureSize = currentSourceImage.size;
+        [layout configureLayoutWithDisplayOption:isiPhone ? TightDisplay : BestDisplay];
+#ifdef NOTDEF
+        float scale = scales[scaleIndex++];
+        targetSize = CGSizeMake(round(targetSize.width * scale),
+                                round(targetSize.height * scale));
+#endif
+        assert(layout.quality >= 0);
+        [layouts addObject:layout];
+        currentLayoutIndex = 0;
+        [self applyScreenLayout];
+        [taskCtrl enableTasks];
+        [self doTransformsOn:currentSourceImage];
+    } else {
+        assert(LIVE);   // select camera setting for available area
         assert(cameraController);
         [cameraController updateOrientationTo:deviceOrientation];
         [cameraController selectCameraOnSide:currentSource.currentSide
@@ -1052,34 +1088,6 @@ static NSString * const imageOrientationName[] = {
         [self applyScreenLayout];
         [self startCamera];
         [taskCtrl enableTasks];
-    } else {
-#ifdef DEBUG_LAYOUT
-        NSLog(@"choose layout for image source size %.0f x %.0f (%5.2f",
-              currentSource.imageSize.width, currentSource.imageSize.height, currentSource.imageSize.width/currentSource.imageSize.height);
-#endif
-        [self initForLayingOut];
-        
-        layout = [[Layout alloc]
-                  initForOrientation:isPortrait
-                  iPhone:isiPhone
-                  containerRect:containerView.frame];
-        layout.thumbCount = transforms.transforms.count;
-        layout.format = nil;
-        layout.captureSize = currentSource.imageSize;
-        [layout configureLayoutWithDisplayOption:isiPhone ? TightDisplay : BestDisplay];
-#ifdef NOTDEF
-        float scale = scales[scaleIndex++];
-        targetSize = CGSizeMake(round(targetSize.width * scale),
-                                round(targetSize.height * scale));
-#endif
-        assert(layout.quality >= 0);
-        [layouts addObject:layout];
-        currentLayoutIndex = 0;
-        UIImage *image = [UIImage imageWithContentsOfFile:currentSource.imagePath];
-        assert(image);
-        [self applyScreenLayout];
-        [taskCtrl enableTasks];
-        [self doTransformsOn:image];
     }
 }
 
@@ -1216,7 +1224,7 @@ static NSString * const imageOrientationName[] = {
         }
         [screenTask configureTaskForSize];
     }
-    [self doTransformsOn:lastSourceImage];
+    [self doTransformsOn:currentSourceImage];
     [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -1283,6 +1291,10 @@ static NSString * const imageOrientationName[] = {
     pausedLabel.hidden = !pausedLabel.hidden;
     NSLog(@"%@", pausedLabel.hidden ? @"NOT PAUSED" : @"PAUSED");
     [pausedLabel setNeedsDisplay];
+    if (pausedLabel.hidden)
+        currentSourceImage = nil;
+    else
+        currentSourceImage = previousSourceImage;
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -1431,7 +1443,7 @@ int startParam;
 //            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
 //                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
             if ([screenTask updateParamOfLastTransformTo:newParam]) {
-                [self doTransformsOn:lastSourceImage];
+                [self doTransformsOn:previousSourceImage];
                 [self updateExecuteView];
             }
             break;
@@ -1643,7 +1655,7 @@ static CGSize startingDisplaySize;
 
     assert(cameraController.usingDepthCamera);
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
+        self->previousSourceImage = [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
         if (self->cameraController.usingDepthCamera)
             [self->depthThumbTasks executeTasksWithDepthBuf:self->depthBuf];
         self->busy = NO;
@@ -1653,7 +1665,7 @@ static CGSize startingDisplaySize;
 - (void) doTransformsOn:(UIImage *)sourceImage {
     if (!sourceImage)
         return;
-    lastSourceImage = sourceImage;
+    previousSourceImage = sourceImage;
     [screenTasks executeTasksWithImage:sourceImage];
 
     if (DISPLAYING_THUMBS)
