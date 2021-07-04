@@ -94,6 +94,7 @@ typedef long PixelIndex_t;
 #define EXECUTE_MIN_H       EXECUTE_H_FOR(1)
 #define EXECUTE_FULL_H      EXECUTE_H_FOR(6)
 
+#define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
 
 // There is always a bit of display available, for pinching
 #define MIN_DISPLAY_W   THUMB_W

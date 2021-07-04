@@ -324,7 +324,7 @@ typedef enum {
         plusButtonLocked = NO;
         options = [[Options alloc] init];
         
-        overlayState = overlayShowing;
+        overlayState = overlayClear;
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
@@ -505,8 +505,9 @@ CGFloat topOfNonDepthArray = 0;
     CGRect switchRect = CGRectMake((nextButtonFrame.size.width - SECTION_SWITCH_W)/2, nextButtonFrame.size.height-SECTION_SWITCH_H - SEP,
                                    SECTION_SWITCH_W, SECTION_SWITCH_H);
     depthSwitch.frame = switchRect;
-    CGRect sectionNameRect = CGRectMake(0, 0,
-                                        nextButtonFrame.size.width, nextButtonFrame.size.height - switchRect.origin.y);
+    CGRect sectionNameRect = CGRectMake(0, 20,
+                                        nextButtonFrame.size.width,
+                                        nextButtonFrame.size.height - switchRect.origin.y);
     
     // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
     // positions for the current situation. These thumbs come in section, each of which has
@@ -526,12 +527,13 @@ CGFloat topOfNonDepthArray = 0;
                   nextButtonFrame.size.width, nextButtonFrame.size.height,
                   thumbView.sectionName);
 #endif
+#ifdef OLD
             if (lastSection) {  // not our first section, make space
                 if (!atStartOfRow) {
                     [self nextTransformButtonPosition];
                 }
             }
-            
+#endif
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = sectionNameRect;
             depthSwitch.enabled = HAVE_CAMERA && [cameraController isDepthAvailable];
@@ -626,10 +628,9 @@ static NSString * const imageOrientationName[] = {
     NSLog(@"viewDidLoad");
 #endif
     
-    self.navigationController.navigationBarHidden = NO;
-    self.navigationController.toolbarHidden = self.navigationController.navigationBarHidden;
-    self.navigationController.navigationBar.opaque = YES;
-    self.navigationController.toolbar.opaque = YES;
+    self.navigationController.navigationBar.opaque = NO;
+    self.navigationController.toolbar.opaque = NO;
+    [self updateOverlayView:overlayClear];
 
     sourceBarButton = [[UIBarButtonItem alloc]
                                              initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
@@ -1058,7 +1059,7 @@ static NSString * const imageOrientationName[] = {
                   initForOrientation:isPortrait
                   iPhone:isiPhone
                   containerRect:containerView.frame];
-        layout.thumbCount = transforms.transforms.count;
+        layout.thumbCount = thumbViewsArray.count;
         layout.format = nil;
         layout.captureSize = currentSourceImage.size;
         [layout configureLayoutWithDisplayOption:isiPhone ? TightDisplay : BestDisplay];
@@ -1091,16 +1092,18 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-
 #define DEBUG_FONT_SIZE 16
 
--(void) updateOverlayView {
+-(void) updateOverlayView: (OverlayState) newState {
     // start fresh
     [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
     UILabel *overlayDebug = nil;
     
+    overlayState = newState;
     switch (overlayState) {
         case overlayClear:
+            [self.navigationController setNavigationBarHidden:YES animated:YES];
+            [self.navigationController setToolbarHidden:YES animated:YES];
             break;
         case overlayShowingDebug:
             overlayDebug = [[UILabel alloc] init];
@@ -1114,6 +1117,8 @@ static NSString * const imageOrientationName[] = {
             [overlayView addSubview:overlayDebug];
             // FALLTHROUGH
         case overlayShowing: {
+            [self.navigationController setNavigationBarHidden:NO animated:YES];
+            [self.navigationController setToolbarHidden:NO animated:YES];
             if (overlayDebug) {
                 CGRect f;
                 f.size = overlayView.frame.size;
@@ -1225,7 +1230,7 @@ static NSString * const imageOrientationName[] = {
         [screenTask configureTaskForSize];
     }
     [self doTransformsOn:currentSourceImage];
-    [self updateOverlayView];
+    [self updateOverlayView:overlayState];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -1259,7 +1264,10 @@ static NSString * const imageOrientationName[] = {
         label.highlighted = YES;    // this doesn't seem to do anything
     } else {
         label.font = [UIFont systemFontOfSize:THUMB_FONT_SIZE];
-        thumb.layer.borderWidth = 1.0;
+        if (thumb.sectionName)
+            thumb.layer.borderWidth = 0;
+        else
+            thumb.layer.borderWidth = 1.0;
         label.highlighted = NO;
     }
     [label setNeedsDisplay];
@@ -1284,6 +1292,14 @@ static NSString * const imageOrientationName[] = {
 
 // pause/unpause video
 - (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
+    if (overlayState == overlayClear)
+        overlayState = overlayShowing;
+    else
+        overlayState = overlayClear;
+    [self updateOverlayView:overlayState];
+}
+
+#ifdef NEW
     if (!IS_CAMERA(currentSource))
         return;
     if (PAUSED)
@@ -1294,6 +1310,7 @@ static NSString * const imageOrientationName[] = {
         [pausedLabel setNeedsDisplay];
     }
 }
+#endif
 
 - (void) goLive {
     currentSourceImage = nil;
@@ -2333,7 +2350,7 @@ CGSize lastAcceptedSize;
     
     flipBarButton.enabled = HAVE_CAMERA && [cameraController isFlipAvailable];
     
-    [self updateOverlayView];
+    [self updateOverlayView:overlayState];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -2361,7 +2378,7 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
                                    initForOrientation:isPortrait
                                    iPhone:isiPhone
                                    containerRect:containerView.frame];
-        candidateLayout.thumbCount = transforms.transforms.count;
+        candidateLayout.thumbCount = thumbViewsArray.count;
         candidateLayout.format = format;
         candidateLayout.captureSize = sourceSize;
         

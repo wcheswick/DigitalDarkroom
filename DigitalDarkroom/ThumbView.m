@@ -87,7 +87,7 @@
     sectionLabel.adjustsFontSizeToFitWidth = YES;
     sectionLabel.numberOfLines = 3;
     sectionLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    sectionLabel.text = sectionName;
+    sectionLabel.text = [sectionName stringByAppendingString:@"\ntransforms"];
     sectionLabel.textColor = [UIColor blackColor];
     sectionLabel.font = [UIFont boldSystemFontOfSize:SECTION_NAME_FONT_SIZE];
     sectionLabel.highlighted = NO;    // yes if selected
@@ -106,11 +106,7 @@
     sectionLabel.contentMode = NSLayoutAttributeTop;
 #endif
     sectionLabel.opaque = NO;
-    sectionLabel.layer.borderWidth = 0.5;
     [self addSubview:sectionLabel];
-    
-    self.layer.borderColor = [UIColor redColor].CGColor;
-    self.layer.borderWidth = 1.0;
     
     if (sw) {
         [self addSubview:sw];
