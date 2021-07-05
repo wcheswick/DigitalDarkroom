@@ -1781,6 +1781,8 @@ UIImageOrientation lastOrientation;
             [self adjustThumbView:thumbView selected:NO];
         }
     }
+    [self doTransformsOn:currentSourceImage];
+    [self updateOverlayView:overlayState];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -1839,6 +1841,8 @@ UIImageOrientation lastOrientation;
         ThumbView *thumbView = [self thumbForTransform:lastTransform];
         [self adjustThumbView:thumbView selected:NO];
         [screenTask removeLastTransform];
+        [self doTransformsOn:currentSourceImage];
+        [self updateOverlayView:overlayState];
         [self updateExecuteView];
         [self adjustBarButtons];
     }

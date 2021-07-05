@@ -227,7 +227,8 @@ NSString * __nullable displayOptionNames[] = {
     executeRect.size.width = displayRect.size.width;
     executeRect.origin.x = displayRect.origin.x;
     CGFloat spaceBelowDisplay = containerFrame.size.height - BELOW(displayRect);
-    if (squeeze || EXECUTE_FULL_H < spaceBelowDisplay) {
+    if (squeeze || spaceBelowDisplay < EXECUTE_FULL_H) {
+        NSLog(@"full: %.0d  space: %.1f", EXECUTE_FULL_H, spaceBelowDisplay);
         executeRect.origin.y = BELOW(displayRect);
         executeRect.size.height = spaceBelowDisplay;
         executeIsTight = YES;
