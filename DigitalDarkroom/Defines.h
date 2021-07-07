@@ -23,6 +23,8 @@
 //#define ONLY_RED    1   // process pure red input only
 
 #define POINTING_HAND_CHAR  @"☞"
+#define UNICODE_PAUSE   @"\u23F8"   // two bars
+#define UNICODE_PLAY    @"\u25B6"       // play triangle
 
 #define USED(x) ((void)(x)) // to suppress "variable unused" messages
 

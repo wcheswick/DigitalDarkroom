@@ -23,6 +23,7 @@ Transform *nullTransform = nil;
 @synthesize remapImageF;
 @synthesize polarRemapF;
 @synthesize low, value, high;
+@synthesize paramName, lowValueFormat, highValueFormat;
 @synthesize newValue;
 @synthesize remapTable;
 
@@ -44,6 +45,8 @@ Transform *nullTransform = nil;
         newValue = NO;
         hasParameters = NO;
         remapTable = NULL;
+        paramName = nil;
+        lowValueFormat = highValueFormat = @"%d";
     }
     return self;
 }

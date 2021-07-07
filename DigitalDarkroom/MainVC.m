@@ -123,13 +123,6 @@ typedef enum {
 } SourceTypes;
 #define N_SOURCES 3
 
-typedef enum {
-    overlayClear,
-    overlayShowing,
-    overlayShowingDebug,
-} OverlayState;
-#define OVERLAY_STATES  (overlayShowingDebug+1)
-
 
 @interface MainVC ()
 
@@ -155,11 +148,13 @@ typedef enum {
 
 // in containerview:
 @property (nonatomic, strong)   UIView *overlayView;        // transparency over transformView
-@property (assign)              OverlayState overlayState;
 @property (nonatomic, strong)   ReticleView *reticleView;   // nil if reticle not selected
-@property (nonatomic, strong)   UILabel *paramView;
+@property (nonatomic, strong)   UIView *controlsView;
+@property (nonatomic, strong)   UIView *paramView;
+
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UILabel *pausedLabel;       // if camera capture is paused. Use .hidden as flag
+@property (nonatomic, strong)   UIButton *pauseResumeButton;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   NSMutableArray *thumbViewsArray;         // views that go into thumbsView
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
@@ -233,14 +228,14 @@ typedef enum {
 
 @synthesize containerView;
 @synthesize depthSwitch, flipBarButton, sourceBarButton;
-@synthesize transformView, overlayView, overlayState;
+@synthesize transformView;
 @synthesize overlayDebugStatus;
-@synthesize pausedLabel;
-@synthesize reticleView, reticleBarButton;
-@synthesize paramView;
+@synthesize pausedLabel, pauseResumeButton;
 @synthesize thumbViewsArray, thumbsView;
 @synthesize layouts, currentLayoutIndex;
 @synthesize helpNavVC;
+
+@synthesize overlayView, controlsView, reticleView, paramView;
 
 @synthesize executeView;
 @synthesize plusButton, plusButtonLocked;
@@ -327,7 +322,6 @@ typedef enum {
         plusButtonLocked = NO;
         options = [[Options alloc] init];
         
-        overlayState = overlayClear;
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
@@ -658,7 +652,6 @@ static NSString * const imageOrientationName[] = {
     self.navigationController.navigationBar.opaque = YES;
     self.navigationController.toolbarHidden = YES;
 //    self.navigationController.toolbar.opaque = NO;
-    [self updateOverlayView:overlayClear];
 
     sourceBarButton = [[UIBarButtonItem alloc]
                                              initWithImage:[UIImage systemImageNamed:@"filemenu.and.selection"]
@@ -724,12 +717,6 @@ static NSString * const imageOrientationName[] = {
                                      target:self
                                      action:@selector(doHelp:)];
 
-    reticleBarButton = [[UIBarButtonItem alloc]
-                                        initWithImage:[UIImage systemImageNamed:@"squareshape.split.2x2.dotted"]
-                                        style:UIBarButtonItemStylePlain
-                                        target:self
-                                        action:@selector(toggleReticle:)];
-    
 #define NAVBAR_H   self.navigationController.navigationBar.frame.size.height
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     plusButton.frame = CGRectMake(0, 0, NAVBAR_H+SEP, NAVBAR_H);
@@ -835,11 +822,7 @@ static NSString * const imageOrientationName[] = {
     
     transformView = [[UIImageView alloc] init];
     transformView.backgroundColor = NAVY_BLUE;
-
-    overlayView = [[UIView alloc] init];
-    overlayView.opaque = NO;
-    overlayView.userInteractionEnabled = YES;
-    overlayView.backgroundColor = [UIColor clearColor];
+    transformView.userInteractionEnabled = YES;
 
     pausedLabel = [[UILabel alloc]
                    initWithFrame:CGRectMake(0, SEP,
@@ -852,10 +835,36 @@ static NSString * const imageOrientationName[] = {
     pausedLabel.hidden = YES;   // assume not paused video
     [transformView addSubview:pausedLabel];
     [transformView bringSubviewToFront:pausedLabel];
+
+    overlayView = [[UIView alloc] init];
+    overlayView.opaque = NO;
+    overlayView.userInteractionEnabled = YES;
+    overlayView.backgroundColor = [UIColor clearColor];
+    overlayView.hidden = YES;   // starts as hidden
+
+    controlsView = [[UIView alloc] init];
+    controlsView.backgroundColor = [UIColor clearColor];
     
-    reticleView = nil;      // defaults to off
-    paramView = nil;
+    pauseResumeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    [pauseResumeButton setTitle:@"Pause" forState:UIControlStateNormal];
+    [pauseResumeButton setTitle:@"￼￼￼￼Resume" forState:UIControlStateSelected];
     
+    [pauseResumeButton addTarget:self action:@selector(togglePauseResume:) forControlEvents:UIControlEventTouchUpInside];
+    pauseResumeButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
+    [controlsView addSubview:pauseResumeButton];
+    [overlayView addSubview:controlsView];
+    
+    paramView = [[UIView alloc] init];
+    paramView.backgroundColor = [UIColor clearColor];
+    [overlayView addSubview:paramView];
+    
+    
+    reticleView = [[ReticleView alloc] init];
+    reticleView.contentMode = UIViewContentModeRedraw;
+    reticleView.opaque = NO;
+    reticleView.backgroundColor = [UIColor clearColor];
+    [overlayView addSubview:reticleView];
+
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
@@ -866,9 +875,10 @@ static NSString * const imageOrientationName[] = {
     executeView.opaque = YES;
 
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                     initWithTarget:self action:@selector(didTapSceen:)];
+                                   initWithTarget:self action:@selector(didOneTapSceen:)];
     [tap setNumberOfTouchesRequired:1];
     [overlayView addGestureRecognizer:tap];
+    [transformView addGestureRecognizer:tap];
 
     UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTwoTapSceen:)];
@@ -885,6 +895,7 @@ static NSString * const imageOrientationName[] = {
     longPressScreen.minimumPressDuration = 1.0;
     [overlayView addGestureRecognizer:longPressScreen];
 
+#ifdef NOTHERE
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPinch:)];
@@ -894,10 +905,11 @@ static NSString * const imageOrientationName[] = {
                                        initWithTarget:self
                                        action:@selector(doPan:)];
     [overlayView addGestureRecognizer:pan];
-
+#endif
+    
     [containerView addSubview:transformView];
-    [containerView addSubview:overlayView];
     [containerView addSubview:executeView];
+    [containerView addSubview:overlayView];
     [containerView bringSubviewToFront:overlayView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
@@ -914,7 +926,6 @@ static NSString * const imageOrientationName[] = {
     thumbScrollView.canCancelContentTouches = YES;
     thumbScrollView.delegate = self;
     thumbScrollView.scrollEnabled = YES;
-    [containerView addSubview:thumbScrollView];
     
     thumbsView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, LATER, LATER)];
     [thumbScrollView addSubview:thumbsView];
@@ -1119,45 +1130,6 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-#define DEBUG_FONT_SIZE 16
-
--(void) updateOverlayView: (OverlayState) newState {
-    // start fresh
-    [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    UILabel *overlayDebug = nil;
-    
-    overlayState = newState;
-    switch (overlayState) {
-        case overlayClear:
-            //[self.navigationController setNavigationBarHidden:YES animated:YES];
-            break;
-        case overlayShowingDebug:
-            overlayDebug = [[UILabel alloc] init];
-            overlayDebug.text = overlayDebugStatus;
-            overlayDebug.textColor = [UIColor whiteColor];
-            overlayDebug.opaque = NO;
-            overlayDebug.numberOfLines = 0;
-            overlayDebug.lineBreakMode = NSLineBreakByWordWrapping;
-            overlayDebug.font = [UIFont boldSystemFontOfSize:DEBUG_FONT_SIZE];
-            overlayDebug.backgroundColor = [UIColor colorWithWhite:0.4 alpha:0.2];
-            [overlayView addSubview:overlayDebug];
-            // FALLTHROUGH
-        case overlayShowing: {
-            //[self.navigationController setNavigationBarHidden:NO animated:YES];
-            if (overlayDebug) {
-                CGRect f;
-                f.size = overlayView.frame.size;
-                f.origin = CGPointMake(5, 5);
-                overlayDebug.frame = f;
-                [overlayDebug sizeToFit];
-                [overlayView bringSubviewToFront:overlayDebug];
-            }
-            break;
-        }
-    }
-    [overlayView setNeedsDisplay];
-}
-
 - (void) adjustBarButtons {
     flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
@@ -1254,7 +1226,7 @@ static NSString * const imageOrientationName[] = {
         [screenTask configureTaskForSize];
     }
     [self doTransformsOn:currentSourceImage];
-    [self updateOverlayView:overlayState];
+//    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -1314,18 +1286,104 @@ static NSString * const imageOrientationName[] = {
     });
 }
 
-// pause/unpause video
-- (IBAction) didTapSceen:(UITapGestureRecognizer *)recognizer {
-    if (overlayState == overlayClear)
-        overlayState = overlayShowing;
-    else
-        overlayState = overlayClear;
-    [self updateOverlayView:overlayState];
+- (void) toggleOverlay {
+    if (overlayView.hidden) {   // present it, in stages
+        [self adjustOverlayView];   // to current size
+        overlayView.hidden = NO;
+        [overlayView setNeedsDisplay];
+        CGFloat yPosition = controlsView.frame.origin.y;
+        SET_VIEW_Y(controlsView, yPosition + controlsView.frame.size.height);
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            SET_VIEW_Y(self->controlsView, yPosition);
+            self->reticleView.hidden = NO;
+        }];
+        [self updateParamView];
+    } else {    // remove it in stages
+        overlayView.hidden = YES;
+        reticleView.hidden = YES;
+       [overlayView setNeedsDisplay];
+    }
 }
 
-#ifdef NEW
-    if (!IS_CAMERA(currentSource))
+- (void) updateParamView {  // if needed
+    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
+    if (!lastTransform)
         return;
+    if (!lastTransform.hasParameters)
+        return;
+#ifdef NOTYET
+        int value = [screenTask valueForStep:[screenTask lastStep]];
+        paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
+                          value == lastTransform.low ? @"[" : @"<",
+                          value,
+                          value == lastTransform.high ? @"]" : @">"];
+#endif
+        [paramView setNeedsDisplay];
+}
+
+// add big arrows if parameter can be changed on last transform
+- (void) adjustOverlayView {
+    CGRect f = overlayView.frame;
+    f.size.height *= 0.2;   // fraction for controls
+    f.origin = CGPointMake(0, overlayView.frame.size.height - f.size.height);
+    f.size = CGSizeMake(overlayView.frame.size.width, f.size.height);
+    controlsView.frame = f;
+    pauseResumeButton.frame = CGRectMake(0.3*f.size.width, 0, 2*f.size.height, 30);
+    pauseResumeButton.titleLabel.font = [UIFont
+                                         systemFontOfSize:pauseResumeButton.frame.size.height
+                                         weight:UIFontWeightHeavy];
+    f.origin.y -= f.size.height;
+    paramView.frame = f;
+    reticleView.frame = overlayView.frame;
+}
+
+#ifdef OLD
+#define DEBUG_FONT_SIZE 16
+
+-(void) updateOverlayView: (OverlayState) newState {
+    // start fresh
+    [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
+    UILabel *overlayDebug = nil;
+    
+    overlayState = newState;
+    switch (overlayState) {
+        case overlayClear:
+            //[self.navigationController setNavigationBarHidden:YES animated:YES];
+            break;
+        case overlayShowingDebug:
+            overlayDebug = [[UILabel alloc] init];
+            overlayDebug.text = overlayDebugStatus;
+            overlayDebug.textColor = [UIColor whiteColor];
+            overlayDebug.opaque = NO;
+            overlayDebug.numberOfLines = 0;
+            overlayDebug.lineBreakMode = NSLineBreakByWordWrapping;
+            overlayDebug.font = [UIFont boldSystemFontOfSize:DEBUG_FONT_SIZE];
+            overlayDebug.backgroundColor = [UIColor colorWithWhite:0.4 alpha:0.2];
+            [overlayView addSubview:overlayDebug];
+            // FALLTHROUGH
+        case overlayShowing: {
+            //[self.navigationController setNavigationBarHidden:NO animated:YES];
+            if (overlayDebug) {
+                CGRect f;
+                f.size = overlayView.frame.size;
+                f.origin = CGPointMake(5, 5);
+                overlayDebug.frame = f;
+                [overlayDebug sizeToFit];
+                [overlayView bringSubviewToFront:overlayDebug];
+            }
+            break;
+        }
+    }
+    [overlayView setNeedsDisplay];
+}
+#endif
+
+// pause/unpause video
+- (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
+    if (!IS_CAMERA(CURRENT_SOURCE))
+        return;
+    pauseResumeButton.selected = !pauseResumeButton.selected;
+    [pauseResumeButton setNeedsDisplay];
     if (PAUSED)
         [self goLive];
     else {
@@ -1334,7 +1392,6 @@ static NSString * const imageOrientationName[] = {
         [pausedLabel setNeedsDisplay];
     }
 }
-#endif
 
 - (void) goLive {
     currentSourceImage = nil;
@@ -1342,6 +1399,11 @@ static NSString * const imageOrientationName[] = {
     pausedLabel.hidden = YES;
     [pausedLabel setNeedsDisplay];
     [taskCtrl idleForReconfiguration];
+}
+
+- (IBAction) didOneTapSceen:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"one-tap screen: toggle overlay view");
+    [self toggleOverlay];
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -1413,41 +1475,6 @@ static NSString * const imageOrientationName[] = {
         return;  //???
     }];
 #endif
-}
-
-- (IBAction) toggleReticle:(UIBarButtonItem *)reticleBarButton {
-    if (reticleView) {  // turn it off by removing it
-        [reticleView removeFromSuperview];
-        reticleView = nil;
-        [paramView removeFromSuperview];
-        paramView = nil;
-        [overlayView setNeedsDisplay];
-        return;
-    }
-    
-    CGRect f = overlayView.frame;
-    f.origin = CGPointZero;
-    reticleView = [[ReticleView alloc] initWithFrame:f];
-    reticleView.contentMode = UIViewContentModeRedraw;
-    reticleView.opaque = NO;
-    reticleView.backgroundColor = [UIColor clearColor];
-    [overlayView addSubview:reticleView];
-    
-    CGFloat paramH = round(f.size.height/10.0);
-    f.origin.y = f.size.height - paramH;
-    f.size.height = paramH;
-    paramView = [[UILabel alloc] initWithFrame:f];
-    paramView.font = [UIFont systemFontOfSize:paramH - 4
-                                       weight:UIFontWeightUltraLight];
-    paramView.textAlignment = NSTextAlignmentCenter;
-    paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
-    paramView.textColor = [UIColor blackColor];
-    paramView.text = @"Poot";
-    paramView.hidden = YES;
-    [overlayView addSubview:paramView];
-
-    [reticleView setNeedsDisplay];
-    [self updateExecuteView];
 }
 
 #ifdef NOTDEEF
@@ -1601,8 +1628,9 @@ static CGSize startingDisplaySize;
 
 - (void) adjustDisplayToLayout:(CGSize) newSize {
     [layout configureLayoutForDisplaySize:newSize];
-    overlayView.frame = layout.displayRect;
     transformView.frame = layout.displayRect;
+    overlayView.frame = layout.displayRect;
+    [self adjustOverlayView];
     executeView.frame = layout.executeRect;
     if (reticleView) {
         reticleView.frame = CGRectMake(0, 0,
@@ -1806,7 +1834,7 @@ UIImageOrientation lastOrientation;
         }
     }
     [self doTransformsOn:currentSourceImage];
-    [self updateOverlayView:overlayState];
+//    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -1866,7 +1894,7 @@ UIImageOrientation lastOrientation;
         [self adjustThumbView:thumbView selected:NO];
         [screenTask removeLastTransform];
         [self doTransformsOn:currentSourceImage];
-        [self updateOverlayView:overlayState];
+//        [self updateOverlayView];
         [self updateExecuteView];
         [self adjustBarButtons];
     }
@@ -1896,6 +1924,7 @@ UIImageOrientation lastOrientation;
             t = [NSString stringWithFormat:@"%@  +%@%@", t, sep, name];
         }
         
+#ifdef STUB
         // append string showing the parameter value, if one is specified
         if (transform.hasParameters) {
             int value = [screenTask valueForStep:step];
@@ -1915,6 +1944,7 @@ UIImageOrientation lastOrientation;
         }
         if (onePerLine && ![transform.description isEqual:@""])
             t = [NSString stringWithFormat:@"%@   (%@)", t, transform.description];
+#endif
     }
     
     if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
@@ -1926,20 +1956,7 @@ UIImageOrientation lastOrientation;
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
     }
 #endif
-    
-    // add big arrows if parameter can be changed on last transform
-    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
-    if (lastTransform && lastTransform.hasParameters) {
-        int value = [screenTask valueForStep:[screenTask lastStep]];
-        paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
-                          value == lastTransform.low ? @"[" : @"<",
-                          value,
-                          value == lastTransform.high ? @"]" : @">"];
-        [paramView setNeedsDisplay];
-        paramView.hidden = NO;
-    } else
-        paramView.hidden = YES;
-    
+   
 #ifdef notdef
 //    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
 //    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
@@ -2373,7 +2390,7 @@ CGSize lastAcceptedSize;
     
     flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     
-    [self updateOverlayView:overlayState];
+//    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
 }

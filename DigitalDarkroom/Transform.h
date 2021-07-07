@@ -71,7 +71,9 @@ typedef void (^ __nullable __unsafe_unretained
     inPlacePtFunc_t ipPointF;
     areaFunction_t areaF;
     depthVis_t depthVisF;
-    int low, value, high;
+    int low, value, high;   // parameter range
+    NSString *paramName;
+    NSString *lowValueFormat, *highValueFormat;
     ComputeRemap_t remapImageF;
     ComputePolarRemap_t polarRemapF;
 }
@@ -87,6 +89,8 @@ typedef void (^ __nullable __unsafe_unretained
 @property (unsafe_unretained)   ComputePolarRemap_t polarRemapF;
 @property (assign)              transform_t type;
 @property (assign)              int low, value, high;
+@property (nonatomic, strong)   NSString *paramName;
+@property (nonatomic, strong)   NSString *lowValueFormat, *highValueFormat;
 @property (assign)              BOOL hasParameters;
 @property (assign)              BOOL newValue;
 @property (assign)              PixelIndex_t * _Nullable remapTable;
