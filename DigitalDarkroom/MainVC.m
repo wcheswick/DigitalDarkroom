@@ -655,8 +655,9 @@ static NSString * const imageOrientationName[] = {
     NSLog(@"viewDidLoad");
 #endif
     
-    self.navigationController.navigationBar.opaque = NO;
-    self.navigationController.toolbar.opaque = NO;
+    self.navigationController.navigationBar.opaque = YES;
+    self.navigationController.toolbarHidden = YES;
+//    self.navigationController.toolbar.opaque = NO;
     [self updateOverlayView:overlayClear];
 
     sourceBarButton = [[UIBarButtonItem alloc]
@@ -715,13 +716,7 @@ static NSString * const imageOrientationName[] = {
                      style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(doRemoveLastTransform)];
-    
-    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
-                                              sourceBarButton,
-                                              flexibleSpace,
-                                              flipBarButton,
-                                              nil];
-    
+     
     UIBarButtonItem *docBarButton = [[UIBarButtonItem alloc]
 //                                     initWithImage:[UIImage systemImageNamed:@"doc.text"]
                                      initWithTitle:@"?"
@@ -735,24 +730,18 @@ static NSString * const imageOrientationName[] = {
                                         target:self
                                         action:@selector(toggleReticle:)];
     
-    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               docBarButton,
-                                               fixedSpace,
-                                               reticleBarButton,
-                                               nil];
-    
-#define TOOLBAR_H   self.navigationController.toolbar.frame.size.height
+#define NAVBAR_H   self.navigationController.navigationBar.frame.size.height
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusButton.frame = CGRectMake(0, 0, TOOLBAR_H+SEP, TOOLBAR_H);
+    plusButton.frame = CGRectMake(0, 0, NAVBAR_H+SEP, NAVBAR_H);
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
                                     initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
+                                        NSFontAttributeName: [UIFont systemFontOfSize:NAVBAR_H
                                                                                weight:UIFontWeightUltraLight],
                                         //NSBaselineOffsetAttributeName: @-3
                                     }] forState:UIControlStateNormal];
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
                                     initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:TOOLBAR_H
+                                        NSFontAttributeName: [UIFont systemFontOfSize:NAVBAR_H
                                                                                weight:UIFontWeightHeavy],
                                         //NSBaselineOffsetAttributeName: @-3
                                     }] forState:UIControlStateSelected];
@@ -784,13 +773,13 @@ static NSString * const imageOrientationName[] = {
     plusLockButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     plusLockButton.selected = NO;
     
-    plusLockButton.frame = CGRectMake(0, 0, 1.5*TOOLBAR_H+SEP, TOOLBAR_H);
+    plusLockButton.frame = CGRectMake(0, 0, 1.5*NAVBAR_H+SEP, NAVBAR_H);
 //    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
 
-#define PLUS_LOCK_FONT_SIZE (TOOLBAR_H*0.6)
-#define PLUS_LOCK_KERN           (-TOOLBAR_H*0.3)
-#define PLUS_LOCK_SUPERSCRIPT   (TOOLBAR_H*0.1)
-#define OFFSET              0   // (TOOLBAR_H*0.1)
+#define PLUS_LOCK_FONT_SIZE (NAVBAR_H*0.6)
+#define PLUS_LOCK_KERN           (-NAVBAR_H*0.3)
+#define PLUS_LOCK_SUPERSCRIPT   (NAVBAR_H*0.1)
+#define OFFSET              0   // (NAVBAR_H*0.1)
  
     NSMutableAttributedString *littleRaisedPlus = [[NSMutableAttributedString alloc]
                                            initWithString:BIGPLUS];
@@ -813,19 +802,27 @@ static NSString * const imageOrientationName[] = {
     UIBarButtonItem *plusLockBarButton = [[UIBarButtonItem alloc]
                                       initWithCustomView:plusLockButton];
 
-    self.toolbarItems = [[NSArray alloc] initWithObjects:
-                         plusBarButton,
-                         fixedSpace,
-                         plusLockBarButton,
-                         flexibleSpace,
-                         trashBarButton,
-                         fixedSpace,
-                         undoBarButton,
-                         fixedSpace,
-                         saveBarButton,
-//                         fixedSpace,
-// disabled                         otherMenuButton,
-                         nil];
+    
+    self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
+                                              sourceBarButton,
+                                              flexibleSpace,
+                                              flipBarButton,
+                                              plusBarButton,
+                                              fixedSpace,
+                                              plusLockBarButton,
+//                                             fixedSpace,
+//                                              reticleBarButton,
+                                             nil];
+    
+    self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
+                                               docBarButton,
+                                               fixedSpace,
+                                               saveBarButton,
+                                               fixedSpace,
+                                               undoBarButton,
+                                               fixedSpace,
+                                               trashBarButton,
+                                               nil];
 
     containerView = [[UIView alloc] init];
     containerView.backgroundColor = [UIColor whiteColor];
@@ -1029,6 +1026,10 @@ static NSString * const imageOrientationName[] = {
         NSLog(@"III switching to source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
         nextSourceIndex = NO_SOURCE;
         InputSource *source = inputSources[currentSourceIndex];
+
+        if (!isiPhone)
+            self.title = source.label;
+
         if (source.isCamera) {
             previousSourceImage = nil;
             currentSourceImage = nil;
@@ -1128,8 +1129,7 @@ static NSString * const imageOrientationName[] = {
     overlayState = newState;
     switch (overlayState) {
         case overlayClear:
-            [self.navigationController setNavigationBarHidden:YES animated:YES];
-            [self.navigationController setToolbarHidden:YES animated:YES];
+            //[self.navigationController setNavigationBarHidden:YES animated:YES];
             break;
         case overlayShowingDebug:
             overlayDebug = [[UILabel alloc] init];
@@ -1143,8 +1143,7 @@ static NSString * const imageOrientationName[] = {
             [overlayView addSubview:overlayDebug];
             // FALLTHROUGH
         case overlayShowing: {
-            [self.navigationController setNavigationBarHidden:NO animated:YES];
-            [self.navigationController setToolbarHidden:NO animated:YES];
+            //[self.navigationController setNavigationBarHidden:NO animated:YES];
             if (overlayDebug) {
                 CGRect f;
                 f.size = overlayView.frame.size;
@@ -2312,7 +2311,6 @@ CGSize lastAcceptedSize;
     
     CGFloat below = BELOW(thumbScrollView.frame);
     assert(below <= BELOW(containerView.frame));
-    assert(below <= self.navigationController.toolbar.frame.origin.y);
 
     thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
