@@ -14,33 +14,23 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef enum {
-    Front,
-    Rear,
-} CameraSide;
-
-#define FLIP_SIDE(s)    (CameraSide)(Rear - s)
-
 @interface CameraController : NSObject {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
         AVCaptureDepthDataOutputDelegate>delegate;
-    CameraSide currentSide;
-    volatile BOOL usingDepthCamera;
+    BOOL frontCamera;
+    BOOL threeDCamera;
 }
+
+@property (assign) BOOL frontCamera, threeDCamera;
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
                     AVCaptureDepthDataOutputDelegate>delegate;
-@property (assign)  CameraSide currentSide;
 @property (assign)  volatile BOOL usingDepthCamera;
 
-- (BOOL) hasCameraOnSide:(CameraSide) side;
-- (BOOL) hasDepthCameraOnSide:(CameraSide) side;
-- (BOOL) isFlipAvailable;
-- (BOOL) isDepthAvailable;
-
-- (BOOL) selectCameraOnSide:(CameraSide) side threeD:(BOOL)usingDepthCamera;
+- (BOOL) cameraAvailableOnFront:(BOOL)front threeD:(BOOL)threeD;
+- (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
 

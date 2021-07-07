@@ -22,11 +22,10 @@
 
 // last settings
 
-#define LAST_SOURCE_KEY         @"LastSource"
 #define LAST_FILE_SOURCE_KEY    @"LastFileSource"
 #define UI_MODE_KEY             @"UIMode"
-#define LAST_DEPTH_TRANSFORM    @"LastDepthTransform"
-
+#define LAST_DEPTH_TRANSFORM_KEY    @"LastDepthTransform"
+#define LAST_SOURCE_KEY      @"Current source index"
 
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
@@ -97,12 +96,15 @@
 
 #define NO_STEP_SELECTED    -1
 #define NO_LAYOUT_SELECTED   (-1)
+#define NO_SOURCE       (-1)
 
 #define DEPTH_AVAILABLE (IS_CAMERA(self->currentSource) && self->currentSource.cameraHasDepthMode)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
-#define PAUSED      (IS_CAMERA(currentSource) && !pausedLabel.hidden)
-#define LIVE        (currentSource && !PAUSED)
+#define SOURCE(i)   ((InputSource *)inputSources[i])
+#define CURRENT_SOURCE  SOURCE(currentSourceIndex)
+#define PAUSED      (IS_CAMERA(CURRENT_SOURCE) && !pausedLabel.hidden)
+#define LIVE        ((currentSourceIndex != NO_SOURCE) && !PAUSED)
 
 typedef enum {
     TransformTable,
@@ -170,13 +172,13 @@ typedef enum {
 // in sources view
 @property (nonatomic, strong)   UINavigationController *sourcesNavVC;
 
-@property (nonatomic, strong)   InputSource *currentSource, *firstSource, *nextSource;
+@property (assign)              NSInteger currentSourceIndex, nextSourceIndex;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
 @property (nonatomic, strong)   UIImage *currentSourceImage;    // what we are transforming, or nil if get an image from the camera
 @property (nonatomic, strong)   UIImage *previousSourceImage;   // last used
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
-@property (assign)              int availableCameraCount;
+@property (assign)              int cameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign)              long currentDepthTransformIndex; // or NO_TRANSFORM
@@ -253,13 +255,14 @@ typedef enum {
 @synthesize sourcesNavVC;
 @synthesize options;
 
-@synthesize currentSource, nextSource, inputSources;
+@synthesize currentSourceIndex, nextSourceIndex;
+@synthesize inputSources;
 @synthesize cameraSourceThumb;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 @synthesize currentSourceImage, previousSourceImage;
 
-@synthesize availableCameraCount;
+@synthesize cameraCount;
 
 @synthesize cameraController;
 @synthesize layout;
@@ -295,7 +298,7 @@ typedef enum {
         layouts = [[NSMutableArray alloc] init];
         
         NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
-                                        stringForKey:LAST_DEPTH_TRANSFORM];
+                                        stringForKey:LAST_DEPTH_TRANSFORM_KEY];
         assert(transforms.depthTransformCount > 0);
         currentDepthTransformIndex = 0; // gotta have a default, use first one
         for (int i=0; i < transforms.depthTransformCount; i++) {
@@ -339,10 +342,32 @@ typedef enum {
 
         inputSources = [[NSMutableArray alloc] init];
         cameraSourceThumb = nil;
+        cameraCount = 0;
         
         if (HAVE_CAMERA) {
-            [self addCameraSource];
-        }
+            NSInteger front2DIndex = [self addCameraSource:@"Front camera" onFront:YES threeD:NO];
+            NSInteger front3DIndex = [self addCameraSource:@"Front 3D" onFront:YES threeD:YES];
+            NSInteger rear2DIndex = [self addCameraSource:@"Rear camera" onFront:NO threeD:NO];
+            NSInteger rear3DIndex = [self addCameraSource:@"Read 3D" onFront:NO threeD:YES];
+#define AVAIL(i)    ((i) != CAMERA_FUNCTION_NOT_AVAILABLE)
+            if (AVAIL(front2DIndex) && AVAIL(front3DIndex)) {
+                SOURCE(front2DIndex).otherDepthIndex = front3DIndex;
+                SOURCE(front3DIndex).otherDepthIndex = front2DIndex;
+            }
+            if (AVAIL(front2DIndex) && AVAIL(rear2DIndex)) {
+                SOURCE(front2DIndex).otherSideIndex = rear2DIndex;
+                SOURCE(rear2DIndex).otherSideIndex = front2DIndex;
+            }
+            if (AVAIL(rear2DIndex) && AVAIL(rear3DIndex)) {
+                SOURCE(rear3DIndex).otherDepthIndex = rear2DIndex;
+                SOURCE(rear2DIndex).otherDepthIndex = rear3DIndex;
+            }
+            if (AVAIL(front3DIndex) && AVAIL(rear3DIndex)) {
+                SOURCE(rear3DIndex).otherSideIndex = front3DIndex;
+                SOURCE(front3DIndex).otherSideIndex = rear3DIndex;
+            }
+      }
+        
 #ifdef DEBUG
         [self addFileSource:@"Olive.png" label:@"Olive"];
 #endif
@@ -362,40 +387,32 @@ typedef enum {
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
         
-        currentSource = nil;
-        InputSource *firstSource = nil;
-        NSData *lastSourceData = [InputSource lastSourceArchive];
-        if (lastSourceData) {
-            NSError *error;
-            firstSource = [NSKeyedUnarchiver
-                             unarchivedObjectOfClass:[InputSource class]
-                             fromData:lastSourceData error:&error];
-        }
-        firstSource = nil;    // DEBUG
-        if (!firstSource) {  // select default source
-            for (InputSource *source in inputSources)
+        currentSourceIndex = [[NSUserDefaults standardUserDefaults]
+                              integerForKey: LAST_SOURCE_KEY];
+        NSLog(@"III loading source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+        
+        if (currentSourceIndex == NO_SOURCE) {  // select default source
+            for (currentSourceIndex=0; currentSourceIndex<inputSources.count; currentSourceIndex++) {
                 if (HAVE_CAMERA) {
-                    if (IS_CAMERA(source)) {
-                        firstSource = source;
+                    if (IS_CAMERA(CURRENT_SOURCE)) {
                         NSLog(@"first source is default camera");
-
                         break;
                     }
                 } else {
-                    if (!IS_CAMERA(source)) {
-                        firstSource = source;
-                        NSLog(@"first source is file '%@'", firstSource.label);
+                    if (!IS_CAMERA(CURRENT_SOURCE)) {
+                        NSLog(@"first source is file '%@'", CURRENT_SOURCE.label);
                         break;
                     }
                 }
-            if (!firstSource)
-                assert(NO); // inconceivable, no sources available
+                assert(currentSourceIndex != NO_SOURCE);
+            }
         }
-        nextSource = firstSource;
+        nextSourceIndex = currentSourceIndex;
+        currentSourceIndex = NO_SOURCE;
     }
     return self;
 }
-
+        
 - (void) createThumbArray {
     NSString *brokenPath = [[NSBundle mainBundle]
                             pathForResource:@"images/brokenTransform.png" ofType:@""];
@@ -536,10 +553,9 @@ CGFloat topOfNonDepthArray = 0;
 #endif
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = sectionNameRect;
-            depthSwitch.enabled = HAVE_CAMERA && [cameraController isDepthAvailable];
+            depthSwitch.enabled = AVAIL(CURRENT_SOURCE.otherDepthIndex);
             if (depthSwitch.enabled)
-                depthSwitch.on = [cameraController usingDepthCamera];
-            
+                depthSwitch.on = CURRENT_SOURCE.isThreeD;
             thumbView.frame = nextButtonFrame;  // this is a little incomplete
             lastSection = thumbView.sectionName;
         } else {
@@ -585,14 +601,25 @@ CGFloat topOfNonDepthArray = 0;
     assert(currentDepthTransformIndex != NO_TRANSFORM);
     Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
     [[NSUserDefaults standardUserDefaults] setObject:transform.name
-                                              forKey:LAST_DEPTH_TRANSFORM];
+                                              forKey:LAST_DEPTH_TRANSFORM_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
-- (void) addCameraSource {
+- (void) saveSourceIndex {
+    assert(currentSourceIndex != NO_SOURCE);
+    NSLog(@"III saving source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+    [[NSUserDefaults standardUserDefaults] setInteger:currentSourceIndex forKey:LAST_SOURCE_KEY];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (NSInteger) addCameraSource:(NSString *)name onFront:(BOOL) front threeD:(BOOL) threeD {
+    if (![cameraController cameraAvailableOnFront:front threeD:threeD])
+        return CAMERA_FUNCTION_NOT_AVAILABLE;
+    cameraCount++;
     InputSource *newSource = [[InputSource alloc] init];
-    [newSource makeCameraSourceOnSide:Front threeD:NO];
+    [newSource makeCameraSource:name onFront:front threeD:threeD];
     [inputSources addObject:newSource];
+    return inputSources.count - 1;
 }
 
 - (void) addFileSource:(NSString *)fn label:(NSString *)l {
@@ -986,31 +1013,30 @@ static NSString * const imageOrientationName[] = {
 //  transform tasks must be idle
 
 - (void) newLayout {
-    assert(currentSource || nextSource);
 #ifdef DEBUG_LAYOUT
     NSLog(@"********* newLayout");
 #endif
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
-    if (!isiPhone || !isPortrait)
-        self.title = @"Digital Darkroom";
-    
     // close down any currentSource stuff
-    if (nextSource) {   // change sources
+    if (nextSourceIndex != NO_SOURCE) {   // change sources
         if (LIVE) {
             [cameraController stopCamera];
         }
-        currentSource = nextSource;
-        nextSource = nil;
-        if (currentSource.isCamera) {
+
+        currentSourceIndex = nextSourceIndex;
+        NSLog(@"III switching to source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+        nextSourceIndex = NO_SOURCE;
+        InputSource *source = inputSources[currentSourceIndex];
+        if (source.isCamera) {
             previousSourceImage = nil;
             currentSourceImage = nil;
         } else {    // source is a file, it is our source image
-            currentSourceImage = [UIImage imageNamed: currentSource.imagePath];
+            currentSourceImage = [UIImage imageNamed: source.imagePath];
         }
+        [self saveSourceIndex];
     }
-    assert(currentSource);
     
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
@@ -1078,10 +1104,10 @@ static NSString * const imageOrientationName[] = {
         assert(LIVE);   // select camera setting for available area
         assert(cameraController);
         [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:currentSource.currentSide
-                                      threeD:currentSource.usingDepthCamera];
+        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
+                                      threeD:CURRENT_SOURCE.isThreeD];
         NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:currentSource.usingDepthCamera];
+                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
         currentLayoutIndex = [self chooseLayoutsFromFormatList:availableFormats];
         assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
         layout = layouts[currentLayoutIndex];
@@ -1134,8 +1160,7 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) adjustBarButtons {
-    flipBarButton.enabled = IS_CAMERA(currentSource) && [cameraController isFlipAvailable];
-    
+    flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
 }
@@ -1966,17 +1991,13 @@ UIImageOrientation lastOrientation;
 #endif
 
 - (IBAction) flipCamera:(UIButton *)button {
-    InputSource *newSource = [currentSource copy];
-    newSource.currentSide = FLIP_SIDE(currentSource.currentSide);
-    [self changeSourceTo:newSource];
+    [self changeSourceTo:CURRENT_SOURCE.otherSideIndex];
 }
 
 - (IBAction) processDepthSwitch:(UISwitch *)depthsw {
-    InputSource *newSource = [currentSource copy];
-    newSource.usingDepthCamera = !currentSource.usingDepthCamera;
     if (PAUSED)
         [self goLive];
-    [self changeSourceTo:newSource];
+    [self changeSourceTo:CURRENT_SOURCE.otherDepthIndex];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -2085,7 +2106,7 @@ static NSString * const sourceSectionTitles[] = {
      numberOfItemsInSection:(NSInteger)section {
     switch ((SourceTypes) section) {
         case CameraSource:
-            return 1;
+            return cameraCount;
         case SampleSource:
             return inputSources.count;
         case LibrarySource:
@@ -2155,7 +2176,7 @@ static NSString * const sourceSectionTitles[] = {
 
 - (void)collectionView:(UICollectionView *)collectionView
 didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
-    [self changeSourceTo:[inputSources objectAtIndex:indexPath.row]];
+    [self changeSourceTo:indexPath.row];
     [sourcesNavVC dismissViewControllerAnimated:YES completion:nil];
 }
 
@@ -2175,7 +2196,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void) startCamera {
-    if (!IS_CAMERA(currentSource))
+    if (!IS_CAMERA(CURRENT_SOURCE))
         return;
     [cameraController startCamera];
 //    pausedLabel.hidden = YES;
@@ -2183,7 +2204,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void) stopCamera {
-    if (!IS_CAMERA(currentSource))
+    if (!IS_CAMERA(CURRENT_SOURCE))
         return;
     [cameraController stopCamera];
 //    pausedLabel.hidden = NO;
@@ -2199,7 +2220,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void) setCameraRunning:(BOOL) running {
-    assert(IS_CAMERA(currentSource));
+    assert(IS_CAMERA(CURRENT_SOURCE));
     if (running) {
         [cameraController startCamera];
     } else {
@@ -2352,7 +2373,7 @@ CGSize lastAcceptedSize;
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     
-    flipBarButton.enabled = HAVE_CAMERA && [cameraController isFlipAvailable];
+    flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     
     [self updateOverlayView:overlayState];
     [self updateExecuteView];
@@ -2434,13 +2455,11 @@ static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
     }
 #endif
 
-- (void) changeSourceTo:(InputSource *)next {
-    if (!next)
+- (void) changeSourceTo:(NSInteger)nextIndex {
+    if (nextIndex == NO_SOURCE)
         return;
-#ifdef DEBUG_LAYOUT
-    NSLog(@"SSSS changeSourceTo %@", next);
-#endif
-    nextSource = next;
+    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
+    nextSourceIndex = nextIndex;
     [self->taskCtrl idleForReconfiguration];
 }
 

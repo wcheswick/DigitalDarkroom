@@ -12,30 +12,30 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+#define LAST_SOURCE_ARCHIVE   @"./LastSourc.archive"
+
 #define IS_CAMERA(i)        ((i).imagePath == nil)
+#define CAMERA_FUNCTION_NOT_AVAILABLE   (-1)
 
 @interface InputSource : NSObject {
     NSString *label;
-    BOOL isCamera;
+    BOOL isCamera, isThreeD, isFront;
+    NSInteger otherSideIndex;    // or CAMERA_FUNCTION_NOT_AVAILABLE
+    NSInteger otherDepthIndex;    // or CAMERA_FUNCTION_NOT_AVAILABLE
     NSString *__nullable imagePath; // where a file image is
-    CameraSide currentSide;
-    BOOL usingDepthCamera;
     UIImage *__nullable thumbImageCache;
 }
 
 @property (nonatomic, strong)   NSString *label;
-@property (assign)              BOOL isCamera;
+@property (assign)              BOOL isCamera, isThreeD, isFront;
+@property (assign)              NSInteger otherSideIndex, otherDepthIndex;
 @property (nonatomic, strong)   UIImage *capturedImage;
-@property (assign)              CameraSide currentSide;
-@property (assign)              BOOL usingDepthCamera;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 
-- (void) makeCameraSourceOnSide:(CameraSide) side threeD:(BOOL) threeD;
+- (void) makeCameraSource:(NSString *)name onFront:(BOOL)onFront threeD:(BOOL) threeD;
 - (void) setUpImageAt:(NSString *)path;
-+ (NSData *) lastSourceArchive;
-- (void) save;
 
 @end
 

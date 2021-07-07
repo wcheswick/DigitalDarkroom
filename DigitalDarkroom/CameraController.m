@@ -28,12 +28,13 @@
 @synthesize captureSession;
 @synthesize delegate;
 
-@synthesize currentSide, usingDepthCamera;
+@synthesize usingDepthCamera;
 
 @synthesize captureDevice;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
+@synthesize frontCamera, threeDCamera;
 
 
 - (id)init {
@@ -44,82 +45,67 @@
         captureDevice = nil;
         captureSession = nil;
         usingDepthCamera = NO;
-        currentSide = Front;
         videoOrientation = -1;  // not initialized
     }
     return self;
 }
 
-- (AVCaptureDevice *) cameraDeviceOnSide:(CameraSide)side threeD:(BOOL)threeD {
+- (AVCaptureDevice *) cameraDeviceOnFront:(BOOL)onFront threeD:(BOOL)threeD {
     if (threeD) {
-        switch (side) {
-            case Front:
+        if (onFront) {
                 return [AVCaptureDevice
                                  defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
                                  mediaType: AVMediaTypeDepthData
                                  position: AVCaptureDevicePositionFront];
-            case Rear:
+        } else {
                 return [AVCaptureDevice
                                  defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                                  mediaType: AVMediaTypeDepthData
                                  position: AVCaptureDevicePositionBack];
         }
     } else {
-        AVCaptureDevice *testDevice;
-        switch (side) {
-            case Front:
-               testDevice = [AVCaptureDevice
+        AVCaptureDevice *twoDdevice;
+        if (onFront) {
+            twoDdevice = [AVCaptureDevice
                                  defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                                  mediaType: AVMediaTypeVideo
                                  position: AVCaptureDevicePositionFront];
-                if (!testDevice) {
-                    testDevice = [AVCaptureDevice
+                if (!twoDdevice) {
+                    twoDdevice = [AVCaptureDevice
                                      defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
                                      mediaType: AVMediaTypeVideo
                                      position: AVCaptureDevicePositionFront];
                 }
-                return testDevice;
-            case Rear:
-                testDevice = [AVCaptureDevice
+                return twoDdevice;
+        } else {    // rear 2d camera
+            twoDdevice = [AVCaptureDevice
                                  defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
                                  mediaType: AVMediaTypeVideo
                                  position: AVCaptureDevicePositionBack];
-                if (!testDevice)
-                    testDevice = [AVCaptureDevice
+                if (!twoDdevice)
+                    twoDdevice = [AVCaptureDevice
                                      defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
                                      mediaType: AVMediaTypeVideo
                                      position: AVCaptureDevicePositionBack];
-                return testDevice;
+                return twoDdevice;
         }
     }
 }
 
-- (BOOL) hasCameraOnSide:(CameraSide) side {
-    return [self cameraDeviceOnSide: side threeD:NO] != nil;
+- (BOOL) cameraAvailableOnFront:(BOOL)front threeD:(BOOL)threeD {
+    return [self cameraDeviceOnFront:front threeD:threeD] != nil;
 }
 
-- (BOOL) hasDepthCameraOnSide:(CameraSide) side {
-    return [self cameraDeviceOnSide: side threeD:YES] != nil;
-}
-
-- (BOOL) isFlipAvailable {
-    return [self cameraDeviceOnSide: FLIP_SIDE(currentSide) threeD:usingDepthCamera] != nil;
-}
-
-- (BOOL) isDepthAvailable {
-    return [self cameraDeviceOnSide: currentSide threeD:YES] != nil;
-}
-
-- (BOOL) selectCameraOnSide:(CameraSide) side threeD:(BOOL)depth {
+- (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD {
 #ifdef DEBUG_CAMERA
     NSLog(@"CCC selecting camera on side %d, %@", side,
           depth ? @"3D" : @"2D");
 #endif
-    captureDevice = [self cameraDeviceOnSide:side threeD:depth];
+    captureDevice = [self cameraDeviceOnFront:front threeD:threeD];
     if (!captureDevice)
         return NO;
-    currentSide = side;
-    usingDepthCamera = depth;
+    frontCamera = front;
+    threeDCamera = threeD;
     return YES;
 }
 

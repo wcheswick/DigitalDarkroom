@@ -91,7 +91,7 @@ NSString * __nullable displayOptionNames[] = {
 // Can we make an acceptible layout with the given capture size and scaling?
 // return no if layout is bad. we return self for readability.
 
-#define THUMB_ROWS_FOR_HEIGHT(h)  (int)((h+SEP) / firstThumbRect.size.height)
+#define THUMB_ROWS_FOR_HEIGHT(h)  (int)((h+SEP) / (firstThumbRect.size.height + SEP))
 #define THUMB_COLS_FOR_WIDTH(w)  (int)((w) / firstThumbRect.size.width)
 
 - (void) configureLayoutWithDisplayOption:(DisplayOptions) displayOption {
@@ -153,6 +153,7 @@ NSString * __nullable displayOptionNames[] = {
                 long colsNeeded = (thumbCount + (thumbsPerCol - 1)) / thumbsPerCol;
                 CGFloat widthNeeded = colsNeeded * (firstThumbRect.size.width + SEP); //for full thumb display
                 thumbArrayRect.size = CGSizeMake(widthNeeded, thumbsPerCol * (firstThumbRect.size.height + SEP));
+                assert(thumbArrayRect.size.height <= containerFrame.size.height);
                 if (containerFrame.size.width - widthNeeded < 400)  // min display width here
                     thumbArrayRect.size = CGSizeMake(containerFrame.size.width*LAYOUT_BEST_DISPLAY_AREA_FRAC, thumbsPerCol * firstThumbRect.size.height);
 
@@ -197,6 +198,11 @@ NSString * __nullable displayOptionNames[] = {
           captureSize.width, captureSize.height, scale, aspectRatio,
           quality, status);
 #endif
+    assert(BELOW(thumbArrayRect) <= containerFrame.size.height);
+    assert(RIGHT(thumbArrayRect) <= containerFrame.size.width);
+    assert(BELOW(executeRect) <= containerFrame.size.height);
+    assert(RIGHT(executeRect) <= containerFrame.size.width);
+    
     return;
 }
 
