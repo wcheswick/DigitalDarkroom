@@ -37,7 +37,7 @@
                                              selector:@selector(newDeviceOrientation)
                                                  name:UIDeviceOrientationDidChangeNotification
                                                object:nil];
-    
+
     self.window.rootViewController = navController;
     [self.window makeKeyAndVisible];
     return YES;

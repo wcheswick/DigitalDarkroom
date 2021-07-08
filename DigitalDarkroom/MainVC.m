@@ -193,9 +193,7 @@ typedef enum {
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *saveBarButton;
 
-@property (nonatomic, strong)   UIButton *plusButton;
-@property (assign)              BOOL plusButtonLocked;
-@property (nonatomic, strong)   UIButton *plusLockButton;
+@property (nonatomic, strong)   UIButton *plusOffButton, *singlePlusButton, *multiPlusButton;
 
 @property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 
@@ -238,8 +236,7 @@ typedef enum {
 @synthesize overlayView, controlsView, reticleView, paramView;
 
 @synthesize executeView;
-@synthesize plusButton, plusButtonLocked;
-@synthesize plusLockButton;
+@synthesize plusOffButton, singlePlusButton, multiPlusButton;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait;
@@ -319,7 +316,6 @@ typedef enum {
         depthBuf = nil;
         thumbScrollView = nil;
         busy = NO;
-        plusButtonLocked = NO;
         options = [[Options alloc] init];
         
         overlayDebugStatus = nil;
@@ -383,7 +379,7 @@ typedef enum {
         
         currentSourceIndex = [[NSUserDefaults standardUserDefaults]
                               integerForKey: LAST_SOURCE_KEY];
-        NSLog(@"III loading source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+//        NSLog(@"III loading source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
         
         if (currentSourceIndex == NO_SOURCE) {  // select default source
             for (currentSourceIndex=0; currentSourceIndex<inputSources.count; currentSourceIndex++) {
@@ -601,7 +597,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) saveSourceIndex {
     assert(currentSourceIndex != NO_SOURCE);
-    NSLog(@"III saving source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+//    NSLog(@"III saving source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
     [[NSUserDefaults standardUserDefaults] setInteger:currentSourceIndex forKey:LAST_SOURCE_KEY];
     [[NSUserDefaults standardUserDefaults] synchronize];
 }
@@ -674,8 +670,12 @@ static NSString * const imageOrientationName[] = {
     UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
                                    initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
                                    target:nil action:nil];
-    fixedSpace.width = isiPhone ? 10 : 20;
-    
+    fixedSpace.width = isiPhone ? 10 : 25;
+    UIBarButtonItem *noSpace = [[UIBarButtonItem alloc]
+                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                   target:nil action:nil];
+    noSpace.width = 0;
+
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
@@ -718,87 +718,42 @@ static NSString * const imageOrientationName[] = {
                                      action:@selector(doHelp:)];
 
 #define NAVBAR_H   self.navigationController.navigationBar.frame.size.height
-    plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusButton.frame = CGRectMake(0, 0, NAVBAR_H+SEP, NAVBAR_H);
-    [plusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:NAVBAR_H
-                                                                               weight:UIFontWeightUltraLight],
-                                        //NSBaselineOffsetAttributeName: @-3
-                                    }] forState:UIControlStateNormal];
-    [plusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:BIGPLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:NAVBAR_H
-                                                                               weight:UIFontWeightHeavy],
-                                        //NSBaselineOffsetAttributeName: @-3
-                                    }] forState:UIControlStateSelected];
-    [plusButton addTarget:self action:@selector(togglePlusMode)
-         forControlEvents:UIControlEventTouchUpInside];
     
-    UIBarButtonItem *plusBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:plusButton];
-
-#ifdef NOTDEF
-    doublePlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    doublePlusButton.frame = CGRectMake(0, 0, 1.5*toolBarH+SEP, toolBarH);
-    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:DOUBLE_PLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                                               weight:UIFontWeightUltraLight],
-                                        NSBaselineOffsetAttributeName: @3
-                                    }] forState:UIControlStateNormal];
-    [doublePlusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:DOUBLE_PLUS attributes:@{
-                                        NSFontAttributeName: [UIFont systemFontOfSize:toolBarH
-                                                                               weight:UIFontWeightHeavy],
-                                        NSBaselineOffsetAttributeName: @3
-                                    }] forState:UIControlStateSelected];
-    [doublePlusButton addTarget:self action:@selector(togglePlusLock)
-         forControlEvents:UIControlEventTouchUpInside];
-#endif
+    plusOffButton = [UIButton systemButtonWithImage:[UIImage systemImageNamed:@"minus"]
+                                             target:self
+                                             action:@selector(doPlusOff:)];
+//    plusOffButton.backgroundColor = [UIColor redColor];
+//    plusOffButton.frame = CGRectMake(1, 1, NAVBAR_H-1, NAVBAR_H-1);
+    plusOffButton.selected = YES;   // for starters
+    UIBarButtonItem *plusOffBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:plusOffButton];
     
-    plusLockButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    plusLockButton.selected = NO;
-    
-    plusLockButton.frame = CGRectMake(0, 0, 1.5*NAVBAR_H+SEP, NAVBAR_H);
-//    NSString *pLock = [BIGPLUS stringByAppendingString: LOCK];
+    singlePlusButton = [UIButton systemButtonWithImage:[UIImage systemImageNamed:@"plus"]
+                                                target:self
+                                                action:@selector(doPlusOn:)];
+//    singlePlusButton.backgroundColor = [UIColor greenColor];
+    UIBarButtonItem *singlePlusBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:singlePlusButton];
+//    singlePlusButton.frame = CGRectMake(1+1*NAVBAR_H, 1, NAVBAR_H-1, NAVBAR_H-1);
 
-#define PLUS_LOCK_FONT_SIZE (NAVBAR_H*0.6)
-#define PLUS_LOCK_KERN           (-NAVBAR_H*0.3)
-#define PLUS_LOCK_SUPERSCRIPT   (NAVBAR_H*0.1)
-#define OFFSET              0   // (NAVBAR_H*0.1)
- 
-    NSMutableAttributedString *littleRaisedPlus = [[NSMutableAttributedString alloc]
-                                           initWithString:BIGPLUS];
-    [littleRaisedPlus addAttribute: NSKernAttributeName value: @PLUS_LOCK_KERN range:NSMakeRange(0,1)];
-    [littleRaisedPlus addAttribute: (NSString*)NSBaselineOffsetAttributeName value: @PLUS_LOCK_SUPERSCRIPT range:NSMakeRange(0,1)];
+    multiPlusButton = [UIButton systemButtonWithImage:[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"]
+                                               target:self
+                                               action:@selector(doPlusLock:)];
+//    multiPlusButton.backgroundColor = [UIColor blueColor];
+    UIBarButtonItem *multiPlusBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:multiPlusButton];
+//    multiPlusButton.frame = CGRectMake(1+2*NAVBAR_H, 1, NAVBAR_H-1, NAVBAR_H-1);
 
-    NSMutableAttributedString *littleLock = [[NSMutableAttributedString alloc]
-                                           initWithString:LOCK];
-    //    [plusLock addAttribute: NSBaselineOffsetAttributeName value: @OFFSET range:NSMakeRange(0, 1)];
-
-    NSMutableAttributedString *plusLock = littleRaisedPlus;
-    [plusLock appendAttributedString:littleLock];
-    
-    [plusLockButton setAttributedTitle:plusLock forState:UIControlStateNormal];
-    plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
-
-    [plusLockButton addTarget:self action:@selector(togglePlusLock)
-             forControlEvents:UIControlEventTouchUpInside];
-    
-    UIBarButtonItem *plusLockBarButton = [[UIBarButtonItem alloc]
-                                      initWithCustomView:plusLockButton];
-
+#define IS_PLUS_ON      (singlePlusButton.selected)
+#define IS_PLUS_LOCKED  (multiPlusButton.selected)
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
                                               sourceBarButton,
-                                              flexibleSpace,
-                                              flipBarButton,
-                                              plusBarButton,
                                               fixedSpace,
-                                              plusLockBarButton,
-//                                             fixedSpace,
-//                                              reticleBarButton,
+                                              flipBarButton,
+                                              fixedSpace,
+                                              plusOffBarButtonItem,
+                                              noSpace,
+                                              singlePlusBarButtonItem,
+                                              noSpace,
+                                              multiPlusBarButtonItem,
                                              nil];
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
@@ -1046,7 +1001,7 @@ static NSString * const imageOrientationName[] = {
         }
 
         currentSourceIndex = nextSourceIndex;
-        NSLog(@"III switching to source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+//        NSLog(@"III switching to source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
         nextSourceIndex = NO_SOURCE;
         InputSource *source = inputSources[currentSourceIndex];
 
@@ -1212,12 +1167,12 @@ static NSString * const imageOrientationName[] = {
         lastTransform = screenTask.transformList[lastTransformIndex];
     }
     
-    if (plusButton.selected) {  // add new transform
+    if (IS_PLUS_ON) {  // add new transform
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTaskForSize];
         [self adjustThumbView:tappedThumb selected:YES];
-        if (!plusButtonLocked)
-            plusButton.selected = NO;
+        if (!IS_PLUS_LOCKED)
+            [self doPlusOff:plusOffButton];
     } else {    // not plus mode
         if (lastTransform) {
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
@@ -1243,23 +1198,28 @@ static NSString * const imageOrientationName[] = {
     [self adjustBarButtons];
 }
 
-- (IBAction) togglePlusMode {
-    plusButton.selected = !plusButton.selected;
-    [plusButton setNeedsDisplay];
-    [self updateExecuteView];
+- (IBAction) doPlusOff:(UIButton *)button {
+    plusOffButton.selected = YES;
+    singlePlusButton.selected = NO;
+    multiPlusButton.selected = NO;
+    [self adjustPlusButtons];
 }
 
-- (IBAction) togglePlusLock {
-    plusLockButton.selected = !plusLockButton.selected;
-    plusButtonLocked = plusLockButton.selected;
-    if (plusButtonLocked)
-        plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightLight];
-    else
-        plusLockButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_LOCK_FONT_SIZE weight:UIFontWeightHeavy];
-    
-    [plusLockButton setNeedsDisplay];
-    if (plusLockButton.selected && !plusButton.selected)
-        [self togglePlusMode];
+- (IBAction) doPlusOn:(UIButton *)button {
+    plusOffButton.selected = NO;
+    singlePlusButton.selected = YES;
+    multiPlusButton.selected = NO;
+    [self adjustPlusButtons];
+}
+
+- (IBAction) doPlusLock:(UIButton *)button {
+    plusOffButton.selected = NO;
+    singlePlusButton.selected = NO;
+    multiPlusButton.selected = YES;
+    [self adjustPlusButtons];
+}
+
+- (void) adjustPlusButtons {
     [self updateExecuteView];
 }
 
@@ -1382,7 +1342,6 @@ static NSString * const imageOrientationName[] = {
 
 // tapping transform presents overlay
 - (IBAction) didTapTransformView:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"didTapTransformView");
     [self updateParamView];
     [overlayView setNeedsDisplay];
     [transformView addSubview:overlayView];
@@ -1395,7 +1354,6 @@ static NSString * const imageOrientationName[] = {
 
 // tapping overlay removes overlay
 - (IBAction) didTapOverlayView:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"didTapOverlayView");
     [UIView animateWithDuration:OVERLAY_T
                      animations:^{
                         SET_VIEW_Y(self->overlayView, self->transformView.frame.size.height);
@@ -1948,7 +1906,7 @@ UIImageOrientation lastOrientation;
 #endif
     }
     
-    if (plusButton.selected || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
+    if (IS_PLUS_ON || screenTask.transformList.count == DEPTH_TRANSFORM + 1)
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     
@@ -2474,7 +2432,7 @@ CGSize lastAcceptedSize;
 - (void) changeSourceTo:(NSInteger)nextIndex {
     if (nextIndex == NO_SOURCE)
         return;
-    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
+//    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
     nextSourceIndex = nextIndex;
     [self->taskCtrl idleForReconfiguration];
 }
