@@ -866,6 +866,12 @@ static NSString * const imageOrientationName[] = {
                                    initWithTarget:self action:@selector(didTapOverlayView:)];
     [overlayTap setNumberOfTouchesRequired:1];
     [overlayView addGestureRecognizer:overlayTap];
+    
+    // swipe down is synonym for overlay tap
+    UISwipeGestureRecognizer *swipeDown =[[UISwipeGestureRecognizer alloc]
+                                        initWithTarget:self action:@selector(didTapOverlayView:)];
+    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
+    [overlayView addGestureRecognizer:swipeDown];
 
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
@@ -880,6 +886,12 @@ static NSString * const imageOrientationName[] = {
                                    initWithTarget:self action:@selector(didTapTransformView:)];
     [transformTap setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:transformTap];
+    
+    // swipe up is synonym for transform tap
+    UISwipeGestureRecognizer *swipeUp =[[UISwipeGestureRecognizer alloc]
+                                        initWithTarget:self action:@selector(didTapTransformView:)];
+    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
+    [transformView addGestureRecognizer:swipeUp];
 
     UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTwoTapSceen:)];
@@ -1302,22 +1314,6 @@ static NSString * const imageOrientationName[] = {
         [paramView setNeedsDisplay];
 }
 
-// add big arrows if parameter can be changed on last transform
-- (void) adjustOverlayView {
-    CGRect f = overlayView.frame;
-    f.size.height *= 0.2;   // fraction for controls
-    f.origin = CGPointMake(0, overlayView.frame.size.height - f.size.height);
-    f.size = CGSizeMake(overlayView.frame.size.width, f.size.height);
-    controlsView.frame = f;
-    pauseResumeButton.frame = CGRectMake(0.3*f.size.width, 0, 2*f.size.height, 30);
-    pauseResumeButton.titleLabel.font = [UIFont
-                                         systemFontOfSize:pauseResumeButton.frame.size.height
-                                         weight:UIFontWeightHeavy];
-    f.origin.y -= f.size.height;
-    paramView.frame = f;
-    reticleView.frame = overlayView.frame;
-}
-
 #ifdef OLD
 #define DEBUG_FONT_SIZE 16
 
@@ -1382,28 +1378,33 @@ static NSString * const imageOrientationName[] = {
     [taskCtrl idleForReconfiguration];
 }
 
+#define OVERLAY_T   1.0 // 0.5 // seconds
+
 // tapping transform presents overlay
 - (IBAction) didTapTransformView:(UITapGestureRecognizer *)recognizer {
     NSLog(@"didTapTransformView");
-    [self adjustOverlayView];   // to current size
     [self updateParamView];
     [overlayView setNeedsDisplay];
     [transformView addSubview:overlayView];
     [transformView bringSubviewToFront:overlayView];
-#ifdef LATER
-    CGFloat yPosition = controlsView.frame.origin.y;
-    SET_VIEW_Y(controlsView, yPosition + controlsView.frame.size.height);
-    [UIView animateWithDuration:0.5 animations:^(void) {
-        SET_VIEW_Y(self->controlsView, yPosition);
-        self->reticleView.hidden = NO;
+    SET_VIEW_Y(self->overlayView, self->overlayView.frame.size.height);
+    [UIView animateWithDuration:OVERLAY_T animations:^(void) {  // off the bottom
+        SET_VIEW_Y(self->overlayView, self->transformView.frame.origin.y);
     }];
-#endif
 }
 
 // tapping overlay removes overlay
 - (IBAction) didTapOverlayView:(UITapGestureRecognizer *)recognizer {
     NSLog(@"didTapOverlayView");
-    [overlayView removeFromSuperview];
+    [UIView animateWithDuration:OVERLAY_T
+                     animations:^{
+                        SET_VIEW_Y(self->overlayView, self->transformView.frame.size.height);
+                        }
+                     completion:^(BOOL finished) {
+                        if (finished) {
+                            [self->overlayView removeFromSuperview];
+                        }
+    }];
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
