@@ -840,14 +840,13 @@ static NSString * const imageOrientationName[] = {
     overlayView.opaque = NO;
     overlayView.userInteractionEnabled = YES;
     overlayView.backgroundColor = [UIColor clearColor];
-    overlayView.hidden = YES;   // starts as hidden
 
     controlsView = [[UIView alloc] init];
     controlsView.backgroundColor = [UIColor clearColor];
     
     pauseResumeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    [pauseResumeButton setTitle:@"Pause" forState:UIControlStateNormal];
-    [pauseResumeButton setTitle:@"￼￼￼￼Resume" forState:UIControlStateSelected];
+    [pauseResumeButton setTitle:@"(do Pause)" forState:UIControlStateNormal];
+    [pauseResumeButton setTitle:@"￼￼￼￼(do Resume)" forState:UIControlStateSelected];
     
     [pauseResumeButton addTarget:self action:@selector(togglePauseResume:) forControlEvents:UIControlEventTouchUpInside];
     pauseResumeButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
@@ -858,12 +857,15 @@ static NSString * const imageOrientationName[] = {
     paramView.backgroundColor = [UIColor clearColor];
     [overlayView addSubview:paramView];
     
-    
     reticleView = [[ReticleView alloc] init];
     reticleView.contentMode = UIViewContentModeRedraw;
     reticleView.opaque = NO;
     reticleView.backgroundColor = [UIColor clearColor];
     [overlayView addSubview:reticleView];
+    UITapGestureRecognizer *overlayTap = [[UITapGestureRecognizer alloc]
+                                   initWithTarget:self action:@selector(didTapOverlayView:)];
+    [overlayTap setNumberOfTouchesRequired:1];
+    [overlayView addGestureRecognizer:overlayTap];
 
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
@@ -874,11 +876,10 @@ static NSString * const imageOrientationName[] = {
     executeView.text = @"";
     executeView.opaque = YES;
 
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
-                                   initWithTarget:self action:@selector(didOneTapSceen:)];
-    [tap setNumberOfTouchesRequired:1];
-    [overlayView addGestureRecognizer:tap];
-    [transformView addGestureRecognizer:tap];
+    UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
+                                   initWithTarget:self action:@selector(didTapTransformView:)];
+    [transformTap setNumberOfTouchesRequired:1];
+    [transformView addGestureRecognizer:transformTap];
 
     UITapGestureRecognizer *twoTap = [[UITapGestureRecognizer alloc]
                                      initWithTarget:self action:@selector(didTwoTapSceen:)];
@@ -909,7 +910,6 @@ static NSString * const imageOrientationName[] = {
     
     [containerView addSubview:transformView];
     [containerView addSubview:executeView];
-    [containerView addSubview:overlayView];
     [containerView bringSubviewToFront:overlayView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
@@ -1286,25 +1286,6 @@ static NSString * const imageOrientationName[] = {
     });
 }
 
-- (void) toggleOverlay {
-    if (overlayView.hidden) {   // present it, in stages
-        [self adjustOverlayView];   // to current size
-        overlayView.hidden = NO;
-        [overlayView setNeedsDisplay];
-        CGFloat yPosition = controlsView.frame.origin.y;
-        SET_VIEW_Y(controlsView, yPosition + controlsView.frame.size.height);
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            SET_VIEW_Y(self->controlsView, yPosition);
-            self->reticleView.hidden = NO;
-        }];
-        [self updateParamView];
-    } else {    // remove it in stages
-        overlayView.hidden = YES;
-        reticleView.hidden = YES;
-       [overlayView setNeedsDisplay];
-    }
-}
-
 - (void) updateParamView {  // if needed
     Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
     if (!lastTransform)
@@ -1401,9 +1382,28 @@ static NSString * const imageOrientationName[] = {
     [taskCtrl idleForReconfiguration];
 }
 
-- (IBAction) didOneTapSceen:(UITapGestureRecognizer *)recognizer {
-    NSLog(@"one-tap screen: toggle overlay view");
-    [self toggleOverlay];
+// tapping transform presents overlay
+- (IBAction) didTapTransformView:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"didTapTransformView");
+    [self adjustOverlayView];   // to current size
+    [self updateParamView];
+    [overlayView setNeedsDisplay];
+    [transformView addSubview:overlayView];
+    [transformView bringSubviewToFront:overlayView];
+#ifdef LATER
+    CGFloat yPosition = controlsView.frame.origin.y;
+    SET_VIEW_Y(controlsView, yPosition + controlsView.frame.size.height);
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        SET_VIEW_Y(self->controlsView, yPosition);
+        self->reticleView.hidden = NO;
+    }];
+#endif
+}
+
+// tapping overlay removes overlay
+- (IBAction) didTapOverlayView:(UITapGestureRecognizer *)recognizer {
+    NSLog(@"didTapOverlayView");
+    [overlayView removeFromSuperview];
 }
 
 - (IBAction) didTwoTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -2395,7 +2395,7 @@ CGSize lastAcceptedSize;
     [self adjustBarButtons];
 }
 
-static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
+//static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 
 - (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
 #ifdef DEBUG_LAYOUT

@@ -124,7 +124,7 @@ NSString * __nullable displayOptionNames[] = {
 #endif
 
     // figure out the best displayrect, given displayoption type, etc.
-    float scale;
+//    float scale;
     displayRect.origin = CGPointZero;
     
     switch (displayOption) {
@@ -175,7 +175,8 @@ NSString * __nullable displayOptionNames[] = {
     int thumbRows = THUMB_ROWS_FOR_HEIGHT(thumbArrayRect.size.height);
     int thumbCols = THUMB_COLS_FOR_WIDTH(thumbArrayRect.size.width);
     int thumbsDisplayed = thumbCols * thumbRows;
-//    float thumbFrac = thumbsDisplayed/thumbCount;
+    float thumbFrac = thumbsDisplayed/thumbCount;
+    NSLog(@" thumb fraction: %.2f", thumbFrac);
     [self showThumbArraySize:thumbArrayRect.size];
 
     float captureScoreFrac;
