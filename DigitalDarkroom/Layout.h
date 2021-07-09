@@ -71,7 +71,6 @@ typedef enum {
 @property (assign)              CGSize targetDisplaySize;
 @property (assign)              DisplayOptions currentDisplayOption;
 
-
 @property (assign)              ThumbsPlacement thumbsPlacement;
 @property (assign)              float displayFrac, thumbFrac;
 
