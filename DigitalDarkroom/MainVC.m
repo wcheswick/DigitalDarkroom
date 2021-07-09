@@ -150,6 +150,8 @@ typedef enum {
 @property (nonatomic, strong)   UILabel *paramLabel;
 @property (nonatomic, strong)   UISlider *paramSlider;
 
+@property (nonatomic, strong)   UIView *flashView;
+
 @property (assign)              BOOL showControls;
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
 
@@ -234,7 +236,7 @@ typedef enum {
 @synthesize helpNavVC;
 
 @synthesize paramView, paramLabel, paramSlider;
-@synthesize showControls;
+@synthesize showControls, flashView;
 @synthesize paramLow, paramName, paramHigh, paramValue;
 
 @synthesize executeView;
@@ -782,6 +784,11 @@ static NSString * const imageOrientationName[] = {
     transformView.backgroundColor = NAVY_BLUE;
     transformView.userInteractionEnabled = YES;
 
+    flashView = [[UIView alloc] init];  // used to show a flash on the screen
+    flashView.opaque = NO;
+    flashView.hidden = YES;
+    [containerView addSubview:flashView];
+    
     pausedLabel = [[UILabel alloc]
                    initWithFrame:CGRectMake(0, SEP,
                                             LATER, PAUSE_FONT_SIZE+2*SEP)];
@@ -1520,21 +1527,23 @@ static CGSize startingDisplaySize;
 #endif
 
 -(void) flash {
-    UIView *flashView = [[UIView alloc] initWithFrame:transformView.frame];
+    flashView.frame = transformView.frame;
+    flashView.hidden = NO;
     flashView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:1.0];
-    [containerView addSubview:transformView];
+    [containerView bringSubviewToFront:flashView];
     [UIView animateWithDuration:0.40 animations:^(void) {
-        flashView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.0];
+        self->flashView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0];
+    } completion:^(BOOL finished) {
+        self->flashView.hidden = YES;
+        [self->containerView sendSubviewToBack:self->flashView];
     }];
-    [flashView removeFromSuperview];
 }
 
 // this should be copy to paste buffer, or the send-it-out option
 - (IBAction) doSave {
-    NSLog(@"saving");   // XXX need full image for a save
-    [self flash];
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
-    
+    [self flash];
+
     // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
     UIWindow* keyWindow = nil;
     if (@available(iOS 13.0, *)) {
