@@ -533,6 +533,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.low = -180;
     lastTransform.value = 45;
     lastTransform.high = 180;    // was 15
+    lastTransform.paramName = @"Angle";
     lastTransform.hasParameters = YES;
     [self addTransform:lastTransform];
 
@@ -554,11 +555,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 50;
     lastTransform.high = 360;    // was 15
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle";
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Fish eye"
                                  description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a,
+                                               TransformInstance *instance, int tX, int tY) {
         double R = hypot(remapBuf.w,remapBuf.h);
         float zoomFactor = instance.value/10.0; // XXXX this is broken, I think
         double r1 = r*r/(R/zoomFactor);
@@ -570,6 +573,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 20;
     lastTransform.high = 30;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Zoom in?";  // XXX
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Cone projection"
@@ -638,6 +642,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 5;
     lastTransform.high = 12;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Mirror count";
     [self addTransform:lastTransform];
 
 
@@ -791,6 +796,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.low = 10;
     lastTransform.value = 62;
     lastTransform.high = 100;
+    lastTransform.paramName = @"Pupil separation";
     [self addTransform:lastTransform];
 
 
@@ -853,6 +859,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 5*VSCALE;
     lastTransform.high = 10.0*VSCALE;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Depth scale";
     [self addTransform:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
@@ -983,6 +990,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.broken = YES;
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Pupil separation";
     [self addTransform:lastTransform];
 #endif
     
@@ -1048,6 +1056,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
+    //    lastTransform.paramName = @"Depth scale";
+
     [self addTransform:lastTransform];
 #endif
     
@@ -1091,6 +1101,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
     lastTransform.broken = YES;
+    lastTransform.paramName = @"Color scale?";
+
     [self addTransform:lastTransform];
 #endif
     
@@ -1225,6 +1237,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     lastTransform.low = 1; lastTransform.value = 2; lastTransform.high = 7;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Truncation level";
     [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Brighten"
@@ -1338,6 +1351,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.value = 10;
     lastTransform.high = 100;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Shift amount";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Vertical shift"
@@ -1358,6 +1372,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.value = 10;
     lastTransform.high = 100;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Shift amount";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"O no!"
@@ -1396,6 +1411,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.value = 2;
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Zoom amount";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Wavy shower"
@@ -1419,6 +1435,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.value = 18;
     lastTransform.high = 50;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Pixels per wave";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Pixelate"
@@ -1431,10 +1448,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             }
         }
     }];
-    lastTransform.low = 4;
+    lastTransform.low = 1;
     lastTransform.value = 6;
     lastTransform.high = 120;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Pixel size";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Terry's kite"
@@ -1569,6 +1587,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Band thickness";
     [self addTransform:lastTransform];
 
 }
@@ -1726,6 +1745,7 @@ irand(int i) {
     lastTransform.value = 2;    // 2^2.  2^3 is MUCH shower
     lastTransform.high = 4;     // 2^4
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Blob size";
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
@@ -1870,6 +1890,7 @@ irand(int i) {
     lastTransform.value = 170;
     lastTransform.high = 250;
     lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Block edge length";
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Edvard Munch #1"        // old twist right

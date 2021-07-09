@@ -676,11 +676,12 @@ static NSString * const imageOrientationName[] = {
                                    target:nil action:nil];
     noSpace.width = 0;
 
+#ifdef DISABLED
+
     UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
                                       initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
                                       target:nil action:nil];
-
-#ifdef DISABLED
+    
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                         style:UIBarButtonItemStylePlain
