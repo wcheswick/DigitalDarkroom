@@ -1167,13 +1167,19 @@ static NSString * const imageOrientationName[] = {
         lastTransform = screenTask.transformList[lastTransformIndex];
     }
     
-    if (IS_PLUS_ON) {  // add new transform
+    if (IS_PLUS_LOCKED || IS_PLUS_ON) {  // add new transform
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTaskForSize];
         [self adjustThumbView:tappedThumb selected:YES];
         if (!IS_PLUS_LOCKED)
             [self doPlusOff:plusOffButton];
     } else {    // not plus mode
+#ifdef NEW
+        if (screenTasks.tasks.count > 0) {  // clear everything
+            [self deselectAllThumbs];
+        }
+#endif
+        // XXX in minus mode, selecting a selected transform should simply remove it
         if (lastTransform) {
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
             [screenTask removeLastTransform];
@@ -1785,6 +1791,14 @@ UIImageOrientation lastOrientation;
 
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
+    [self deselectAllThumbs];
+    [self doTransformsOn:currentSourceImage];
+//    [self updateOverlayView];
+    [self updateExecuteView];
+    [self adjustBarButtons];
+}
+
+- (void) deselectAllThumbs {
     for (ThumbView *thumbView in thumbViewsArray) {
         // deselect all selected thumbs
         UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
@@ -1792,10 +1806,6 @@ UIImageOrientation lastOrientation;
             [self adjustThumbView:thumbView selected:NO];
         }
     }
-    [self doTransformsOn:currentSourceImage];
-//    [self updateOverlayView];
-    [self updateExecuteView];
-    [self adjustBarButtons];
 }
 
 - (IBAction) doToggleHires:(UIBarButtonItem *)button {
