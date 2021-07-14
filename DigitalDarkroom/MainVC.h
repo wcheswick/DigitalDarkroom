@@ -11,6 +11,19 @@
 #import "InputSource.h"
 #import "ThumbView.h"
 
+typedef enum {
+    Bottom,
+    Right,
+    Both,
+} ThumbsPosition;
+
+typedef enum {
+    NoDisplay,          // only controls
+    TightDisplay,       // iPhone and the like
+    BestDisplay,        // good standard iPad display
+    FullScreenDisplay,    // only the display
+} DisplayOptions;
+
 @interface MainVC : UIViewController
 <UICollectionViewDelegate,
     UICollectionViewDataSource,
@@ -20,11 +33,22 @@
     AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureDepthDataOutputDelegate> {
         UIDeviceOrientation currentDeviceOrientation;
+    
+    // layout looks at these:
+    BOOL isPortrait, isiPhone;
+    UIView *containerView;
+    NSMutableArray *thumbViewsArray;
 }
+
+@property (assign)              BOOL isPortrait, isiPhone;
+@property (nonatomic, strong)   UIView *containerView;
+@property (nonatomic, strong)   NSMutableArray *thumbViewsArray; // views that go into thumbsView
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
 - (void) tasksAreIdle;
 - (void) newDeviceOrientation;
+
+extern MainVC *mainVC;
 
 @end

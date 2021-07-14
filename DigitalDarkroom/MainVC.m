@@ -103,7 +103,7 @@
 
 #define SOURCE(i)   ((InputSource *)inputSources[i])
 #define CURRENT_SOURCE  SOURCE(currentSourceIndex)
-#define PAUSED      (IS_CAMERA(CURRENT_SOURCE) && pauseResumeButton.enabled)
+#define PAUSED      (IS_CAMERA(CURRENT_SOURCE) && !runningButton.enabled)
 #define LIVE        ((currentSourceIndex != NO_SOURCE) && !PAUSED)
 
 typedef enum {
@@ -123,6 +123,7 @@ typedef enum {
 } SourceTypes;
 #define N_SOURCES 3
 
+MainVC *mainVC = nil;
 
 @interface MainVC ()
 
@@ -138,7 +139,6 @@ typedef enum {
 @property (nonatomic, strong)   Task *screenTask;
 @property (nonatomic, strong)   Task *externalTask;
 
-@property (nonatomic, strong)   UIView *containerView;
 
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
@@ -157,13 +157,12 @@ typedef enum {
 
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UILabel *pausedLabel;       // if camera capture is paused. Use .hidden as flag
-@property (nonatomic, strong)   UIButton *pauseResumeButton, *snapButton;
+@property (nonatomic, strong)   UIButton *runningButton, *snapButton;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
-@property (nonatomic, strong)   NSMutableArray *thumbViewsArray;         // views that go into thumbsView
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
 @property (nonatomic, strong)   UITextView *executeView;        // active transform list
 @property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
-@property (assign)              long currentLayoutIndex;       // index into layouts
+@property (assign)              long layoutIndex;       // index into layouts
 
 @property (nonatomic, strong)   UINavigationController *helpNavVC;
 
@@ -201,8 +200,6 @@ typedef enum {
 
 //@property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
-@property (assign)              BOOL isPortrait;
-@property (assign)              BOOL isiPhone;
 @property (assign)              BOOL hasFrontCamera;    // assume no front camera means no cameras at all
 @property (assign)              BOOL hasRearCamera;
 @property (assign)              BOOL hasFrontDepthCamera, hasRearDepthCamera;
@@ -230,9 +227,9 @@ typedef enum {
 @synthesize depthSwitch, flipBarButton, sourceBarButton;
 @synthesize transformView;
 @synthesize overlayDebugStatus;
-@synthesize pausedLabel, pauseResumeButton, snapButton;
+@synthesize pausedLabel, runningButton, snapButton;
 @synthesize thumbViewsArray, thumbsView;
-@synthesize layouts, currentLayoutIndex;
+@synthesize layouts, layoutIndex;
 @synthesize helpNavVC;
 
 @synthesize paramView, paramLabel, paramSlider;
@@ -243,8 +240,7 @@ typedef enum {
 @synthesize plusOffButton, singlePlusButton, multiPlusButton;
 
 @synthesize deviceOrientation;
-@synthesize isPortrait;
-@synthesize isiPhone;
+@synthesize isPortrait, isiPhone;
 @synthesize hasFrontCamera, hasRearCamera;
 @synthesize hasFrontDepthCamera, hasRearDepthCamera;
 
@@ -283,6 +279,7 @@ typedef enum {
 - (id) init {
     self = [super init];
     if (self) {
+        mainVC = self;  // a global is easier
         transforms = [[Transforms alloc] init];
         nullTransform = [[Transform alloc] init];
         
@@ -805,25 +802,26 @@ static NSString * const imageOrientationName[] = {
 //#define FIT_TO_BUTTON(si)   [self fitImage:[UIImage systemImageNamed:si] \
 //            toSize:CGSizeMake(CONTROL_BUTTON_SIZE,CONTROL_BUTTON_SIZE) centered:YES]]
 
-    pauseResumeButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    pauseResumeButton.frame = CGRectMake(LATER, LATER,
+    runningButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    runningButton.frame = CGRectMake(LATER, LATER,
                                          CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
-    pauseResumeButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
-    pauseResumeButton.imageView.contentScaleFactor = 4.0;
-    pauseResumeButton.backgroundColor = [UIColor clearColor];
-    [pauseResumeButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.circle"]
-                                        toSize:pauseResumeButton.frame.size centered:YES]    // pause.circle
-                       forState:UIControlStateNormal];
-    [pauseResumeButton setImage:[self fitImage:[UIImage systemImageNamed:@"largecircle.fill.circle"]
-                                        toSize:pauseResumeButton.frame.size centered:YES]
+    runningButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    runningButton.imageView.contentScaleFactor = 4.0;
+    runningButton.backgroundColor = [UIColor clearColor];
+    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.circle"]
+                                        toSize:runningButton.frame.size centered:YES]    // pause.circle
                        forState:UIControlStateSelected];
-    [pauseResumeButton setImage:[self fitImage:[UIImage systemImageNamed:@"video.slash"]
-                                        toSize:pauseResumeButton.frame.size centered:YES]
+    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"largecircle.fill.circle"]
+                                        toSize:runningButton.frame.size centered:YES]
+                       forState:UIControlStateNormal];
+    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"video.slash"]
+                                        toSize:runningButton.frame.size centered:YES]
                        forState:UIControlStateDisabled];
-    [pauseResumeButton addTarget:self
+    [runningButton addTarget:self
                           action:@selector(togglePauseResume:)
                 forControlEvents:UIControlEventTouchUpInside];
-    [transformView addSubview:pauseResumeButton];
+    runningButton.enabled = YES;
+    [transformView addSubview:runningButton];
     
     snapButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     snapButton.frame = CGRectMake(LATER, LATER,
@@ -872,6 +870,16 @@ static NSString * const imageOrientationName[] = {
                                    initWithTarget:self action:@selector(didTapTransformView:)];
     [transformTap setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:transformTap];
+
+    UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
+                                         initWithTarget:self action:@selector(doUp:)];
+    swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
+    [transformView addGestureRecognizer:swipeUp];
+
+    UISwipeGestureRecognizer *swipeDown = [[UISwipeGestureRecognizer alloc]
+                                         initWithTarget:self action:@selector(doDown:)];
+    swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
+    [transformView addGestureRecognizer:swipeDown];
 
 #ifdef NOTDEF
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
@@ -1006,6 +1014,8 @@ static NSString * const imageOrientationName[] = {
 #endif
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
+    [layouts removeAllObjects];
+    
     
     // close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
@@ -1056,7 +1066,7 @@ static NSString * const imageOrientationName[] = {
 #endif
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.size.height = self.navigationController.toolbar.frame.origin.y - f.origin.y;
+    f.size.height -= f.origin.y;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
     containerView.frame = f;
 #ifdef DEBUG_LAYOUT
@@ -1064,34 +1074,32 @@ static NSString * const imageOrientationName[] = {
           f.origin.x, f.origin.y, f.size.width, f.size.height,
           f.size.width/f.size.height);
 #endif
-    
+
     if (currentSourceImage) { // file or captured image input
-#ifdef DEBUG_LAYOUT
-        NSLog(@"choose layout for image source size %.0f x %.0f (%5.2f",
-              currentSourceImage.size.width, currentSourceImage.size.height,
-              currentSourceImage.size.width/currentSourceImage.size.height);
-#endif
-        [self initForLayingOut];
-        
-        layout = [[Layout alloc]
-                  initForOrientation:isPortrait
-                  iPhone:isiPhone
-                  containerRect:containerView.frame];
-        layout.thumbCount = thumbViewsArray.count;
-        layout.format = nil;
-        layout.captureSize = currentSourceImage.size;
-        [layout configureLayoutWithDisplayOption:isiPhone ? TightDisplay : BestDisplay];
-#ifdef NOTDEF
-        float scale = scales[scaleIndex++];
-        targetSize = CGSizeMake(round(targetSize.width * scale),
-                                round(targetSize.height * scale));
-#endif
-        assert(layout.quality >= 0);
-        [layouts addObject:layout];
-        currentLayoutIndex = 0;
-        [self applyScreenLayout];
-        [taskCtrl enableTasks];
-        [self doTransformsOn:currentSourceImage];
+        if (isiPhone) {
+            if (isPortrait) {
+                [self tryLayoutForSourceSize:currentSourceImage.size
+                                     thumbsOn:Bottom
+                                displayOption:TightDisplay];
+            } else {
+                [self tryLayoutForSourceSize:currentSourceImage.size
+                                     thumbsOn:Right
+                                displayOption:TightDisplay];
+            }
+        } else {
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Bottom
+                            displayOption:TightDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Bottom
+                            displayOption:BestDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Right
+                            displayOption:BestDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Right
+                            displayOption:TightDisplay];
+        }
     } else {
         assert(LIVE);   // select camera setting for available area
         assert(cameraController);
@@ -1100,14 +1108,40 @@ static NSString * const imageOrientationName[] = {
                                       threeD:CURRENT_SOURCE.isThreeD];
         NSArray *availableFormats = [cameraController
                                      formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
-        currentLayoutIndex = [self chooseLayoutsFromFormatList:availableFormats];
-        assert(currentLayoutIndex != NO_LAYOUT_SELECTED);
-        layout = layouts[currentLayoutIndex];
-        [cameraController setupCameraSessionWithFormat:layout.format];
-        [self applyScreenLayout];
-        [self startCamera];
-        [taskCtrl enableTasks];
+        DisplayOptions option = isiPhone ? TightDisplay : BestDisplay;
+        for (AVCaptureDeviceFormat *format in availableFormats) {
+            CGSize proposedSourceSize = [cameraController sizeForFormat:format];
+            [self tryLayoutForSourceSize:proposedSourceSize
+                                 thumbsOn:Bottom
+                            displayOption:option];
+            [self tryLayoutForSourceSize:proposedSourceSize
+                                 thumbsOn:Right
+                            displayOption:option];
+       }
     }
+    
+    [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
+        return [[NSNumber numberWithFloat:l2.score]
+                compare:[NSNumber numberWithFloat:l1.score]];}];
+
+#ifdef DEBUG_LAYOUT
+    for (int i=0; i<layouts.count; i++ ) {
+        Layout *layout = layouts[i];
+        NSLog(@"%2d %@", i, layout.status);
+    }
+#endif
+    
+    [self applyScreenLayout: 0];     // top one is best
+}
+
+- (void) tryLayoutForSourceSize:(CGSize) sourceSize
+                        thumbsOn:(ThumbsPosition) position
+                           displayOption:(DisplayOptions) option {
+    layout = [[Layout alloc] init];
+    [layout proposeLayoutForSourceSize:sourceSize
+                               thumbsOn:position
+                          displayOption:option];
+    [layouts addObject:layout];
 }
 
 - (void) adjustBarButtons {
@@ -1320,12 +1354,11 @@ static NSString * const imageOrientationName[] = {
 
 // pause/unpause video
 - (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
+    runningButton.selected = !PAUSED;
     if (PAUSED) {
-        pauseResumeButton.selected = NO;
-        [self goLive];
-    } else {
-        pauseResumeButton.selected = YES;
         currentSourceImage = previousSourceImage;
+    } else {
+        [self goLive];
     }
     [self adjustControls];
 }
@@ -1346,15 +1379,14 @@ static NSString * const imageOrientationName[] = {
 
 - (void) adjustControls {
     if (IS_CAMERA(CURRENT_SOURCE)) {
-        pauseResumeButton.enabled = YES;
-        pauseResumeButton.selected = PAUSED;
+        runningButton.enabled = YES;
     } else {
-        pauseResumeButton.enabled = NO;
+        runningButton.enabled = NO;
     }
     
-    pauseResumeButton.hidden = !showControls;
+    runningButton.hidden = !showControls;
     snapButton.hidden = !showControls;
-    [pauseResumeButton setNeedsDisplay];
+    [runningButton setNeedsDisplay];
     [pausedLabel setNeedsDisplay];
 }
 
@@ -1379,7 +1411,7 @@ static NSString * const imageOrientationName[] = {
     snapButton.frame = f;
     
     f.origin.x = transformView.frame.size.width/2 - CONTROL_BUTTON_SIZE/2;
-    pauseResumeButton.frame = f;
+    runningButton.frame = f;
     
     SET_VIEW_WIDTH(paramView, transformView.frame.size.width);
     SET_VIEW_Y(paramView, transformView.frame.size.height - paramView.frame.size.height);
@@ -1504,25 +1536,6 @@ static CGSize startingDisplaySize;
         default:
             return;
     }
-#ifdef NOTNEW
-    if (recognizer.state != UIGestureRecognizerStateEnded)
-        return;
-    if (recognizer.scale > 1.0) {
-        // go to bigger display image
-        if (currentLayoutIndex + 1 < layouts.count) {
-            currentLayoutIndex++;
-            layout = layouts[currentLayoutIndex];
-        }
-        [self configureScreenForOrientation];
-    } else if (recognizer.scale < 1.0) {
-        // smaller display image
-        if (currentLayoutIndex > 0) {
-            currentLayoutIndex--;
-            layout = layouts[currentLayoutIndex];
-        }
-    }
-    [self reconfigure];
-#endif
 }
 #endif
 
@@ -1937,6 +1950,20 @@ UIImageOrientation lastOrientation;
     [executeView setNeedsDisplay];
 }
 
+- (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doUp");
+    if (layoutIndex+1 >= layouts.count)
+        return;
+    [self applyScreenLayout:layoutIndex+1];
+}
+
+- (IBAction) doDown:(UISwipeGestureRecognizer *)sender {
+    NSLog(@"doDown");
+    if (layoutIndex == 0)
+        return;
+    [self applyScreenLayout:layoutIndex-1];
+}
+
 - (IBAction) doRight:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doRight");
     [self doSave];
@@ -2203,48 +2230,15 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-CGSize lastAcceptedSize;
-
-- (void) initForLayingOut {
-    [layouts removeAllObjects];
-    lastAcceptedSize = CGSizeZero;
-    currentLayoutIndex = NO_LAYOUT_SELECTED;
-}
-
-// save if this is the best candidate for this display size
-
-- (void) tryCandidate:(Layout * __nullable) layout {
-    if (!layout || LAYOUT_IS_BAD(layout.quality))
-        return;
+- (void) applyScreenLayout:(long) newLayoutIndex {
+    assert(newLayoutIndex >= 0 && newLayoutIndex < layouts.count);
     
-    if (layouts.count == 0) {   // accept the first one
-        [layouts addObject:layout];
-        return;
-    }
-    
-    int i;
-    for (i=0; i<layouts.count; i++) {   // find a match or do an insertion sort of this one
-        Layout *previousLayout = layouts[i];
-        switch ([layout compare:previousLayout]) {
-            case NSOrderedDescending:   // smaller than current one. insert it and done
-                [layouts insertObject:layout atIndex:i];
-                return;
-            case NSOrderedAscending:
-                continue;
-            case NSOrderedSame: {
-                if (layout.quality > previousLayout.quality)
-                    layouts[i]  = layout;
-                return;
-            }
-        }
-    }
-    [layouts addObject:layout];
-}
-
-- (void) applyScreenLayout {
+    layoutIndex = newLayoutIndex;
+    layout = layouts[layoutIndex];
 #ifdef DEBUG_LAYOUT
-    NSLog(@"applyScreenLayout");
+    NSLog(@"applyScreenLayout %ld", layoutIndex);
 #endif
+    
     // We have several image sizes to consider and process:
     //
     // currentSource.imageSize  is the size of the source image.  For images from files, it is
@@ -2286,7 +2280,7 @@ CGSize lastAcceptedSize;
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
 
-#ifdef DEBUG_LAYOUT
+#ifdef NOTDEF
     NSLog(@"layout selected:");
 
     NSLog(@"        capture:               %4.0f x %4.0f (%4.2f)  @%.1f",
@@ -2343,9 +2337,16 @@ CGSize lastAcceptedSize;
     
     flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     
-//    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
+    [taskCtrl enableTasks];
+    if (currentSourceImage)
+        [self doTransformsOn:currentSourceImage];
+    else {
+        [cameraController setupCameraSessionWithFormat:layout.format];
+        [self startCamera];
+        [taskCtrl enableTasks];
+    }
 }
 
 #ifdef OLD
@@ -2382,82 +2383,6 @@ int startParam;
 }
 #endif
 
-
-//static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
-
-- (long) chooseLayoutsFromFormatList:(NSArray *)availableFormats {
-#ifdef DEBUG_LAYOUT
-    NSLog(@"chooseLayoutsFromFormatList");
-#endif
-    [self initForLayingOut];
-    //    NSLog(@"screen size   %4.0f x %4.0f",
-    //          containerView.frame.size.width, containerView.frame.size.height );
-    
-    CGSize lastSize = CGSizeZero;
-    for (int i=0; i<availableFormats.count; i++) {
-        AVCaptureDeviceFormat *format = availableFormats[i];
-        //        NSLog(@"FFF %@", format);
-        CGSize sourceSize = [cameraController sizeForFormat:format];
-        if (sourceSize.width == lastSize.width && sourceSize.height == lastSize.height)
-            continue;   // for now, only use the first of duplicate sizes
-        assert(sourceSize.width >= lastSize.width || sourceSize.height >= lastSize.height);
-        
-        Layout *candidateLayout = [[Layout alloc]
-                                   initForOrientation:isPortrait
-                                   iPhone:isiPhone
-                                   containerRect:containerView.frame];
-        candidateLayout.thumbCount = thumbViewsArray.count;
-        candidateLayout.format = format;
-        candidateLayout.captureSize = sourceSize;
-        
-        [candidateLayout configureLayoutWithDisplayOption: BestDisplay];
-        if (candidateLayout.quality < 0)
-            continue;
-        [layouts addObject:candidateLayout];
-    }
-    int bestQuality = -1;
-    int newLayoutIndex = 0;
-    for (int i=0; i<layouts.count; i++) {
-        Layout *layout = layouts[i];
-        if (layout.quality < bestQuality)
-            continue;
-        newLayoutIndex = i;
-        bestQuality = layout.quality;
-    }
-    return newLayoutIndex;
-}
-        
-#ifdef OLD
-#ifdef NOTDEF
-        [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
-                                                     targetSize:CGSizeZero
-                                                  displayOption:NoDisplay]];
-#endif
-        int scaleIndex = 0;
-        CGSize targetSize = sourceSize;
-        do {
-            [self tryCandidate:[candidateLayout layoutForSourceSize:sourceSize
-                                                        displaySize:targetSize
-                                                      displayOption:isiPhone ? TightDisplay : BestDisplay]];
-            if (candidateLayout.quality != LAYOUT_BAD_TOO_LARGE)
-                break;
-            float scale = scales[scaleIndex++];
-            targetSize = CGSizeMake(round(targetSize.width * scale),
-                                    round(targetSize.height * scale));
-        } while (scaleIndex < sizeof(scales)/sizeof(scales[0]));
-
-        
-        int newLayoutIndex = LAYOUT_NO_GOOD;
-    int bestQuality = -1;
-    for (int i=0; i<layouts.count; i++) {
-        Layout *layout = layouts[i];
-        if (layout.quality < bestQuality)
-            continue;
-        newLayoutIndex = i;
-        bestQuality = layout.quality;
-    }
-#endif
-
 - (void) changeSourceTo:(NSInteger)nextIndex {
     if (nextIndex == NO_SOURCE)
         return;
@@ -2465,46 +2390,5 @@ int startParam;
     nextSourceIndex = nextIndex;
     [self->taskCtrl idleForReconfiguration];
 }
-
-#ifdef NOTUSED
-    NSLog(@"--- switch layout, list:");
-    for (int i=0; i<layouts.count; i++) {
-        Layout *layout = layouts[i];
-        NSLog(@"%@ %2d: %4.0fx%4.0f (%4.2f)  %4.0fx%4.0f (%4.2f)  %4.0fx%4.0f (%4.2f)  %3.1f  %3d   %@",
-              i == currentLayoutIndex ? @">>>" : @"   ", i,
-              layout.captureSize.width, layout.captureSize.height,
-              layout.captureSize.width/layout.captureSize.height,
-              layout.transformSize.width, layout.transformSize.height,
-              layout.transformSize.width/layout.transformSize.height,
-              layout.displayRect.size.width, layout.displayRect.size.height,
-              layout.displayRect.size.width/layout.displayRect.size.height,
-              layout.scale, layout.quality, layout.status);
-    }
-#endif
-    
-#ifdef NOTYET
-    [self updateLayoutForDeviceChange];
-    
-    [self next]
-    if (![cameraController isDepthAvailable]) {
-        depthsw.enabled = NO;
-        return;
-    }
-    NSLog(@"Depth %@", depthsw.on ? @"ON" : @"OFF");
-    assert(IS_CAMERA(currentSource));
-    [cameraController stopCamera];
-    currentSource.usingDepthCamera = depthsw.on;
-    [self adjustDepthThumbsToStatus:depthsw.on];
-    [cameraController selectCameraOnSide:currentSource.currentSide threeD:depthsw.on];
-    [cameraController setupSession];
-    [cameraController startCamera];
-    [taskCtrl reconfigureWhenReady];
-    [cameraController selectCameraOnSide:newSource.currentSide
-                                  threeD:NO];
-    [cameraController setupSession];
-    [cameraController startCamera];
-    [taskCtrl reconfigureWhenReady];
-    
-#endif
 
 @end
