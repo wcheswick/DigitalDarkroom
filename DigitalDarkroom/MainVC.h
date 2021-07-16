@@ -32,8 +32,6 @@ typedef enum {
     UIPopoverPresentationControllerDelegate,
     AVCaptureVideoDataOutputSampleBufferDelegate,
     AVCaptureDepthDataOutputDelegate> {
-        UIDeviceOrientation currentDeviceOrientation;
-    
     // layout looks at these:
     BOOL isPortrait, isiPhone;
     UIView *containerView;

@@ -255,9 +255,10 @@ NSString * __nullable displayOptionNames[] = {
             else
                 scaleScore = 0.9;   // cost of scaling, which shouldn't be a thing if fixed image
             
-            if (wastedThumbs >= 0)
-                thumbScore = pow(0.999, wastedThumbs);  // slight penalty for wasted space
-            else {
+            if (wastedThumbs >= 0) {
+                float wastedPenalty = pow(0.999, wastedThumbs);
+                thumbScore = wastedPenalty;  // slight penalty for wasted space
+            } else {
                 thumbScore = thumbFrac;
             }
             break;

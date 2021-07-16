@@ -642,10 +642,15 @@ static NSString * const imageOrientationName[] = {
 - (void) viewDidLoad {
     [super viewDidLoad];
     
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"OOOO viewDidLoad orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+#else
 #ifdef DEBUG_LAYOUT
     NSLog(@"viewDidLoad");
 #endif
-    
+#endif
+
     self.navigationController.navigationBar.opaque = YES;
     self.navigationController.toolbarHidden = YES;
 //    self.navigationController.toolbar.opaque = NO;
@@ -929,9 +934,21 @@ static NSString * const imageOrientationName[] = {
 
 - (void) viewWillTransitionToSize:(CGSize)newSize
         withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:newSize withTransitionCoordinator:coordinator];
+    
+    // "Note that iPhoneX series (with notch) does not support portrait upside down."
+    
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"OOOO viewWillTransitionToSize orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+
+    NSLog(@"                                     Size: %.0f x %.0f", newSize.width, newSize.height);
+#else
 #ifdef DEBUG_LAYOUT
     NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
 #endif
+#endif
+
     [taskCtrl idleForReconfiguration];
 }
 
@@ -939,7 +956,13 @@ static NSString * const imageOrientationName[] = {
     [super viewWillAppear:animated];
     
 #ifdef DEBUG_LAYOUT
-    NSLog(@"viewWillAppear");
+    NSLog(@"OOOO viewWillAppear orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+#else
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"OOOO viewWillAppear orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+#endif
 #endif
     // not needed: we haven't started anything yet
     //[taskCtrl idleForReconfiguration];
@@ -950,9 +973,16 @@ static NSString * const imageOrientationName[] = {
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"OOOO viewDidAppear orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+    NSLog(@"                          size: %.0f x %.0f --------",
+          self.view.frame.size.width, self.view.frame.size.height);
+#else
 #ifdef DEBUG_LAYOUT
     NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
           self.view.frame.size.width, self.view.frame.size.height);
+#endif
 #endif
 
 #ifdef OLD
@@ -986,16 +1016,15 @@ static NSString * const imageOrientationName[] = {
 
 - (void) newDeviceOrientation {
     UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
+#ifdef DEBUG_ORIENTATION
+    NSLog(@"OOOO new orientation: %@",
+          [CameraController dumpDeviceOrientationName:deviceOrientation]);
+#endif
     if (nextOrientation == UIDeviceOrientationUnknown)
-        return; // weird, ignore it
+        nextOrientation = UIDeviceOrientationPortraitUpsideDown;    // klduge, don't know why
     if (nextOrientation == deviceOrientation)
         return; // nothing new to see here, folks
     deviceOrientation = nextOrientation;
-#ifdef DEBUG_ORIENTATION
-    NSLog(@"adjusting for orientation: %@", [CameraController
-                                             dumpDeviceOrientationName:deviceOrientation]);
-    //    NSLog(@" image orientation %@", imageOrientationName[imageOrientation]);
-#endif
     if (layout) // already layed out, adjust it
         [taskCtrl idleForReconfiguration];
 }
@@ -1015,7 +1044,6 @@ static NSString * const imageOrientationName[] = {
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     [layouts removeAllObjects];
-    
     
     // close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
@@ -1110,11 +1138,10 @@ static NSString * const imageOrientationName[] = {
                                      formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
         DisplayOptions option = isiPhone ? TightDisplay : BestDisplay;
         for (AVCaptureDeviceFormat *format in availableFormats) {
-            CGSize proposedSourceSize = [cameraController sizeForFormat:format];
-            [self tryLayoutForSourceSize:proposedSourceSize
+            [self tryLayoutForFormat:format
                                  thumbsOn:Bottom
                             displayOption:option];
-            [self tryLayoutForSourceSize:proposedSourceSize
+            [self tryLayoutForFormat:format
                                  thumbsOn:Right
                             displayOption:option];
        }
@@ -1134,7 +1161,17 @@ static NSString * const imageOrientationName[] = {
     [self applyScreenLayout: 0];     // top one is best
 }
 
-- (void) tryLayoutForSourceSize:(CGSize) sourceSize
+- (void) tryLayoutForFormat:(AVCaptureDeviceFormat *) trialFormat
+                   thumbsOn:(ThumbsPosition) position
+                      displayOption:(DisplayOptions) option {
+    CGSize proposedSourceSize = [cameraController sizeForFormat:trialFormat];
+    Layout *layout = [self tryLayoutForSourceSize:proposedSourceSize
+                                         thumbsOn:position
+                                    displayOption:option];
+    layout.format = trialFormat;
+}
+
+- (Layout *) tryLayoutForSourceSize:(CGSize) sourceSize
                         thumbsOn:(ThumbsPosition) position
                            displayOption:(DisplayOptions) option {
     layout = [[Layout alloc] init];
@@ -1142,6 +1179,7 @@ static NSString * const imageOrientationName[] = {
                                thumbsOn:position
                           displayOption:option];
     [layouts addObject:layout];
+    return layout;
 }
 
 - (void) adjustBarButtons {

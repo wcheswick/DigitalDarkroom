@@ -176,6 +176,7 @@
               [error localizedDescription]);
         return;
     }
+    assert(format);
     captureDevice.activeFormat = format;
 
     // these must be after the activeFormat is set.  there are other conditions, see
