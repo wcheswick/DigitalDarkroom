@@ -189,9 +189,7 @@
     // insist on our activeFormat selection:
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
     if ([captureSession canAddInput:videoInput]) {
-        NSLog(@" setupSession 0.1, format: %@", captureDevice.activeFormat);
         [captureSession addInput:videoInput];
-        NSLog(@" setupSession 0.2, format: %@", captureDevice.activeFormat);
     } else {
         NSLog(@"**** could not add camera input");
     }
