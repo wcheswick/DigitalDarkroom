@@ -1103,6 +1103,25 @@ static NSString * const imageOrientationName[] = {
           f.size.width/f.size.height);
 #endif
 
+//  [self simpleLayouts];
+    [self tryAllThumbLayouts];
+    assert(layouts.count > 0);
+    
+    [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
+        return [[NSNumber numberWithFloat:l2.score]
+                compare:[NSNumber numberWithFloat:l1.score]];}];
+
+#ifdef DEBUG_LAYOUT
+    for (int i=0; i<layouts.count; i++ ) {
+        Layout *layout = layouts[i];
+        NSLog(@"%2d %@", i, layout.status);
+    }
+#endif
+    
+    [self applyScreenLayout: 0];     // top one is best
+}
+
+- (void) simpleLayouts {
     if (currentSourceImage) { // file or captured image input
         if (isiPhone) {
             if (isPortrait) {
@@ -1146,19 +1165,50 @@ static NSString * const imageOrientationName[] = {
                             displayOption:option];
        }
     }
-    
-    [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
-        return [[NSNumber numberWithFloat:l2.score]
-                compare:[NSNumber numberWithFloat:l1.score]];}];
+}
 
-#ifdef DEBUG_LAYOUT
-    for (int i=0; i<layouts.count; i++ ) {
-        Layout *layout = layouts[i];
-        NSLog(@"%2d %@", i, layout.status);
+
+- (void) tryAllThumbLayouts {
+    if (currentSourceImage) { // file or captured image input
+        [self tryAllThumbsForSize:currentSourceImage.size format:nil];
+    } else {
+        assert(LIVE);   // select camera setting for available area
+        assert(cameraController);
+        [cameraController updateOrientationTo:deviceOrientation];
+        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
+                                      threeD:CURRENT_SOURCE.isThreeD];
+        NSArray *availableFormats = [cameraController
+                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
+        for (AVCaptureDeviceFormat *format in availableFormats) {
+            CGSize formatSize = [cameraController sizeForFormat:format];
+            [self tryAllThumbsForSize:formatSize format:format];
+       }
     }
-#endif
+}
+- (void) tryAllThumbsForSize:(CGSize) size format:(AVCaptureDeviceFormat *)format {
+    for (size_t thumbColumns=0; ; thumbColumns++) {
+        Layout *trialLayout = [[Layout alloc] init];
+        if (format)
+            trialLayout.format = format;
+        if (![trialLayout tryLayoutForSize:size
+                           thumbRows:0
+                        thumbColumns:thumbColumns]) {
+            break;  // can't be done
+        }
+        [layouts addObject:trialLayout];
+    }
     
-    [self applyScreenLayout: 0];     // top one is best
+    for (size_t thumbRows=0; ; thumbRows++) {
+        Layout *trialLayout = [[Layout alloc] init];
+        if (format)
+            trialLayout.format = format;
+        if (![trialLayout tryLayoutForSize:size
+                           thumbRows:thumbRows
+                        thumbColumns:0]) {
+            break;  // can't be done
+        }
+        [layouts addObject:trialLayout];
+    }
 }
 
 - (void) tryLayoutForFormat:(AVCaptureDeviceFormat *) trialFormat

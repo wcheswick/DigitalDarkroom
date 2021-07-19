@@ -69,6 +69,10 @@ NS_ASSUME_NONNULL_BEGIN
                         thumbsOn:(ThumbsPosition) position
                        displayOption:(DisplayOptions) displayOption;
 
+- (BOOL) tryLayoutForSize:(CGSize) sourceSize
+          thumbRows:(size_t) rowCount
+       thumbColumns:(size_t) columnCount;
+
 - (NSComparisonResult) compare:(Layout *)layout;
 + (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size;
 
