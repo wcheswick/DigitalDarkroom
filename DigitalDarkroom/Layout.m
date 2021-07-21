@@ -90,9 +90,215 @@ NSString * __nullable displayOptionNames[] = {
 
 //static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 
+
+// return NO if it can't be done, usually too many thumbs. if NO,
+// then the score is not computed.
+
+- (BOOL) tryLayoutForSize:(CGSize) sourceSize
+          thumbRows:(size_t) rowCount
+       thumbColumns:(size_t) columnCount {
+    int thumbsShown;
+    
+    assert(rowCount == 0 || columnCount == 0);  // for now
+    
+    aspectRatio = sourceSize.width / sourceSize.height;
+
+#define NO_SCALE    (-2.0)
+#define SCALE_UNINITIALIZED (-1.0)
+    scale = SCALE_UNINITIALIZED;
+    
+    firstThumbRect = thumbImageRect = CGRectZero;
+    thumbImageRect.size.width = mainVC.isiPhone  ? TIGHT_THUMB_W : THUMB_W;
+    thumbImageRect.size.height = round(thumbImageRect.size.width / aspectRatio);
+    firstThumbRect = thumbImageRect;
+    firstThumbRect.size.height += THUMB_LABEL_H;
+
+    CGFloat rightThumbWidthNeeded = columnCount * (firstThumbRect.size.width + SEP);
+    CGFloat bottomThumbHeightNeeded = rowCount * firstThumbRect.size.height + SEP;
+
+    displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
+    displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded;
+    if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
+        return NO;
+    
+    displayRect.size = [Layout fitSize:sourceSize toSize:displayRect.size];
+    displayRect.origin = CGPointZero;   // needs centering
+    [self placeExecuteRectWithSqueeze:YES];
+    thumbArrayRect = CGRectZero;
+
+    if (columnCount && !rowCount) {  // nothing underneath at the moment
+        thumbsShown = [self placeThumbsOnRight];
+    } else if (!columnCount && rowCount) {
+        thumbsShown = [self placeThumbsUnderneath];
+    } else if (columnCount && rowCount) {
+        assert(NO); // both places, not yet
+    } else
+        thumbsShown = [self placeThumbsUnderneath];
+
+    transformSize = displayRect.size;
+    if (scale == SCALE_UNINITIALIZED)
+        scale = displayRect.size.width / sourceSize.width;
+    
+    int thumbCount = (int)mainVC.thumbViewsArray.count;
+    long wastedThumbs = thumbsShown - thumbCount;
+    float thumbFrac = wastedThumbs >= 0 ? 1.0 : (float)thumbsShown / (float)thumbCount;
+    
+#define MIN_TIGHT_DISPLAY_FRAC  0.2
+#define MIN_BEST_DISPLAY_FRAC  0.3
+
+    if (scale == 1.0)
+        scaleScore = 1.0;
+    else if (scale > 1.0)
+        scaleScore = 0.6;   // expanding the image
+    else
+        scaleScore = 0.99;   // cost of scaling, which shouldn't be a thing if fixed image
+
+    if (wastedThumbs >= 0) {
+        float wastedPenalty = pow(0.999, wastedThumbs);
+        thumbScore = wastedPenalty;  // slight penalty for wasted space
+    } else {
+        float maxThumbScore;
+        switch (columnCount) {
+            case 0:
+            case 1:
+                maxThumbScore = 0.4;
+                break;
+            case 2:
+                maxThumbScore = 0.8;
+                break;
+            default:
+                maxThumbScore = 1.0;
+        }
+        thumbScore = pow(maxThumbScore, 1.0 - thumbFrac);
+    }
+
+    displayScore = 1.0; // for now
+    
+    float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
+    float heightFrac = displayRect.size.height / mainVC.containerView.frame.size.height;
+    if (widthFrac < 0.25) {
+        NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
+        displayScore = 0;
+    } else {
+        displayScore = MAX(widthFrac, heightFrac);
+    }
+    
+    assert(thumbScore >= 0);
+    assert(scaleScore >= 0);
+    assert(displayScore >= 0);
+    score = thumbScore * scaleScore * displayScore;
+    
+#ifdef LONG
+    status = [NSString stringWithFormat:@"%4.0f %4.0f@%4.2f%%\t%@%@ %4.2f=f(%4.2f %4.2f %4.2f) T%2.0f",
+              displayRect.size.width, displayRect.size.height, scale,
+              displayOptionNames[displayOption], displayThumbsPosition[thumbsPosition],
+              score, thumbScore, displayScore, scaleScore,
+              round(thumbFrac*100.0)
+              ];
+#endif
+    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu",
+                       trunc(100.0*score - 0.1),
+                       trunc(100.0*thumbScore - 0.1),
+                       trunc(100.0*displayScore - 0.1),
+                       trunc(100.0*scaleScore - 0.1),
+                       rowCount, columnCount
+                       ];
+    status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%@",
+              displayRect.size.width, displayRect.size.height, scale, stats];
+    shortStatus = stats;
+
+    assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
+    assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
+    assert(BELOW(executeRect) <= mainVC.containerView.frame.size.height);
+    assert(RIGHT(executeRect) <= mainVC.containerView.frame.size.width);
+
+    return YES;
+}
+
+- (int) placeThumbsUnderneath {
+    thumbArrayRect = CGRectMake(0, BELOW(executeRect)+SEP, mainVC.containerView.frame.size.width,
+                                LATER);
+    thumbArrayRect.size.height = mainVC.containerView.frame.size.height - thumbArrayRect.origin.y;
+    return [self trimThumbArray];
+}
+
+- (int) placeThumbsOnRight {
+    thumbArrayRect = CGRectMake(RIGHT(displayRect)+SEP, displayRect.origin.y, LATER,
+                                mainVC.containerView.frame.size.height);
+    thumbArrayRect.size.width = mainVC.containerView.frame.size.width - thumbArrayRect.origin.x;
+    return [self trimThumbArray];
+}
+
+// if the array holds all our thumbs, trim extra width and height as needed
+// in any case, return number of thumbs displayed in the array
+- (int) trimThumbArray {
+    int thumbsInRow = THUMBS_FOR_WIDTH(thumbArrayRect.size.width);
+    int thumbsInCol = THUMBS_FOR_HEIGHT(thumbArrayRect.size.height);
+    int thumbCount = thumbsInCol * thumbsInRow;
+//    if (thumbCount < (int)mainVC.thumbViewsArray.count)
+//        return thumbCount;
+    thumbArrayRect.size.width = thumbsInRow * (firstThumbRect.size.width + SEP) - SEP;
+    thumbArrayRect.size.height = thumbsInCol * (firstThumbRect.size.height + SEP) - SEP;
+    return thumbCount;
+}
+
+- (void) showThumbArraySize:(CGSize) s {
+    int thumbRows = THUMBS_FOR_HEIGHT(s.height);
+    int thumbCols = THUMBS_FOR_WIDTH(s.width);
+    NSLog(@"********* Thumb array size for %.1f x %.1f: %d x %d = %d",
+          s.width, s.height, thumbCols, thumbRows, thumbRows*thumbCols);
+}
+
+- (void) placeExecuteRectWithSqueeze:(BOOL) squeeze {
+    executeRect.size.width = displayRect.size.width;
+    executeRect.origin.x = displayRect.origin.x;
+    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height - BELOW(displayRect);
+    if (squeeze || spaceBelowDisplay < EXECUTE_FULL_H) {
+        executeRect.origin.y = BELOW(displayRect);
+        executeRect.size.height = EXECUTE_MIN_H;
+        executeIsTight = YES;
+        executeOverlayOK = YES;
+    } else {
+        executeRect.origin.y = BELOW(displayRect) + SEP;
+        executeRect.size.height = MIN(spaceBelowDisplay, EXECUTE_FULL_H);
+        executeIsTight = NO;
+        executeOverlayOK = NO;
+    }
+}
+
+// I realize that teh following may give the wrong result if one dimension
+// is greater than the other, but the other is shorter.  It isn't
+// that important.
+
+- (NSComparisonResult) compare:(Layout *)layout {
+    if (displayRect.size.width > layout.displayRect.size.width ||
+        displayRect.size.height > layout.displayRect.size.height)
+        return NSOrderedAscending;
+    if (displayRect.size.width == layout.displayRect.size.width &&
+        displayRect.size.height == layout.displayRect.size.height)
+        return NSOrderedSame;
+    return NSOrderedDescending;
+}
+
++ (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
+    float xScale = size.width/srcSize.width;
+    float yScale = size.height/srcSize.height;
+    return MIN(xScale,yScale);
+}
+
++ (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size {
+    assert(size.height > 0);
+    assert(size.width > 0);
+    CGFloat scale = [self scaleToFitSize:srcSize toSize:size];
+    CGSize scaledSize;
+    scaledSize.width = round(scale*srcSize.width);
+    scaledSize.height = round(scale*srcSize.height);
+    return scaledSize;
+}
+
+#ifdef OLD_LAYOUT
 // Can we make an acceptible layout with the given capture size and scaling?
 // return no if layout is bad. we return self for readability.
-
 - (void) proposeLayoutForSourceSize:(CGSize) size
                            thumbsOn:(ThumbsPosition) position
                       displayOption:(DisplayOptions) displayOption {
@@ -311,198 +517,6 @@ NSString * __nullable displayOptionNames[] = {
     assert(RIGHT(executeRect) <= mainVC.containerView.frame.size.width);
      return;
 }
-
-// return NO if it can't be done, usually too many thumbs. if NO,
-// then the score is not computed.
-
-- (BOOL) tryLayoutForSize:(CGSize) sourceSize
-          thumbRows:(size_t) rowCount
-       thumbColumns:(size_t) columnCount {
-    int thumbsShown;
-    
-    assert(rowCount == 0 || columnCount == 0);  // for now
-    
-    aspectRatio = sourceSize.width / sourceSize.height;
-
-#define NO_SCALE    (-2.0)
-#define SCALE_UNINITIALIZED (-1.0)
-    scale = SCALE_UNINITIALIZED;
-    
-    firstThumbRect = thumbImageRect = CGRectZero;
-    thumbImageRect.size.width = mainVC.isiPhone  ? TIGHT_THUMB_W : THUMB_W;
-    thumbImageRect.size.height = round(thumbImageRect.size.width / aspectRatio);
-    firstThumbRect = thumbImageRect;
-    firstThumbRect.size.height += THUMB_LABEL_H;
-
-    CGFloat rightThumbWidthNeeded = columnCount * (firstThumbRect.size.width + SEP);
-    CGFloat bottomThumbHeightNeeded = rowCount * firstThumbRect.size.height + SEP;
-
-    displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
-    displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded;
-    if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
-        return NO;
-    
-    displayRect.size = [Layout fitSize:sourceSize toSize:displayRect.size];
-    displayRect.origin = CGPointZero;   // needs centering
-    [self placeExecuteRectWithSqueeze:YES];
-    thumbArrayRect = CGRectZero;
-
-    if (columnCount && !rowCount) {  // nothing underneath at the moment
-        thumbsShown = [self placeThumbsOnRight];
-    } else if (!columnCount && rowCount) {
-        thumbsShown = [self placeThumbsUnderneath];
-    } else if (columnCount && rowCount) {
-        assert(NO); // both places, not yet
-    } else
-        thumbsShown = [self placeThumbsUnderneath];
-
-    transformSize = displayRect.size;
-    if (scale == SCALE_UNINITIALIZED)
-        scale = displayRect.size.width / sourceSize.width;
-    
-    int thumbCount = (int)mainVC.thumbViewsArray.count;
-    long wastedThumbs = thumbsShown - thumbCount;
-    float thumbFrac = wastedThumbs >= 0 ? 1.0 : (float)thumbsShown / (float)thumbCount;
-    
-#define MIN_TIGHT_DISPLAY_FRAC  0.2
-#define MIN_BEST_DISPLAY_FRAC  0.3
-
-    if (scale == 1.0)
-        scaleScore = 1.0;
-    else if (scale > 1.0)
-        scaleScore = 0.6;   // expanding the image
-    else
-        scaleScore = 0.99;   // cost of scaling, which shouldn't be a thing if fixed image
-
-    if (wastedThumbs >= 0) {
-        float wastedPenalty = pow(0.999, wastedThumbs);
-        thumbScore = wastedPenalty;  // slight penalty for wasted space
-    } else {
-        thumbScore = pow(0.9, 1.0 - thumbFrac);
-    }
-
-    displayScore = 1.0; // for now
-    
-    float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
-    float heightFrac = displayRect.size.height / mainVC.containerView.frame.size.height;
-    if (widthFrac < 0.25) {
-        NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
-        displayScore = 0;
-    } else {
-        displayScore = MAX(widthFrac, heightFrac);
-    }
-    
-    assert(thumbScore >= 0);
-    assert(scaleScore >= 0);
-    assert(displayScore >= 0);
-    score = thumbScore * scaleScore * displayScore;
-    
-#ifdef LONG
-    status = [NSString stringWithFormat:@"%4.0f %4.0f@%4.2f%%\t%@%@ %4.2f=f(%4.2f %4.2f %4.2f) T%2.0f",
-              displayRect.size.width, displayRect.size.height, scale,
-              displayOptionNames[displayOption], displayThumbsPosition[thumbsPosition],
-              score, thumbScore, displayScore, scaleScore,
-              round(thumbFrac*100.0)
-              ];
 #endif
-    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu",
-                       trunc(100.0*score - 0.1),
-                       trunc(100.0*thumbScore - 0.1),
-                       trunc(100.0*displayScore - 0.1),
-                       trunc(100.0*scaleScore - 0.1),
-                       rowCount, columnCount
-                       ];
-    status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%2.0f  %@",
-              displayRect.size.width, displayRect.size.height, scale, stats];
-    shortStatus = stats;
-
-    assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
-    assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
-    assert(BELOW(executeRect) <= mainVC.containerView.frame.size.height);
-    assert(RIGHT(executeRect) <= mainVC.containerView.frame.size.width);
-
-    return YES;
-}
-
-- (int) placeThumbsUnderneath {
-    thumbArrayRect = CGRectMake(0, BELOW(executeRect)+SEP, mainVC.containerView.frame.size.width,
-                                LATER);
-    thumbArrayRect.size.height = mainVC.containerView.frame.size.height - thumbArrayRect.origin.y;
-    return [self trimThumbArray];
-}
-
-- (int) placeThumbsOnRight {
-    thumbArrayRect = CGRectMake(RIGHT(displayRect)+SEP, displayRect.origin.y, LATER,
-                                mainVC.containerView.frame.size.height);
-    thumbArrayRect.size.width = mainVC.containerView.frame.size.width - thumbArrayRect.origin.x;
-    return [self trimThumbArray];
-}
-
-// if the array holds all our thumbs, trim extra width and height as needed
-// in any case, return number of thumbs displayed in the array
-- (int) trimThumbArray {
-    int thumbsInRow = THUMBS_FOR_WIDTH(thumbArrayRect.size.width);
-    int thumbsInCol = THUMBS_FOR_HEIGHT(thumbArrayRect.size.height);
-    int thumbCount = thumbsInCol * thumbsInRow;
-//    if (thumbCount < (int)mainVC.thumbViewsArray.count)
-//        return thumbCount;
-    thumbArrayRect.size.width = thumbsInRow * (firstThumbRect.size.width + SEP) - SEP;
-    thumbArrayRect.size.height = thumbsInCol * (firstThumbRect.size.height + SEP) - SEP;
-    return thumbCount;
-}
-
-- (void) showThumbArraySize:(CGSize) s {
-    int thumbRows = THUMBS_FOR_HEIGHT(s.height);
-    int thumbCols = THUMBS_FOR_WIDTH(s.width);
-    NSLog(@"********* Thumb array size for %.1f x %.1f: %d x %d = %d",
-          s.width, s.height, thumbCols, thumbRows, thumbRows*thumbCols);
-}
-
-- (void) placeExecuteRectWithSqueeze:(BOOL) squeeze {
-    executeRect.size.width = displayRect.size.width;
-    executeRect.origin.x = displayRect.origin.x;
-    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height - BELOW(displayRect);
-    if (squeeze || spaceBelowDisplay < EXECUTE_FULL_H) {
-        executeRect.origin.y = BELOW(displayRect);
-        executeRect.size.height = EXECUTE_MIN_H;
-        executeIsTight = YES;
-        executeOverlayOK = YES;
-    } else {
-        executeRect.origin.y = BELOW(displayRect) + SEP;
-        executeRect.size.height = MIN(spaceBelowDisplay, EXECUTE_FULL_H);
-        executeIsTight = NO;
-        executeOverlayOK = NO;
-    }
-}
-
-// I realize that teh following may give the wrong result if one dimension
-// is greater than the other, but the other is shorter.  It isn't
-// that important.
-
-- (NSComparisonResult) compare:(Layout *)layout {
-    if (displayRect.size.width > layout.displayRect.size.width ||
-        displayRect.size.height > layout.displayRect.size.height)
-        return NSOrderedAscending;
-    if (displayRect.size.width == layout.displayRect.size.width &&
-        displayRect.size.height == layout.displayRect.size.height)
-        return NSOrderedSame;
-    return NSOrderedDescending;
-}
-
-+ (CGFloat) scaleToFitSize:(CGSize)srcSize toSize:(CGSize)size {
-    float xScale = size.width/srcSize.width;
-    float yScale = size.height/srcSize.height;
-    return MIN(xScale,yScale);
-}
-
-+ (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size {
-    assert(size.height > 0);
-    assert(size.width > 0);
-    CGFloat scale = [self scaleToFitSize:srcSize toSize:size];
-    CGSize scaledSize;
-    scaledSize.width = round(scale*srcSize.width);
-    scaledSize.height = round(scale*srcSize.height);
-    return scaledSize;
-}
 
 @end
