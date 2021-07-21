@@ -84,6 +84,8 @@
 
 #define SLIDER_AREA_W   200
 
+#define SHOW_LAYOUT_FONT_SIZE   14
+
 #define STATS_HEADER_INDEX  1   // second section is just stats
 #define TRANSFORM_USES_SLIDER(t) ((t).p != UNINITIALIZED_P)
 
@@ -151,6 +153,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UISlider *paramSlider;
 
 @property (nonatomic, strong)   UIView *flashView;
+@property (nonatomic, strong)   UILabel *layoutValuesView;
 
 @property (assign)              BOOL showControls;
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
@@ -237,6 +240,8 @@ MainVC *mainVC = nil;
 @synthesize paramLow, paramName, paramHigh, paramValue;
 
 @synthesize executeView;
+@synthesize layoutValuesView;
+
 @synthesize plusOffButton, singlePlusButton, multiPlusButton;
 
 @synthesize deviceOrientation;
@@ -791,6 +796,20 @@ static NSString * const imageOrientationName[] = {
     flashView.hidden = YES;
     [containerView addSubview:flashView];
     
+    layoutValuesView = [[UILabel alloc] init];
+    layoutValuesView.hidden = YES;
+    layoutValuesView.font = [UIFont fontWithName:@"Courier-Bold" size:SHOW_LAYOUT_FONT_SIZE];
+    [UIFont boldSystemFontOfSize:SHOW_LAYOUT_FONT_SIZE];
+    layoutValuesView.textAlignment = NSTextAlignmentLeft;
+    layoutValuesView.textColor = [UIColor whiteColor];
+    layoutValuesView.adjustsFontSizeToFitWidth = YES;
+    //layoutValuesView.lineBreakMode = NSLineBreakByTruncatingTail;
+    //    layoutValuesView.lineBreakMode = NSLineBreakByWordWrapping;
+    layoutValuesView.opaque = NO;
+    layoutValuesView.numberOfLines = 0;
+    layoutValuesView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.5];
+    [containerView addSubview:layoutValuesView];
+    
     pausedLabel = [[UILabel alloc]
                    initWithFrame:CGRectMake(0, SEP,
                                             LATER, PAUSE_FONT_SIZE+2*SEP)];
@@ -886,12 +905,10 @@ static NSString * const imageOrientationName[] = {
     swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
     [transformView addGestureRecognizer:swipeDown];
 
-#ifdef NOTDEF
     UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
-                                                     initWithTarget:self action:@selector(doLeft:)];
+                                                     initWithTarget:self action:@selector(doLongPress:)];
     longPressScreen.minimumPressDuration = 1.0;
-    [overlayView addGestureRecognizer:longPressScreen];
-#endif
+    [transformView addGestureRecognizer:longPressScreen];
     
 #ifdef NOTHERE
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
@@ -1186,7 +1203,7 @@ static NSString * const imageOrientationName[] = {
     }
 }
 - (void) tryAllThumbsForSize:(CGSize) size format:(AVCaptureDeviceFormat *)format {
-    for (size_t thumbColumns=0; ; thumbColumns++) {
+    for (size_t thumbColumns=2; ; thumbColumns++) {
         Layout *trialLayout = [[Layout alloc] init];
         if (format)
             trialLayout.format = format;
@@ -1198,7 +1215,7 @@ static NSString * const imageOrientationName[] = {
         [layouts addObject:trialLayout];
     }
     
-    for (size_t thumbRows=0; ; thumbRows++) {
+    for (size_t thumbRows=2; ; thumbRows++) {
         Layout *trialLayout = [[Layout alloc] init];
         if (format)
             trialLayout.format = format;
@@ -2057,6 +2074,13 @@ UIImageOrientation lastOrientation;
     [self doSave];
 }
 
+- (IBAction) doLongPress:(UILongPressGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateBegan)
+        return;
+    layoutValuesView.hidden = !layoutValuesView.hidden;
+    [layoutValuesView setNeedsDisplay];
+}
+
 - (IBAction) doLeft:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doLeft");
 #define PHOTO_APP_URL   @"photo-redirect://"
@@ -2368,6 +2392,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
 
+
 #ifdef NOTDEF
     NSLog(@"layout selected:");
 
@@ -2423,6 +2448,27 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
     //cameraController.captureVideoPreviewLayer = previewLayer;
     
+    layoutValuesView.frame = transformView.frame;
+    [containerView bringSubviewToFront:layoutValuesView];
+    NSString *formatList = @"";
+    for (int i=0; i<6 && i<layouts.count; i++) {
+        if (i > 0)
+            formatList = [formatList stringByAppendingString:@"\n"];
+        NSString *cursor = newLayoutIndex == i ? @">" : @" ";
+        Layout *layout = layouts[i];
+        NSString *line = [NSString stringWithFormat:@"%@%@", cursor, layout.status];
+        NSLog(@"%@", layout.status);
+        formatList = [formatList stringByAppendingString:line];
+    }
+    //    [layoutValuesView sizeToFit];
+    layoutValuesView.text = formatList;
+    CGSize textSize = [formatList sizeWithFont:layoutValuesView.font
+                             constrainedToSize:transformView.frame.size
+                                 lineBreakMode:layoutValuesView.lineBreakMode];
+    SET_VIEW_HEIGHT(layoutValuesView, textSize.height)
+    SET_VIEW_WIDTH(layoutValuesView, textSize.width)
+    [layoutValuesView setNeedsDisplay];
+
     flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     
     [self updateExecuteView];

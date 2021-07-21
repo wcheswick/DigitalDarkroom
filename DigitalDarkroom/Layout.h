@@ -40,7 +40,7 @@ NS_ASSUME_NONNULL_BEGIN
     CGRect thumbImageRect;  // image sample size in the thumb
     CGRect executeRect;     // where the active transform list is shown
     BOOL executeOverlayOK;  // if execute can creep up onto the transform display
-    NSString *status;
+    NSString *status, *shortStatus;
 }
 
 @property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
@@ -63,7 +63,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              float scale, aspectRatio;
 @property (assign)              int quality;        // -1 = no, more positive is better
 
-@property (nonatomic, strong)   NSString *status;
+@property (nonatomic, strong)   NSString *status, *shortStatus;
 
 - (void) proposeLayoutForSourceSize:(CGSize) size
                         thumbsOn:(ThumbsPosition) position

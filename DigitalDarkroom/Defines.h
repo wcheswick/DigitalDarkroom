@@ -10,6 +10,7 @@
 #define Defines_h
 
 #define DEBUG_LAYOUT    1
+
 //#define DEBUG_ORIENTATION 1
 
 //#define DEBUG_CAMERA  1

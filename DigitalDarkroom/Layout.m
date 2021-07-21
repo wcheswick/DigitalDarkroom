@@ -47,7 +47,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize scale, aspectRatio;
-@synthesize status;
+@synthesize status, shortStatus;
 @synthesize score, thumbScore, displayScore, scaleScore;
 
 - (id)init {
@@ -60,7 +60,7 @@ NSString * __nullable displayOptionNames[] = {
         displayRect = CGRectZero;
         transformSize = CGSizeZero;
         executeRect = CGRectZero;
-        status = nil;
+        status = shortStatus = nil;
         
         // these values are tweaked to satisfy the all the cameras on two
         // different iPhones and two different iPads.
@@ -103,7 +103,10 @@ NSString * __nullable displayOptionNames[] = {
     int thumbCount = (int)mainVC.thumbViewsArray.count;
     
     score = thumbScore = displayScore = scaleScore = -1;   // unassigned
-    scale = -1.0;
+
+#define NO_SCALE    (-2.0)
+#define SCALE_UNINITIALIZED (-1.0)
+    scale = SCALE_UNINITIALIZED;
 
 #ifdef NOTDEF
     NSLog(@"configureLayoutWithDisplayOption %d", displayOption);
@@ -133,7 +136,7 @@ NSString * __nullable displayOptionNames[] = {
     switch (displayOption) {
         case NoDisplay:     // just controls, no transform view
             displayRect = CGRectZero;
-            scale = 0;
+            scale = NO_SCALE;
             thumbsPerRow = THUMBS_FOR_WIDTH(mainVC.containerView.frame.size.width);
             rowsNeeded = (thumbCount + (thumbsPerRow - 1)) / thumbsPerRow;
             colsNeeded = thumbCount / rowsNeeded;
@@ -204,7 +207,7 @@ NSString * __nullable displayOptionNames[] = {
             break;
     }
     transformSize = displayRect.size;
-    if (scale < 0)
+    if (scale == SCALE_UNINITIALIZED)
         scale = displayRect.size.width / sourceSize.width;
     
     long wastedThumbs = thumbsShown - thumbCount;
@@ -290,12 +293,15 @@ NSString * __nullable displayOptionNames[] = {
     assert(displayScore >= 0);
     score = thumbScore * scaleScore * displayScore;
     
-    status = [NSString stringWithFormat:@"%4.0fx%4.0f -> %.0f x %.0f    @%4.2f%%   %@%@  %2.0f   %4.2f  %4.2f %4.2f %4.2f",
-              sourceSize.width, sourceSize.height,
+    assert(NO); // not this code
+    // truncatable status, for skinny screens
+    status = [NSString stringWithFormat:@"%4.0f%4.0f @%4.2f%% %@%@ %4.2f < %4.2f %4.2f %4.2f T %2.0f<%4.0fx%4.0f",
               displayRect.size.width, displayRect.size.height, scale,
-              displayOptionNames[displayOption], displayThumbsPosition[position],
+              displayOptionNames[displayOption], displayThumbsPosition[thumbsPosition],
+              score, thumbScore, displayScore, scaleScore,
               round(thumbFrac*100.0),
-              score, thumbScore, displayScore, scaleScore];
+              sourceSize.width, sourceSize.height
+              ];
     if (score == 0.0)
         NSLog(@"     %@", status);
 
@@ -318,18 +324,22 @@ NSString * __nullable displayOptionNames[] = {
     
     aspectRatio = sourceSize.width / sourceSize.height;
 
+#define NO_SCALE    (-2.0)
+#define SCALE_UNINITIALIZED (-1.0)
+    scale = SCALE_UNINITIALIZED;
+    
     firstThumbRect = thumbImageRect = CGRectZero;
     thumbImageRect.size.width = mainVC.isiPhone  ? TIGHT_THUMB_W : THUMB_W;
     thumbImageRect.size.height = round(thumbImageRect.size.width / aspectRatio);
     firstThumbRect = thumbImageRect;
     firstThumbRect.size.height += THUMB_LABEL_H;
 
-    CGFloat rightThumbWidthNeeded = columnCount * firstThumbRect.size.width + SEP;
+    CGFloat rightThumbWidthNeeded = columnCount * (firstThumbRect.size.width + SEP);
     CGFloat bottomThumbHeightNeeded = rowCount * firstThumbRect.size.height + SEP;
 
     displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
     displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded;
-    if (displayRect.size.height < 0 || displayRect.size.width < 0)
+    if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
         return NO;
     
     displayRect.size = [Layout fitSize:sourceSize toSize:displayRect.size];
@@ -347,7 +357,7 @@ NSString * __nullable displayOptionNames[] = {
         thumbsShown = [self placeThumbsUnderneath];
 
     transformSize = displayRect.size;
-    if (scale < 0)
+    if (scale == SCALE_UNINITIALIZED)
         scale = displayRect.size.width / sourceSize.width;
     
     int thumbCount = (int)mainVC.thumbViewsArray.count;
@@ -362,37 +372,49 @@ NSString * __nullable displayOptionNames[] = {
     else if (scale > 1.0)
         scaleScore = 0.6;   // expanding the image
     else
-        scaleScore = 0.9;   // cost of scaling, which shouldn't be a thing if fixed image
+        scaleScore = 0.99;   // cost of scaling, which shouldn't be a thing if fixed image
 
     if (wastedThumbs >= 0) {
         float wastedPenalty = pow(0.999, wastedThumbs);
         thumbScore = wastedPenalty;  // slight penalty for wasted space
     } else {
-        thumbScore = thumbFrac;
+        thumbScore = pow(0.9, 1.0 - thumbFrac);
     }
 
     displayScore = 1.0; // for now
     
     float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
+    float heightFrac = displayRect.size.height / mainVC.containerView.frame.size.height;
     if (widthFrac < 0.25) {
         NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
         displayScore = 0;
-    } else if (widthFrac < 0.5)
-        displayScore = widthFrac;
+    } else {
+        displayScore = MAX(widthFrac, heightFrac);
+    }
     
     assert(thumbScore >= 0);
     assert(scaleScore >= 0);
     assert(displayScore >= 0);
     score = thumbScore * scaleScore * displayScore;
     
-    status = [NSString stringWithFormat:@"%4.0fx%4.0f -> %.0f x %.0f    @%4.2f%%    %zu %zu   %2.0f   %4.2f  %4.2f %4.2f %4.2f",
-              sourceSize.width, sourceSize.height,
+#ifdef LONG
+    status = [NSString stringWithFormat:@"%4.0f %4.0f@%4.2f%%\t%@%@ %4.2f=f(%4.2f %4.2f %4.2f) T%2.0f",
               displayRect.size.width, displayRect.size.height, scale,
-              rowCount, columnCount,
-              round(thumbFrac*100.0),
-              score, thumbScore, displayScore, scaleScore];
-    if (score == 0.0)
-        NSLog(@"     %@", status);
+              displayOptionNames[displayOption], displayThumbsPosition[thumbsPosition],
+              score, thumbScore, displayScore, scaleScore,
+              round(thumbFrac*100.0)
+              ];
+#endif
+    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu",
+                       trunc(100.0*score - 0.1),
+                       trunc(100.0*thumbScore - 0.1),
+                       trunc(100.0*displayScore - 0.1),
+                       trunc(100.0*scaleScore - 0.1),
+                       rowCount, columnCount
+                       ];
+    status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%2.0f  %@",
+              displayRect.size.width, displayRect.size.height, scale, stats];
+    shortStatus = stats;
 
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
     assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
@@ -422,10 +444,10 @@ NSString * __nullable displayOptionNames[] = {
     int thumbsInRow = THUMBS_FOR_WIDTH(thumbArrayRect.size.width);
     int thumbsInCol = THUMBS_FOR_HEIGHT(thumbArrayRect.size.height);
     int thumbCount = thumbsInCol * thumbsInRow;
-    if (thumbCount < (int)mainVC.thumbViewsArray.count)
-        return thumbCount;
-    thumbArrayRect.size.width = thumbsInRow * (firstThumbRect.size.width + SEP);
-    thumbArrayRect.size.height = thumbsInCol * (firstThumbRect.size.height + SEP);
+//    if (thumbCount < (int)mainVC.thumbViewsArray.count)
+//        return thumbCount;
+    thumbArrayRect.size.width = thumbsInRow * (firstThumbRect.size.width + SEP) - SEP;
+    thumbArrayRect.size.height = thumbsInCol * (firstThumbRect.size.height + SEP) - SEP;
     return thumbCount;
 }
 
