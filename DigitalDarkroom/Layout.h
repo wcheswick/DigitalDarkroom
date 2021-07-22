@@ -65,9 +65,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong)   NSString *status, *shortStatus;
 
-- (void) proposeLayoutForSourceSize:(CGSize) size
-                        thumbsOn:(ThumbsPosition) position
-                       displayOption:(DisplayOptions) displayOption;
+// OLD:
+//- (void) proposeLayoutForSourceSize:(CGSize) size
+//                        thumbsOn:(ThumbsPosition) position
+//                       displayOption:(DisplayOptions) displayOption;
 
 - (BOOL) tryLayoutForSize:(CGSize) sourceSize
           thumbRows:(size_t) rowCount

@@ -1138,53 +1138,6 @@ static NSString * const imageOrientationName[] = {
     [self applyScreenLayout: 0];     // top one is best
 }
 
-- (void) simpleLayouts {
-    if (currentSourceImage) { // file or captured image input
-        if (isiPhone) {
-            if (isPortrait) {
-                [self tryLayoutForSourceSize:currentSourceImage.size
-                                     thumbsOn:Bottom
-                                displayOption:TightDisplay];
-            } else {
-                [self tryLayoutForSourceSize:currentSourceImage.size
-                                     thumbsOn:Right
-                                displayOption:TightDisplay];
-            }
-        } else {
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Bottom
-                            displayOption:TightDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Bottom
-                            displayOption:BestDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Right
-                            displayOption:BestDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Right
-                            displayOption:TightDisplay];
-        }
-    } else {
-        assert(LIVE);   // select camera setting for available area
-        assert(cameraController);
-        [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
-                                      threeD:CURRENT_SOURCE.isThreeD];
-        NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
-        DisplayOptions option = isiPhone ? TightDisplay : BestDisplay;
-        for (AVCaptureDeviceFormat *format in availableFormats) {
-            [self tryLayoutForFormat:format
-                                 thumbsOn:Bottom
-                            displayOption:option];
-            [self tryLayoutForFormat:format
-                                 thumbsOn:Right
-                            displayOption:option];
-       }
-    }
-}
-
-
 - (void) tryAllThumbLayouts {
     if (currentSourceImage) { // file or captured image input
         [self tryAllThumbsForSize:currentSourceImage.size format:nil];
@@ -1226,27 +1179,6 @@ static NSString * const imageOrientationName[] = {
         }
         [layouts addObject:trialLayout];
     }
-}
-
-- (void) tryLayoutForFormat:(AVCaptureDeviceFormat *) trialFormat
-                   thumbsOn:(ThumbsPosition) position
-                      displayOption:(DisplayOptions) option {
-    CGSize proposedSourceSize = [cameraController sizeForFormat:trialFormat];
-    Layout *layout = [self tryLayoutForSourceSize:proposedSourceSize
-                                         thumbsOn:position
-                                    displayOption:option];
-    layout.format = trialFormat;
-}
-
-- (Layout *) tryLayoutForSourceSize:(CGSize) sourceSize
-                        thumbsOn:(ThumbsPosition) position
-                           displayOption:(DisplayOptions) option {
-    layout = [[Layout alloc] init];
-    [layout proposeLayoutForSourceSize:sourceSize
-                               thumbsOn:position
-                          displayOption:option];
-    [layouts addObject:layout];
-    return layout;
 }
 
 - (void) adjustBarButtons {
@@ -2451,14 +2383,25 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     layoutValuesView.frame = transformView.frame;
     [containerView bringSubviewToFront:layoutValuesView];
     NSString *formatList = @"";
-    for (int i=0; i<6 && i<layouts.count; i++) {
-        if (i > 0)
+    long start = newLayoutIndex - 6;
+    long finish = newLayoutIndex + 6;
+    if (start < 0)
+        start = 0;
+    if (finish > layouts.count)
+        finish = layouts.count;
+    for (long i=start; i<finish; i++) {
+        if (i > start)
             formatList = [formatList stringByAppendingString:@"\n"];
         NSString *cursor = newLayoutIndex == i ? @">" : @" ";
         Layout *layout = layouts[i];
         NSString *line = [NSString stringWithFormat:@"%@%@", cursor, layout.status];
-        NSLog(@"%@", layout.status);
         formatList = [formatList stringByAppendingString:line];
+#ifdef DEBUG_LAYOUT
+        if (i == newLayoutIndex)
+            NSLog(@"%1ld-%@", i, layout.status);
+        else
+            NSLog(@"%1ld %@", i, layout.status);
+#endif
     }
     //    [layoutValuesView sizeToFit];
     layoutValuesView.text = formatList;
@@ -2524,5 +2467,75 @@ int startParam;
     nextSourceIndex = nextIndex;
     [self->taskCtrl idleForReconfiguration];
 }
+
+#ifdef OLD
+- (void) simpleLayouts {
+    if (currentSourceImage) { // file or captured image input
+        if (isiPhone) {
+            if (isPortrait) {
+                [self tryLayoutForSourceSize:currentSourceImage.size
+                                     thumbsOn:Bottom
+                                displayOption:TightDisplay];
+            } else {
+                [self tryLayoutForSourceSize:currentSourceImage.size
+                                     thumbsOn:Right
+                                displayOption:TightDisplay];
+            }
+        } else {
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Bottom
+                            displayOption:TightDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Bottom
+                            displayOption:BestDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Right
+                            displayOption:BestDisplay];
+            [self tryLayoutForSourceSize:currentSourceImage.size
+                                 thumbsOn:Right
+                            displayOption:TightDisplay];
+        }
+    } else {
+        assert(LIVE);   // select camera setting for available area
+        assert(cameraController);
+        [cameraController updateOrientationTo:deviceOrientation];
+        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
+                                      threeD:CURRENT_SOURCE.isThreeD];
+        NSArray *availableFormats = [cameraController
+                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
+        DisplayOptions option = isiPhone ? TightDisplay : BestDisplay;
+        for (AVCaptureDeviceFormat *format in availableFormats) {
+            [self tryLayoutForFormat:format
+                                 thumbsOn:Bottom
+                            displayOption:option];
+            [self tryLayoutForFormat:format
+                                 thumbsOn:Right
+                            displayOption:option];
+       }
+    }
+}
+
+- (void) tryLayoutForFormat:(AVCaptureDeviceFormat *) trialFormat
+                   thumbsOn:(ThumbsPosition) position
+                      displayOption:(DisplayOptions) option {
+    CGSize proposedSourceSize = [cameraController sizeForFormat:trialFormat];
+    Layout *layout = [self tryLayoutForSourceSize:proposedSourceSize
+                                         thumbsOn:position
+                                    displayOption:option];
+    layout.format = trialFormat;
+}
+
+- (Layout *) tryLayoutForSourceSize:(CGSize) sourceSize
+                        thumbsOn:(ThumbsPosition) position
+                           displayOption:(DisplayOptions) option {
+    layout = [[Layout alloc] init];
+    [layout proposeLayoutForSourceSize:sourceSize
+                               thumbsOn:position
+                          displayOption:option];
+    [layouts addObject:layout];
+    return layout;
+}
+
+#endif
 
 @end

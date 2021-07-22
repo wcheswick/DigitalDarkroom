@@ -196,16 +196,26 @@ NSString * __nullable displayOptionNames[] = {
               round(thumbFrac*100.0)
               ];
 #endif
-    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu",
-                       trunc(100.0*score - 0.1),
+    // the use of trunc here is to make 100% -> 99%, saving space in the tight display
+    int displayWPct = trunc(100.0*(displayRect.size.width/mainVC.containerView.frame.size.width) - 0.1);
+    int displayHPct = trunc(100.0*(displayRect.size.height/mainVC.containerView.frame.size.height) - 0.1);
+    
+    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu  %2d %2d",
+                       trunc(100.0*score),
                        trunc(100.0*thumbScore - 0.1),
                        trunc(100.0*displayScore - 0.1),
                        trunc(100.0*scaleScore - 0.1),
-                       rowCount, columnCount
+                       rowCount, columnCount,
+                       displayWPct, displayHPct
                        ];
     status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%@",
               displayRect.size.width, displayRect.size.height, scale, stats];
     shortStatus = stats;
+
+#define ASPECT_DIFF_OK  5.0   // percent
+    float displayAspect = displayRect.size.width / displayRect.size.height;
+    float aspectDiffPct = 100*fabsf(aspectRatio - displayAspect)/aspectRatio;
+    assert(aspectDiffPct < ASPECT_DIFF_OK); // must be within 3%
 
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
     assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
