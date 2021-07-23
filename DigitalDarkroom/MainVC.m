@@ -1157,6 +1157,8 @@ static NSString * const imageOrientationName[] = {
                         thumbColumns:thumbColumns]) {
             break;  // can't be done
         }
+        if (!trialLayout.score)
+            continue;
         [layouts addObject:trialLayout];
     }
     
@@ -1169,6 +1171,8 @@ static NSString * const imageOrientationName[] = {
                         thumbColumns:0]) {
             break;  // can't be done
         }
+        if (!trialLayout.score)
+            continue;
         [layouts addObject:trialLayout];
     }
 }
@@ -1384,16 +1388,8 @@ static NSString * const imageOrientationName[] = {
 // pause/unpause video
 - (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
     assert(IS_CAMERA(CURRENT_SOURCE));
-    runningButton.selected = !runningButton.selected;   // selected means paused
-    [runningButton setNeedsDisplay];
-    if (!live) {
-        currentSourceImage = previousSourceImage;
-    } else {
-        [self liveOn:YES];
-    }
-    [self adjustControls];
+    [self liveOn:!live];
 }
-
 
 - (void) liveOn:(BOOL) on {
     live = on;
@@ -1408,11 +1404,14 @@ static NSString * const imageOrientationName[] = {
                            forState:UIControlStateNormal];
     } else {
         [cameraController stopCamera];
+        currentSourceImage = previousSourceImage;
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
 
     }
+    [runningButton setNeedsDisplay];
+    [self adjustControls];
 }
 
 // tapping transform presents or clears the controls

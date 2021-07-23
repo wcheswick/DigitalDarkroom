@@ -218,7 +218,6 @@ NSString * __nullable displayOptionNames[] = {
     float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
     float heightFrac = displayRect.size.height / mainVC.containerView.frame.size.height;
     if (widthFrac < 0.25) {
-        NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
         score = displayScore = 0;
         return NO;
     } else {
@@ -559,8 +558,7 @@ NSString * __nullable displayOptionNames[] = {
 
     float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
     if (widthFrac < 0.25) {
-        NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
-        displayScore = 0;
+        score = displayScore = 0;
     }
     
     assert(thumbScore >= 0);
