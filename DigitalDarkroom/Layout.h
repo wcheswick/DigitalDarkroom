@@ -71,8 +71,8 @@ NS_ASSUME_NONNULL_BEGIN
 //                       displayOption:(DisplayOptions) displayOption;
 
 - (BOOL) tryLayoutForSize:(CGSize) sourceSize
-          thumbRows:(size_t) rowCount
-       thumbColumns:(size_t) columnCount;
+          thumbRows:(int) rowCount
+       thumbColumns:(int) columnCount;
 
 - (NSComparisonResult) compare:(Layout *)layout;
 + (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size;

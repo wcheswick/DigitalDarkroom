@@ -95,11 +95,20 @@ NSString * __nullable displayOptionNames[] = {
 // then the score is not computed.
 
 - (BOOL) tryLayoutForSize:(CGSize) sourceSize
-          thumbRows:(size_t) rowCount
-       thumbColumns:(size_t) columnCount {
+          thumbRows:(int) rowsWanted
+       thumbColumns:(int) columnsWanted {
     int thumbsShown;
     
-    assert(rowCount == 0 || columnCount == 0);  // for now
+    if (rowsWanted == 0 && columnsWanted == 0)
+        thumbsPosition = None;
+    else if (rowsWanted == 0 && columnsWanted > 0)
+        thumbsPosition = Right;
+    else if (rowsWanted > 0 && columnsWanted == 0)
+        thumbsPosition = Bottom;
+    else
+        thumbsPosition = Both;  // not implemented
+    
+    assert(thumbsPosition != None);  // for now
     
     aspectRatio = sourceSize.width / sourceSize.height;
 
@@ -113,8 +122,8 @@ NSString * __nullable displayOptionNames[] = {
     firstThumbRect = thumbImageRect;
     firstThumbRect.size.height += THUMB_LABEL_H;
 
-    CGFloat rightThumbWidthNeeded = columnCount * (firstThumbRect.size.width + SEP);
-    CGFloat bottomThumbHeightNeeded = rowCount * firstThumbRect.size.height + SEP;
+    CGFloat rightThumbWidthNeeded = [self widthForColumns:columnsWanted];
+    CGFloat bottomThumbHeightNeeded = [self heightForRows:rowsWanted];
 
     displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
     displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded;
@@ -126,14 +135,39 @@ NSString * __nullable displayOptionNames[] = {
     [self placeExecuteRectWithSqueeze:YES];
     thumbArrayRect = CGRectZero;
 
-    if (columnCount && !rowCount) {  // nothing underneath at the moment
+    if (columnsWanted && !rowsWanted) {  // nothing underneath at the moment
         thumbsShown = [self placeThumbsOnRight];
-    } else if (!columnCount && rowCount) {
+    } else if (!columnsWanted && rowsWanted) {
         thumbsShown = [self placeThumbsUnderneath];
-    } else if (columnCount && rowCount) {
+    } else if (columnsWanted && rowsWanted) {
         assert(NO); // both places, not yet
     } else
         thumbsShown = [self placeThumbsUnderneath];
+
+    // after placing the thumbs, the displayrect may be trimmed.  Find the
+    // number of thumb rows/columns actually used, and apply penalty for
+    // shortages.
+    
+    switch (thumbsPosition) {
+        case Right: {
+            int columnsUsed = [self columnsInThumbArray];
+            if (columnsUsed > columnsWanted)
+                thumbScore = 0;
+            else
+                thumbScore = (float)columnsUsed/(float)columnsWanted;
+            break;
+        }
+        case Bottom: {
+            int rowsUsed = [self rowsInThumbArray];
+            if (rowsUsed > rowsWanted)
+                thumbScore = 0;
+            else
+                thumbScore = (float)rowsUsed/(float)rowsWanted;
+            break;
+        }
+        default:
+            break;  // XXX stub
+    }
 
     transformSize = displayRect.size;
     if (scale == SCALE_UNINITIALIZED)
@@ -149,16 +183,22 @@ NSString * __nullable displayOptionNames[] = {
     if (scale == 1.0)
         scaleScore = 1.0;
     else if (scale > 1.0)
-        scaleScore = 0.6;   // expanding the image
-    else
-        scaleScore = 0.99;   // cost of scaling, which shouldn't be a thing if fixed image
+        scaleScore = 0.9;   // expanding the image
+    else {
+        // reducing size isn't a big deal, but we want some penalty for unnecessary reduction
+        // 0.8 is the lowest value
+        // XXX scaling shouldn't be a factor for fixed images
+        scaleScore = 0.8 + 0.2*scale;
+    }
 
     if (wastedThumbs >= 0) {
         float wastedPenalty = pow(0.999, wastedThumbs);
-        thumbScore = wastedPenalty;  // slight penalty for wasted space
-    } else {
+        thumbScore *= wastedPenalty;  // slight penalty for wasted space
+    }
+#ifdef MAYBE
+    else {
         float maxThumbScore;
-        switch (columnCount) {
+        switch (columnsWanted) {
             case 0:
             case 1:
                 maxThumbScore = 0.4;
@@ -171,14 +211,16 @@ NSString * __nullable displayOptionNames[] = {
         }
         thumbScore = pow(maxThumbScore, 1.0 - thumbFrac);
     }
-
+#endif
+    
     displayScore = 1.0; // for now
     
     float widthFrac = displayRect.size.width / mainVC.containerView.frame.size.width;
     float heightFrac = displayRect.size.height / mainVC.containerView.frame.size.height;
     if (widthFrac < 0.25) {
         NSLog(@"LLLL display too skinny: %0.5f", widthFrac);
-        displayScore = 0;
+        score = displayScore = 0;
+        return NO;
     } else {
         displayScore = MAX(widthFrac, heightFrac);
     }
@@ -200,16 +242,17 @@ NSString * __nullable displayOptionNames[] = {
     int displayWPct = trunc(100.0*(displayRect.size.width/mainVC.containerView.frame.size.width) - 0.1);
     int displayHPct = trunc(100.0*(displayRect.size.height/mainVC.containerView.frame.size.height) - 0.1);
     
-    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1zu %1zu  %2d %2d",
+    NSString *stats = [NSString stringWithFormat:@"%2.0f  %2.0f %2.0f %2.0f  %1d %1d  %2d %2d",
                        trunc(100.0*score),
-                       trunc(100.0*thumbScore - 0.1),
                        trunc(100.0*displayScore - 0.1),
+                       trunc(100.0*thumbScore - 0.1),
                        trunc(100.0*scaleScore - 0.1),
-                       rowCount, columnCount,
+                       rowsWanted, columnsWanted,
                        displayWPct, displayHPct
                        ];
-    status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%@",
-              displayRect.size.width, displayRect.size.height, scale, stats];
+    status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%@\t%.0fx%.0f",
+              displayRect.size.width, displayRect.size.height, scale, stats,
+              displayRect.size.width, displayRect.size.height];
     shortStatus = stats;
 
 #define ASPECT_DIFF_OK  5.0   // percent
@@ -223,6 +266,22 @@ NSString * __nullable displayOptionNames[] = {
     assert(RIGHT(executeRect) <= mainVC.containerView.frame.size.width);
 
     return YES;
+}
+
+- (CGFloat) widthForColumns:(size_t) nc {
+    return nc * (firstThumbRect.size.width + SEP);
+}
+
+- (CGFloat) heightForRows:(size_t) nr {
+    return nr * firstThumbRect.size.height + SEP;
+}
+
+- (int) columnsInThumbArray {
+    return trunc(thumbArrayRect.size.width / (firstThumbRect.size.width + SEP) + 0.1);
+}
+
+- (int) rowsInThumbArray {
+    return trunc(thumbArrayRect.size.height / (firstThumbRect.size.height + SEP) + 0.1);
 }
 
 - (int) placeThumbsUnderneath {

@@ -105,8 +105,6 @@
 
 #define SOURCE(i)   ((InputSource *)inputSources[i])
 #define CURRENT_SOURCE  SOURCE(currentSourceIndex)
-#define PAUSED      (IS_CAMERA(CURRENT_SOURCE) && !runningButton.enabled)
-#define LIVE        ((currentSourceIndex != NO_SOURCE) && !PAUSED)
 
 typedef enum {
     TransformTable,
@@ -155,11 +153,10 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIView *flashView;
 @property (nonatomic, strong)   UILabel *layoutValuesView;
 
-@property (assign)              BOOL showControls;
+@property (assign)              BOOL showControls, live;
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
 
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
-@property (nonatomic, strong)   UILabel *pausedLabel;       // if camera capture is paused. Use .hidden as flag
 @property (nonatomic, strong)   UIButton *runningButton, *snapButton;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
@@ -230,7 +227,7 @@ MainVC *mainVC = nil;
 @synthesize depthSwitch, flipBarButton, sourceBarButton;
 @synthesize transformView;
 @synthesize overlayDebugStatus;
-@synthesize pausedLabel, runningButton, snapButton;
+@synthesize runningButton, snapButton;
 @synthesize thumbViewsArray, thumbsView;
 @synthesize layouts, layoutIndex;
 @synthesize helpNavVC;
@@ -258,7 +255,7 @@ MainVC *mainVC = nil;
 @synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
 @synthesize currentSourceImage, previousSourceImage;
-
+@synthesize live;
 @synthesize cameraCount;
 
 @synthesize cameraController;
@@ -809,44 +806,37 @@ static NSString * const imageOrientationName[] = {
     layoutValuesView.numberOfLines = 0;
     layoutValuesView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.5];
     [containerView addSubview:layoutValuesView];
-    
-    pausedLabel = [[UILabel alloc]
-                   initWithFrame:CGRectMake(0, SEP,
-                                            LATER, PAUSE_FONT_SIZE+2*SEP)];
-    pausedLabel.text = @"** PAUSED **";
-    pausedLabel.textColor = [UIColor blackColor];
-    pausedLabel.font = [UIFont boldSystemFontOfSize:PAUSE_FONT_SIZE];
-    pausedLabel.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
-    pausedLabel.textAlignment = NSTextAlignmentCenter;
-    pausedLabel.hidden = YES;   // assume not paused video
-    [transformView addSubview:pausedLabel];
-    [transformView bringSubviewToFront:pausedLabel];
 
-    
 //#define FIT_TO_BUTTON(si)   [self fitImage:[UIImage systemImageNamed:si] \
 //            toSize:CGSizeMake(CONTROL_BUTTON_SIZE,CONTROL_BUTTON_SIZE) centered:YES]]
 
     runningButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     runningButton.frame = CGRectMake(LATER, LATER,
-                                         CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
+                                         CONTROL_BUTTON_SIZE*4, CONTROL_BUTTON_SIZE*4);
+#ifdef OLD
     runningButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
-    runningButton.imageView.contentScaleFactor = 4.0;
-    runningButton.backgroundColor = [UIColor clearColor];
-    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.circle"]
-                                        toSize:runningButton.frame.size centered:YES]    // pause.circle
+//    runningButton.imageView.contentScaleFactor = 4.0;
+    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
+                                        toSize:runningButton.frame.size centered:YES]
                        forState:UIControlStateSelected];
-    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"largecircle.fill.circle"]
+    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.fill"]
                                         toSize:runningButton.frame.size centered:YES]
                        forState:UIControlStateNormal];
-    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"video.slash"]
-                                        toSize:runningButton.frame.size centered:YES]
-                       forState:UIControlStateDisabled];
+    [runningButton setTintColor:[UIColor whiteColor]];
+    [runningButton setTitle:UNICODE_PAUSE forState:UIControlStateNormal];
+    [runningButton setTitle:@"▶️" forState:UIControlStateSelected];
+    runningButton.titleLabel.font = [UIFont boldSystemFontOfSize:CONTROL_BUTTON_SIZE-6];
+    runningButton.titleLabel.textAlignment = NSTextAlignmentCenter;
+    runningButton.enabled = YES;
+#endif
     [runningButton addTarget:self
                           action:@selector(togglePauseResume:)
                 forControlEvents:UIControlEventTouchUpInside];
-    runningButton.enabled = YES;
+    [runningButton setTintColor:[UIColor whiteColor]];
+    runningButton.backgroundColor = [UIColor colorWithWhite:0.2 alpha:0.5];
+    runningButton.layer.cornerRadius = CONTROL_BUTTON_SIZE/2.0;
     [transformView addSubview:runningButton];
-    
+
     snapButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     snapButton.frame = CGRectMake(LATER, LATER,
                                          CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
@@ -890,10 +880,18 @@ static NSString * const imageOrientationName[] = {
     executeView.text = @"";
     executeView.opaque = YES;
 
+    // select overlaied stuff
     UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
                                    initWithTarget:self action:@selector(didTapTransformView:)];
     [transformTap setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:transformTap];
+
+    // same as tap, but with debugging stuff.
+    UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
+                                                     initWithTarget:self action:@selector(didLongPressTransformView:)];
+    longPressScreen.minimumPressDuration = 1.0;
+    [longPressScreen setNumberOfTouchesRequired:1];
+    [transformView addGestureRecognizer:longPressScreen];
 
     UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
                                          initWithTarget:self action:@selector(doUp:)];
@@ -904,11 +902,6 @@ static NSString * const imageOrientationName[] = {
                                          initWithTarget:self action:@selector(doDown:)];
     swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
     [transformView addGestureRecognizer:swipeDown];
-
-    UILongPressGestureRecognizer *longPressScreen = [[UILongPressGestureRecognizer alloc]
-                                                     initWithTarget:self action:@selector(doLongPress:)];
-    longPressScreen.minimumPressDuration = 1.0;
-    [transformView addGestureRecognizer:longPressScreen];
     
 #ifdef NOTHERE
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
@@ -1064,8 +1057,8 @@ static NSString * const imageOrientationName[] = {
     
     // close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
-        if (LIVE) {
-            [cameraController stopCamera];
+        if (live) {
+            [self liveOn:NO];
         }
 
         currentSourceIndex = nextSourceIndex;
@@ -1077,8 +1070,7 @@ static NSString * const imageOrientationName[] = {
             self.title = source.label;
 
         if (source.isCamera) {
-            previousSourceImage = nil;
-            currentSourceImage = nil;
+            [self liveOn:YES];
         } else {    // source is a file, it is our source image
             currentSourceImage = [UIImage imageNamed: source.imagePath];
         }
@@ -1142,8 +1134,8 @@ static NSString * const imageOrientationName[] = {
     if (currentSourceImage) { // file or captured image input
         [self tryAllThumbsForSize:currentSourceImage.size format:nil];
     } else {
-        assert(LIVE);   // select camera setting for available area
         assert(cameraController);
+        assert(live);   // select camera setting for available area
         [cameraController updateOrientationTo:deviceOrientation];
         [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
                                       threeD:CURRENT_SOURCE.isThreeD];
@@ -1156,7 +1148,7 @@ static NSString * const imageOrientationName[] = {
     }
 }
 - (void) tryAllThumbsForSize:(CGSize) size format:(AVCaptureDeviceFormat *)format {
-    for (size_t thumbColumns=2; ; thumbColumns++) {
+    for (int thumbColumns=2; ; thumbColumns++) {
         Layout *trialLayout = [[Layout alloc] init];
         if (format)
             trialLayout.format = format;
@@ -1168,7 +1160,7 @@ static NSString * const imageOrientationName[] = {
         [layouts addObject:trialLayout];
     }
     
-    for (size_t thumbRows=2; ; thumbRows++) {
+    for (int thumbRows=2; ; thumbRows++) {
         Layout *trialLayout = [[Layout alloc] init];
         if (format)
             trialLayout.format = format;
@@ -1391,40 +1383,58 @@ static NSString * const imageOrientationName[] = {
 
 // pause/unpause video
 - (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
-    runningButton.selected = !PAUSED;
-    if (PAUSED) {
+    assert(IS_CAMERA(CURRENT_SOURCE));
+    runningButton.selected = !runningButton.selected;   // selected means paused
+    [runningButton setNeedsDisplay];
+    if (!live) {
         currentSourceImage = previousSourceImage;
     } else {
-        [self goLive];
+        [self liveOn:YES];
     }
     [self adjustControls];
 }
 
-- (void) goLive {
-    currentSourceImage = nil;
-    previousSourceImage = nil;
-    pausedLabel.hidden = YES;
-    [pausedLabel setNeedsDisplay];
-    [taskCtrl idleForReconfiguration];
+
+- (void) liveOn:(BOOL) on {
+    live = on;
+    if (live) {
+        currentSourceImage = nil;
+        previousSourceImage = nil;
+        runningButton.selected = NO;
+        [runningButton setNeedsDisplay];
+        [taskCtrl idleForReconfiguration];
+        [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.fill"]
+                                            toSize:runningButton.frame.size centered:YES]
+                           forState:UIControlStateNormal];
+    } else {
+        [cameraController stopCamera];
+        [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
+                                            toSize:runningButton.frame.size centered:YES]
+                           forState:UIControlStateNormal];
+
+    }
 }
 
 // tapping transform presents or clears the controls
-- (IBAction) didTapTransformView:(UITapGestureRecognizer *)recognizer {
+- (IBAction) didTapTransformView:(UIGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded)
+        return;
     showControls = !showControls;
     [self adjustControls];
 }
 
+- (IBAction) didLongPressTransformView:(UIGestureRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded)
+        return;
+    layoutValuesView.hidden = !layoutValuesView.hidden;
+    [self didTapTransformView:recognizer];
+}
+
 - (void) adjustControls {
-    if (IS_CAMERA(CURRENT_SOURCE)) {
-        runningButton.enabled = YES;
-    } else {
-        runningButton.enabled = NO;
-    }
-    
+    runningButton.enabled = IS_CAMERA(CURRENT_SOURCE);
     runningButton.hidden = !showControls;
     snapButton.hidden = !showControls;
     [runningButton setNeedsDisplay];
-    [pausedLabel setNeedsDisplay];
 }
 
 - (void) adjustParamView {
@@ -1687,7 +1697,7 @@ static CGSize startingDisplaySize;
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
         didOutputDepthData:(AVDepthData *)rawDepthData
         timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
-    if (!pausedLabel.hidden)    // PAUSED displayed means no new images
+    if (!live)    // PAUSED displayed means no new images
         return;
     if (!cameraController.usingDepthCamera)
         return;
@@ -1760,7 +1770,7 @@ static CGSize startingDisplaySize;
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)captureConnection {
     frameCount++;
-    if (!pausedLabel.hidden)    // PAUSED displayed means no new images
+    if (!live)    // PAUSED displayed means no new images
         return;
     if (taskCtrl.reconfigurationNeeded)
         return;
@@ -2006,13 +2016,6 @@ UIImageOrientation lastOrientation;
     [self doSave];
 }
 
-- (IBAction) doLongPress:(UILongPressGestureRecognizer *)recognizer {
-    if (recognizer.state != UIGestureRecognizerStateBegan)
-        return;
-    layoutValuesView.hidden = !layoutValuesView.hidden;
-    [layoutValuesView setNeedsDisplay];
-}
-
 - (IBAction) doLeft:(UISwipeGestureRecognizer *)sender {
     NSLog(@"doLeft");
 #define PHOTO_APP_URL   @"photo-redirect://"
@@ -2041,8 +2044,8 @@ UIImageOrientation lastOrientation;
 }
 
 - (IBAction) processDepthSwitch:(UISwitch *)depthsw {
-    if (PAUSED)
-        [self goLive];
+    if (!live)
+        [self liveOn:YES];
     [self changeSourceTo:CURRENT_SOURCE.otherDepthIndex];
 }
 
@@ -2245,16 +2248,12 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     if (!IS_CAMERA(CURRENT_SOURCE))
         return;
     [cameraController startCamera];
-//    pausedLabel.hidden = YES;
-//    [pausedLabel setNeedsDisplay];
 }
 
 - (void) stopCamera {
     if (!IS_CAMERA(CURRENT_SOURCE))
         return;
     [cameraController stopCamera];
-//    pausedLabel.hidden = NO;
-//    [pausedLabel setNeedsDisplay];
 }
 
 - (void) set3D:(BOOL) enable {
@@ -2312,7 +2311,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     
     transformView.frame = layout.displayRect;
     [self positionControls];
-    SET_VIEW_WIDTH(pausedLabel, transformView.frame.size.width);
     thumbScrollView.frame = layout.thumbArrayRect;
     thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
     thumbScrollView.layer.borderWidth = 3.0;
@@ -2323,7 +2321,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-
 
 #ifdef NOTDEF
     NSLog(@"layout selected:");

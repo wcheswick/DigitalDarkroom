@@ -15,6 +15,7 @@ typedef enum {
     Bottom,
     Right,
     Both,
+    None,
 } ThumbsPosition;
 
 typedef enum {

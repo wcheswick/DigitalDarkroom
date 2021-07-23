@@ -25,7 +25,7 @@
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars
-#define UNICODE_PLAY    @"\u25B6"       // play triangle
+#define UNICODE_PLAY    @"\u25B6"   // play triangle
 
 #define USED(x) ((void)(x)) // to suppress "variable unused" messages
 
@@ -87,7 +87,7 @@ typedef long PixelIndex_t;
 
 #define EXECUTE_BORDER_W    2
 
-#define CONTROL_BUTTON_SIZE 70
+#define CONTROL_BUTTON_SIZE 50
 #define PARAM_VIEW_H    70
 
 #define EXECUTE_STATUS_W    30
