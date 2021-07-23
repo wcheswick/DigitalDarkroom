@@ -132,17 +132,21 @@ NSString * __nullable displayOptionNames[] = {
     
     displayRect.size = [Layout fitSize:sourceSize toSize:displayRect.size];
     displayRect.origin = CGPointZero;   // needs centering
-    [self placeExecuteRectWithSqueeze:YES];
     thumbArrayRect = CGRectZero;
 
     if (columnsWanted && !rowsWanted) {  // nothing underneath at the moment
+        [self placeExecuteRectWithSqueeze:NO];
         thumbsShown = [self placeThumbsOnRight];
     } else if (!columnsWanted && rowsWanted) {
+        [self placeExecuteRectWithSqueeze:YES];
         thumbsShown = [self placeThumbsUnderneath];
     } else if (columnsWanted && rowsWanted) {
+        [self placeExecuteRectWithSqueeze:YES];
         assert(NO); // both places, not yet
-    } else
+    } else {
+        [self placeExecuteRectWithSqueeze:YES];
         thumbsShown = [self placeThumbsUnderneath];
+    }
 
     // after placing the thumbs, the displayrect may be trimmed.  Find the
     // number of thumb rows/columns actually used, and apply penalty for
@@ -167,6 +171,15 @@ NSString * __nullable displayOptionNames[] = {
         }
         default:
             break;  // XXX stub
+    }
+    
+    // A bit of a penalty needed for fewer thumbs displayed, about 1 point per
+    // four missing.
+//    float thumbFracMissing = (float)thumbsShown/(float)mainVC.thumbViewsArray.count;
+    if (thumbScore) {
+        long thumbsMissing = mainVC.thumbViewsArray.count - thumbsShown;
+        if (thumbsMissing > 0)
+            thumbScore -= (thumbsMissing/2.0)/100.0;
     }
 
     transformSize = displayRect.size;
@@ -221,7 +234,10 @@ NSString * __nullable displayOptionNames[] = {
         score = displayScore = 0;
         return NO;
     } else {
-        displayScore = MAX(widthFrac, heightFrac);
+        if (widthFrac >= 0.55 && heightFrac >= 0.58)    // good enough
+            displayScore = 1.0;
+        else
+            displayScore = MAX(widthFrac, heightFrac);
     }
     
     assert(thumbScore >= 0);
@@ -320,7 +336,7 @@ NSString * __nullable displayOptionNames[] = {
 - (void) placeExecuteRectWithSqueeze:(BOOL) squeeze {
     executeRect.size.width = displayRect.size.width;
     executeRect.origin.x = displayRect.origin.x;
-    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height - BELOW(displayRect);
+    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height - BELOW(displayRect) - SEP;
     if (squeeze || spaceBelowDisplay < EXECUTE_FULL_H) {
         executeRect.origin.y = BELOW(displayRect);
         executeRect.size.height = EXECUTE_MIN_H;
@@ -328,7 +344,7 @@ NSString * __nullable displayOptionNames[] = {
         executeOverlayOK = YES;
     } else {
         executeRect.origin.y = BELOW(displayRect) + SEP;
-        executeRect.size.height = MIN(spaceBelowDisplay, EXECUTE_FULL_H);
+        executeRect.size.height = spaceBelowDisplay;
         executeIsTight = NO;
         executeOverlayOK = NO;
     }
