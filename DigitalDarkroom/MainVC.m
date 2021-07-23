@@ -868,7 +868,6 @@ static NSString * const imageOrientationName[] = {
           forControlEvents:UIControlEventValueChanged];
     [paramView addSubview:paramSlider];
     [paramView bringSubviewToFront:paramSlider];
-    
     [transformView bringSubviewToFront:paramView];
 
     executeView = [[UITextView alloc]
@@ -1281,6 +1280,7 @@ static NSString * const imageOrientationName[] = {
     [self doTransformsOn:currentSourceImage];
 //    [self updateOverlayView];
     [self updateExecuteView];
+    [self adjustParamView];
     [self adjustBarButtons];
 }
 
@@ -1436,19 +1436,6 @@ static NSString * const imageOrientationName[] = {
     [runningButton setNeedsDisplay];
 }
 
-- (void) adjustParamView {
-    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
-    if (!lastTransform || !lastTransform.hasParameters) {
-        paramView.hidden = YES;
-        return;
-    }
-    paramView.hidden = NO;
-    paramLabel.text = lastTransform.paramName;
-    paramSlider.minimumValue = lastTransform.low;
-    paramSlider.maximumValue = lastTransform.high;
-    paramSlider.value = lastTransform.value;
-}
-
 - (void) positionControls {
     CGRect f = transformView.frame;
     f.origin.x = f.size.width - CONTROL_BUTTON_SIZE - SEP;
@@ -1462,6 +1449,7 @@ static NSString * const imageOrientationName[] = {
     SET_VIEW_WIDTH(paramView, transformView.frame.size.width);
     SET_VIEW_Y(paramView, transformView.frame.size.height - paramView.frame.size.height);
     SET_VIEW_WIDTH(paramSlider, transformView.frame.size.width);
+    [self adjustParamView];
 }
 
 - (IBAction)doParamSlider:(id)slider {
@@ -1474,6 +1462,19 @@ static NSString * const imageOrientationName[] = {
         [self adjustParamView];
         [self updateExecuteView];
     }
+}
+
+- (void) adjustParamView {
+    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
+    if (!lastTransform || !lastTransform.hasParameters) {
+        paramView.hidden = YES;
+        return;
+    }
+    paramView.hidden = NO;
+    paramLabel.text = lastTransform.paramName;
+    paramSlider.minimumValue = lastTransform.low;
+    paramSlider.maximumValue = lastTransform.high;
+    paramSlider.value = lastTransform.value;
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -1621,46 +1622,6 @@ static CGSize startingDisplaySize;
     UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
     UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
 }
-
-#ifdef NOTYET
-- (void) adjustDisplayFromSize:(CGSize) startingSize toScale:(float)newScale {
-    // constrain the size between smallest display (thumb size) to size of the containerView.
-    if (layout.aspectRatio > 1.0) {
-        if (startingSize.height*newScale < MIN_DISPLAY_H)
-            newScale = MIN_DISPLAY_H/startingSize.height;
-        else if (startingSize.height*newScale > containerView.frame.size.height)
-            newScale = containerView.frame.size.height/startingSize.height;
-    } else {
-        if (startingSize.width*newScale < MIN_DISPLAY_W)
-            newScale = MIN_DISPLAY_W/startingSize.width;
-        else if (startingSize.width*newScale > containerView.frame.size.width)
-            newScale = containerView.frame.size.width/startingSize.width;
-    }
-    
-    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
-                                round(startingSize.height*newScale));
-    if (newSize.width == layout.displayRect.size.width &&
-        newSize.height == layout.displayRect.size.height)
-        return;     // same size, nothing to do
-
-    [self adjustDisplayToLayout:newSize];
-}
-
-- (void) adjustDisplayToLayout:(CGSize) newSize {
-    [layout configureLayoutForDisplaySize:newSize];
-    transformView.frame = layout.displayRect;
-    overlayView.frame = layout.displayRect;
-    [self adjustOverlayView];
-    executeView.frame = layout.executeRect;
-
-    thumbScrollView.frame = layout.thumbArrayRect;
-    thumbsView.frame = CGRectMake(0, 0,
-                                      thumbScrollView.frame.size.width,
-                                      thumbScrollView.frame.size.height);
-    [self layoutThumbs: layout];
-    [self updateExecuteView];
-}
-#endif
 
 - (UIImage *)fitImage:(UIImage *)image
                toSize:(CGSize)size
@@ -2320,7 +2281,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     thumbsView.frame = CGRectMake(0, 0,
                                       thumbScrollView.frame.size.width,
                                       thumbScrollView.frame.size.height);
-
 #ifdef NOTDEF
     NSLog(@"layout selected:");
 
@@ -2412,6 +2372,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     
     [self updateExecuteView];
     [self adjustBarButtons];
+    [self adjustParamView];
     [taskCtrl enableTasks];
     if (currentSourceImage)
         [self doTransformsOn:currentSourceImage];
@@ -2531,6 +2492,46 @@ int startParam;
     [layouts addObject:layout];
     return layout;
 }
+
+#ifdef NOTYET
+- (void) adjustDisplayFromSize:(CGSize) startingSize toScale:(float)newScale {
+    // constrain the size between smallest display (thumb size) to size of the containerView.
+    if (layout.aspectRatio > 1.0) {
+        if (startingSize.height*newScale < MIN_DISPLAY_H)
+            newScale = MIN_DISPLAY_H/startingSize.height;
+        else if (startingSize.height*newScale > containerView.frame.size.height)
+            newScale = containerView.frame.size.height/startingSize.height;
+    } else {
+        if (startingSize.width*newScale < MIN_DISPLAY_W)
+            newScale = MIN_DISPLAY_W/startingSize.width;
+        else if (startingSize.width*newScale > containerView.frame.size.width)
+            newScale = containerView.frame.size.width/startingSize.width;
+    }
+    
+    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
+                                round(startingSize.height*newScale));
+    if (newSize.width == layout.displayRect.size.width &&
+        newSize.height == layout.displayRect.size.height)
+        return;     // same size, nothing to do
+
+    [self adjustDisplayToLayout:newSize];
+}
+
+- (void) adjustDisplayToLayout:(CGSize) newSize {
+    [layout configureLayoutForDisplaySize:newSize];
+    transformView.frame = layout.displayRect;
+    overlayView.frame = layout.displayRect;
+    [self adjustOverlayView];
+    executeView.frame = layout.executeRect;
+
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbsView.frame = CGRectMake(0, 0,
+                                      thumbScrollView.frame.size.width,
+                                      thumbScrollView.frame.size.height);
+    [self layoutThumbs: layout];
+    [self updateExecuteView];
+}
+#endif
 
 #endif
 
