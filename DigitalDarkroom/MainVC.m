@@ -786,6 +786,7 @@ static NSString * const imageOrientationName[] = {
     
     transformView = [[UIImageView alloc] init];
     transformView.backgroundColor = NAVY_BLUE;
+    transformView.clipsToBounds = YES;
     transformView.userInteractionEnabled = YES;
 
     flashView = [[UIView alloc] init];  // used to show a flash on the screen
@@ -852,24 +853,28 @@ static NSString * const imageOrientationName[] = {
     [transformView addSubview:snapButton];
     [transformView bringSubviewToFront:snapButton];
 
-    paramView = [[UIView alloc] initWithFrame:CGRectMake(0, LATER, LATER, PARAM_VIEW_H)];
+    paramView = [[UIView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     paramView.backgroundColor = [UIColor colorWithRed:0.5 green:1.0 blue:0.0 alpha:0.5];
     paramView.hidden = YES;
+    paramView.opaque = NO;
+    paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.8];
     [transformView addSubview:paramView];
-    
-    paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(LATER, 0, LATER, PARAM_VIEW_H)];
+
+    paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_LABEL_H)];
     paramLabel.textAlignment = NSTextAlignmentCenter;
-    paramLabel.font = [UIFont boldSystemFontOfSize:PARAM_VIEW_H - 4];
+    paramLabel.font = [UIFont boldSystemFontOfSize:PARAM_LABEL_FONT_SIZE];
+    paramLabel.textColor = [UIColor blackColor];
     [paramView addSubview:paramLabel];
-    
-    paramSlider = [[UISlider alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_VIEW_H)];
+
+    paramSlider = [[UISlider alloc] initWithFrame:CGRectMake(0, BELOW(paramLabel.frame) + SEP, LATER, PARAM_SLIDER_H)];
     paramSlider.continuous = YES;
     [paramSlider addTarget:self action:@selector(doParamSlider:)
           forControlEvents:UIControlEventValueChanged];
     [paramView addSubview:paramSlider];
-    [paramView bringSubviewToFront:paramSlider];
-    [transformView bringSubviewToFront:paramView];
 
+    SET_VIEW_HEIGHT(paramView, BELOW(paramSlider.frame) + SEP);
+    SET_VIEW_Y(paramView, BELOW(transformView.frame));    // off screen for starters
+    
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
@@ -1280,7 +1285,25 @@ static NSString * const imageOrientationName[] = {
     [self doTransformsOn:currentSourceImage];
 //    [self updateOverlayView];
     [self updateExecuteView];
-    [self adjustParamView];
+    BOOL oldParameters = lastTransform && lastTransform.hasParameters;
+    BOOL newParameters = tappedTransform && tappedTransform.hasParameters;
+    if (oldParameters) {
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            SET_VIEW_Y(self->paramView, BELOW(self->transformView.frame));
+        } completion:^(BOOL finished) {
+            if (newParameters) {
+                [UIView animateWithDuration:0.5 animations:^(void) {
+                    SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
+                    [self adjustParamView];
+                }];
+            }
+        }];
+    } else if (newParameters) {
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
+            [self adjustParamView];
+        }];
+    }
     [self adjustBarButtons];
 }
 
@@ -1447,19 +1470,22 @@ static NSString * const imageOrientationName[] = {
     runningButton.frame = f;
     
     SET_VIEW_WIDTH(paramView, transformView.frame.size.width);
-    SET_VIEW_Y(paramView, transformView.frame.size.height - paramView.frame.size.height);
-    SET_VIEW_WIDTH(paramSlider, transformView.frame.size.width);
+    SET_VIEW_Y(paramView, BELOW(transformView.frame));  // off screen
+    SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
+    SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
     [self adjustParamView];
 }
 
-- (IBAction)doParamSlider:(id)slider {
+- (IBAction)doParamSlider:(UISlider *)slider {
     Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
+    NSLog(@"slider value %.1f", slider.value);
+    [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
         [self doTransformsOn:previousSourceImage];
-        [self adjustParamView];
+        [self updateParamViewFor: lastTransform];
         [self updateExecuteView];
     }
 }
@@ -1471,10 +1497,21 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     paramView.hidden = NO;
-    paramLabel.text = lastTransform.paramName;
+    NSString *lowValue = [NSString stringWithFormat:lastTransform.lowValueFormat, lastTransform.low];
+    NSString *highValue = [NSString stringWithFormat:lastTransform.highValueFormat, lastTransform.high];
     paramSlider.minimumValue = lastTransform.low;
     paramSlider.maximumValue = lastTransform.high;
     paramSlider.value = lastTransform.value;
+    [self updateParamViewFor: lastTransform];
+    [transformView bringSubviewToFront:paramView];
+}
+
+- (void) updateParamViewFor:(Transform *)transform {
+     paramLabel.text = [NSString stringWithFormat:@"%@  %@: %.0f",
+                       transform.name,
+                       transform.paramName,
+                       paramSlider.value];
+    [paramLabel setNeedsDisplay];
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {

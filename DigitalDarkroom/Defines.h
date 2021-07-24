@@ -88,7 +88,11 @@ typedef long PixelIndex_t;
 #define EXECUTE_BORDER_W    2
 
 #define CONTROL_BUTTON_SIZE 50
-#define PARAM_VIEW_H    70
+
+#define PARAM_LABEL_H   18
+#define PARAM_LABEL_FONT_SIZE   (PARAM_LABEL_H)
+#define PARAM_SLIDER_H  (40)
+#define PARAM_VIEW_H    (SEP + PARAM_LABEL_H + SEP + PARAM_SLIDER_H + SEP)
 
 #define EXECUTE_STATUS_W    30
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)

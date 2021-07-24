@@ -1411,7 +1411,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.value = 2;
     lastTransform.high = 10;
     lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Zoom amount";
+    lastTransform.paramName = @"amount";
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Wavy shower"
