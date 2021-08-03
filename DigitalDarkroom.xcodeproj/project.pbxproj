@@ -15,6 +15,7 @@
 		FB625E1E260B9DFA008636FC /* UndebuggedTransforms.m in Sources */ = {isa = PBXBuildFile; fileRef = FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */; };
 		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
 		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
+		FB97DAF226B1915A0025EE56 /* PopoverMenuVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB97DAF126B1915A0025EE56 /* PopoverMenuVC.m */; };
 		FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9BBADA260A32A70026C4E4 /* HelpVC.m */; };
 		FB9BBAE0260A366B0026C4E4 /* help.html in Resources */ = {isa = PBXBuildFile; fileRef = FB9BBADF260A366B0026C4E4 /* help.html */; };
 		FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */ = {isa = PBXBuildFile; fileRef = FB9E2A752592267C00BD7E1E /* TaskGroup.m */; };
@@ -72,6 +73,8 @@
 		FB79D710258A67FC00DEAD6A /* Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Task.h; sourceTree = "<group>"; };
 		FB79D711258A67FC00DEAD6A /* Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Task.m; sourceTree = "<group>"; };
 		FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PopoverMenuVC.h; sourceTree = "<group>"; };
+		FB97DAF126B1915A0025EE56 /* PopoverMenuVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PopoverMenuVC.m; sourceTree = "<group>"; };
 		FB9BBAD9260A32A70026C4E4 /* HelpVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HelpVC.h; sourceTree = "<group>"; };
 		FB9BBADA260A32A70026C4E4 /* HelpVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HelpVC.m; sourceTree = "<group>"; };
 		FB9BBADF260A366B0026C4E4 /* help.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = help.html; sourceTree = "<group>"; };
@@ -231,6 +234,8 @@
 				FBB16D63232EB49B0026F789 /* Defines.h */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */,
+				FB97DAF126B1915A0025EE56 /* PopoverMenuVC.m */,
 				FB9BBAD9260A32A70026C4E4 /* HelpVC.h */,
 				FB9BBADA260A32A70026C4E4 /* HelpVC.m */,
 				FB56160D2654620500E5BE54 /* ThumbView.h */,
@@ -368,6 +373,7 @@
 				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
 				FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */,
 				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
+				FB97DAF226B1915A0025EE56 /* PopoverMenuVC.m in Sources */,
 				FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */,
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
 				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,

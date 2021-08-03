@@ -27,12 +27,12 @@ typedef enum {
 
 @interface MainVC : UIViewController
 <UICollectionViewDelegate,
-    UICollectionViewDataSource,
-    UICollectionViewDelegateFlowLayout,
-    UIScrollViewDelegate,
-    UIPopoverPresentationControllerDelegate,
-    AVCaptureVideoDataOutputSampleBufferDelegate,
-    AVCaptureDepthDataOutputDelegate> {
+UICollectionViewDataSource,
+UICollectionViewDelegateFlowLayout,
+UIScrollViewDelegate,
+AVCaptureVideoDataOutputSampleBufferDelegate,
+UIPopoverPresentationControllerDelegate,
+AVCaptureDepthDataOutputDelegate> {
     // layout looks at these:
     BOOL isPortrait, isiPhone;
     UIView *containerView;
