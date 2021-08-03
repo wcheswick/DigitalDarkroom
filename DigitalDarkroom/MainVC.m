@@ -770,7 +770,6 @@ static NSString * const imageOrientationName[] = {
                                                          style:UIBarButtonItemStylePlain
                                                         target:self
                                                         action:@selector(doCamera:)];
-    [self setupCameras];
     
 // XXXXXX    [self adjustPlusTo:NoPlus];
     
@@ -1093,6 +1092,7 @@ static NSString * const imageOrientationName[] = {
             self.title = source.label;
 
         if (IS_CAMERA(source)) {
+            cameraBarButtonItem.image = [self cameraImageForCamera:source.cameraIndex];
             [self liveOn:YES];
         } else {    // source is a file, it is our source image
             currentSourceImage = [UIImage imageNamed: source.imagePath];
@@ -1354,14 +1354,10 @@ static NSString * const imageOrientationName[] = {
     if (newPlusMode == POPMENU_ABORTED)
         return;
     NSLog(@"++++ adjustPlusTo: %d", newPlusMode);
-    plusBarButtonItem.image = [UIImage systemImageNamed:plusImageNames[newPlusMode]];
+    UIImage *newImage = [UIImage systemImageNamed:plusImageNames[newPlusMode]];
+    assert(newImage);
+    plusBarButtonItem.image = newImage;
     plusMode = newPlusMode;
-}
-
-- (void) setupCameras {
-    cameraBarButtonItem.enabled = [cameraController cameraAvailableOnFront:YES threeD:NO] ||
-        [cameraController cameraAvailableOnFront:NO threeD:NO];
-    cameraBarButtonItem.image = [UIImage systemImageNamed:@"video"];
 }
 
 - (IBAction) doCamera:(UIBarButtonItem *)caller {
@@ -1385,12 +1381,21 @@ static NSString * const imageOrientationName[] = {
     InputSource *cameraSource = [inputSources objectAtIndex:row];
     long cameraIndex = cameraSource.cameraIndex;
     cell.textLabel.text = possibleCameras[cameraIndex].name;
-    cell.highlighted = (currentSourceIndex == row);
+    if (currentSourceIndex == row) {
+        cell.accessoryType = UITableViewCellAccessoryCheckmark;
+        cell.highlighted = YES;
+    } else {
+        cell.accessoryType = UITableViewCellAccessoryNone;
+        cell.highlighted = NO;
+    }
     //    cell.textLabel.font = [UIFont systemFontOfSize:PLUS_ROW_H];
+    cell.imageView.image = [self cameraImageForCamera:row];
+#ifdef MAYBENOT
     UIImageView *accessImageView = [[UIImageView alloc] initWithImage:[self cameraImageForCamera:row]];
     accessImageView.contentMode = UIViewContentModeScaleAspectFit;
     accessImageView.frame = CGRectMake(0, 0, cell.frame.size.height, cell.frame.size.width);
     cell.accessoryView = accessImageView;
+#endif
 }
 
 - (UIImage *) cameraImageForCamera:(long) cameraIndex {
@@ -1413,9 +1418,7 @@ static NSString * const imageOrientationName[] = {
 - (void) selectCamera:(long) sourceIndex {
     assert (sourceIndex != POPMENU_ABORTED);
     nextSourceIndex = sourceIndex;
-    InputSource *cameraSource = [inputSources objectAtIndex:sourceIndex];
-    long cameraIndex = cameraSource.cameraIndex;
-    cameraBarButtonItem.image = [self cameraImageForCamera:cameraIndex];
+    [taskCtrl idleForReconfiguration];
 }
 
 #ifdef NOTDEF

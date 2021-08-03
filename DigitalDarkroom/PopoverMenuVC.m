@@ -66,7 +66,7 @@
     self.navigationItem.rightBarButtonItem = rightBarButton;
     
 
-    tableView = [[UITableView alloc] initWithFrame:self.view.frame style:UITableViewStylePlain];
+    tableView = [[UITableView alloc] initWithFrame:self.view.frame];
     tableView.dataSource = self;
     tableView.delegate = self;
     tableView.rowHeight = TABLE_HPL;
