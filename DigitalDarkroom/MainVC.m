@@ -103,11 +103,11 @@
 #define NO_LAYOUT_SELECTED   (-1)
 #define NO_SOURCE       (-1)
 
-#define DEPTH_AVAILABLE (IS_CAMERA(self->currentSource) && self->currentSource.cameraHasDepthMode)
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 #define SOURCE(i)   ((InputSource *)inputSources[i])
 #define CURRENT_SOURCE  SOURCE(currentSourceIndex)
+#define IS_CAMERA(s)        ((s).cameraIndex != NOT_A_CAMERA)
 
 typedef enum {
     NoPlus,
@@ -128,7 +128,7 @@ NSString *plusImageNames[] = {
     @"plus.rectangle.fill.on.rectangle.fill"
 };
 
-struct camera {
+struct camera_t {
     BOOL front, threeD;
     NSString *name, *imageName;
 } possibleCameras[] = {
@@ -137,7 +137,7 @@ struct camera {
     {NO, NO, @"Rear", @"flippedcamera"},
     {NO, YES, @"Rear 3D", @"3DcameraBack"},
 };
-#define N_POSS_CAM   (sizeof(possibleCameras)/sizeof(struct camera))
+#define N_POSS_CAM   (sizeof(possibleCameras)/sizeof(struct camera_t))
 
 #define IS_PLUS_ON      (plusMode == PlusOne)
 #define IS_PLUS_LOCKED  (plusMode == PlusMany)
@@ -178,7 +178,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 
-@property (nonatomic, strong)   UISwitch *depthSwitch;
+@property (nonatomic, strong)   UIBarButtonItem *depthBarButton;
 
 // in containerview:
 @property (nonatomic, strong)   UIView *paramView;
@@ -237,9 +237,7 @@ MainVC *mainVC = nil;
 
 //@property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
-@property (assign)              BOOL hasFrontCamera;    // assume no front camera means no cameras at all
-@property (assign)              BOOL hasRearCamera;
-@property (assign)              BOOL hasFrontDepthCamera, hasRearDepthCamera;
+
 @property (nonatomic, strong)   Layout *layout;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
@@ -261,7 +259,7 @@ MainVC *mainVC = nil;
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize depthSwitch, flipBarButton, sourceBarButton;
+@synthesize depthBarButton, flipBarButton, sourceBarButton;
 @synthesize transformView;
 @synthesize overlayDebugStatus;
 @synthesize runningButton, snapButton;
@@ -281,8 +279,6 @@ MainVC *mainVC = nil;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait, isiPhone;
-@synthesize hasFrontCamera, hasRearCamera;
-@synthesize hasFrontDepthCamera, hasRearDepthCamera;
 
 @synthesize sourcesNavVC;
 @synthesize options;
@@ -452,11 +448,6 @@ MainVC *mainVC = nil;
         Transform *transform = [transforms.transforms objectAtIndex:ti];
         NSString *section = [transform.helpPath pathComponents][0];
         if (!lastSection || ![lastSection isEqualToString:section]) {
-            // new section. The first one has the depthSwitch
-            [thumbView configureSectionThumbNamed:section
-                                       withSwitch:!lastSection ? depthSwitch : nil];
-            [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
-            
             thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
             lastSection = section;
         }
@@ -541,13 +532,9 @@ CGFloat topOfNonDepthArray = 0;
     CGRect transformNameRect;
     transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect));
     transformNameRect.size = CGSizeMake(nextButtonFrame.size.width, THUMB_LABEL_H);
-    
-    CGRect switchRect = CGRectMake((nextButtonFrame.size.width - SECTION_SWITCH_W)/2, nextButtonFrame.size.height-SECTION_SWITCH_H - SEP,
-                                   SECTION_SWITCH_W, SECTION_SWITCH_H);
-    depthSwitch.frame = switchRect;
     CGRect sectionNameRect = CGRectMake(0, 20,
                                         nextButtonFrame.size.width,
-                                        nextButtonFrame.size.height - switchRect.origin.y);
+                                        nextButtonFrame.size.height);
     
     // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
     // positions for the current situation. These thumbs come in section, each of which has
@@ -690,28 +677,10 @@ static NSString * const imageOrientationName[] = {
                                       style:UIBarButtonItemStylePlain
                                       target:self
                                       action:@selector(flipCamera:)];
-    
-    depthSwitch = [[UISwitch alloc] init];  // this is placed later in the Depth thumb section header'
-    [depthSwitch addTarget:self action:@selector(processDepthSwitch:)
-          forControlEvents:UIControlEventValueChanged];
-    depthSwitch.on = NO;
-    depthSwitch.enabled = NO;
-    
-    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
-                                   target:nil action:nil];
-    fixedSpace.width = isiPhone ? 10 : 25;
-    UIBarButtonItem *noSpace = [[UIBarButtonItem alloc]
-                                   initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
-                                   target:nil action:nil];
-    noSpace.width = 0;
 
 #ifdef DISABLED
 
-    UIBarButtonItem *flexibleSpace = [[UIBarButtonItem alloc]
-                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
-                                      target:nil action:nil];
-    
+
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                         style:UIBarButtonItemStylePlain
@@ -758,6 +727,15 @@ static NSString * const imageOrientationName[] = {
                                    menu:<#(nullable UIMenu *)#>]
     navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Menu", image: nil, primaryAction: nil, menu: demoMenu)
     
+    cameraBarButtonItem = [[UIBarButtonItem alloc] initWithImage:nil
+                                                         style:UIBarButtonItemStylePlain
+                                                        target:self
+                                                        action:@selector(doCamera:)];
+    UIImage *newImage = [UIImage systemImageNamed:@"star"];
+    assert(newImage);
+    cameraBarButtonItem.image = newImage;
+    cameraBarButtonItem.enabled = (cameraCount > 0);
+
 #endif
     
     plusBarButtonItem = [[UIBarButtonItem alloc] initWithImage:nil
@@ -765,31 +743,26 @@ static NSString * const imageOrientationName[] = {
                                                         target:self
                                                         action:@selector(doPlus:)];
     [self adjustPlusTo:NoPlus];
-    
-    cameraBarButtonItem = [[UIBarButtonItem alloc] initWithImage:nil
-                                                         style:UIBarButtonItemStylePlain
-                                                        target:self
-                                                        action:@selector(doCamera:)];
-    
-// XXXXXX    [self adjustPlusTo:NoPlus];
+        
+    depthBarButton = [[UIBarButtonItem alloc] initWithImage:nil
+                                                      style:UIBarButtonItemStylePlain
+                                                     target:self
+                                                     action:@selector(doVideoAndDepth:)];
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
                                               sourceBarButton,
-                                              fixedSpace,
-                                              cameraBarButtonItem,
-//                                              fixedSpace,
-//                                              flipBarButton,
-                                              fixedSpace,
+                                              depthBarButton,
+                                              flipBarButton,
                                               plusBarButtonItem,
                                               nil];
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                docBarButton,
-                                               fixedSpace,
+//                                               fixedSpace,
                                                saveBarButton,
-                                               fixedSpace,
+//                                               fixedSpace,
                                                undoBarButton,
-                                               fixedSpace,
+//                                               fixedSpace,
                                                trashBarButton,
                                                nil];
 
@@ -1020,7 +993,6 @@ static NSString * const imageOrientationName[] = {
 #ifdef OLD
     if (IS_CAMERA(currentSource)) {
         [self startCamera];
-        [self set3D:DOING_3D];
     }
 #endif
     
@@ -1079,6 +1051,7 @@ static NSString * const imageOrientationName[] = {
     
     // close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
+        NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
         if (live) {
             [self liveOn:NO];
         }
@@ -1092,7 +1065,6 @@ static NSString * const imageOrientationName[] = {
             self.title = source.label;
 
         if (IS_CAMERA(source)) {
-            cameraBarButtonItem.image = [self cameraImageForCamera:source.cameraIndex];
             [self liveOn:YES];
         } else {    // source is a file, it is our source image
             currentSourceImage = [UIImage imageNamed: source.imagePath];
@@ -1150,6 +1122,7 @@ static NSString * const imageOrientationName[] = {
     }
 #endif
     
+    [self adjustBarButtons];
     [self applyScreenLayout: 0];     // top one is best
 }
 
@@ -1201,9 +1174,27 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) adjustBarButtons {
-//    flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex); XXXX
     trashBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
+
+    NSString *imageName;
+    if (!cameraCount) {
+        flipBarButton.enabled = depthBarButton.enabled = NO;
+        imageName = @"video";
+    } else {
+        if (!IS_CAMERA(CURRENT_SOURCE)) { // set up for camera selection
+            depthBarButton.enabled = YES;   // to select the camera
+            imageName = @"video";
+        } else {
+            struct camera_t cam = possibleCameras[CURRENT_SOURCE.cameraIndex];
+            flipBarButton.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"];
+            flipBarButton.enabled = [cameraController cameraAvailableOnFront:!cam.front threeD:cam.threeD];
+            
+            depthBarButton.enabled = [cameraController cameraAvailableOnFront:cam.front threeD:!cam.threeD];
+            imageName = !cam.threeD ? @"view.3d" : @"view.2d";
+        }
+    }
+    depthBarButton.image = [UIImage systemImageNamed:imageName];
 }
 
 - (void) nextTransformButtonPosition {
@@ -1360,6 +1351,30 @@ static NSString * const imageOrientationName[] = {
     plusMode = newPlusMode;
 }
 
+// If the camera is off, turn it on, to the first possible setting,
+// almost certainly the front camera, 2d.  Otherwise, change the depth.
+
+- (IBAction) doVideoAndDepth:(UIBarButtonItem *)caller {
+    if (!IS_CAMERA(CURRENT_SOURCE)) { // select default camera
+        nextSourceIndex = 0;
+    } else {
+        long ci = CURRENT_SOURCE.cameraIndex;
+        nextSourceIndex = 0;
+        do {
+            InputSource *s = inputSources[nextSourceIndex];
+            long nci = s.cameraIndex;
+            assert(nci != NOT_A_CAMERA);
+            if (possibleCameras[nci].front == possibleCameras[ci].front &&
+                possibleCameras[nci].threeD != possibleCameras[ci].threeD)
+                break;
+            nextSourceIndex++;
+        } while (nextSourceIndex < N_POSS_CAM);
+        assert(nextSourceIndex < N_POSS_CAM); // this loop should never be called unless there is a useful answer
+    }
+    [taskCtrl idleForReconfiguration];  // selected camera
+}
+
+#ifdef OLD
 - (IBAction) doCamera:(UIBarButtonItem *)caller {
     PopoverMenuVC *popMenuVC = [[PopoverMenuVC alloc]
                                 initWithFrame: CGRectMake(0, 0, PLUS_W, LATER)
@@ -1389,7 +1404,7 @@ static NSString * const imageOrientationName[] = {
         cell.highlighted = NO;
     }
     //    cell.textLabel.font = [UIFont systemFontOfSize:PLUS_ROW_H];
-    cell.imageView.image = [self cameraImageForCamera:row];
+    cell.imageView.image = [self cameraImageForCamera:row height:cell.frame.size.height];
 #ifdef MAYBENOT
     UIImageView *accessImageView = [[UIImageView alloc] initWithImage:[self cameraImageForCamera:row]];
     accessImageView.contentMode = UIViewContentModeScaleAspectFit;
@@ -1398,7 +1413,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 }
 
-- (UIImage *) cameraImageForCamera:(long) cameraIndex {
+- (UIImage *) cameraImageForCamera:(long) cameraIndex height:(CGFloat) h {
     NSString *imageName = possibleCameras[cameraIndex].imageName;
     UIImage *image = [UIImage systemImageNamed:imageName];
     if (!image) { // not an SF image, try local bundle image
@@ -1414,12 +1429,7 @@ static NSString * const imageOrientationName[] = {
     }
     return image;
 }
-
-- (void) selectCamera:(long) sourceIndex {
-    assert (sourceIndex != POPMENU_ABORTED);
-    nextSourceIndex = sourceIndex;
-    [taskCtrl idleForReconfiguration];
-}
+#endif
 
 #ifdef NOTDEF
 
@@ -2393,14 +2403,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [cameraController stopCamera];
 }
 
-- (void) set3D:(BOOL) enable {
-    if (enable) {
-        
-    } else {
-        
-    }
-}
-
 - (void) setCameraRunning:(BOOL) running {
     assert(IS_CAMERA(CURRENT_SOURCE));
     if (running) {
@@ -2544,8 +2546,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     SET_VIEW_HEIGHT(layoutValuesView, textSize.height)
     SET_VIEW_WIDTH(layoutValuesView, textSize.width)
     [layoutValuesView setNeedsDisplay];
-
-//    flipBarButton.enabled = AVAIL(CURRENT_SOURCE.otherSideIndex);
     
     [self updateExecuteView];
     [self adjustBarButtons];
