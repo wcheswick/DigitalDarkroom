@@ -105,9 +105,11 @@
 
 #define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
-#define SOURCE(i)   ((InputSource *)inputSources[i])
+#define SOURCE(si)   ((InputSource *)inputSources[si])
 #define CURRENT_SOURCE  SOURCE(currentSourceIndex)
-#define IS_CAMERA(s)        ((s).cameraIndex != NOT_A_CAMERA)
+
+#define SOURCE_INDEX_IS_FRONT(si)   (possibleCameras[SOURCE(si).cameraIndex].front)
+#define SOURCE_INDEX_IS_3D(si)   (possibleCameras[SOURCE(si).cameraIndex].threeD)
 
 typedef enum {
     NoPlus,
@@ -130,14 +132,18 @@ NSString *plusImageNames[] = {
 
 struct camera_t {
     BOOL front, threeD;
-    NSString *name, *imageName;
+    NSString *name;
 } possibleCameras[] = {
-    {YES, NO, @"Front", @"2Dcamera"},
-    {YES, YES, @"Front 3D", @"3Dcamera"},
-    {NO, NO, @"Rear", @"flippedcamera"},
-    {NO, YES, @"Rear 3D", @"3DcameraBack"},
+    {YES, NO, @"Front"},
+    {YES, YES, @"Front 3D"},
+    {NO, NO, @"Rear"},
+    {NO, YES, @"Rear 3D"},
 };
 #define N_POSS_CAM   (sizeof(possibleCameras)/sizeof(struct camera_t))
+
+#define IS_CAMERA(s)        ((s).cameraIndex != NOT_A_CAMERA)
+#define IS_FRONT_CAMERA(s)  (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].front)
+#define IS_3D_CAMERA(s)     (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].threeD)
 
 #define IS_PLUS_ON      (plusMode == PlusOne)
 #define IS_PLUS_LOCKED  (plusMode == PlusMany)
@@ -373,20 +379,19 @@ MainVC *mainVC = nil;
         cameraCount = 0;
         
         if (HAVE_CAMERA) {
-            for (int i=0; i<N_POSS_CAM; i++) {
-                if ([cameraController cameraAvailableOnFront:possibleCameras[i].front
-                                                       threeD:possibleCameras[i].threeD]) {
+            for (int ci=0; ci<N_POSS_CAM; ci++) {
+                if ([cameraController cameraAvailableOnFront:possibleCameras[ci].front
+                                                       threeD:possibleCameras[ci].threeD]) {
                     cameraCount++;
                     InputSource *newSource = [[InputSource alloc] init];
-                    [newSource makeCameraSource:possibleCameras[i].name
-                                        onFront:possibleCameras[i].front
-                                         threeD:possibleCameras[i].threeD];
-                    newSource.cameraIndex = i;
+                    [newSource makeCameraSource:possibleCameras[ci].name
+                                    cameraIndex:ci];
                     [inputSources addObject:newSource];
                 }
             }
         }
-        
+        [self dumpInputCameraSources];
+
 #ifdef DEBUG
         [self addFileSource:@"Olive.png" label:@"Olive"];
 #endif
@@ -428,10 +433,19 @@ MainVC *mainVC = nil;
         }
         nextSourceIndex = currentSourceIndex;
         currentSourceIndex = NO_SOURCE;
+        nextSourceIndex = 0;    // XXXXXX DEBUG
     }
     return self;
 }
-        
+
+- (void) dumpInputCameraSources {
+    for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
+        NSLog(@"camera source %d  ci %ld   %@  %@", i, SOURCE(i).cameraIndex,
+              IS_FRONT_CAMERA(SOURCE(i)) ? @"front" : @"rear ",
+              IS_3D_CAMERA(SOURCE(i)) ? @"3D" : @"2D");
+    }
+}
+
 - (void) createThumbArray {
     NSString *brokenPath = [[NSBundle mainBundle]
                             pathForResource:@"images/brokenTransform.png" ofType:@""];
@@ -971,7 +985,7 @@ static NSString * const imageOrientationName[] = {
 #endif
     // not needed: we haven't started anything yet
     //[taskCtrl idleForReconfiguration];
-    [self newLayout];
+    [self newLayout];   // redundant? No, needed at this point
     [self adjustControls];
 }
 
@@ -1065,6 +1079,8 @@ static NSString * const imageOrientationName[] = {
             self.title = source.label;
 
         if (IS_CAMERA(source)) {
+            [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)
+                                          threeD:IS_3D_CAMERA(source)];
             [self liveOn:YES];
         } else {    // source is a file, it is our source image
             currentSourceImage = [UIImage imageNamed: source.imagePath];
@@ -1133,16 +1149,17 @@ static NSString * const imageOrientationName[] = {
         assert(cameraController);
         assert(live);   // select camera setting for available area
         [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
-                                      threeD:CURRENT_SOURCE.isThreeD];
+        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)
+                                      threeD:IS_3D_CAMERA(CURRENT_SOURCE)];
         NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
+                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(CURRENT_SOURCE)];
         for (AVCaptureDeviceFormat *format in availableFormats) {
             CGSize formatSize = [cameraController sizeForFormat:format];
             [self tryAllThumbsForSize:formatSize format:format];
        }
     }
 }
+
 - (void) tryAllThumbsForSize:(CGSize) size format:(AVCaptureDeviceFormat *)format {
     for (int thumbColumns=2; ; thumbColumns++) {
         Layout *trialLayout = [[Layout alloc] init];
@@ -1178,23 +1195,47 @@ static NSString * const imageOrientationName[] = {
     undoBarButton.enabled = screenTask.transformList.count > DEPTH_TRANSFORM + 1;
 
     NSString *imageName;
-    if (!cameraCount) {
+    if (!cameraCount) { // never a camera here
         flipBarButton.enabled = depthBarButton.enabled = NO;
         imageName = @"video";
     } else {
-        if (!IS_CAMERA(CURRENT_SOURCE)) { // set up for camera selection
+        if (!IS_CAMERA(CURRENT_SOURCE)) { // not using a camera at the moment
             depthBarButton.enabled = YES;   // to select the camera
             imageName = @"video";
         } else {
             struct camera_t cam = possibleCameras[CURRENT_SOURCE.cameraIndex];
             flipBarButton.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"];
-            flipBarButton.enabled = [cameraController cameraAvailableOnFront:!cam.front threeD:cam.threeD];
-            
-            depthBarButton.enabled = [cameraController cameraAvailableOnFront:cam.front threeD:!cam.threeD];
+            flipBarButton.enabled = [self flipOfCurrentSource] != NO_SOURCE;
+            NSLog(@"AAAA flip enabled: %d for front: %d 3d:%d", flipBarButton.enabled, cam.front, cam.threeD);
+            depthBarButton.enabled = [self otherDepthOfCurrentSource] != NO_SOURCE;
             imageName = !cam.threeD ? @"view.3d" : @"view.2d";
         }
     }
     depthBarButton.image = [UIImage systemImageNamed:imageName];
+}
+
+// do we have an input camera source that is the flip of the current source?
+// search the camera inputs.
+- (long) flipOfCurrentSource {
+    for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
+        if (SOURCE_INDEX_IS_3D(currentSourceIndex) != SOURCE_INDEX_IS_3D(i))
+            continue;
+        if (SOURCE_INDEX_IS_FRONT(currentSourceIndex) != SOURCE_INDEX_IS_FRONT(i))
+            return i;
+    }
+    return NO_SOURCE;
+}
+
+// do we have an input camera source that is the depth alternative to the current source?
+// search the camera inputs.
+- (long) otherDepthOfCurrentSource {
+    for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
+        if (SOURCE_INDEX_IS_FRONT(currentSourceIndex) != SOURCE_INDEX_IS_FRONT(i))
+            continue;
+        if (SOURCE_INDEX_IS_3D(currentSourceIndex) != SOURCE_INDEX_IS_3D(i))
+            return i;
+    }
+    return NO_SOURCE;
 }
 
 - (void) nextTransformButtonPosition {
@@ -1355,12 +1396,14 @@ static NSString * const imageOrientationName[] = {
 // almost certainly the front camera, 2d.  Otherwise, change the depth.
 
 - (IBAction) doVideoAndDepth:(UIBarButtonItem *)caller {
+    NSLog(@"video/depth tapped");
     if (!IS_CAMERA(CURRENT_SOURCE)) { // select default camera
         nextSourceIndex = 0;
     } else {
         long ci = CURRENT_SOURCE.cameraIndex;
         nextSourceIndex = 0;
         do {
+            [self dumpInputCameraSources];
             InputSource *s = inputSources[nextSourceIndex];
             long nci = s.cameraIndex;
             assert(nci != NOT_A_CAMERA);
@@ -2187,13 +2230,19 @@ UIImageOrientation lastOrientation;
 #endif
 
 - (IBAction) flipCamera:(UIButton *)button {
-    [self changeSourceTo:CURRENT_SOURCE.otherSideIndex];
+    NSLog(@"flip camera tapped");
+    nextSourceIndex = [self flipOfCurrentSource];
+    assert(nextSourceIndex != NO_SOURCE);
+    [self changeSourceTo:nextSourceIndex];
 }
 
 - (IBAction) processDepthSwitch:(UISwitch *)depthsw {
-    if (!live)
-        [self liveOn:YES];
-    [self changeSourceTo:CURRENT_SOURCE.otherDepthIndex];
+    NSLog(@"chagne camera deoth");
+    nextSourceIndex = [self otherDepthOfCurrentSource];
+    assert(nextSourceIndex != NO_SOURCE);
+    [self changeSourceTo:nextSourceIndex];
+//    if (!live)
+//        [self liveOn:YES];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -2548,7 +2597,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [layoutValuesView setNeedsDisplay];
     
     [self updateExecuteView];
-    [self adjustBarButtons];
+//    [self adjustBarButtons];  // redundant call
     [self adjustParamView];
     [taskCtrl enableTasks];
     if (currentSourceImage)

@@ -15,26 +15,21 @@ NS_ASSUME_NONNULL_BEGIN
 #define LAST_SOURCE_ARCHIVE   @"./LastSourc.archive"
 #define NOT_A_CAMERA    (-1)
 
-#define CAMERA_FUNCTION_NOT_AVAILABLE   (-1)
-
 @interface InputSource : NSObject {
     NSString *label;
     long cameraIndex;
-    BOOL isThreeD, isFront;
     NSString *__nullable imagePath; // where a file image is
     UIImage *__nullable thumbImageCache;
 }
 
 @property (nonatomic, strong)   NSString *label;
 @property (assign)              long cameraIndex;
-@property (assign)              BOOL isThreeD, isFront;
-@property (assign)              NSInteger otherSideIndex, otherDepthIndex;
 @property (nonatomic, strong)   UIImage *capturedImage;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 
-- (void) makeCameraSource:(NSString *)name onFront:(BOOL)onFront threeD:(BOOL) threeD;
+- (void) makeCameraSource:(NSString *)name cameraIndex:(int) ci;
 - (void) setUpImageAt:(NSString *)path;
 
 @end

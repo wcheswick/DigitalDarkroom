@@ -17,9 +17,7 @@
 @implementation InputSource
 
 @synthesize label;
-@synthesize isThreeD, isFront;
 @synthesize cameraIndex;
-@synthesize otherSideIndex, otherDepthIndex;
 @synthesize imagePath;
 @synthesize thumbImageCache;
 @synthesize capturedImage;
@@ -31,19 +29,16 @@
         imagePath = nil;
         thumbImageCache = nil;
         cameraIndex = NOT_A_CAMERA;
-        otherSideIndex = otherDepthIndex = CAMERA_FUNCTION_NOT_AVAILABLE;
         capturedImage = nil;
     }
     return self;
 }
 
-- (void) makeCameraSource:(NSString *)name onFront:(BOOL)onFront threeD:(BOOL) threeD {
+- (void) makeCameraSource:(NSString *)name cameraIndex:(int) ci {
     label = name;
-    isFront = onFront;
+    cameraIndex = ci;
     capturedImage = nil;
     thumbImageCache = nil;
-    self.isFront = onFront;
-    self.isThreeD = threeD;
 }
 
 - (void) setUpImageAt:(NSString *)path {
