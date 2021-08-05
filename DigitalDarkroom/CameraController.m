@@ -34,7 +34,6 @@
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
-@synthesize frontCamera, threeDCamera;
 
 
 - (id)init {
@@ -98,14 +97,13 @@
 
 - (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD {
 #ifdef DEBUG_CAMERA
-    NSLog(@"CCC selecting camera on side %d, %@", side,
-          depth ? @"3D" : @"2D");
+    NSLog(@"CCC selecting camera on side %@, %@", front ? @"Front" : @"Rear ",
+          threeD ? @"3D" : @"2D");
 #endif
     captureDevice = [self cameraDeviceOnFront:front threeD:threeD];
     if (!captureDevice)
         return NO;
-    frontCamera = front;
-    threeDCamera = threeD;
+    usingDepthCamera = threeD;
     return YES;
 }
 

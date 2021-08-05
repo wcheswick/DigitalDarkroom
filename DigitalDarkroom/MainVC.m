@@ -1063,7 +1063,7 @@ static NSString * const imageOrientationName[] = {
         UIDeviceOrientationIsFlat(deviceOrientation);
     [layouts removeAllObjects];
     
-    // close down any currentSource stuff
+    // if we are changing sources, close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
         NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
         if (live) {
@@ -1206,7 +1206,7 @@ static NSString * const imageOrientationName[] = {
             struct camera_t cam = possibleCameras[CURRENT_SOURCE.cameraIndex];
             flipBarButton.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath.camera"];
             flipBarButton.enabled = [self flipOfCurrentSource] != NO_SOURCE;
-            NSLog(@"AAAA flip enabled: %d for front: %d 3d:%d", flipBarButton.enabled, cam.front, cam.threeD);
+ //           NSLog(@"AAAA flip enabled: %d for front: %d 3d:%d", flipBarButton.enabled, cam.front, cam.threeD);
             depthBarButton.enabled = [self otherDepthOfCurrentSource] != NO_SOURCE;
             imageName = !cam.threeD ? @"view.3d" : @"view.2d";
         }

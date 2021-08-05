@@ -18,11 +18,8 @@ NS_ASSUME_NONNULL_BEGIN
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
         AVCaptureDepthDataOutputDelegate>delegate;
-    BOOL frontCamera;
-    BOOL threeDCamera;
+    BOOL usingDepthCamera;
 }
-
-@property (assign) BOOL frontCamera, threeDCamera;
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
