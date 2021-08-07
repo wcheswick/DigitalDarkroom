@@ -390,7 +390,7 @@ MainVC *mainVC = nil;
                 }
             }
         }
-        [self dumpInputCameraSources];
+        // [self dumpInputCameraSources];
 
 #ifdef DEBUG
         [self addFileSource:@"Olive.png" label:@"Olive"];
@@ -902,6 +902,7 @@ static NSString * const imageOrientationName[] = {
     [longPressScreen setNumberOfTouchesRequired:1];
     [transformView addGestureRecognizer:longPressScreen];
 
+#ifdef SWIPE_NOT_PINCH
     UISwipeGestureRecognizer *swipeUp = [[UISwipeGestureRecognizer alloc]
                                          initWithTarget:self action:@selector(doUp:)];
     swipeUp.direction = UISwipeGestureRecognizerDirectionUp;
@@ -911,14 +912,12 @@ static NSString * const imageOrientationName[] = {
                                          initWithTarget:self action:@selector(doDown:)];
     swipeDown.direction = UISwipeGestureRecognizerDirectionDown;
     [transformView addGestureRecognizer:swipeDown];
+#endif
     
-#ifdef NOTHERE
     UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc]
                                        initWithTarget:self
                                        action:@selector(doPinch:)];
-    [overlayView addGestureRecognizer:pinch];
-    
-#endif
+    [transformView addGestureRecognizer:pinch];
     
     [containerView addSubview:transformView];
     [containerView addSubview:executeView];
@@ -1057,7 +1056,7 @@ static NSString * const imageOrientationName[] = {
 
 - (void) newLayout {
 #ifdef DEBUG_LAYOUT
-    NSLog(@"********* newLayout");
+    NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
 #endif
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
@@ -1065,13 +1064,13 @@ static NSString * const imageOrientationName[] = {
     
     // if we are changing sources, close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
-        NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
         if (live) {
             [self liveOn:NO];
         }
 
         currentSourceIndex = nextSourceIndex;
-//        NSLog(@"III switching to source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
+//        NSLog(@"III switching to source index %ld, %@",
+        //  (long)currentSourceIndex, CURRENT_SOURCE.label);
         nextSourceIndex = NO_SOURCE;
         InputSource *source = inputSources[currentSourceIndex];
 
@@ -1127,11 +1126,78 @@ static NSString * const imageOrientationName[] = {
     [self tryAllThumbLayouts];
     assert(layouts.count > 0);
     
+    // sort the layouts by decreasing screen size.  Start with the
+    // layout with the highest score.
+    
     [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
-        return [[NSNumber numberWithFloat:l2.score]
-                compare:[NSNumber numberWithFloat:l1.score]];}];
+        // sort in decending order, hence l1 and l2 are switched
+        return [[NSNumber numberWithFloat:l2.displayFrac]
+                compare:[NSNumber numberWithFloat:l1.displayFrac]];
+    }];
+    
+    // run down through the layouts, from largest display to smallest, removing
+    // ones that are essentially duplicates.
+    
+    NSMutableArray *editedLayouts = [[NSMutableArray alloc] init];
+    
+    float topScore = -1;;
+    Layout *previousLayout = nil;
 
+//    NSLog(@"LLLL scanning %lu layouts", (unsigned long)layouts.count);
+    int i=0;
+    for (Layout *layout in layouts) {
+#ifdef NOTDEF
+        NSLog(@"%3d   %.3f  %.3f %.3f    %lu", i++,
+              layout.displayFrac, layout.score, layout.thumbFrac,
+              (unsigned long)editedLayouts.count);
+#endif
+        if (layouts.count == 0) {   // first one
+            topScore = layout.score;
+            layoutIndex = layouts.count;
+            [editedLayouts addObject:layout];
+            previousLayout = layout;
+            continue;
+        }
+#ifdef NOTDEF
+        if (i % 10 == 0)
+            NSLog(@"pause %d", i);
+        NSLog(@"   %.3f %.3f  %@    %2d %2d  %@    %.3f  %.3f  %@",
+              layout.displayFrac, previousLayout.displayFrac,
+              layout.displayFrac == previousLayout.displayFrac ? @"= " : @"!=",
+              layout.thumbsPosition, previousLayout.thumbsPosition,
+              layout.thumbsPosition == previousLayout.thumbsPosition ? @"= " : @"!=",
+              layout.thumbFrac, previousLayout.thumbFrac,
+              layout.thumbFrac == previousLayout.thumbFrac ? @"= " : @"!=");
+#endif
+        if (layout.displayFrac == previousLayout.displayFrac &&
+            layout.thumbsPosition == previousLayout.thumbsPosition &&
+            layout.thumbFrac == previousLayout.thumbFrac) {
+            if (layout.score >= previousLayout.score) { // discard previous
+                [editedLayouts replaceObjectAtIndex:editedLayouts.count-1 withObject:layout];
+            }
+        } else {
+            [editedLayouts addObject:layout];
+        }
+        if (layout.score > topScore) {
+            topScore = layout.score;
+            layoutIndex = editedLayouts.count - 1;
+        }
+        previousLayout = layout;
+    }
+//    NSLog(@"LLLL remaining layouts: %lu, top score %.5f at %ld",
+//          (unsigned long)editedLayouts.count, topScore, layoutIndex);
+    
+    layouts = editedLayouts;
+    
 #ifdef DEBUG_LAYOUT
+    i = 0;
+    for (Layout *layout in layouts) {
+        NSLog(@"%3d   %.3f  %.3f %.3f    %@", i,
+              layout.displayFrac, layout.score, layout.thumbFrac,
+              i == layoutIndex ? @"<---" : @"");
+        i++;
+    }
+    
     for (int i=0; i<layouts.count; i++ ) {
         Layout *layout = layouts[i];
         NSLog(@"%2d %@", i, layout.status);
@@ -1139,7 +1205,15 @@ static NSString * const imageOrientationName[] = {
 #endif
     
     [self adjustBarButtons];
-    [self applyScreenLayout: 0];     // top one is best
+    [self applyScreenLayout: layoutIndex];     // top one is best
+}
+
+static bool
+epsilonEquals(float a, float b) {
+    if (b == 0.0)
+        return a != 0.0;
+    float frac = fabsf(a - b)/b;
+    return frac < 0.01;
 }
 
 - (void) tryAllThumbLayouts {
@@ -1160,7 +1234,21 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-- (void) tryAllThumbsForSize:(CGSize) size format:(AVCaptureDeviceFormat *)format {
+- (void) tryAllThumbsForSize:(CGSize) size
+                      format:(AVCaptureDeviceFormat *)format {
+    
+    // first, layout full-screen version
+    Layout *trialLayout = [[Layout alloc] init];
+    if (format)
+        trialLayout.format = format;
+    if ([trialLayout tryLayoutForSize:size
+                            thumbRows:0
+                         thumbColumns:0]) {
+        if (trialLayout.score) {
+            [layouts addObject:trialLayout];
+        }
+    }
+    
     for (int thumbColumns=2; ; thumbColumns++) {
         Layout *trialLayout = [[Layout alloc] init];
         if (format)
@@ -1385,7 +1473,6 @@ static NSString * const imageOrientationName[] = {
 - (void) adjustPlusTo:(PlusMode) newPlusMode {
     if (newPlusMode == POPMENU_ABORTED)
         return;
-    NSLog(@"++++ adjustPlusTo: %d", newPlusMode);
     UIImage *newImage = [UIImage systemImageNamed:plusImageNames[newPlusMode]];
     assert(newImage);
     plusBarButtonItem.image = newImage;
@@ -1396,14 +1483,13 @@ static NSString * const imageOrientationName[] = {
 // almost certainly the front camera, 2d.  Otherwise, change the depth.
 
 - (IBAction) doVideoAndDepth:(UIBarButtonItem *)caller {
-    NSLog(@"video/depth tapped");
     if (!IS_CAMERA(CURRENT_SOURCE)) { // select default camera
         nextSourceIndex = 0;
     } else {
         long ci = CURRENT_SOURCE.cameraIndex;
         nextSourceIndex = 0;
         do {
-            [self dumpInputCameraSources];
+            // [self dumpInputCameraSources];
             InputSource *s = inputSources[nextSourceIndex];
             long nci = s.cameraIndex;
             assert(nci != NOT_A_CAMERA);
@@ -1792,30 +1878,6 @@ static NSString * const imageOrientationName[] = {
     [self updateExecuteView];
 }
 
-#ifdef OLD
-
-static CGSize startingDisplaySize;
-
-- (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
-    switch (pinch.state) {
-        case UIGestureRecognizerStateBegan:
-            startingDisplaySize = overlayView.frame.size;
-            break;
-        case UIGestureRecognizerStateEnded:
-            //[self finalizeDisplayAdjustment];
-            break;
-        case UIGestureRecognizerStateChanged: {
-//            [UIView animateWithDuration:0.7 animations:^(void) {
-//                [self adjustDisplayFromSize:startingDisplaySize toScale: pinch.scale];
-//            }];
-            break;
-        }
-        default:
-            return;
-    }
-}
-#endif
-
 -(void) flash {
     flashView.frame = transformView.frame;
     flashView.hidden = NO;
@@ -2187,18 +2249,36 @@ UIImageOrientation lastOrientation;
     [executeView setNeedsDisplay];
 }
 
-- (IBAction) doUp:(UISwipeGestureRecognizer *)sender {
-    NSLog(@"doUp");
-    if (layoutIndex+1 >= layouts.count)
-        return;
-    [self applyScreenLayout:layoutIndex+1];
-}
+static CGSize startingPinchSize;
 
-- (IBAction) doDown:(UISwipeGestureRecognizer *)sender {
-    NSLog(@"doDown");
-    if (layoutIndex == 0)
-        return;
-    [self applyScreenLayout:layoutIndex-1];
+- (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
+    switch (pinch.state) {
+        case UIGestureRecognizerStateBegan:
+            startingPinchSize = layout.displayRect.size;
+            break;
+        case UIGestureRecognizerStateEnded: {
+            float currentScale = ((Layout *)layouts[layoutIndex]).displayFrac;
+            if (pinch.scale < 1.0) {    // go smaller
+                float targetScale = currentScale*pinch.scale;
+                for (layoutIndex++; layoutIndex < layouts.count; layoutIndex++)
+                    if (((Layout *)layouts[layoutIndex]).displayFrac <= targetScale)
+                        break;
+                if (layoutIndex >= layouts.count)
+                    layoutIndex = layouts.count - 1;
+            } else {
+                float targetScale = currentScale + 0.1 * trunc(pinch.scale);
+                for (layoutIndex--; layoutIndex >= 0; layoutIndex--)
+                    if (((Layout *)layouts[layoutIndex]).displayFrac >= targetScale)
+                        break;
+                if (layoutIndex < 0)
+                    layoutIndex = 0;
+            }
+            [self applyScreenLayout:layoutIndex];
+            break;
+        }
+        default:
+            return;
+    }
 }
 
 - (IBAction) doRight:(UISwipeGestureRecognizer *)sender {

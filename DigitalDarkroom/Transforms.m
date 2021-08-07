@@ -516,7 +516,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 
 - (void) addPolarTransforms {
-    
     lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -679,23 +678,24 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     [self addTransform:lastTransform];
 
+#ifdef BROKEN
     lastTransform = [Transform areaTransform: @"Paul"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
         double x = r*cos(a);
         double y = r*sin(a);
-        long sx = centerX + (short)(r*sin((y*x)/4.0+a));
-        long sy = centerY + (short)(r*cos(a));
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*sin((y*x)/4.0+a);
+        long sy = centerY + r*cos(a);
         if (REMAPBUF_IN_RANGE(sx, sy))
             UNSAFE_REMAP_TO(tX, tY, sx, sy);
         else
             REMAP_COLOR(tX, tY, Remap_White);
     }];
-    lastTransform.broken = YES;
+//    lastTransform.broken = YES;
     [self addTransform:lastTransform];
+#endif
     
     lastTransform = [Transform areaTransform: @"Can"    // WTF?
                                  description: @""
@@ -1274,7 +1274,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     }];
     [self addTransform:lastTransform];
     
-    // BROKEN: too blue
     lastTransform = [Transform colorTransform: @"Auto contrast"
                                   description: @""
                                 inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
@@ -1298,14 +1297,13 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
         for (int i=0; i<n; i++) {
             Pixel p = buf[i];
             channel l = LUM(p);
-            float a = (map[l] - l)/Z;
+            float a = (map[l] - l)/(float)Z;
             int r = p.r + (a*(Z-p.r));
             int g = p.g + (a*(Z-p.g));
             int b = p.b + (a*(Z-p.b));
             buf[i] = CRGB(r,g,b);
         }
     }];
-    lastTransform.broken = YES;
     [self addTransform:lastTransform];
 }
 
@@ -1341,7 +1339,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             for (int x=0; x<remapBuf.w; x++) {
                 long sx = x - xPixelShift;
                 if (REMAPBUF_IN_RANGE(sx, y))
-                    REMAP_TO(x, y, x - xPixelShift, y);
+                    REMAP_TO(x, y, sx, y);
                 else
                     REMAP_COLOR(x, y, Remap_White);
             }
