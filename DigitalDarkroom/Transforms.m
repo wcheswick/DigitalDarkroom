@@ -704,18 +704,56 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         // have a bug:
         //    return frame[CENTER_Y+(short)(r*cos(a))]
         //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+        //
+        // or
+        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
 
+        float p = instance.value/10.0;
         long centerX = remapBuf.w/2;
         long centerY = remapBuf.h/2;
-        long sx = centerX + a*5.0/2.0;
-        long sy = centerY + r*5.0/2.0;
+        long sx = centerX + a*p;
+        long sy = centerY + r*p;
         if (REMAPBUF_IN_RANGE(sx, sy))
             UNSAFE_REMAP_TO(tX, tY, sx, sy);
         else
             REMAP_COLOR(tX, tY, Remap_White);
     }];
+    lastTransform.low = 4;
+    lastTransform.value = 8;
+    lastTransform.high = 16;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle mult.";
     [self addTransform:lastTransform];
+    
+#ifdef DEFINITELY_NOT
+    lastTransform = [Transform areaTransform: @"Can 2"    // WTF?
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+        //
+        // or
+        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
 
+        float p = instance.value/10.0;
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + ((r - sin(a))/300.0)*sin(a);
+        long sy = centerY + cos(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 8;
+    lastTransform.high = 16;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle mult.";
+    [self addTransform:lastTransform];
+#endif
 }
 
 - (void) addAreaTransforms {
