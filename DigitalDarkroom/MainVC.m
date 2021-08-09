@@ -371,7 +371,7 @@ MainVC *mainVC = nil;
         NSLog(@"No camera on simulator");
 #else
         cameraController = [[CameraController alloc] init];
-        cameraController.delegate = self;
+        cameraController.videoProcessor = self;
 #endif
 
         inputSources = [[NSMutableArray alloc] init];
@@ -967,7 +967,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 #endif
 
-    [taskCtrl idleForReconfiguration];
+    [taskCtrl idleTransforms];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -983,9 +983,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 #endif
     // not needed: we haven't started anything yet
-    //[taskCtrl idleForReconfiguration];
-    [self newLayout];   // redundant? No, needed at this point
-    [self adjustControls];
+    [taskCtrl idleTransforms];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -1001,12 +999,6 @@ static NSString * const imageOrientationName[] = {
     NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
           self.view.frame.size.width, self.view.frame.size.height);
 #endif
-#endif
-
-#ifdef OLD
-    if (IS_CAMERA(currentSource)) {
-        [self startCamera];
-    }
 #endif
     
     frameCount = depthCount = droppedCount = busyCount = 0;
@@ -1028,7 +1020,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 
     [super viewWillDisappear:animated];
-    [self stopCamera];
+    [cameraController stopCamera];
 }
 
 - (void) newDeviceOrientation {
@@ -1043,25 +1035,10 @@ static NSString * const imageOrientationName[] = {
         return; // nothing new to see here, folks
     deviceOrientation = nextOrientation;
     if (layout) // already layed out, adjust it
-        [taskCtrl idleForReconfiguration];
+        [taskCtrl idleTransforms];
 }
 
-- (void) tasksAreIdle {
-    [self newLayout];
-}
-
-// On entry:
-//  currentSource or nextSource
-//  transform tasks must be idle
-
-- (void) newLayout {
-#ifdef DEBUG_LAYOUT
-    NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
-#endif
-    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
-        UIDeviceOrientationIsFlat(deviceOrientation);
-    [layouts removeAllObjects];
-    
+- (void) transformsIdle {
     // if we are changing sources, close down any currentSource stuff
     if (nextSourceIndex != NO_SOURCE) {   // change sources
         if (live) {
@@ -1078,6 +1055,7 @@ static NSString * const imageOrientationName[] = {
             self.title = source.label;
 
         if (IS_CAMERA(source)) {
+            [cameraController updateOrientationTo:deviceOrientation];
             [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)
                                           threeD:IS_3D_CAMERA(source)];
             [self liveOn:YES];
@@ -1086,6 +1064,21 @@ static NSString * const imageOrientationName[] = {
         }
         [self saveSourceIndex];
     }
+
+    [self doLayout];
+}
+
+// On entry:
+//  currentSource or nextSource
+//  transform tasks must be idle
+
+- (void) doLayout {
+#ifdef DEBUG_LAYOUT
+    NSLog(@" *** newlayout, new source is %ld", (long)nextSourceIndex);
+#endif
+    isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
+        UIDeviceOrientationIsFlat(deviceOrientation);
+    [layouts removeAllObjects];
     
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
@@ -1144,7 +1137,6 @@ static NSString * const imageOrientationName[] = {
     Layout *previousLayout = nil;
 
 //    NSLog(@"LLLL scanning %lu layouts", (unsigned long)layouts.count);
-    int i=0;
     for (Layout *layout in layouts) {
 #ifdef NOTDEF
         NSLog(@"%3d   %.3f  %.3f %.3f    %lu", i++,
@@ -1204,16 +1196,9 @@ static NSString * const imageOrientationName[] = {
     }
 #endif
     
+    [self adjustControls];
     [self adjustBarButtons];
     [self applyScreenLayout: layoutIndex];     // top one is best
-}
-
-static bool
-epsilonEquals(float a, float b) {
-    if (b == 0.0)
-        return a != 0.0;
-    float frac = fabsf(a - b)/b;
-    return frac < 0.01;
 }
 
 - (void) tryAllThumbLayouts {
@@ -1222,9 +1207,11 @@ epsilonEquals(float a, float b) {
     } else {
         assert(cameraController);
         assert(live);   // select camera setting for available area
+#ifdef XXXXXX
         [cameraController updateOrientationTo:deviceOrientation];
         [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)
                                       threeD:IS_3D_CAMERA(CURRENT_SOURCE)];
+#endif
         NSArray *availableFormats = [cameraController
                                      formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(CURRENT_SOURCE)];
         for (AVCaptureDeviceFormat *format in availableFormats) {
@@ -1500,7 +1487,7 @@ epsilonEquals(float a, float b) {
         } while (nextSourceIndex < N_POSS_CAM);
         assert(nextSourceIndex < N_POSS_CAM); // this loop should never be called unless there is a useful answer
     }
-    [taskCtrl idleForReconfiguration];  // selected camera
+    [taskCtrl idleTransforms];  // selected camera
 }
 
 #ifdef OLD
@@ -1700,7 +1687,7 @@ epsilonEquals(float a, float b) {
         previousSourceImage = nil;
         runningButton.selected = NO;
         [runningButton setNeedsDisplay];
-        [taskCtrl idleForReconfiguration];
+//        [taskCtrl idleTransforms];
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
@@ -1760,7 +1747,7 @@ epsilonEquals(float a, float b) {
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
-    NSLog(@"slider value %.1f", slider.value);
+//    NSLog(@"slider value %.1f", slider.value);
     [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
         [self doTransformsOn:previousSourceImage];
@@ -1776,8 +1763,8 @@ epsilonEquals(float a, float b) {
         return;
     }
     paramView.hidden = NO;
-    NSString *lowValue = [NSString stringWithFormat:lastTransform.lowValueFormat, lastTransform.low];
-    NSString *highValue = [NSString stringWithFormat:lastTransform.highValueFormat, lastTransform.high];
+//    NSString *lowValue = [NSString stringWithFormat:lastTransform.lowValueFormat, lastTransform.low];
+//    NSString *highValue = [NSString stringWithFormat:lastTransform.highValueFormat, lastTransform.high];
     paramSlider.minimumValue = lastTransform.low;
     paramSlider.maximumValue = lastTransform.high;
     paramSlider.value = lastTransform.value;
@@ -1946,6 +1933,109 @@ epsilonEquals(float a, float b) {
     return newImage;
 }
 
+// new video frame data and perhaps depth data from the cameracontroller:
+- (void) processSampleBuffer:(CMSampleBufferRef _Nonnull)sampleBuffer
+                       depth:(AVDepthData *__nullable) rawDepthData {
+    if (!live)    // PAUSED displayed means no new images
+        return;
+    if (taskCtrl.reconfigurationNeeded)
+        return;
+    if (busy) {
+        busyCount++;
+        return;
+    }
+    busy = YES;
+    
+    // video data
+    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self doTransformsOn:capturedImage];
+        self->busy = NO;    // XXXXXX busy now wrong
+    });
+    
+    if (rawDepthData) {
+        // depth data
+        AVDepthData *depthData;
+        if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
+            depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
+        else
+            depthData = rawDepthData;
+        
+        CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
+        size_t width = CVPixelBufferGetWidth(pixelBufferRef);
+        size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+        if (!depthBuf || depthBuf.w != width || depthBuf.h != height) {
+            depthBuf = [[DepthBuf alloc]
+                        initWithSize: CGSizeMake(width, height)];
+        }
+        
+        CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+        assert(sizeof(Distance) == sizeof(float));
+        float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
+        memcpy(depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
+        CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
+        
+        if (depthBuf.maxDepth == 0.0) {     // if no previous depth range
+            depthBuf.minDepth = MAXFLOAT;
+            depthBuf.maxDepth = 0.0;
+            for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
+                float z = depthBuf.db[i];
+                if (z > depthBuf.maxDepth)
+                    depthBuf.maxDepth = z;
+                if (z < depthBuf.minDepth)
+                    depthBuf.minDepth = z;
+            }
+    //        return; // skip this frame, we spent enough time on it
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self->previousSourceImage = [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
+//            if (self->cameraController.usingDepthCamera)
+                [self->depthThumbTasks executeTasksWithDepthBuf:self->depthBuf];
+            self->busy = NO;
+        });
+    }
+}
+
+- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
+    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+    
+    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
+    size_t width = CVPixelBufferGetWidth(imageBuffer);
+    size_t height = CVPixelBufferGetHeight(imageBuffer);
+    //NSLog(@"image  orientation %@", width > height ? @"panoramic" : @"portrait");
+    
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
+                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
+                                         scale:(CGFloat)1.0
+                                   orientation:UIImageOrientationUp];
+    CGImageRelease(quartzImage);
+    return image;
+}
+
+- (void) doTransformsOn:(UIImage *)sourceImage {
+    if (!sourceImage)
+        return;
+    previousSourceImage = sourceImage;
+    [screenTasks executeTasksWithImage:sourceImage];
+
+    if (DISPLAYING_THUMBS)
+        [thumbTasks executeTasksWithImage:sourceImage];
+    if (cameraSourceThumb) {
+        [cameraSourceThumb setImage:sourceImage];
+        [cameraSourceThumb setNeedsDisplay];
+    }
+}
+
+#ifdef OLD_NON_SYNC
 - (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
         didOutputDepthData:(AVDepthData *)rawDepthData
         timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
@@ -2003,20 +2093,6 @@ epsilonEquals(float a, float b) {
         self->busy = NO;
     });
 }
-
-- (void) doTransformsOn:(UIImage *)sourceImage {
-    if (!sourceImage)
-        return;
-    previousSourceImage = sourceImage;
-    [screenTasks executeTasksWithImage:sourceImage];
-
-    if (DISPLAYING_THUMBS)
-        [thumbTasks executeTasksWithImage:sourceImage];
-    if (cameraSourceThumb) {
-        [cameraSourceThumb setImage:sourceImage];
-        [cameraSourceThumb setNeedsDisplay];
-    }
-}
     
 - (void)captureOutput:(AVCaptureOutput *)captureOutput
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
@@ -2053,36 +2129,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     //NSLog(@"depth data dropped: %ld", (long)reason);
     droppedCount++;
 }
+#endif
 
 #ifdef DEBUG_TASK_CONFIGURATION
 BOOL haveOrientation = NO;
 UIImageOrientation lastOrientation;
 #endif
-
-- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
-    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
-    
-    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
-    //NSLog(@"image  orientation %@", width > height ? @"panoramic" : @"portrait");
-    
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
-                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-    
-    UIImage *image = [UIImage imageWithCGImage:quartzImage
-                                         scale:(CGFloat)1.0
-                                   orientation:UIImageOrientationUp];
-    CGImageRelease(quartzImage);
-    return image;
-}
 
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {
     NSLog(@" === didPressVideo");
@@ -2118,11 +2170,7 @@ UIImageOrientation lastOrientation;
 }
 
 - (void) doTick:(NSTimer *)sender {
-    if (taskCtrl.reconfigurationNeeded && [taskCtrl tasksIdledForLayout]) {
-        [self layout];
-    }
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl checkReadyForReconfiguration];
+//    [taskCtrl checkReadyForLayout];
     
 #ifdef NOTYET
     NSDate *now = [NSDate now];
@@ -2333,7 +2381,7 @@ static CGSize startingPinchSize;
                        animated:YES
                      completion:^{
         [self adjustBarButtons];
-        [self->taskCtrl idleForReconfiguration];
+        [self->taskCtrl idleTransforms];
     }];
 }
 
@@ -2516,29 +2564,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     oVC.view.frame = f;
     
     [self presentViewController:oVC animated:YES completion:^{
-        [self->taskCtrl idleForReconfiguration];
+        [self->taskCtrl idleTransforms];
     }];
-}
-
-- (void) startCamera {
-    if (!IS_CAMERA(CURRENT_SOURCE))
-        return;
-    [cameraController startCamera];
-}
-
-- (void) stopCamera {
-    if (!IS_CAMERA(CURRENT_SOURCE))
-        return;
-    [cameraController stopCamera];
-}
-
-- (void) setCameraRunning:(BOOL) running {
-    assert(IS_CAMERA(CURRENT_SOURCE));
-    if (running) {
-        [cameraController startCamera];
-    } else {
-        [cameraController stopCamera];
-    }
 }
 
 - (void) applyScreenLayout:(long) newLayoutIndex {
@@ -2641,9 +2668,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         }];
     }
     
-    //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
-    //cameraController.captureVideoPreviewLayer = previewLayer;
-    
     layoutValuesView.frame = transformView.frame;
     [containerView bringSubviewToFront:layoutValuesView];
     NSString *formatList = @"";
@@ -2684,8 +2708,10 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         [self doTransformsOn:currentSourceImage];
     else {
         [cameraController setupCameraSessionWithFormat:layout.format];
-        [self startCamera];
+        //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
+        //cameraController.captureVideoPreviewLayer = previewLayer;
         [taskCtrl enableTasks];
+        [cameraController startCamera];
     }
 }
 
@@ -2728,117 +2754,7 @@ int startParam;
         return;
 //    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
     nextSourceIndex = nextIndex;
-    [self->taskCtrl idleForReconfiguration];
+    [self->taskCtrl idleTransforms];
 }
-
-#ifdef OLD
-- (void) simpleLayouts {
-    if (currentSourceImage) { // file or captured image input
-        if (isiPhone) {
-            if (isPortrait) {
-                [self tryLayoutForSourceSize:currentSourceImage.size
-                                     thumbsOn:Bottom
-                                displayOption:TightDisplay];
-            } else {
-                [self tryLayoutForSourceSize:currentSourceImage.size
-                                     thumbsOn:Right
-                                displayOption:TightDisplay];
-            }
-        } else {
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Bottom
-                            displayOption:TightDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Bottom
-                            displayOption:BestDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Right
-                            displayOption:BestDisplay];
-            [self tryLayoutForSourceSize:currentSourceImage.size
-                                 thumbsOn:Right
-                            displayOption:TightDisplay];
-        }
-    } else {
-        assert(LIVE);   // select camera setting for available area
-        assert(cameraController);
-        [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:CURRENT_SOURCE.isFront
-                                      threeD:CURRENT_SOURCE.isThreeD];
-        NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:CURRENT_SOURCE.isThreeD];
-        DisplayOptions option = isiPhone ? TightDisplay : BestDisplay;
-        for (AVCaptureDeviceFormat *format in availableFormats) {
-            [self tryLayoutForFormat:format
-                                 thumbsOn:Bottom
-                            displayOption:option];
-            [self tryLayoutForFormat:format
-                                 thumbsOn:Right
-                            displayOption:option];
-       }
-    }
-}
-
-- (void) tryLayoutForFormat:(AVCaptureDeviceFormat *) trialFormat
-                   thumbsOn:(ThumbsPosition) position
-                      displayOption:(DisplayOptions) option {
-    CGSize proposedSourceSize = [cameraController sizeForFormat:trialFormat];
-    Layout *layout = [self tryLayoutForSourceSize:proposedSourceSize
-                                         thumbsOn:position
-                                    displayOption:option];
-    layout.format = trialFormat;
-}
-
-- (Layout *) tryLayoutForSourceSize:(CGSize) sourceSize
-                        thumbsOn:(ThumbsPosition) position
-                           displayOption:(DisplayOptions) option {
-    layout = [[Layout alloc] init];
-    [layout proposeLayoutForSourceSize:sourceSize
-                               thumbsOn:position
-                          displayOption:option];
-    [layouts addObject:layout];
-    return layout;
-}
-
-#ifdef NOTYET
-- (void) adjustDisplayFromSize:(CGSize) startingSize toScale:(float)newScale {
-    // constrain the size between smallest display (thumb size) to size of the containerView.
-    if (layout.aspectRatio > 1.0) {
-        if (startingSize.height*newScale < MIN_DISPLAY_H)
-            newScale = MIN_DISPLAY_H/startingSize.height;
-        else if (startingSize.height*newScale > containerView.frame.size.height)
-            newScale = containerView.frame.size.height/startingSize.height;
-    } else {
-        if (startingSize.width*newScale < MIN_DISPLAY_W)
-            newScale = MIN_DISPLAY_W/startingSize.width;
-        else if (startingSize.width*newScale > containerView.frame.size.width)
-            newScale = containerView.frame.size.width/startingSize.width;
-    }
-    
-    CGSize newSize = CGSizeMake(round(startingSize.width*newScale),
-                                round(startingSize.height*newScale));
-    if (newSize.width == layout.displayRect.size.width &&
-        newSize.height == layout.displayRect.size.height)
-        return;     // same size, nothing to do
-
-    [self adjustDisplayToLayout:newSize];
-}
-
-- (void) adjustDisplayToLayout:(CGSize) newSize {
-    [layout configureLayoutForDisplaySize:newSize];
-    transformView.frame = layout.displayRect;
-    overlayView.frame = layout.displayRect;
-    [self adjustOverlayView];
-    executeView.frame = layout.executeRect;
-
-    thumbScrollView.frame = layout.thumbArrayRect;
-    thumbsView.frame = CGRectMake(0, 0,
-                                      thumbScrollView.frame.size.width,
-                                      thumbScrollView.frame.size.height);
-    [self layoutThumbs: layout];
-    [self updateExecuteView];
-}
-#endif
-
-#endif
 
 @end

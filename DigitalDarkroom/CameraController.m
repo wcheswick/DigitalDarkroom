@@ -21,14 +21,22 @@
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
 
+@property (nonatomic, strong)   AVCaptureVideoDataOutput *videoDataOutput;
+@property (nonatomic, strong)   AVCaptureDepthDataOutput *depthDataOutput;
+@property (nonatomic, strong)   AVCaptureDataOutputSynchronizer *syncer;
+
+@property (assign)              BOOL depthCaptureEnabled;
+
 @end
 
 @implementation CameraController
 
-@synthesize captureSession;
-@synthesize delegate;
+@synthesize videoDataOutput, depthDataOutput, syncer;
 
-@synthesize usingDepthCamera;
+@synthesize captureSession;
+@synthesize videoProcessor;
+
+@synthesize usingDepthCamera, depthCaptureEnabled;
 
 @synthesize captureDevice;
 @synthesize deviceOrientation;
@@ -40,7 +48,6 @@
     self = [super init];
     if (self) {
         captureVideoPreviewLayer = nil;
-        delegate = nil;
         captureDevice = nil;
         captureSession = nil;
         usingDepthCamera = NO;
@@ -152,7 +159,6 @@
     if (captureSession) {
         [captureSession stopRunning];
     }
-    
     captureSession = [[AVCaptureSession alloc] init];
     
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
@@ -165,7 +171,7 @@
     }
     
 #ifdef DEBUG_CAMERA
-    NSLog(@" setupCameraWithFormat: %@", captureDevice.activeFormat);
+    NSLog(@" CCCC setupCameraSessionWithFormat: %@", captureDevice.activeFormat);
 #endif
 
     [captureDevice lockForConfiguration:&error];
@@ -192,63 +198,141 @@
         NSLog(@"**** could not add camera input");
     }
 
-    if (usingDepthCamera) {   // XXX i.e. depth available ?!
-#ifdef DEBUG_CAMERA
-        NSLog(@"starting DEPTH camera");
-#endif
-        AVCaptureDepthDataOutput *depthOutput = [[AVCaptureDepthDataOutput alloc] init];
-        assert(depthOutput);
-        if ([captureSession canAddOutput:depthOutput]) {
-            [captureSession addOutput:depthOutput];
-        } else {
-            NSLog(@"**** could not add data output");
-        }
-        AVCaptureConnection *depthConnection = [depthOutput connectionWithMediaType:AVMediaTypeDepthData];
-        assert(depthConnection);
-        [depthConnection setVideoOrientation:videoOrientation];
-        depthConnection.videoMirrored = usingDepthCamera;
-#ifdef DEBUG_DEPTH
-        NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
-              captureOrientationNames[videoOrientation]);
-        NSLog(@"     activeDepthDataFormat: %@", captureDevice.activeDepthDataFormat.formatDescription);
-#endif
-        
-        dispatch_queue_t queue = dispatch_queue_create("DepthQueue", NULL);
-        [depthOutput setDelegate:delegate callbackQueue:queue];
-        depthOutput.filteringEnabled = YES;
+    // configure video capture...
+    videoDataOutput = [[AVCaptureVideoDataOutput alloc] init];
+    assert(videoDataOutput);
+    if ([captureSession canAddOutput:videoDataOutput]) {
+        [captureSession addOutput:videoDataOutput];
     } else {
-#ifdef DEBUG_CAMERA
-        NSLog(@"starting VIDEO camera");
-#endif
-        AVCaptureVideoDataOutput *dataOutput = [[AVCaptureVideoDataOutput alloc] init];
-        assert(dataOutput);
-        if ([captureSession canAddOutput:dataOutput]) {
-            [captureSession addOutput:dataOutput];
-        } else {
-            NSLog(@"**** could not add data output");
-        }
-        // depthDataByApplyingExifOrientation
-        AVCaptureConnection *videoConnection = [dataOutput connectionWithMediaType:AVMediaTypeVideo];
-        [videoConnection setVideoOrientation:videoOrientation];
-        videoConnection.videoMirrored = !usingDepthCamera;
-#ifdef DEBUG_ORIENTATION
-        NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
-              deviceOrientationNames[videoOrientation]);
-#endif
-
-        dataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
-        dataOutput.videoSettings = @{
-            (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
-        };
-        dataOutput.alwaysDiscardsLateVideoFrames = YES;
-        dispatch_queue_t queue = dispatch_queue_create("VideoQueue", NULL);
-        [dataOutput setSampleBufferDelegate:delegate queue:queue];
+        NSLog(@"**** could not add video data output");
     }
+    // depthDataByApplyingExifOrientation
+    
+    AVCaptureConnection *videoConnection = [videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
+    [videoConnection setVideoOrientation:videoOrientation];
+    videoConnection.videoMirrored = !usingDepthCamera;
+#ifdef DEBUG_ORIENTATION
+    NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
+          deviceOrientationNames[videoOrientation]);
+#endif
+    videoDataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
+    videoDataOutput.videoSettings = @{
+        (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
+    };
+    videoDataOutput.alwaysDiscardsLateVideoFrames = YES;
+    dispatch_queue_t videoQueue = dispatch_queue_create("VideoCaptureQueue", NULL);
+    [videoDataOutput setSampleBufferDelegate:self queue:videoQueue];
+
+    if ([captureSession canAddOutput:videoDataOutput]) {
+        [captureSession addOutput:videoDataOutput];
+//        [self _enableVideoMirrorForDevicePosition:devicePosition];
+    }
+
+    depthDataOutput = [[AVCaptureDepthDataOutput alloc] init];
+    assert(depthDataOutput);
+    [[depthDataOutput connectionWithMediaType:AVMediaTypeDepthData] setEnabled:NO];
+    if ([captureSession canAddOutput:depthDataOutput]) {
+        [captureSession addOutput:depthDataOutput];
+        dispatch_queue_t depthQueue = dispatch_queue_create("DepthCaptureQueue", NULL);
+        [depthDataOutput setDelegate:self callbackQueue:depthQueue];
+        
+        AVCaptureConnection *depthConnection = [depthDataOutput connectionWithMediaType:AVMediaTypeDepthData];
+        depthCaptureEnabled = (depthConnection != nil);
+        
+        if (depthCaptureEnabled) {
+            [depthConnection setVideoOrientation:videoOrientation];
+            depthConnection.videoMirrored = usingDepthCamera;
+    #ifdef DEBUG_DEPTH
+            NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
+                  captureOrientationNames[videoOrientation]);
+            NSLog(@"     activeDepthDataFormat: %@", captureDevice.activeDepthDataFormat.formatDescription);
+    #endif
+            depthDataOutput.filteringEnabled = YES; // XXXX does this need to be last, after delegate?
+        }
+    }
+
+#ifdef NOTES
+    _depthCaptureEnabled = enabled;
+    [[_depthDataOutput connectionWithMediaType:AVMediaTypeDepthData] setEnabled:enabled];
+    if (enabled) {
+        _dataOutputSynchronizer =
+            [[AVCaptureDataOutputSynchronizer alloc] initWithDataOutputs:@[ _videoDataOutput, _depthDataOutput ]];
+        [_dataOutputSynchronizer setDelegate:self queue:_performer.queue];
+    } else {
+        _dataOutputSynchronizer = nil;
+    }
+    
+    - (void)setVideoOrientation:(AVCaptureVideoOrientation)videoOrientation
+    {
+        SCTraceStart();
+        // It is not neccessary call these changes on private queue, because is is just only data output configuration.
+        // It should be called from manged capturer queue to prevent lock capture session in two different(private and
+        // managed capturer) queues that will cause the deadlock.
+        SCLogVideoStreamerInfo(@"setVideoOrientation oldOrientation:%lu newOrientation:%lu",
+                               (unsigned long)_videoOrientation, (unsigned long)videoOrientation);
+        _videoOrientation = videoOrientation;
+        AVCaptureConnection *connection = [_videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
+        connection.videoOrientation = _videoOrientation;
+    }
+
+#endif
+    
+    syncer = [[AVCaptureDataOutputSynchronizer alloc]
+                                               initWithDataOutputs:
+                                               depthCaptureEnabled ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
+    dispatch_queue_t syncQueue = dispatch_queue_create("CameraSyncQueue", NULL);
+    [syncer setDelegate:self queue:syncQueue];
+
+#ifdef DEBUG_CAMERA
+    NSLog(@"synchronized session set up");
+#endif
 
     [captureSession beginConfiguration];
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
-//    NSLog(@" *** video/depth sessions set up");
+
+    return;
+}
+
+- (void)captureOutput:(AVCaptureOutput *)output
+didOutputSampleBuffer:(CMSampleBufferRef)videoSampleBuffer
+       fromConnection:(AVCaptureConnection *)connection {
+    [(id<videoSampleProcessorDelegate>)videoProcessor processSampleBuffer:videoSampleBuffer
+                                                                    depth:nil];
+}
+
+static int droppedCount = 0;
+
+- (void)captureOutput:(AVCaptureOutput *)output
+  didDropSampleBuffer:(CMSampleBufferRef)sampleBuffer
+       fromConnection:(AVCaptureConnection *)connection {
+    droppedCount++;
+}
+
+
+#pragma mark - AVCaptureDataOutputSynchronizer (Video + Depth)
+
+// from https://git.fuwafuwa.moe/mindcrime/Source-SCCamera/commit/402429fa18b08aef139b44700fb44a4d6310c076
+
+- (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
+    didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
+    
+//    NSLog(@" SSSS didOutputSynchronizedDataCollection");
+    AVCaptureSynchronizedDepthData *syncedDepthData = (AVCaptureSynchronizedDepthData *)[synchronizedDataCollection
+        synchronizedDataForCaptureOutput:depthDataOutput];
+    AVDepthData *depthData = nil;
+    if (syncedDepthData && !syncedDepthData.depthDataWasDropped) {
+        depthData = syncedDepthData.depthData;
+    }
+
+    AVCaptureSynchronizedSampleBufferData *syncedVideoData =
+        (AVCaptureSynchronizedSampleBufferData *)[synchronizedDataCollection
+            synchronizedDataForCaptureOutput:videoDataOutput];
+    if (syncedVideoData && !syncedVideoData.sampleBufferWasDropped) {
+        CMSampleBufferRef videoSampleBuffer = syncedVideoData.sampleBuffer;
+        [(id<videoSampleProcessorDelegate>)videoProcessor processSampleBuffer:videoSampleBuffer
+                                                                        depth:depthData];
+    }
 }
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format {
@@ -351,20 +435,21 @@
         NSLog(@"startcamera: no capture session yet");
         return;
     }
-    if (![self isCameraOn])
+    if (!captureSession.isRunning) {
         [captureSession startRunning];
-}
-
-- (void) stopCamera {
-    if ([self isCameraOn]) {
-        [captureSession stopRunning];
+#ifdef DEBUG_CAMERA
+        NSLog(@"CCCC turning camera on");
+#endif
     }
 }
 
-- (BOOL) isCameraOn {
-    if (!captureSession)
-        return NO;
-    return captureSession.isRunning;
+- (void) stopCamera {
+    if (captureSession.isRunning) {
+#ifdef DEBUG_CAMERA
+        NSLog(@"CCCC turning camera off");
+#endif
+        [captureSession stopRunning];
+    }
 }
 
 #ifdef XXX

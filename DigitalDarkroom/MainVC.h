@@ -8,8 +8,10 @@
 
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
-#import "InputSource.h"
 #import "ThumbView.h"
+#import "InputSource.h"
+
+NS_ASSUME_NONNULL_BEGIN
 
 typedef enum {
     Bottom,
@@ -25,14 +27,18 @@ typedef enum {
     FullScreenDisplay,    // only the display
 } DisplayOptions;
 
+@protocol videoSampleProcessorDelegate
+- (void) processSampleBuffer:(CMSampleBufferRef _Nonnull)sampleBuffer
+                       depth:(AVDepthData *__nullable) depthData;
+@end
+
 @interface MainVC : UIViewController
-<UICollectionViewDelegate,
-UICollectionViewDataSource,
-UICollectionViewDelegateFlowLayout,
-UIScrollViewDelegate,
-AVCaptureVideoDataOutputSampleBufferDelegate,
-UIPopoverPresentationControllerDelegate,
-AVCaptureDepthDataOutputDelegate> {
+        <UICollectionViewDelegate,
+//        UICollectionViewDataSource,
+//        UICollectionViewDelegateFlowLayout,
+//        UIScrollViewDelegate,
+        videoSampleProcessorDelegate,
+        UIPopoverPresentationControllerDelegate> {
     // layout looks at these:
     BOOL isPortrait, isiPhone;
     UIView *containerView;
@@ -45,9 +51,11 @@ AVCaptureDepthDataOutputDelegate> {
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
-- (void) tasksAreIdle;
+- (void) transformsIdle;
 - (void) newDeviceOrientation;
 
 extern MainVC *mainVC;
 
 @end
+
+NS_ASSUME_NONNULL_END

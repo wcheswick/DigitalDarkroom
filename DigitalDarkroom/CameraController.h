@@ -10,37 +10,35 @@
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import "MainVC.h"
-#import "InputSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface CameraController : NSObject {
+@interface CameraController : NSObject
+<AVCaptureDataOutputSynchronizerDelegate,
+        AVCaptureDepthDataOutputDelegate,
+        AVCaptureVideoDataOutputSampleBufferDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
-    __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
-        AVCaptureDepthDataOutputDelegate>delegate;
+    __unsafe_unretained id videoProcessor;
     BOOL usingDepthCamera;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
-@property (assign)  __unsafe_unretained id<AVCaptureVideoDataOutputSampleBufferDelegate,
-                    AVCaptureDepthDataOutputDelegate>delegate;
+@property (assign)  __unsafe_unretained id videoProcessor;
 @property (assign)  volatile BOOL usingDepthCamera;
 
 - (BOOL) cameraAvailableOnFront:(BOOL)front threeD:(BOOL)threeD;
+- (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
+- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
+
+- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format;
 - (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
 
-- (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
-- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format;
-- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
-
 - (void) startCamera;
 - (void) stopCamera;
-- (BOOL) isCameraOn;
 
 + (NSString *) dumpDeviceOrientationName: (UIDeviceOrientation) o;
-
 - (NSString *) dumpFormatType:(OSType) t;
 
 @end

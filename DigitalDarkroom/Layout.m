@@ -193,7 +193,7 @@ NSString * __nullable displayOptionNames[] = {
     
     int thumbCount = (int)mainVC.thumbViewsArray.count;
     long wastedThumbs = thumbsShown - thumbCount;
-    float thumbFrac = wastedThumbs >= 0 ? 1.0 : (float)thumbsShown / (float)thumbCount;
+//    float thumbFrac = wastedThumbs >= 0 ? 1.0 : (float)thumbsShown / (float)thumbCount;
     
 #define MIN_TIGHT_DISPLAY_FRAC  0.2
 #define MIN_BEST_DISPLAY_FRAC  0.3

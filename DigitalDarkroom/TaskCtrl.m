@@ -42,7 +42,7 @@
     return taskGroup;
 }
 
-- (BOOL) tasksIdledForLayout {
+- (BOOL) tasksAreIdled {
     for (TaskGroup *taskGroup in taskGroups) {
         if (![taskGroup isReadyForLayout])
             return NO;
@@ -50,25 +50,31 @@
     return YES;
 }
 
-- (void) idleForReconfiguration {
+- (void) idleTransforms {
 #ifdef DEBUG_TASK_BUSY
     NSLog(@"TTT idling tasks");
 #endif
     reconfigurationNeeded = YES;
-    [self checkReadyForReconfiguration];
+    [self checkForIdle];
 }
 
-- (void) checkReadyForReconfiguration {
+- (void) checkForIdle {
+    if (!reconfigurationNeeded)
+        return;
     for (TaskGroup *taskGroup in taskGroups) {
         if (taskGroup.busyCount)
             return;
     }
+    reconfigurationNeeded = NO;
+    [self->mainVC transformsIdle];
+#ifdef OLD
     dispatch_async(dispatch_get_main_queue(), ^{
 #ifdef DEBUG_TASK_BUSY
         NSLog(@"TTT    tasks now idle");
 #endif
-        [self->mainVC tasksAreIdle];
+        [self->mainVC transformsIdle];
     });
+#endif
 }
 
 - (void) enableTasks {

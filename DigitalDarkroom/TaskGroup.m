@@ -206,7 +206,7 @@
             }
         }
         // The are all stopped.  Inform the authorities
-        [taskCtrl idleForReconfiguration];
+        [taskCtrl tasksAreIdled];
         return;
     }
 
@@ -258,12 +258,8 @@
             assert(busyCount >= 0);
         }
     }
-    [self checkForReconfigure];
-}
-
-- (void) checkForReconfigure {
-    if (busyCount == 0 && taskCtrl.reconfigurationNeeded)
-        [taskCtrl checkReadyForReconfiguration];
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl idleTransforms];
 }
 
 // same idea as image tasks, but convert the depth buffer
@@ -300,7 +296,8 @@
         busyCount--;
         assert(busyCount >= 0);
     }
-    [self checkForReconfigure];
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl idleTransforms];
     return sourceImage;
 }
 
