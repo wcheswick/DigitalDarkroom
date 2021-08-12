@@ -34,7 +34,7 @@ typedef enum {
 
 @interface MainVC : UIViewController
         <UICollectionViewDelegate,
-//        UICollectionViewDataSource,
+        UICollectionViewDataSource,
 //        UICollectionViewDelegateFlowLayout,
 //        UIScrollViewDelegate,
         videoSampleProcessorDelegate,

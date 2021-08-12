@@ -268,7 +268,8 @@
 
 - (UIImage *) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf {
     UIImage *sourceImage = nil;   // after depth processing
-    DepthBuf *activeDepthBuf = rawDepthBuf;
+    DepthBuf *activeDepthBuf = [rawDepthBuf copy];
+    
     if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
         // cheap scaling: XXXX use the hardware
         double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
@@ -279,10 +280,10 @@
             for (int y=0; y<depthBuf.h; y++) {
                 int sy = trunc(y/yScale);
                 assert(sy < rawDepthBuf.h);
-                depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];
+                activeDepthBuf.da[y][x] = rawDepthBuf.da[sy][sx];
             }
         }
-        activeDepthBuf = depthBuf;
+//        activeDepthBuf = depthBuf;
         activeDepthBuf.minDepth = rawDepthBuf.minDepth;
         activeDepthBuf.maxDepth = rawDepthBuf.maxDepth;
     }

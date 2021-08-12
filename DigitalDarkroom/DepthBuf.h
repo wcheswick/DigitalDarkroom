@@ -30,6 +30,7 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
 //- (Distance) distAtX:(int)x Y:(int)y;
 - (void) copyDepthsTo:(DepthBuf *) dest;
 - (void) verify;
+- (void) findDepthRange;
 
 NS_ASSUME_NONNULL_END
 

@@ -19,19 +19,19 @@ NS_ASSUME_NONNULL_BEGIN
         AVCaptureVideoDataOutputSampleBufferDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
-    BOOL usingDepthCamera;
+    NSMutableArray *formatList;     // from the device, edited to what we could use
+    BOOL depthDataAvailable;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id videoProcessor;
-@property (assign)  volatile BOOL usingDepthCamera;
+@property (assign)  volatile BOOL depthDataAvailable;
+@property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
 
-- (BOOL) cameraAvailableOnFront:(BOOL)front threeD:(BOOL)threeD;
-- (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D;
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
 - (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format;
-- (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD;
+- (BOOL) selectCameraOnSide:(BOOL)front;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
 

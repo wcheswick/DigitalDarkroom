@@ -36,13 +36,13 @@
 @synthesize captureSession;
 @synthesize videoProcessor;
 
-@synthesize usingDepthCamera, depthCaptureEnabled;
+@synthesize depthDataAvailable;
 
 @synthesize captureDevice;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
-
+@synthesize formatList;
 
 - (id)init {
     self = [super init];
@@ -50,67 +50,75 @@
         captureVideoPreviewLayer = nil;
         captureDevice = nil;
         captureSession = nil;
-        usingDepthCamera = NO;
         videoOrientation = -1;  // not initialized
+        formatList = [[NSMutableArray alloc] init];
     }
     return self;
 }
 
-- (AVCaptureDevice *) cameraDeviceOnFront:(BOOL)onFront threeD:(BOOL)threeD {
-    if (threeD) {
-        if (onFront) {
-                return [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInTrueDepthCamera
-                                 mediaType: AVMediaTypeDepthData
-                                 position: AVCaptureDevicePositionFront];
-        } else {
-                return [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                                 mediaType: AVMediaTypeDepthData
-                                 position: AVCaptureDevicePositionBack];
-        }
-    } else {
-        AVCaptureDevice *twoDdevice;
-        if (onFront) {
-            twoDdevice = [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                                 mediaType: AVMediaTypeVideo
-                                 position: AVCaptureDevicePositionFront];
-                if (!twoDdevice) {
-                    twoDdevice = [AVCaptureDevice
-                                     defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                                     mediaType: AVMediaTypeVideo
-                                     position: AVCaptureDevicePositionFront];
-                }
-                return twoDdevice;
-        } else {    // rear 2d camera
-            twoDdevice = [AVCaptureDevice
-                                 defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInDualCamera
-                                 mediaType: AVMediaTypeVideo
-                                 position: AVCaptureDevicePositionBack];
-                if (!twoDdevice)
-                    twoDdevice = [AVCaptureDevice
-                                     defaultDeviceWithDeviceType: AVCaptureDeviceTypeBuiltInWideAngleCamera
-                                     mediaType: AVMediaTypeVideo
-                                     position: AVCaptureDevicePositionBack];
-                return twoDdevice;
-        }
-    }
-}
 
-- (BOOL) cameraAvailableOnFront:(BOOL)front threeD:(BOOL)threeD {
-    return [self cameraDeviceOnFront:front threeD:threeD] != nil;
-}
-
-- (BOOL) selectCameraOnSide:(BOOL)front threeD:(BOOL)threeD {
-#ifdef DEBUG_CAMERA
-    NSLog(@"CCC selecting camera on side %@, %@", front ? @"Front" : @"Rear ",
-          threeD ? @"3D" : @"2D");
-#endif
-    captureDevice = [self cameraDeviceOnFront:front threeD:threeD];
-    if (!captureDevice)
+- (BOOL) cameraDeviceOnFront:(BOOL)onFront {
+    AVCaptureDeviceDiscoverySession *discSess = [AVCaptureDeviceDiscoverySession
+                                                 discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInTrueDepthCamera,
+                                                                                   AVCaptureDeviceTypeBuiltInDualWideCamera,
+                                                                                   AVCaptureDeviceTypeBuiltInTripleCamera,
+                                                                                   AVCaptureDeviceTypeBuiltInDualCamera,
+                                                                                   AVCaptureDeviceTypeBuiltInWideAngleCamera,
+                                                                                   AVCaptureDeviceTypeBuiltInUltraWideCamera]
+                                                 mediaType:AVMediaTypeVideo
+                                                 position:onFront ? AVCaptureDevicePositionFront : AVCaptureDevicePositionBack];
+//    NSLog(@" discovered devices: %@", discSess.devices);
+//    NSLog(@"        device sets: %@", discSess.supportedMultiCamDeviceSets);
+    if (!discSess.devices.count)
         return NO;
-    usingDepthCamera = threeD;
+    
+    captureDevice = discSess.devices[0];
+    //    NSLog(@" top device: %@", activeDevice);
+    //    NSLog(@"    formats: %@", activeDevice.formats);    // need to select supports depth
+    [formatList removeAllObjects];
+    int depthCount = 0;
+    for (AVCaptureDeviceFormat *format in captureDevice.formats) {
+        FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+        //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
+        switch (mediaSubType) {
+            case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+            case kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange: // 'x420'
+                /* 2 plane YCbCr10 4:2:0, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+            case kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange:  //'x422'
+                /* 2 plane YCbCr10 4:2:2, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+            case kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange: // 'x444'
+                /* 2 plane YCbCr10 4:4:4, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+                continue;
+           case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
+                break;
+            default:
+                NSLog(@"??? Unknown media subtype encountered in format: %@", format);
+                continue;
+        }
+        if (format.supportedDepthDataFormats &&
+            format.supportedDepthDataFormats.count > 0)
+            depthCount++;
+#ifdef NOT
+        NSLog(@"DDDDDD format: %@", format.formatDescription);
+        NSArray<AVCaptureDeviceFormat *> *depthFormats = format.supportedDepthDataFormats;
+        NSLog(@"       depth formats: %@", depthFormats);
+#endif
+        [formatList addObject:format];
+    }
+    assert(formatList.count);   // we need at least one format!
+    if (!formatList.count) {
+        return NO;
+    }
+    NSLog(@" --- depthcount: %d", depthCount);
+    return YES;
+}
+
+- (BOOL) selectCameraOnSide:(BOOL)front {
+#ifdef DEBUG_CAMERA
+    NSLog(@"CCC selecting camera on side %@", front ? @"Front" : @"Rear ");
+#endif
+    if (![self cameraDeviceOnFront:front])
+        return NO;
     return YES;
 }
 
@@ -147,7 +155,8 @@
 - (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format {
     NSError *error;
     assert(captureDevice);  // must have been selected, but not configured, before
-
+    depthDataAvailable = (format.supportedDepthDataFormats &&
+                          format.supportedDepthDataFormats.count > 0);
 #ifdef DEBUG_ORIENTATION
     NSLog(@" +++ setupSession: device orientation (%ld): %@",
           (long)deviceOrientation,
@@ -172,6 +181,7 @@
     
 #ifdef DEBUG_CAMERA
     NSLog(@" CCCC setupCameraSessionWithFormat: %@", captureDevice.activeFormat);
+    NSLog(@"                       DepthFormat: %@", captureDevice.activeFormat.supportedDepthDataFormats);
 #endif
 
     [captureDevice lockForConfiguration:&error];
@@ -210,7 +220,7 @@
     
     AVCaptureConnection *videoConnection = [videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
     [videoConnection setVideoOrientation:videoOrientation];
-    videoConnection.videoMirrored = !usingDepthCamera;
+    videoConnection.videoMirrored = YES;
 #ifdef DEBUG_ORIENTATION
     NSLog(@" +++  video orientation: %ld, %@", (long)videoOrientation,
           deviceOrientationNames[videoOrientation]);
@@ -237,11 +247,12 @@
         [depthDataOutput setDelegate:self callbackQueue:depthQueue];
         
         AVCaptureConnection *depthConnection = [depthDataOutput connectionWithMediaType:AVMediaTypeDepthData];
-        depthCaptureEnabled = (depthConnection != nil);
+        depthConnection.videoMirrored = NO;
+        depthDataAvailable = (depthConnection != nil);
         
-        if (depthCaptureEnabled) {
+        if (depthDataAvailable) {
             [depthConnection setVideoOrientation:videoOrientation];
-            depthConnection.videoMirrored = usingDepthCamera;
+            depthConnection.videoMirrored = YES; // XXXXXX depthDataAvailable;
     #ifdef DEBUG_DEPTH
             NSLog(@" +++ depth video orientation 2: %ld, %@", (long)videoOrientation,
                   captureOrientationNames[videoOrientation]);
@@ -279,7 +290,7 @@
     
     syncer = [[AVCaptureDataOutputSynchronizer alloc]
                                                initWithDataOutputs:
-                                               depthCaptureEnabled ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
+              depthDataAvailable ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
     dispatch_queue_t syncQueue = dispatch_queue_create("CameraSyncQueue", NULL);
     [syncer setDelegate:self queue:syncQueue];
 
@@ -394,6 +405,7 @@ static int droppedCount = 0;
     return YES;
 }
 
+#ifdef OLD
 - (NSArray *) formatsForSelectedCameraNeeding3D:(BOOL) need3D {
     NSMutableArray *formatList = [[NSMutableArray alloc] init];
     for (AVCaptureDeviceFormat *format in captureDevice.formats) {
@@ -429,6 +441,7 @@ static int droppedCount = 0;
     }
     return [NSArray arrayWithArray:formatList];
 }
+#endif
 
 - (void) startCamera {
     if (!captureSession) {

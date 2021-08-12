@@ -247,7 +247,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   Layout *layout;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
-@property (nonatomic, strong)   DepthBuf *depthBuf;
+@property (nonatomic, strong)   DepthBuf *rawDepthBuf;
 @property (assign)              CGSize transformDisplaySize;
 
 @property (nonatomic, strong)   UISegmentedControl *sourceSelectionView;
@@ -311,8 +311,7 @@ MainVC *mainVC = nil;
 @synthesize hiresButton;
 
 @synthesize rowIsCollapsed;
-@synthesize depthBuf;
-
+@synthesize rawDepthBuf;
 @synthesize transformDisplaySize;
 @synthesize sourceSelectionView;
 @synthesize uiSelection;
@@ -357,7 +356,7 @@ MainVC *mainVC = nil;
         
         transformTotalElapsed = 0;
         transformCount = 0;
-        depthBuf = nil;
+        rawDepthBuf = nil;
         thumbScrollView = nil;
         busy = NO;
         options = [[Options alloc] init];
@@ -380,8 +379,7 @@ MainVC *mainVC = nil;
         
         if (HAVE_CAMERA) {
             for (int ci=0; ci<N_POSS_CAM; ci++) {
-                if ([cameraController cameraAvailableOnFront:possibleCameras[ci].front
-                                                       threeD:possibleCameras[ci].threeD]) {
+                if ([cameraController selectCameraOnSide:possibleCameras[ci].front]) {
                     cameraCount++;
                     InputSource *newSource = [[InputSource alloc] init];
                     [newSource makeCameraSource:possibleCameras[ci].name
@@ -461,7 +459,10 @@ MainVC *mainVC = nil;
 
         Transform *transform = [transforms.transforms objectAtIndex:ti];
         NSString *section = [transform.helpPath pathComponents][0];
-        if (!lastSection || ![lastSection isEqualToString:section]) {
+        if (!lastSection || ![lastSection isEqualToString:section]) {               // new section.
+            [thumbView configureSectionThumbNamed:section];
+            [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
+            
             thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
             lastSection = section;
         }
@@ -540,15 +541,15 @@ CGFloat topOfNonDepthArray = 0;
     nextButtonFrame = layout.firstThumbRect;
     assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
+    if (DISPLAYING_THUMBS && cameraController.depthDataAvailable)
         [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
     CGRect transformNameRect;
     transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect));
     transformNameRect.size = CGSizeMake(nextButtonFrame.size.width, THUMB_LABEL_H);
-    CGRect sectionNameRect = CGRectMake(0, 20,
-                                        nextButtonFrame.size.width,
-                                        nextButtonFrame.size.height);
+    CGRect sectionNameRect = CGRectMake(THUMB_LABEL_SEP, SEP,
+                                        nextButtonFrame.size.width - 2*THUMB_LABEL_SEP,
+                                        nextButtonFrame.size.height - 2*SEP);
     
     // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
     // positions for the current situation. These thumbs come in section, each of which has
@@ -577,11 +578,6 @@ CGFloat topOfNonDepthArray = 0;
 #endif
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = sectionNameRect;
-#ifdef NODEPTHSSWITCH   // XXXX
-            depthSwitch.enabled = AVAIL(CURRENT_SOURCE.otherDepthIndex);
-            if (depthSwitch.enabled)
-                depthSwitch.on = CURRENT_SOURCE.isThreeD;
-#endif
             thumbView.frame = nextButtonFrame;  // this is a little incomplete
             lastSection = thumbView.sectionName;
         } else {
@@ -594,8 +590,8 @@ CGFloat topOfNonDepthArray = 0;
                   transform.name);
 #endif
             if (transform.type == DepthVis) {
-                [thumbView enable: cameraController.usingDepthCamera];
-                if (cameraController.usingDepthCamera) {
+                [thumbView enable: cameraController.depthDataAvailable];
+                if (cameraController.depthDataAvailable) {
                     BOOL selected = thumbView.transformIndex == currentDepthTransformIndex;
                     [self adjustThumbView:thumbView selected:selected];
                     if (selected) {
@@ -1056,8 +1052,7 @@ static NSString * const imageOrientationName[] = {
 
         if (IS_CAMERA(source)) {
             [cameraController updateOrientationTo:deviceOrientation];
-            [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)
-                                          threeD:IS_3D_CAMERA(source)];
+            [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
             [self liveOn:YES];
         } else {    // source is a file, it is our source image
             currentSourceImage = [UIImage imageNamed: source.imagePath];
@@ -1212,9 +1207,7 @@ static NSString * const imageOrientationName[] = {
         [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)
                                       threeD:IS_3D_CAMERA(CURRENT_SOURCE)];
 #endif
-        NSArray *availableFormats = [cameraController
-                                     formatsForSelectedCameraNeeding3D:IS_3D_CAMERA(CURRENT_SOURCE)];
-        for (AVCaptureDeviceFormat *format in availableFormats) {
+        for (AVCaptureDeviceFormat *format in cameraController.formatList) {
             CGSize formatSize = [cameraController sizeForFormat:format];
             [self tryAllThumbsForSize:formatSize format:format];
        }
@@ -1352,7 +1345,7 @@ static NSString * const imageOrientationName[] = {
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
-    if (DISPLAYING_THUMBS && cameraController.usingDepthCamera)
+    if (DISPLAYING_THUMBS && cameraController.depthDataAvailable)
         [depthThumbTasks configureGroupWithNewDepthTransform:depthTransform];
 }
 
@@ -1403,7 +1396,7 @@ static NSString * const imageOrientationName[] = {
         }
         [screenTask configureTaskForSize];
     }
-    [self doTransformsOn:currentSourceImage];
+    [self doTransformsOn:currentSourceImage depth:rawDepthBuf]; // XXXXXX depth of saved image
 //    [self updateOverlayView];
     [self updateExecuteView];
     BOOL oldParameters = lastTransform && lastTransform.hasParameters;
@@ -1743,21 +1736,21 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (IBAction)doParamSlider:(UISlider *)slider {
-    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
+    Transform *lastTransform = [screenTask lastTransform:cameraController.depthDataAvailable];
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
 //    NSLog(@"slider value %.1f", slider.value);
     [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
-        [self doTransformsOn:previousSourceImage];
+        [self doTransformsOn:previousSourceImage depth:rawDepthBuf];    // XXXXXX depth of source image
         [self updateParamViewFor: lastTransform];
         [self updateExecuteView];
     }
 }
 
 - (void) adjustParamView {
-    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
+    Transform *lastTransform = [screenTask lastTransform:cameraController.depthDataAvailable];
     if (!lastTransform || !lastTransform.hasParameters) {
         paramView.hidden = YES;
         return;
@@ -1948,13 +1941,10 @@ static NSString * const imageOrientationName[] = {
     
     // video data
     UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self doTransformsOn:capturedImage];
-        self->busy = NO;    // XXXXXX busy now wrong
-    });
     
-    if (rawDepthData) {
-        // depth data
+    if (!rawDepthData)
+        rawDepthBuf = nil;
+    else {
         AVDepthData *depthData;
         if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
             depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
@@ -1964,36 +1954,24 @@ static NSString * const imageOrientationName[] = {
         CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
         size_t width = CVPixelBufferGetWidth(pixelBufferRef);
         size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-        if (!depthBuf || depthBuf.w != width || depthBuf.h != height) {
-            depthBuf = [[DepthBuf alloc]
+        if (!rawDepthBuf || rawDepthBuf.w != width || rawDepthBuf.h != height) {
+            rawDepthBuf = [[DepthBuf alloc]
                         initWithSize: CGSizeMake(width, height)];
         }
         
         CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
         assert(sizeof(Distance) == sizeof(float));
         float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
-        memcpy(depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
+        memcpy(rawDepthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
         CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
-        
-        if (depthBuf.maxDepth == 0.0) {     // if no previous depth range
-            depthBuf.minDepth = MAXFLOAT;
-            depthBuf.maxDepth = 0.0;
-            for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
-                float z = depthBuf.db[i];
-                if (z > depthBuf.maxDepth)
-                    depthBuf.maxDepth = z;
-                if (z < depthBuf.minDepth)
-                    depthBuf.minDepth = z;
-            }
-    //        return; // skip this frame, we spent enough time on it
-        }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self->previousSourceImage = [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
-//            if (self->cameraController.usingDepthCamera)
-                [self->depthThumbTasks executeTasksWithDepthBuf:self->depthBuf];
-            self->busy = NO;
-        });
+                
+        [rawDepthBuf findDepthRange];
     }
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self doTransformsOn:capturedImage depth:self->rawDepthBuf];    // and depthbuf
+        self->busy = NO;    // XXXXXX busy now wrong
+    });
 }
 
 - (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
@@ -2021,7 +1999,9 @@ static NSString * const imageOrientationName[] = {
     return image;
 }
 
-- (void) doTransformsOn:(UIImage *)sourceImage {
+- (void) doTransformsOn:(UIImage *)sourceImage depth:(DepthBuf *) db {
+    if (db)
+        [depthThumbTasks executeTasksWithDepthBuf:db];
     if (!sourceImage)
         return;
     previousSourceImage = sourceImage;
@@ -2034,102 +2014,6 @@ static NSString * const imageOrientationName[] = {
         [cameraSourceThumb setNeedsDisplay];
     }
 }
-
-#ifdef OLD_NON_SYNC
-- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
-        didOutputDepthData:(AVDepthData *)rawDepthData
-        timestamp:(CMTime)timestamp connection:(AVCaptureConnection *)connection {
-    if (!live)    // PAUSED displayed means no new images
-        return;
-    if (!cameraController.usingDepthCamera)
-        return;
-    if (taskCtrl.reconfigurationNeeded)
-        return;
-    depthCount++;
-    if (busy) {
-        busyCount++;
-        return;
-    }
-    busy = YES;
-    
-    AVDepthData *depthData;
-    if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
-        depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
-    else
-        depthData = rawDepthData;
-            
-    CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
-    size_t width = CVPixelBufferGetWidth(pixelBufferRef);
-    size_t height = CVPixelBufferGetHeight(pixelBufferRef);
-    if (!depthBuf || depthBuf.w != width || depthBuf.h != height) {
-        depthBuf = [[DepthBuf alloc]
-                    initWithSize: CGSizeMake(width, height)];
-    }
-    
-    CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
-    assert(sizeof(Distance) == sizeof(float));
-    float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
-    memcpy(depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
-    CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
-    
-    if (depthBuf.maxDepth == 0.0) {     // if no previous depth range
-        depthBuf.minDepth = MAXFLOAT;
-        depthBuf.maxDepth = 0.0;
-        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
-            float z = depthBuf.db[i];
-            if (z > depthBuf.maxDepth)
-                depthBuf.maxDepth = z;
-            if (z < depthBuf.minDepth)
-                depthBuf.minDepth = z;
-        }
-//        return; // skip this frame, we spent enough time on it
-    }
-
-    assert(cameraController.usingDepthCamera);
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self->previousSourceImage = [self->screenTasks executeTasksWithDepthBuf:self->depthBuf];
-        if (self->cameraController.usingDepthCamera)
-            [self->depthThumbTasks executeTasksWithDepthBuf:self->depthBuf];
-        self->busy = NO;
-    });
-}
-    
-- (void)captureOutput:(AVCaptureOutput *)captureOutput
-didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
-       fromConnection:(AVCaptureConnection *)captureConnection {
-    frameCount++;
-    if (!live)    // PAUSED displayed means no new images
-        return;
-    if (taskCtrl.reconfigurationNeeded)
-        return;
-    if (busy) {
-        busyCount++;
-        return;
-    }
-    busy = YES;
-    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self doTransformsOn:capturedImage];
-        self->busy = NO;
-    });
-}
-
-- (void)captureOutput:(AVCaptureOutput *)captureOutput
-  didDropSampleBuffer:(nonnull CMSampleBufferRef)sampleBuffer
-       fromConnection:(nonnull AVCaptureConnection *)connection {
-    //NSLog(@"dropped");
-    droppedCount++;
-}
-
-- (void)depthDataOutput:(AVCaptureDepthDataOutput *)output
-       didDropDepthData:(AVDepthData *)depthData
-              timestamp:(CMTime)timestamp
-             connection:(AVCaptureConnection *)connection
-                 reason:(AVCaptureOutputDataDroppedReason)reason {
-    //NSLog(@"depth data dropped: %ld", (long)reason);
-    droppedCount++;
-}
-#endif
 
 #ifdef DEBUG_TASK_CONFIGURATION
 BOOL haveOrientation = NO;
@@ -2146,7 +2030,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
     [self deselectAllThumbs];
-    [self doTransformsOn:currentSourceImage];
+    [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
 //    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -2212,7 +2096,7 @@ UIImageOrientation lastOrientation;
         ThumbView *thumbView = [self thumbForTransform:lastTransform];
         [self adjustThumbView:thumbView selected:NO];
         [screenTask removeLastTransform];
-        [self doTransformsOn:currentSourceImage];
+        [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
 //        [self updateOverlayView];
         [self updateExecuteView];
         [self adjustBarButtons];
@@ -2228,7 +2112,7 @@ UIImageOrientation lastOrientation;
 
 - (void) updateExecuteView {
     NSString *t = nil;
-    size_t start = cameraController.usingDepthCamera ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
+    size_t start = cameraController.depthDataAvailable ? DEPTH_TRANSFORM : DEPTH_TRANSFORM + 1;
     long displaySteps = screenTask.transformList.count - start;
     CGFloat bestH = EXECUTE_H_FOR(displaySteps);
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
@@ -2705,7 +2589,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [self adjustParamView];
     [taskCtrl enableTasks];
     if (currentSourceImage)
-        [self doTransformsOn:currentSourceImage];
+        [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
     else {
         [cameraController setupCameraSessionWithFormat:layout.format];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
@@ -2737,7 +2621,7 @@ int startParam;
 //            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
 //                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
             if ([screenTask updateParamOfLastTransformTo:newParam]) {
-                [self doTransformsOn:previousSourceImage];
+                [self doTransformsOn:previousSourceImage depth:rawDepthBuf];
                 [self adjustParamView];
                 [self updateExecuteView];
             }

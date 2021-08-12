@@ -81,9 +81,10 @@ typedef long PixelIndex_t;
 #define PAUSE_FONT_SIZE 18
 #define PAUSE_W         (PAUSE_FONT_SIZE*12)
 #define THUMB_FONT_SIZE 14
-#define THUMB_LABEL_H   (2.0*(THUMB_FONT_SIZE+6))
+#define THUMB_LABEL_H   (3.0*(THUMB_FONT_SIZE+6))
+#define THUMB_LABEL_SEP 4
 
-#define SECTION_HEADER_FONT_SIZE    24
+#define SECTION_HEADER_FONT_SIZE    20
 
 #define EXECUTE_BORDER_W    2
 

@@ -14,7 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 #define THUMB_LABEL_TAG         198
 #define THUMB_IMAGE_TAG         197
 
-#define SECTION_NAME_FONT_SIZE  14
 #define SECTION_SWITCH_H    31
 #define SECTION_SWITCH_W    51  // apparently fixed?
 
@@ -28,9 +27,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *sectionName;
 @property (assign)              long transformIndex;
 
-- (void) configureSectionThumbNamed:(NSString *)sectionName
-                         withSwitch:(UISwitch *__nullable) sw;
 - (void) configureForTransform:(Transform *) transform;
+- (void) configureSectionThumbNamed:(NSString *)sectionName;
 - (void) enable:(BOOL) enable;
 
 @end

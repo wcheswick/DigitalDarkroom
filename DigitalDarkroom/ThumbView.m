@@ -77,19 +77,26 @@
     self.layer.borderWidth = 1.0;
 }
 
-- (void) configureSectionThumbNamed:(NSString *)sn
-                         withSwitch:(UISwitch *__nullable) sw {
+- (void) configureSectionThumbNamed:(NSString *)sn {
     sectionName = sn;
     
-    UILabel *sectionLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+    UILabel *sectionLabel = [[UILabel alloc] initWithFrame:CGRectMake(THUMB_LABEL_SEP, LATER, LATER, LATER)];
     sectionLabel.tag = THUMB_LABEL_TAG;
     sectionLabel.textAlignment = NSTextAlignmentCenter;
     sectionLabel.adjustsFontSizeToFitWidth = YES;
-    sectionLabel.numberOfLines = 3;
+    sectionLabel.numberOfLines = 0;
     sectionLabel.lineBreakMode = NSLineBreakByWordWrapping;
-    sectionLabel.text = [sectionName stringByAppendingString:@"\ntransforms"];
+    
+    NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+    paragraphStyle.hyphenationFactor = 1.0f;
+
+    // hyphenated entry
+    sectionLabel.attributedText  = [[NSMutableAttributedString alloc]
+                                    initWithString:[sectionName stringByAppendingString:@""]
+                                    attributes:@{ NSParagraphStyleAttributeName : paragraphStyle }];;
     sectionLabel.textColor = [UIColor blackColor];
-    sectionLabel.font = [UIFont boldSystemFontOfSize:SECTION_NAME_FONT_SIZE];
+    sectionLabel.font = [UIFont boldSystemFontOfSize:SECTION_HEADER_FONT_SIZE];
+    sectionLabel.textAlignment = NSTextAlignmentCenter;
     sectionLabel.highlighted = NO;    // yes if selected
 #ifdef NOTDEF
     sectionLabel.attributedText = [[NSMutableAttributedString alloc]
@@ -107,12 +114,6 @@
 #endif
     sectionLabel.opaque = NO;
     [self addSubview:sectionLabel];
-    
-    if (sw) {
-        [self addSubview:sw];
-        sw.frame = CGRectMake(0, LATER, LATER, SECTION_SWITCH_H);
-        [self addSubview:sw];
-    }
 }
 
 @end

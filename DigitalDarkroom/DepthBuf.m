@@ -104,6 +104,18 @@
     }
 }
 
+- (void) findDepthRange {
+    minDepth = MAXFLOAT;
+    maxDepth = 0.0;
+    for (int i=0; i<w * h; i++) {
+        float z = db[i];
+        if (z > maxDepth)
+            maxDepth = z;
+        if (z < minDepth)
+            minDepth = z;
+    }
+}
+
 - (void) copyDepthsTo:(DepthBuf *) dest {
     assert(w == dest.w);
     assert(h == dest.h);    // the PixelArray pointers in the destination will do
