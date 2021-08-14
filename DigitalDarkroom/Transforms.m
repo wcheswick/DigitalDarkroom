@@ -514,9 +514,30 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     return 0;
 }
 
-
 - (void) addPolarTransforms {
-    lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
+
+    // Now this one:  $1[x + (r*cos(a))/F, y + (r-sin(a)*sin(a))/F]
+    // (with F=10000)  is cool!  See attached.
+    
+    lastTransform = [Transform areaTransform: @"New Gerard"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float F = instance.value*1000.0;
+        long sx = tX + (r*cos(a))/F;
+        long sy = tY + (r-sin(a)*sin(a))/F;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 10;
+    lastTransform.high = 90;    // was 15
+    lastTransform.paramName = @"Angle";
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
+    
+   lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double newa = a + DEGRAD((float)instance.value);

@@ -28,7 +28,7 @@ typedef enum {
 } DisplayOptions;
 
 @protocol videoSampleProcessorDelegate
-- (void) processSampleBuffer:(CMSampleBufferRef _Nonnull)sampleBuffer
+- (void) processVideoCapture:(UIImage *)capturedImage
                        depth:(AVDepthData *__nullable) depthData;
 @end
 

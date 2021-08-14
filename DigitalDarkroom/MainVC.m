@@ -332,13 +332,13 @@ MainVC *mainVC = nil;
         plusMode = NoPlus;
         layouts = [[NSMutableArray alloc] init];
         
-        NSString *depthTransformName = [[NSUserDefaults standardUserDefaults]
+        NSString *defaultDepthTransformName = [[NSUserDefaults standardUserDefaults]
                                         stringForKey:LAST_DEPTH_TRANSFORM_KEY];
         assert(transforms.depthTransformCount > 0);
         currentDepthTransformIndex = 0; // gotta have a default, use first one
         for (int i=0; i < transforms.depthTransformCount; i++) {
             Transform *transform = [transforms.transforms objectAtIndex:i];
-            if ([transform.name isEqual:depthTransformName]) {
+            if ([transform.name isEqual:defaultDepthTransformName]) {
                 currentDepthTransformIndex = i;
                 break;
             }
@@ -761,7 +761,7 @@ static NSString * const imageOrientationName[] = {
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
                                               sourceBarButton,
-                                              depthBarButton,
+//                                              depthBarButton,
                                               flipBarButton,
                                               plusBarButtonItem,
                                               nil];
@@ -1177,7 +1177,7 @@ static NSString * const imageOrientationName[] = {
     layouts = editedLayouts;
     
 #ifdef DEBUG_LAYOUT
-    i = 0;
+    int i = 0;
     for (Layout *layout in layouts) {
         NSLog(@"%3d   %.3f  %.3f %.3f    %@", i,
               layout.displayFrac, layout.score, layout.thumbFrac,
@@ -1208,6 +1208,10 @@ static NSString * const imageOrientationName[] = {
                                       threeD:IS_3D_CAMERA(CURRENT_SOURCE)];
 #endif
         for (AVCaptureDeviceFormat *format in cameraController.formatList) {
+            if (cameraController.depthDataAvailable) {
+                if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
+                    continue;   // we want depth, if available
+            }
             CGSize formatSize = [cameraController sizeForFormat:format];
             [self tryAllThumbsForSize:formatSize format:format];
        }
@@ -1473,8 +1477,7 @@ static NSString * const imageOrientationName[] = {
             InputSource *s = inputSources[nextSourceIndex];
             long nci = s.cameraIndex;
             assert(nci != NOT_A_CAMERA);
-            if (possibleCameras[nci].front == possibleCameras[ci].front &&
-                possibleCameras[nci].threeD != possibleCameras[ci].threeD)
+            if (possibleCameras[nci].front == possibleCameras[ci].front)
                 break;
             nextSourceIndex++;
         } while (nextSourceIndex < N_POSS_CAM);
@@ -1927,7 +1930,7 @@ static NSString * const imageOrientationName[] = {
 }
 
 // new video frame data and perhaps depth data from the cameracontroller:
-- (void) processSampleBuffer:(CMSampleBufferRef _Nonnull)sampleBuffer
+- (void) processVideoCapture:(UIImage *)capturedImage
                        depth:(AVDepthData *__nullable) rawDepthData {
     if (!live)    // PAUSED displayed means no new images
         return;
@@ -1938,9 +1941,6 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     busy = YES;
-    
-    // video data
-    UIImage *capturedImage = [self imageFromSampleBuffer:sampleBuffer];
     
     if (!rawDepthData)
         rawDepthBuf = nil;
@@ -1964,7 +1964,6 @@ static NSString * const imageOrientationName[] = {
         float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
         memcpy(rawDepthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
         CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
-                
         [rawDepthBuf findDepthRange];
     }
     
@@ -1972,31 +1971,6 @@ static NSString * const imageOrientationName[] = {
         [self doTransformsOn:capturedImage depth:self->rawDepthBuf];    // and depthbuf
         self->busy = NO;    // XXXXXX busy now wrong
     });
-}
-
-- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
-    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
-    
-    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
-    //NSLog(@"image  orientation %@", width > height ? @"panoramic" : @"portrait");
-    
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(baseAddress, width, height, 8,
-                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-    
-    UIImage *image = [UIImage imageWithCGImage:quartzImage
-                                         scale:(CGFloat)1.0
-                                   orientation:UIImageOrientationUp];
-    CGImageRelease(quartzImage);
-    return image;
 }
 
 - (void) doTransformsOn:(UIImage *)sourceImage depth:(DepthBuf *) db {
@@ -2460,7 +2434,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 #ifdef DEBUG_LAYOUT
     NSLog(@"applyScreenLayout %ld", layoutIndex);
 #endif
-    
+    NSLog(@"screen format %@", layout.format);
+
     // We have several image sizes to consider and process:
     //
     // currentSource.imageSize  is the size of the source image.  For images from files, it is
