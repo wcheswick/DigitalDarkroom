@@ -312,6 +312,19 @@ mostCommonColorInHist(Hist_t *hists) {
 }
 
 - (void) addTestTransforms {
+    lastTransform = [Transform areaTransform: @"Flat polar test"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        long centerX = remapBuf.w/2;
+        long centerY = remapBuf.h/2;
+        long sx = centerX + r*cos(a);
+        long sy = centerY + r*sin(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_Yellow);
+    }];
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
@@ -515,27 +528,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 }
 
 - (void) addPolarTransforms {
-
-    // Now this one:  $1[x + (r*cos(a))/F, y + (r-sin(a)*sin(a))/F]
-    // (with F=10000)  is cool!  See attached.
-    
-    lastTransform = [Transform areaTransform: @"New Gerard"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        float F = instance.value*1000.0;
-        long sx = tX + (r*cos(a))/F;
-        long sy = tY + (r-sin(a)*sin(a))/F;
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = 1;
-    lastTransform.value = 10;
-    lastTransform.high = 90;    // was 15
-    lastTransform.paramName = @"Angle";
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
     
    lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
                                  description: @""
@@ -578,6 +570,28 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.paramName = @"Angle";
     [self addTransform:lastTransform];
     
+    // Now this one:  $1[x + (r*cos(a))/F, y + (r-sin(a)*sin(a))/F]
+    // (with F=10000)  is cool!  See attached.
+    
+    lastTransform = [Transform areaTransform: @"Daisy"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float F = 10000.0;
+        F = 10000;
+        long sx = tX + (r*cos(a))/F;
+        long sy = tY + (r-sin(a)*sin(a))/F;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 10;
+    lastTransform.high = 90;    // was 15
+    lastTransform.paramName = @"Angle";
+    lastTransform.hasParameters = NO;
+    [self addTransform:lastTransform];
+
     lastTransform = [Transform areaTransform: @"Fish eye"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a,
@@ -855,6 +869,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.low = 10;
     lastTransform.value = 62;
     lastTransform.high = 100;
+    lastTransform.broken = YES;
     lastTransform.paramName = @"Pupil separation";
     [self addTransform:lastTransform];
 
@@ -919,6 +934,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.high = 10.0*VSCALE;
     lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Depth scale";
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
@@ -1078,6 +1094,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         depthBuf.minDepth = newMinDepth;
         depthBuf.maxDepth = newMaxDepth;
     }];
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
 
 #ifdef NOTDEF

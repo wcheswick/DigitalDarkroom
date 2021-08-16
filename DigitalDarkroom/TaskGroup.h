@@ -47,8 +47,8 @@ NS_ASSUME_NONNULL_BEGIN
                                   named:(NSString *)tn;
 - (void) configureGroupForSize:(CGSize) s;
 - (void) executeTasksWithImage:(UIImage *) image;
-- (UIImage *) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf;
-- (void) configureGroupWithNewDepthTransform:(Transform *) dt;
+- (UIImage *) executeTasksWithDepthBuf:(DepthBuf *__nullable) rawDepthBuf;
+- (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

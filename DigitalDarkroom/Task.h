@@ -59,7 +59,7 @@ typedef enum {
 - (void) removeTransformAtIndex:(long) index;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
-- (void) useDepthTransform:(Transform *) transform;
+- (void) useDepthTransform:(Transform *__nullable) transform;
 - (Transform *) lastTransform:(BOOL)doing3D;
 
 - (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;

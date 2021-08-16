@@ -93,11 +93,12 @@
     return newTask;   // XXX not sure we are going to use this
 }
 
-- (void) configureGroupWithNewDepthTransform:(Transform *) dt {
+- (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
         if (task.depthLocked)
             continue;
         [task useDepthTransform:dt];
+        depthTransform = dt;
     }
 }
 

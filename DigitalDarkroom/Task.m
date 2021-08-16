@@ -91,7 +91,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 // we may not reveal it, but it is always there. May be nullTransform
 
-- (void) useDepthTransform:(Transform *) transform {
+- (void) useDepthTransform:(Transform *__nullable) transform {
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
     [transformList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:transform];
@@ -234,6 +234,8 @@ static PixelIndex_t dPI(int x, int y) {
     Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
     assert(transform.type == DepthVis); // Could be NullTrans, inconceivable
     TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
+    if (transform.broken)
+        return nil;
     transform.depthVisF(depthBuf, imBuf0, instance);
     startingImage = [self pixbufToImage:imBuf0];
     [self executeTransformsStartingWithImBuf0];

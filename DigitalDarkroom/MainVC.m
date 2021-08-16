@@ -335,7 +335,7 @@ MainVC *mainVC = nil;
         NSString *defaultDepthTransformName = [[NSUserDefaults standardUserDefaults]
                                         stringForKey:LAST_DEPTH_TRANSFORM_KEY];
         assert(transforms.depthTransformCount > 0);
-        currentDepthTransformIndex = 0; // gotta have a default, use first one
+        currentDepthTransformIndex = NO_TRANSFORM;
         for (int i=0; i < transforms.depthTransformCount; i++) {
             Transform *transform = [transforms.transforms objectAtIndex:i];
             if ([transform.name isEqual:defaultDepthTransformName]) {
@@ -344,7 +344,8 @@ MainVC *mainVC = nil;
             }
         }
         [self saveDepthTransformName];
-        
+        currentDepthTransformIndex = NO_TRANSFORM;
+
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
         deviceOrientation = UIDeviceOrientationUnknown;
@@ -476,13 +477,17 @@ MainVC *mainVC = nil;
                      initWithTarget:self
                      action:@selector(doTapDepthVis:)];
             UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-            Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
-                                                                 named:transform.name];
-            [task useDepthTransform:transform];
-            [thumbView addSubview:imageView];
-            // these thumbs display their own transform of the depth input only, and don't
-            // change when they are used.
-            task.depthLocked = YES;
+            if (transform.broken) {
+                imageView.image = brokenImage;
+            } else {
+                Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
+                                                                     named:transform.name];
+                [task useDepthTransform:transform];
+                [thumbView addSubview:imageView];
+                // these thumbs display their own transform of the depth input only, and don't
+                // change when they are used.
+                task.depthLocked = YES;
+            }
         } else {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
@@ -620,7 +625,6 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) saveDepthTransformName {
-    assert(currentDepthTransformIndex != NO_TRANSFORM);
     Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
     [[NSUserDefaults standardUserDefaults] setObject:transform.name
                                               forKey:LAST_DEPTH_TRANSFORM_KEY];
@@ -1333,16 +1337,18 @@ static NSString * const imageOrientationName[] = {
 
 // select a new depth visualization.
 - (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
+    if (currentDepthTransformIndex != NO_TRANSFORM) {
+        ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
+        [self adjustThumbView:oldSelectedDepthThumb selected:NO];
+    }
     ThumbView *newThumbView = (ThumbView *)recognizer.view;
     long newTransformIndex = newThumbView.transformIndex;
-    assert(newTransformIndex >= 0 && newTransformIndex < transforms.transforms.count);
-    if (newTransformIndex == currentDepthTransformIndex)
+    if (newTransformIndex == currentTransformIndex) {   // just turn depth transform off
+        [screenTasks configureGroupWithNewDepthTransform:nil];
         return;
-
-    ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
-    [self adjustThumbView:oldSelectedDepthThumb selected:NO];
+    }
+    
     [self adjustThumbView:newThumbView selected:YES];
-
     currentDepthTransformIndex = newTransformIndex;
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     assert(depthTransform.type == DepthVis);
@@ -1946,7 +1952,7 @@ static NSString * const imageOrientationName[] = {
         rawDepthBuf = nil;
     else {
         AVDepthData *depthData;
-        if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)
+        if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)  // this should not be needed any more
             depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
         else
             depthData = rawDepthData;
