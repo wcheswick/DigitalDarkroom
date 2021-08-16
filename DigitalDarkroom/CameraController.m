@@ -264,10 +264,10 @@
         dispatch_queue_t depthQueue = dispatch_queue_create("DepthCaptureQueue", DISPATCH_QUEUE_CONCURRENT);
         [depthDataOutput setDelegate:self callbackQueue:depthQueue];
     } else {
-        if ([captureSession canAddOutput:depthDataOutput]) {
+        if ([captureSession canAddOutput:videoDataOutput]) {
             [captureSession addOutput:videoDataOutput];
         } else {
-            NSLog(@"**** could not add depth data output");
+            NSLog(@"**** could not add video data output");
         }
         // depthDataByApplyingExifOrientation
         
@@ -281,8 +281,8 @@
     }
     assert(format);
     captureDevice.activeFormat = format;
-    // XXXXXX maybe this isn't needed?
-    captureDevice.activeDepthDataFormat = chosenDepthFormat;
+    if (chosenDepthFormat)
+        captureDevice.activeDepthDataFormat = chosenDepthFormat;
     
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
@@ -311,12 +311,9 @@
     captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
     [captureSession commitConfiguration];
     
-    assert(depthDataOutput);    // XXXXXX debugging
-    
     syncer = [[AVCaptureDataOutputSynchronizer alloc]
               initWithDataOutputs:
-              @[videoDataOutput, depthDataOutput]];
-    //              depthDataAvailable ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
+              depthDataAvailable ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
     dispatch_queue_t syncQueue = dispatch_queue_create("CameraSyncQueue", DISPATCH_QUEUE_CONCURRENT);
     [syncer setDelegate:self queue:syncQueue];
     return;
@@ -388,11 +385,12 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         return;
     }
     videoFrames++;
+#ifdef NOTNEEDED
     if (frameCount % 500 == 0)
         NSLog(@"frames: %5d  v: %5d  dp:%5d   late:%3d  buf:%3d",
               frameCount, videoFrames, depthFrames,
               lateFrames, outOfBuffers);
-    
+#endif
     UIImage *capturedImage = [self imageFromSampleBuffer:syncedVideoData.sampleBuffer];
     if (!capturedImage)
         return;
