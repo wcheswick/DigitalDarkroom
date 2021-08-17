@@ -316,8 +316,6 @@
 
 // from https://git.fuwafuwa.moe/mindcrime/Source-SCCamera/commit/402429fa18b08aef139b44700fb44a4d6310c076
 
-static int outOfBuffers = 0;
-static int lateFrames = 0;
 static int frameCount = 0;
 static int depthFrames = 0;
 static int videoFrames = 0;
@@ -326,9 +324,10 @@ static int depthDropped = 0;
 
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
+    CVPixelBufferRef depthPixelBuffer = nil;
+    CVPixelBufferRef videoPixelBuffer;
+    
     frameCount++;
-#ifndef SAMPLE
-    CVPixelBufferRef depthPixelBuffer, videoPixelBuffer;
     
     AVCaptureSynchronizedData *syncedDepthData=[synchronizedDataCollection synchronizedDataForCaptureOutput:self.depthDataOutput];
     AVCaptureSynchronizedDepthData *syncedDepthBufferData=(AVCaptureSynchronizedDepthData *)syncedDepthData;
@@ -346,98 +345,32 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     } else {
         videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
         videoFrames++;
-#ifdef NOTYET            //[self.delegate didOutputVideoBuffer:videoPixelBuffer andDepthBuffer:depthPixelBuffer];
-        UIImage *capturedImage = [self imageFromSampleBuffer:syncedVideoData.sampleBuffer];
+        UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBuffer];
         if (!capturedImage)
             return;
         [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
-                                                                        depth:depthData];
-#endif
+                                                                        depth:depthPixelBuffer];
     }
-
-    //#ifdef NOTNEEDED
-        if (frameCount % 100 == 0)
-            NSLog(@"frames: %5d  v: %5d  dp:%5d   late:%3d  buf:%3d",
-                  frameCount, videoFrames, depthFrames,
-                  videoDropped, depthDropped);
-    //#endif
+    
+    if (YES && frameCount % 500 == 0)
+        NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d",
+              frameCount, videoFrames, depthFrames,
+              videoDropped, depthDropped);
     return;
-    
-#else
-    AVCaptureSynchronizedDepthData *syncedDepthData =
-        (AVCaptureSynchronizedDepthData *)[synchronizedDataCollection
-                                       synchronizedDataForCaptureOutput:depthDataOutput];
-    AVDepthData *depthData = nil;
-    if (syncedDepthData) {
-        if (syncedDepthData.depthDataWasDropped) {
-            switch (syncedDepthData.droppedReason) {
-                case AVCaptureOutputDataDroppedReasonLateData:
-                    lateFrames++;
-                    break;
-                case AVCaptureOutputDataDroppedReasonOutOfBuffers:
-                    outOfBuffers++;
-                    NSLog(@"depth buff full");
-                    break;
-                default:
-                    NSLog(@"*** unknown dropped depth reason");
-            }
-            NSLog(@"BBBB dropped depth.  reason: %ld",
-                  (long)syncedDepthData.droppedReason);
-            NSLog(@"ssssync: %@", synchronizedDataCollection);
-            return;
-        } else {
-            depthData = syncedDepthData.depthData;
-            assert(depthData);
-        }
-        depthFrames++;
-    }
-    
-    AVCaptureSynchronizedSampleBufferData *syncedVideoData =
-        (AVCaptureSynchronizedSampleBufferData *)[synchronizedDataCollection
-                                              synchronizedDataForCaptureOutput:videoDataOutput];
-    if (!syncedVideoData)
-        return;
-    if (syncedVideoData.sampleBufferWasDropped) {
-//        NSLog(@"BBBB dropped video buffers: %ld", (long)syncedVideoData.droppedReason);
-        switch (syncedVideoData.droppedReason) {
-            case AVCaptureOutputDataDroppedReasonLateData:
-                lateFrames++;
-                break;
-            case AVCaptureOutputDataDroppedReasonOutOfBuffers:
-                NSLog(@"video buff full");
-                outOfBuffers++;
-                break;
-            default:
-                NSLog(@"*** unknown dropped frame reason");
-        }
-//        NSLog(@"BBBB dropped video. %3d, %3d  reason: %ld",
-//              lateFrames, outOfBuffers,
-//              (long)syncedVideoData.droppedReason);
-        return;
-    }
-    videoFrames++;
-    UIImage *capturedImage = [self imageFromSampleBuffer:syncedVideoData.sampleBuffer];
-    if (!capturedImage)
-        return;
-    [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
-                                                                    depth:depthData];
-#endif
 }
 
-- (UIImage *) imageFromSampleBuffer:(CMSampleBufferRef) sampleBuffer {
-    assert(sampleBuffer);
-    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-    if (!imageBuffer) {
-        NSLog(@" image buffer missing: %@", sampleBuffer);
+- (UIImage *) imageFromSampleBuffer:(CVImageBufferRef) videoPixelBuffer {
+    if (!videoPixelBuffer) {
+        NSLog(@" image buffer missing");
         return nil;
     }
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
+    CVPixelBufferLockBaseAddress(videoPixelBuffer, 0);
     
-    void *baseAddress = CVPixelBufferGetBaseAddress(imageBuffer);
+    void *baseAddress = CVPixelBufferGetBaseAddress(videoPixelBuffer);
     assert(baseAddress);
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer);
-    size_t width = CVPixelBufferGetWidth(imageBuffer);
-    size_t height = CVPixelBufferGetHeight(imageBuffer);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBuffer);
+    size_t width = CVPixelBufferGetWidth(videoPixelBuffer);
+    size_t height = CVPixelBufferGetHeight(videoPixelBuffer);
     //NSLog(@"image  orientation %@", width > height ? @"panoramic" : @"portrait");
     
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
@@ -445,7 +378,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
                                                  bytesPerRow, colorSpace, BITMAP_OPTS);
     assert(context);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    CVPixelBufferUnlockBaseAddress(imageBuffer,0);
+    CVPixelBufferUnlockBaseAddress(videoPixelBuffer,0);
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
     

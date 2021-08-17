@@ -1943,7 +1943,7 @@ static NSString * const imageOrientationName[] = {
 
 // new video frame data and perhaps depth data from the cameracontroller:
 - (void) processVideoCapture:(UIImage *)capturedImage
-                       depth:(AVDepthData *__nullable) rawDepthData {
+                       depth:(CVPixelBufferRef) depthPixelBufRef {
     if (!live)    // PAUSED displayed means no new images
         return;
     if (taskCtrl.reconfigurationNeeded)
@@ -1954,28 +1954,19 @@ static NSString * const imageOrientationName[] = {
     }
     busy = YES;
     
-    if (!rawDepthData) {
-        rawDepthBuf = nil;
-    } else {
-        AVDepthData *depthData;
-        if (rawDepthData.depthDataType != kCVPixelFormatType_DepthFloat32)  // this should not be needed any more
-            depthData = [rawDepthData depthDataByConvertingToDepthDataType:kCVPixelFormatType_DepthFloat32];
-        else
-            depthData = rawDepthData;
-        
-        CVPixelBufferRef pixelBufferRef = depthData.depthDataMap;
-        size_t width = CVPixelBufferGetWidth(pixelBufferRef);
-        size_t height = CVPixelBufferGetHeight(pixelBufferRef);
+    if (depthPixelBufRef) {
+        size_t width = CVPixelBufferGetWidth(depthPixelBufRef);
+        size_t height = CVPixelBufferGetHeight(depthPixelBufRef);
         if (!rawDepthBuf || rawDepthBuf.w != width || rawDepthBuf.h != height) {
             rawDepthBuf = [[DepthBuf alloc]
                         initWithSize: CGSizeMake(width, height)];
         }
         
-        CVPixelBufferLockBaseAddress(pixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferLockBaseAddress(depthPixelBufRef,  kCVPixelBufferLock_ReadOnly);
         assert(sizeof(Distance) == sizeof(float));
-        float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(pixelBufferRef);
+        float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufRef);
         memcpy(rawDepthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
-        CVPixelBufferUnlockBaseAddress(pixelBufferRef, 0);
+        CVPixelBufferUnlockBaseAddress(depthPixelBufRef, 0);
         [rawDepthBuf findDepthRange];
     }
     

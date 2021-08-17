@@ -29,7 +29,7 @@ typedef enum {
 
 @protocol videoSampleProcessorDelegate
 - (void) processVideoCapture:(UIImage *)capturedImage
-                       depth:(AVDepthData *__nullable) depthData;
+                       depth:(CVPixelBufferRef) depthPixelBufRef;
 @end
 
 @interface MainVC : UIViewController
