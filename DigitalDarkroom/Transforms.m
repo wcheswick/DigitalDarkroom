@@ -528,7 +528,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 }
 
 - (void) addPolarTransforms {
-    
    lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -869,7 +868,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.low = 10;
     lastTransform.value = 62;
     lastTransform.high = 100;
-    lastTransform.broken = YES;
+    lastTransform.broken = NO;
     lastTransform.paramName = @"Pupil separation";
     [self addTransform:lastTransform];
 
@@ -934,7 +933,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.high = 10.0*VSCALE;
     lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Depth scale";
-    lastTransform.broken = YES;
+    lastTransform.broken = NO;
     [self addTransform:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
@@ -1094,10 +1093,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         depthBuf.minDepth = newMinDepth;
         depthBuf.maxDepth = newMaxDepth;
     }];
-    lastTransform.broken = YES;
+    lastTransform.broken = NO;
     [self addTransform:lastTransform];
 
-#ifdef NOTDEF
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
@@ -1133,11 +1131,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
 //    lastTransform.hasParameters = YES;
     //    lastTransform.paramName = @"Depth scale";
-
+    lastTransform.broken = YES;
     [self addTransform:lastTransform];
-#endif
     
-#ifdef NOTDEF
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
                                depthVis: ^(const DepthBuf *depthBuf, PixBuf *pixBuf,
@@ -1178,9 +1174,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.hasParameters = YES;
     lastTransform.broken = YES;
     lastTransform.paramName = @"Color scale?";
-
     [self addTransform:lastTransform];
-#endif
     
     depthTransformCount = transforms.count;
 }

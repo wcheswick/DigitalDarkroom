@@ -22,8 +22,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
 
-#define NO_DEPTH_TRANSFORM  (100)
-
 typedef enum {
     ColorTrans,
     GeometricTrans,
@@ -117,8 +115,6 @@ typedef void (^ __nullable __unsafe_unretained
                 depthVis:(depthVis_t) f;
 
 - (void) clearRemap;
-
-extern  Transform *nullTransform;
 
 @end
 

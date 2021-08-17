@@ -95,7 +95,7 @@
 
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
-        if (task.depthLocked)
+        if (task.isDepthThumb)
             continue;
         [task useDepthTransform:dt];
         depthTransform = dt;
@@ -188,7 +188,8 @@
     }
 }
 
-- (void) executeTasksWithImage:(UIImage *) srcImage {
+- (void) executeTasksWithImage:(UIImage *) srcImage
+                                         depth:(const DepthBuf *__nullable) rawDepthBuf {
     // we prepare a read-only PixBuf for this image.
     // Task must not change it: it is shared among the tasks.
     // At the end of the loop, we don't need it any more
@@ -196,10 +197,14 @@
     // certain properties that not all iOS pixel buffer formats have.
     // srcBuf's pixels are copied out of the kernel buffer, so we
     // don't have to hold the memory lock.
-
+    
+    // We also prepare a readonly depth buffer (if depth supplied) that is scaled
+    // to this group's image size.  The scaling is a bit crude at the moment,
+    // and probably should be done in hardware.
+    
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
-
+    
     if (taskCtrl.reconfigurationNeeded) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
@@ -210,6 +215,34 @@
         [taskCtrl tasksAreIdled];
         return;
     }
+    
+    DepthBuf *activeDepthBuf;
+    if (!rawDepthBuf) {
+        activeDepthBuf = nil;
+    } else {
+        DepthBuf *activeDepthBuf = [rawDepthBuf copy];
+        
+        if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
+            // cheap scaling: XXXX use the hardware
+            double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
+            double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
+            for (int x=0; x<depthBuf.w; x++) {
+                int sx = x/xScale;
+                assert(sx <= rawDepthBuf.w);
+                for (int y=0; y<depthBuf.h; y++) {
+                    int sy = trunc(y/yScale);
+                    assert(sy < rawDepthBuf.h);
+                    activeDepthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
+                }
+            }
+            //        activeDepthBuf = depthBuf;
+            activeDepthBuf.minDepth = rawDepthBuf.minDepth;
+            activeDepthBuf.maxDepth = rawDepthBuf.maxDepth;
+        }
+    }
+    
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl idleTransforms];
 
     UIImage *scaledImage;
     if (srcPix.h != srcImage.size.height || srcPix.w != srcImage.size.width) {  // scale
@@ -254,7 +287,8 @@
             if (task.taskStatus == Running)
                 continue;
             busyCount++;
-            [task executeTransformsFromPixBuf:srcPix];
+            [task executeTransformsFromPixBuf:srcPix
+                                        depth:(const DepthBuf *)activeDepthBuf];
             busyCount--;
             assert(busyCount >= 0);
         }
@@ -263,44 +297,5 @@
         [taskCtrl idleTransforms];
 }
 
-// same idea as image tasks, but convert the depth buffer
-// into an image first. Return the first non-depth image
-// for possible capture, etc.
-
-- (UIImage *) executeTasksWithDepthBuf:(DepthBuf *) rawDepthBuf {
-    UIImage *sourceImage = nil;   // after depth processing
-    DepthBuf *activeDepthBuf = [rawDepthBuf copy];
-    
-    if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
-        // cheap scaling: XXXX use the hardware
-        double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
-        double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
-        for (int x=0; x<depthBuf.w; x++) {
-            int sx = x/xScale;
-            assert(sx <= rawDepthBuf.w);
-            for (int y=0; y<depthBuf.h; y++) {
-                int sy = trunc(y/yScale);
-                assert(sy < rawDepthBuf.h);
-                activeDepthBuf.da[y][x] = rawDepthBuf.da[sy][sx];
-            }
-        }
-//        activeDepthBuf = depthBuf;
-        activeDepthBuf.minDepth = rawDepthBuf.minDepth;
-        activeDepthBuf.maxDepth = rawDepthBuf.maxDepth;
-    }
-
-    assert(activeDepthBuf.maxDepth != 0); // should have been done before now
-    for (Task *task in tasks) {
-        if (task.taskStatus == Running)
-            continue;
-        busyCount++;
-        sourceImage = [task startTransformsWithDepthBuf:activeDepthBuf];
-        busyCount--;
-        assert(busyCount >= 0);
-    }
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl idleTransforms];
-    return sourceImage;
-}
 
 @end

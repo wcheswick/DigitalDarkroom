@@ -46,6 +46,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @synthesize taskName;
 @synthesize transformList;
+@synthesize depthTransform, depthInstance;
 @synthesize paramList;
 @synthesize targetImageView;
 @synthesize chBuf0, chBuf1;
@@ -54,7 +55,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
-@synthesize enabled, depthLocked;
+@synthesize enabled, isDepthThumb;
 
 - (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg {
     self = [super init];
@@ -64,10 +65,11 @@ static PixelIndex_t dPI(int x, int y) {
         taskIndex = UNASSIGNED_TASK;
         // create list, with empty depth transform
         transformList = [[NSMutableArray alloc] init];
+        depthTransform = nil;
+        depthInstance = nil;
         paramList = [[NSMutableArray alloc] init];
-        [self appendTransformToTask:nullTransform]; // empty depth transform
         enabled = YES;
-        depthLocked = NO;
+        isDepthThumb = NO;
         taskStatus = Stopped;
         targetImageView = nil;
         chBuf0 = chBuf1 = nil;
@@ -83,19 +85,20 @@ static PixelIndex_t dPI(int x, int y) {
     taskStatus = Idle;
 }
 
-- (Transform *) lastTransform:(BOOL)doing3D {
-    if (doing3D || transformList.count > DEPTH_TRANSFORM + 1)
+- (Transform *) lastTransform {
+    if (transformList.count > 0)
         return [transformList lastObject];
     return nil;
 }
 
-// we may not reveal it, but it is always there. May be nullTransform
-
 - (void) useDepthTransform:(Transform *__nullable) transform {
-    TransformInstance *instance = [[TransformInstance alloc]
-                                   initFromTransform:(Transform *)transform];
-    [transformList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:transform];
-    [paramList replaceObjectAtIndex:DEPTH_TRANSFORM withObject:instance];
+    depthTransform = transform;
+    if (!depthTransform) {
+        depthInstance = nil;
+    } else {
+        depthInstance = [[TransformInstance alloc]
+                                       initFromTransform:(Transform *)transform];
+    }
 }
 
 - (long) appendTransformToTask:(Transform *) transform {
@@ -109,18 +112,16 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (long) removeLastTransform {
     long step = transformList.count - 1;
-    assert(step >= DEPTH_TRANSFORM + 1);    // should never try to delete the depth transform
-    [transformList removeLastObject];
-    [paramList removeLastObject];
+    if (step >= 0) {
+        [transformList removeLastObject];
+        [paramList removeLastObject];
+    }
     return step;
 }
 
 - (void) removeAllTransforms {
-    size_t count = transformList.count - 1; // never remove depth transform, at zero
-    if (count == 0)
-        return;
-    [transformList removeObjectsInRange:NSMakeRange(DEPTH_TRANSFORM+1, count)];
-    [paramList removeObjectsInRange:NSMakeRange(DEPTH_TRANSFORM+1, count)];
+    [transformList removeAllObjects];
+    [paramList removeAllObjects];
 }
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index {
@@ -150,12 +151,15 @@ static PixelIndex_t dPI(int x, int y) {
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
     assert(chBuf0);
     assert(chBuf1);
-    for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
+    for (int i=0; i<transformList.count; i++) {
         [self configureTransformAtIndex:i];
     }
 }
 
+// step -1 is the depth step
 - (int) valueForStep:(long) step {
+    if (step < 0)
+        return depthInstance.value;
     TransformInstance *instance = paramList[step];
     return instance.value;
 }
@@ -204,49 +208,17 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) removeTransformAtIndex:(long) index {
-    assert(index > DEPTH_TRANSFORM);  // cannot remove depth viz
     assert(index < transformList.count);
     [transformList removeObjectAtIndex:index];
     [paramList removeObjectAtIndex:index];
-}
-
-// first, apply depth vis on the depthdata, then run it through
-// the other transforms. Don't mess with the incoming DepthBuf,
-// Return the first post-depth image for possible future use.
-
-- (UIImage * __nullable) startTransformsWithDepthBuf:(DepthBuf *) depthBuf {
-    UIImage *startingImage = nil;
-    if (taskStatus == Stopped || !enabled)
-        return nil;     // not now
-    if (taskGroup.taskCtrl.reconfigurationNeeded) {
-        taskStatus = Stopped;
-        return nil;
-    }
-    taskStatus = Running;
-    assert(transformList.count > 0);
-    
-    // If we don't have depth range information (only on our first call),
-    // compute it and skip the transform.  After that, the transform uses
-    // the information from the previous scan, and updates it.
-    // NB: this means the transform might encounter current data that is
-    // out of range, and should clip it.
-
-    Transform *transform = [transformList objectAtIndex:DEPTH_TRANSFORM];
-    assert(transform.type == DepthVis); // Could be NullTrans, inconceivable
-    TransformInstance *instance = [paramList objectAtIndex:DEPTH_TRANSFORM];
-    if (transform.broken)
-        return nil;
-    transform.depthVisF(depthBuf, imBuf0, instance);
-    startingImage = [self pixbufToImage:imBuf0];
-    [self executeTransformsStartingWithImBuf0];
-    return startingImage;
 }
 
 // run the srcBuf image through the transforms. We need to make our own
 // task-specific copy of the source image, because other tasks need a clean
 // source.
 
-- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf {
+- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf
+                               depth:(const DepthBuf *)depthBuf {
     if (taskStatus == Stopped || !enabled)
         return;     // not now
     if (taskGroup.taskCtrl.reconfigurationNeeded) {
@@ -255,13 +227,25 @@ static PixelIndex_t dPI(int x, int y) {
     }
     taskStatus = Running;
     
+    if (depthTransform) {
+        assert(depthInstance);
+        if (depthTransform.broken)
+            return;
+        assert(depthTransform.type == DepthVis);
+        depthTransform.depthVisF(depthBuf, imBuf0, depthInstance);
+        
+        if (isDepthThumb) { // only do the depth
+            UIImage *finalImage = [self pixbufToImage:imBuf0];
+            [self updateTargetWith:finalImage];
+            taskStatus = Idle;
+            return;
+         }
+    }
+    assert(!isDepthThumb);  // should be processed above
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
     [srcBuf copyPixelsTo:imBuf0];
-    [self executeTransformsStartingWithImBuf0];
-}
 
-- (void) executeTransformsStartingWithImBuf0 {
     assert(taskStatus == Running);
     if (transformList.count == 0) { // just display the input
         UIImage *unmodifiedSourceImage = [self pixbufToImage:imBufs[0]];
@@ -274,13 +258,21 @@ static PixelIndex_t dPI(int x, int y) {
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
 
-    for (int i=DEPTH_TRANSFORM+1; i<transformList.count; i++) {
+    int start = depthTransform ? -1 : 0;
+    for (int i=start; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
             taskStatus = Stopped;
             return;
         }
-        Transform *transform = transformList[i];
-        TransformInstance *instance = paramList[i];
+        Transform *transform;
+        TransformInstance *instance;
+        if (start < 0) {
+            transform = depthTransform;
+            instance = depthInstance;
+        } else {
+            transform = transformList[i];
+            instance = paramList[i];
+        }
         destIndex = [self performTransform:transform
                                     instance:instance
                                source:sourceIndex];
@@ -293,7 +285,6 @@ static PixelIndex_t dPI(int x, int y) {
     }
 
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
-    
     UIImage *finalImage = [self pixbufToImage:imBufs[sourceIndex]];
     [self updateTargetWith:finalImage];
     taskStatus = Idle;

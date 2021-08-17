@@ -8,8 +8,6 @@
 
 #import "Transform.h"
 
-Transform *nullTransform = nil;
-
 @implementation Transform
 
 @synthesize name, description, helpPath;

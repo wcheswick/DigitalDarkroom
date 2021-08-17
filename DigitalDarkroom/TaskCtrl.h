@@ -42,7 +42,6 @@ typedef enum {
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 
-//- (void) executeTasksWithImage:(UIImage *) image;
 - (BOOL) tasksAreIdled;
 - (void) enableTasks;
 - (void) idleTransforms;

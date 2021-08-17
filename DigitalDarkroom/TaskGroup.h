@@ -46,8 +46,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
 - (void) configureGroupForSize:(CGSize) s;
-- (void) executeTasksWithImage:(UIImage *) image;
-- (UIImage *) executeTasksWithDepthBuf:(DepthBuf *__nullable) rawDepthBuf;
+- (void) executeTasksWithImage:(UIImage *) srcImage
+                              depth:(const DepthBuf *__nullable) rawDepthBuf;
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform

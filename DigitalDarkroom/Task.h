@@ -16,7 +16,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 #define UNASSIGNED_TASK (-1)
-#define DEPTH_TRANSFORM 0
 
 typedef enum {
     Idle,
@@ -28,23 +27,27 @@ typedef enum {
     NSString *taskName;
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;        // only this routine changes this
-    NSMutableArray *transformList;  // first transform is the depth transform
+    Transform *__nullable depthTransform;
+    TransformInstance *__nullable depthInstance;
+    NSMutableArray *transformList;  // Transform after depth transform
     NSMutableArray *paramList;
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL enabled;   // if transform target is on-screen
-    BOOL depthLocked;   // if task is a depth button view, don't change it
+    BOOL isDepthThumb;   // if task is a depth button view, don't change it
 }
 
 @property (nonatomic, strong)   NSString *taskName;
 @property (assign, atomic)      TaskStatus_t taskStatus;
 @property (nonatomic, strong)   UIImageView *targetImageView;
+@property (nonatomic, strong)   Transform *__nullable depthTransform;
+@property (nonatomic, strong)   TransformInstance *depthInstance;
 @property (strong, nonatomic)   NSMutableArray *transformList;
 @property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
-@property (assign)              BOOL enabled, depthLocked;
+@property (assign)              BOOL enabled, isDepthThumb;
 
 - (id)initTaskNamed:(NSString *) n
             inGroup:(TaskGroup *) tg;
@@ -60,11 +63,10 @@ typedef enum {
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
 - (void) useDepthTransform:(Transform *__nullable) transform;
-- (Transform *) lastTransform:(BOOL)doing3D;
+- (Transform *) lastTransform;
 
-- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf;
-- (UIImage * __nullable) startTransformsWithDepthBuf:(const DepthBuf *) depthBuf;
-
+- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf
+                               depth:(const DepthBuf *__nullable)activeDepthBuf;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 
 @end

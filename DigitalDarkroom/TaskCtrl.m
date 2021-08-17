@@ -83,15 +83,6 @@
         [taskGroup enable];
 }
 
-// not used, taskStatus needs to be right
-- (void) executeTasksWithImage:(UIImage *)image {
-    if (reconfigurationNeeded)
-        return;
-    for (TaskGroup *taskGroup in taskGroups) {
-        [taskGroup executeTasksWithImage: image];
-    }
-}
-
 #ifdef GONE
 - (PixelIndex_t *) computeMappingFor:(Transform *) transform {
     assert(bytesPerRow);
