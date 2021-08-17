@@ -2432,8 +2432,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     layout = layouts[layoutIndex];
 #ifdef DEBUG_LAYOUT
     NSLog(@"applyScreenLayout %ld", layoutIndex);
-#endif
     NSLog(@"screen format %@", layout.format);
+#endif
 
     // We have several image sizes to consider and process:
     //

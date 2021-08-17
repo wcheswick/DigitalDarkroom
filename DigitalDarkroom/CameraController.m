@@ -187,8 +187,6 @@
     NSError *error;
     dispatch_queue_t outputQueue = dispatch_queue_create("output queue", DISPATCH_QUEUE_SERIAL);
 
-    NSLog(@"SSSS setupCameraSessionWithFormat %@", format);
-
 #pragma mark - Capture session
 
     if (captureSession) {
@@ -208,7 +206,6 @@
             continue;
         chosenDepthFormat = depthFormat;    // we will be more selective later.  Use the largest for now
     }
-    NSLog(@"SSSS chosen depth format: %@", chosenDepthFormat);
     [captureDevice lockForConfiguration:&error];
     if (error) {
         NSLog(@"startSession: could not lock camera: %@",
@@ -227,8 +224,8 @@
     captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
     [captureDevice unlockForConfiguration];
-    NSLog(@"capture device: %@", captureDevice);
-    NSLog(@"capture session: %@", captureSession);
+//    NSLog(@"capture device: %@", captureDevice);
+//    NSLog(@"capture session: %@", captureSession);
     
 #pragma mark - video input
 
@@ -292,7 +289,6 @@
         depthConnection.videoMirrored = YES;
     }
    
-
 #ifdef NOPE
     previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
     previewLayer.frame = videoView.layer.bounds
@@ -308,7 +304,6 @@
     [outputSynchronizer setDelegate:self queue:outputQueue];
 
     [captureSession commitConfiguration];
-
     return;
 }
 
@@ -326,8 +321,7 @@ static int depthDropped = 0;
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
     CVPixelBufferRef depthPixelBuffer = nil;
     CVPixelBufferRef videoPixelBuffer;
-    
-    frameCount++;
+        frameCount++;
     
     AVCaptureSynchronizedData *syncedDepthData=[synchronizedDataCollection synchronizedDataForCaptureOutput:self.depthDataOutput];
     AVCaptureSynchronizedDepthData *syncedDepthBufferData=(AVCaptureSynchronizedDepthData *)syncedDepthData;
@@ -351,8 +345,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
                                                                         depth:depthPixelBuffer];
     }
-    
-    if (YES && frameCount % 500 == 0)
+    if (NO && frameCount % 500 == 0)
         NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d",
               frameCount, videoFrames, depthFrames,
               videoDropped, depthDropped);
