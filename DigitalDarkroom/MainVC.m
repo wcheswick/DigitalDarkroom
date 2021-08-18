@@ -479,13 +479,10 @@ MainVC *mainVC = nil;
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
-                Task *task = [depthThumbTasks createTaskForTargetImageView:imageView
-                                                                     named:transform.name];
-                [task useDepthTransform:transform];
-                task.isDepthThumb = YES;
+                [depthThumbTasks createTaskForTargetImageView:imageView
+                                                                     named:transform.name
+                                                            thumbTransform:transform];
                 [thumbView addSubview:imageView];
-                // these thumbs display their own transform of the depth input only, and don't
-                // change when they are used.
             }
         } else {
             touch = [[UITapGestureRecognizer alloc]
@@ -495,10 +492,9 @@ MainVC *mainVC = nil;
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
-                Task *task = [thumbTasks createTaskForTargetImageView:imageView
-                                                                named:transform.name];
-                [task appendTransformToTask:transform];
-                task.isDepthThumb = NO;
+                [thumbTasks createTaskForTargetImageView:imageView
+                                                                named:transform.name
+                                                       thumbTransform:transform];
             }
             [thumbView addSubview:imageView];
         }
@@ -543,9 +539,6 @@ CGFloat topOfNonDepthArray = 0;
 - (void) layoutThumbs:(Layout *)layout {
     nextButtonFrame = layout.firstThumbRect;
     assert(layout.thumbImageRect.size.width > 0 && layout.thumbImageRect.size.height > 0);
-    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    if (DISPLAYING_THUMBS)
-        [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
 
     CGRect transformNameRect;
     transformNameRect.origin = CGPointMake(0, BELOW(layout.thumbImageRect));
@@ -930,7 +923,8 @@ static NSString * const imageOrientationName[] = {
     [containerView addSubview:executeView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
-                                                         named:@"main"];
+                                                     named:@"main"
+                                            thumbTransform:nil];
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -1345,12 +1339,14 @@ static NSString * const imageOrientationName[] = {
 // select a new depth visualization.
 - (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
     if (currentDepthTransformIndex != NO_TRANSFORM) {
+        // turn off old depth transform.  There can be only one.
         ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
         [self adjustThumbView:oldSelectedDepthThumb selected:NO];
     }
     ThumbView *newThumbView = (ThumbView *)recognizer.view;
     long newTransformIndex = newThumbView.transformIndex;
-    if (newTransformIndex == currentTransformIndex) {   // just turn depth transform off
+    if (newTransformIndex == currentTransformIndex) {
+        // just turn depth transform off
         [screenTasks configureGroupWithNewDepthTransform:nil];
         return;
     }
@@ -1362,8 +1358,6 @@ static NSString * const imageOrientationName[] = {
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
-    if (DISPLAYING_THUMBS)
-        [depthThumbTasks configureGroupWithNewDepthTransform:depthTransform];
 }
 
 - (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
@@ -2515,6 +2509,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // then display (possibly scaled) onto transformView.
     
     [screenTasks configureGroupForSize: layout.transformSize];
+    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
+    [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
     //    [externalTask configureForSize: processingSize];
 
 // no longer?    [layout positionExecuteRect];

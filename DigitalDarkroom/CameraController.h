@@ -14,9 +14,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface CameraController : NSObject
-<AVCaptureDataOutputSynchronizerDelegate,
-        AVCaptureDepthDataOutputDelegate,
-        AVCaptureVideoDataOutputSampleBufferDelegate> {
+        <AVCaptureVideoDataOutputSampleBufferDelegate,
+        AVCaptureDataOutputSynchronizerDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
     NSMutableArray *formatList;     // from the device, edited to what we could use

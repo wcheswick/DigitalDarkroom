@@ -81,21 +81,28 @@
     }
 }
 
+// Create a task with a name that is internally useful.  If the task's
+// only job is to process a thumb transform image, the set that up.
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn {
+                                  named:(NSString *)tn
+                         thumbTransform:(Transform *__nullable) thumbTransform {
 //    assert(transformSize.width > 0);    // group must be configured for a size already
     Task *newTask = [[Task alloc] initTaskNamed:tn
                                         inGroup:self];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
-//    [newTask configureTaskForSize];
+    if (thumbTransform) {
+        newTask.thumbTransform = thumbTransform;
+        newTask.thumbInstance = [[TransformInstance alloc]
+                                       initFromTransform:thumbTransform];
+    }
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
 }
 
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
-        if (task.isDepthThumb)
+        if (task.depthTransform)    // fixed depth transform for thumb, don't change
             continue;
         [task useDepthTransform:dt];
         depthTransform = dt;
@@ -216,29 +223,22 @@
         return;
     }
     
-    DepthBuf *activeDepthBuf;
-    if (!rawDepthBuf) {
-        activeDepthBuf = nil;
-    } else {
-        DepthBuf *activeDepthBuf = [rawDepthBuf copy];
-        
-        if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
-            // cheap scaling: XXXX use the hardware
-            double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
-            double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
-            for (int x=0; x<depthBuf.w; x++) {
-                int sx = x/xScale;
-                assert(sx <= rawDepthBuf.w);
-                for (int y=0; y<depthBuf.h; y++) {
-                    int sy = trunc(y/yScale);
-                    assert(sy < rawDepthBuf.h);
-                    activeDepthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
-                }
+    if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
+        // cheap scaling: XXXX use the hardware
+        double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
+        double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
+        for (int x=0; x<depthBuf.w; x++) {
+            int sx = trunc(x/xScale);
+            assert(sx <= rawDepthBuf.w);
+            for (int y=0; y<depthBuf.h; y++) {
+                int sy = trunc(y/yScale);
+                assert(sy < rawDepthBuf.h);
+                depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
             }
-            //        activeDepthBuf = depthBuf;
-            activeDepthBuf.minDepth = rawDepthBuf.minDepth;
-            activeDepthBuf.maxDepth = rawDepthBuf.maxDepth;
         }
+        //        activeDepthBuf = depthBuf;
+        depthBuf.minDepth = rawDepthBuf.minDepth;
+        depthBuf.maxDepth = rawDepthBuf.maxDepth;
     }
     
     if (taskCtrl.reconfigurationNeeded)
@@ -288,7 +288,7 @@
                 continue;
             busyCount++;
             [task executeTransformsFromPixBuf:srcPix
-                                        depth:(const DepthBuf *)activeDepthBuf];
+                                        depth:(const DepthBuf *)depthBuf];
             busyCount--;
             assert(busyCount >= 0);
         }

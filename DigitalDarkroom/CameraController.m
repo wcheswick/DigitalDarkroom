@@ -195,7 +195,7 @@
     }
     captureSession = [[AVCaptureSession alloc] init];
     [captureSession beginConfiguration];
-    [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
+//    [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
 
 #pragma mark - Capture device
 
@@ -214,9 +214,11 @@
         return;
     }
     assert(format);
+#ifdef NOTDEF
     captureDevice.activeFormat = format;
     if (chosenDepthFormat)
         captureDevice.activeDepthDataFormat = chosenDepthFormat;
+#endif
     
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
@@ -280,13 +282,16 @@
             [captureSession commitConfiguration];
             return;
         }
-        depthDataOutput.filteringEnabled = YES; // XXXX does this need to be last, after delegate?
         [depthDataOutput setDelegate:self callbackQueue:outputQueue];
-                depthDataOutput.alwaysDiscardsLateDepthData = YES;
+        depthDataOutput.filteringEnabled = NO; // XXXX does this need to be last, after delegate?
+        depthDataOutput.alwaysDiscardsLateDepthData = YES;
         AVCaptureConnection *depthConnection = [depthDataOutput connectionWithMediaType:AVMediaTypeDepthData];
         assert(depthConnection);  // we were told it is available
         [depthConnection setVideoOrientation:videoOrientation];
         depthConnection.videoMirrored = YES;
+        
+        NSLog(@"depthConnection: %@", depthConnection);
+        NSLog(@"depthConnection: %@", depthConnection);
     }
    
 #ifdef NOPE
@@ -313,48 +318,68 @@
 
 static int frameCount = 0;
 static int depthFrames = 0;
+static int depthMissing = 0;
 static int videoFrames = 0;
 static int videoDropped = 0;
 static int depthDropped = 0;
 
+// Clean code, but still not working, from
+//   https://github.com/sjy234sjy234/Learn-Metal/blob/master/TrueDepthStreaming/TrueDepthStreaming/Utility/Device/FrontCamera.m
+
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
     CVPixelBufferRef depthPixelBuffer = nil;
-    CVPixelBufferRef videoPixelBuffer;
-        frameCount++;
+    CVPixelBufferRef videoPixelBuffer = nil;
+    frameCount++;
     
-    AVCaptureSynchronizedData *syncedDepthData=[synchronizedDataCollection synchronizedDataForCaptureOutput:self.depthDataOutput];
+//    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
+//    NSLog(@"           depthDataOutput: %@", depthDataOutput);
+    AVCaptureSynchronizedData *syncedDepthData=[synchronizedDataCollection
+                                                synchronizedDataForCaptureOutput:depthDataOutput];
+//    NSLog(@"           syncedDepthData: %@", syncedDepthData);
     AVCaptureSynchronizedDepthData *syncedDepthBufferData=(AVCaptureSynchronizedDepthData *)syncedDepthData;
-    if(syncedDepthBufferData.depthDataWasDropped){
-        depthDropped++;
+//    NSLog(@"     syncedDepthBufferData: %@", syncedDepthBufferData);
+    if (!syncedDepthBufferData) {
+        depthMissing++;
     } else {
-        depthPixelBuffer=[syncedDepthBufferData.depthData depthDataMap];
-        depthFrames++;
+        if(!syncedDepthBufferData.depthDataWasDropped) {
+            depthFrames++;
+            depthPixelBuffer=[syncedDepthBufferData.depthData depthDataMap];
+//            NSLog(@" ***      depthPixelBuffer: %@", depthPixelBuffer);
+        } else
+            depthDropped++;
     }
-    
-    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection synchronizedDataForCaptureOutput:self.videoDataOutput];
-    AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData=(AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
-    if(syncedSampleBufferData.sampleBufferWasDropped) {
-        videoDropped++;
-    } else {
-        videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
-        videoFrames++;
-        UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBuffer];
-        if (!capturedImage)
-            return;
-        [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
-                                                                        depth:depthPixelBuffer];
+
+    if (depthPixelBuffer) {
+        AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
+                                                    synchronizedDataForCaptureOutput:self.videoDataOutput];
+        AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData=(AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
+        if(syncedSampleBufferData.sampleBufferWasDropped) {
+            videoDropped++;
+        } else {
+            videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
+            videoFrames++;
+//                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
+//                      frameCount, videoFrames, depthFrames,
+//                      videoDropped, depthDropped, depthMissing, notRespond);
+            UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBuffer];
+            if (!capturedImage)
+                return;
+            [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
+                                                                            depth:depthPixelBuffer];
+        }
     }
+    //    }
     if (NO && frameCount % 500 == 0)
-        NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d",
+        NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
               frameCount, videoFrames, depthFrames,
-              videoDropped, depthDropped);
+              videoDropped, depthDropped, depthMissing);
     return;
 }
 
 - (UIImage *) imageFromSampleBuffer:(CVImageBufferRef) videoPixelBuffer {
     if (!videoPixelBuffer) {
-        NSLog(@" image buffer missing");
+//        NSLog(@" image buffer missing");
         return nil;
     }
     CVPixelBufferLockBaseAddress(videoPixelBuffer, 0);

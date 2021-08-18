@@ -29,13 +29,14 @@ typedef enum {
     TaskStatus_t taskStatus;        // only this routine changes this
     Transform *__nullable depthTransform;
     TransformInstance *__nullable depthInstance;
-    NSMutableArray *transformList;  // Transform after depth transform
+    NSMutableArray *transformList;  // Transforms after depth transform
+    Transform *__nullable thumbTransform;   // if task is a thumbnail
+    TransformInstance *__nullable thumbInstance;
     NSMutableArray *paramList;
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL enabled;   // if transform target is on-screen
-    BOOL isDepthThumb;   // if task is a depth button view, don't change it
 }
 
 @property (nonatomic, strong)   NSString *taskName;
@@ -43,16 +44,17 @@ typedef enum {
 @property (nonatomic, strong)   UIImageView *targetImageView;
 @property (nonatomic, strong)   Transform *__nullable depthTransform;
 @property (nonatomic, strong)   TransformInstance *depthInstance;
+@property (nonatomic, strong)   Transform *__nullable thumbTransform;
+@property (nonatomic, strong)   TransformInstance *__nullable thumbInstance;
 @property (strong, nonatomic)   NSMutableArray *transformList;
 @property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
-@property (assign)              BOOL enabled, isDepthThumb;
+@property (assign)              BOOL enabled;
 
 - (id)initTaskNamed:(NSString *) n
             inGroup:(TaskGroup *) tg;
 - (void) configureTaskForSize;
-// UNNEEDED - (void) configureTransformAtIndex:(size_t)ti;
 - (BOOL) updateParamOfLastTransformTo:(int) newParam;
 - (int) valueForStep:(long) step;
 - (long) lastStep;

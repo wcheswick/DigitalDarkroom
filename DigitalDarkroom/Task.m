@@ -47,6 +47,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskName;
 @synthesize transformList;
 @synthesize depthTransform, depthInstance;
+@synthesize thumbTransform, thumbInstance;
 @synthesize paramList;
 @synthesize targetImageView;
 @synthesize chBuf0, chBuf1;
@@ -55,7 +56,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
-@synthesize enabled, isDepthThumb;
+@synthesize enabled;
 
 - (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg {
     self = [super init];
@@ -67,9 +68,11 @@ static PixelIndex_t dPI(int x, int y) {
         transformList = [[NSMutableArray alloc] init];
         depthTransform = nil;
         depthInstance = nil;
+        thumbTransform = nil;   // instead of the list
+        thumbInstance = nil;
         paramList = [[NSMutableArray alloc] init];
+        
         enabled = YES;
-        isDepthThumb = NO;
         taskStatus = Stopped;
         targetImageView = nil;
         chBuf0 = chBuf1 = nil;
@@ -99,6 +102,7 @@ static PixelIndex_t dPI(int x, int y) {
         depthInstance = [[TransformInstance alloc]
                                        initFromTransform:(Transform *)transform];
     }
+    NSLog(@" task '%@' using depth transform '%@'", taskName, depthTransform.name);
 }
 
 - (long) appendTransformToTask:(Transform *) transform {
@@ -151,8 +155,16 @@ static PixelIndex_t dPI(int x, int y) {
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.transformSize];
     assert(chBuf0);
     assert(chBuf1);
-    for (int i=0; i<transformList.count; i++) {
-        [self configureTransformAtIndex:i];
+    
+    if (thumbTransform) {
+        [self configureTransform:thumbTransform andInstance:thumbInstance];
+    } else {
+        if (depthTransform)
+            [self configureTransform:depthTransform andInstance:depthInstance];
+        
+        for (int i=0; i<transformList.count; i++) {
+            [self configureTransformAtIndex:i];
+        }
     }
 }
 
@@ -184,15 +196,20 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) configureTransformAtIndex:(size_t)index {
+    Transform *transform = transformList[index];
+    TransformInstance *instance = paramList[index];
+    [self configureTransform:transform andInstance:instance];
+}
+
+- (void) configureTransform:(Transform *) transform
+                           andInstance:(TransformInstance *) instance {
     CGSize s = taskGroup.transformSize;
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    TT %-15@   configureTransform  %zu size %.0f x %.0f", taskName, index, s.width, s.height);
 #endif
 // maybe ok    assert(taskStatus == Stopped);
     assert(s.width > 0 && s.height > 0);
-    Transform *transform = transformList[index];
-    TransformInstance *instance = paramList[index];
-
+    
     switch (transform.type) {
         case RemapTrans:
         case RemapPolarTrans:
@@ -227,55 +244,61 @@ static PixelIndex_t dPI(int x, int y) {
     }
     taskStatus = Running;
     
-    if (depthTransform) {
-        assert(depthInstance);
-        if (depthTransform.broken)
-            return;
-        assert(depthTransform.type == DepthVis);
-        depthTransform.depthVisF(depthBuf, imBuf0, depthInstance);
-        
-        if (isDepthThumb) { // only do the depth
-            UIImage *finalImage = [self pixbufToImage:imBuf0];
-            [self updateTargetWith:finalImage];
-            taskStatus = Idle;
-            return;
-         }
-    }
-    assert(!isDepthThumb);  // should be processed above
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
     [srcBuf copyPixelsTo:imBuf0];
+    UIImage *finalImage;
+
+    if (thumbTransform) {   // just one transform, for the thumbnail
+        assert(thumbInstance);
+        if (!thumbTransform.broken) {
+            if (thumbTransform.type == DepthVis) {  // depth thumbnail
+                depthTransform.depthVisF(depthBuf, imBuf0, thumbInstance);
+                finalImage = [self pixbufToImage:imBuf0];
+            } else {
+                [srcBuf copyPixelsTo:imBuf0];
+                size_t destIndex = [self performTransform:thumbTransform
+                                              instance:thumbInstance
+                                                source:0];
+                finalImage = [self pixbufToImage:imBufs[destIndex]];
+            }
+            [self updateTargetWith:finalImage];
+            taskStatus = Idle;
+        }
+        taskStatus = Idle;
+        return;
+    }
+
+    // for non-thumbnail visualizations, we apply the depth transform, if any, plus
+    // each of the selected transforms.
 
     assert(taskStatus == Running);
+    
     if (transformList.count == 0) { // just display the input
         UIImage *unmodifiedSourceImage = [self pixbufToImage:imBufs[0]];
         [self updateTargetWith:unmodifiedSourceImage];
         return;
     }
     
-//    NSLog(@"transforming %@ to %zu x %zu", self.taskName, imBuf0.w, imBuf0.h);
     NSDate *startTime = [NSDate now];
+    if (depthTransform) {   // do the depth first, if there is one
+        depthTransform.depthVisF(depthBuf, imBuf0, depthInstance);
+    }
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
-
-    int start = depthTransform ? -1 : 0;
-    for (int i=start; i<transformList.count; i++) {
+    
+    for (int i=0; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
             taskStatus = Stopped;
             return;
         }
         Transform *transform;
         TransformInstance *instance;
-        if (start < 0) {
-            transform = depthTransform;
-            instance = depthInstance;
-        } else {
-            transform = transformList[i];
-            instance = paramList[i];
-        }
+        transform = transformList[i];
+        instance = paramList[i];
         destIndex = [self performTransform:transform
-                                    instance:instance
-                               source:sourceIndex];
+                                  instance:instance
+                                    source:sourceIndex];
         assert(destIndex == 0 || destIndex == 1);
         sourceIndex = destIndex;
         NSDate *transformEnd = [NSDate now];
@@ -283,9 +306,9 @@ static PixelIndex_t dPI(int x, int y) {
         instance.timesCalled++;
         startTime = transformEnd;
     }
-
+    
     // Our PixBuf imBufs[sourceIndex] contains our pixels.  Update the targetImage
-    UIImage *finalImage = [self pixbufToImage:imBufs[sourceIndex]];
+    finalImage = [self pixbufToImage:imBufs[sourceIndex]];
     [self updateTargetWith:finalImage];
     taskStatus = Idle;
 }
@@ -342,6 +365,7 @@ static PixelIndex_t dPI(int x, int y) {
         case GeometricTrans:
         case RemapPolarTrans:
         case RemapTrans: {
+            assert(instance);
             assert(instance.remapBuf);
  //           [instance.remapBuf verify];
             BufferIndex *bip = instance.remapBuf.rb;
