@@ -174,7 +174,7 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   TaskGroup *screenTasks; // only one task in this group
-@property (nonatomic, strong)   TaskGroup *thumbTasks, *depthThumbTasks;
+@property (nonatomic, strong)   TaskGroup *thumbTasks, *depthThumbTasks;    // XXXX not clear why these are separate
 @property (nonatomic, strong)   TaskGroup *externalTasks;   // not yet, only one task in this group
 @property (nonatomic, strong)   TaskGroup *hiresTasks;       // not yet, only one task in this group
 
@@ -469,35 +469,35 @@ MainVC *mainVC = nil;
         [thumbView configureForTransform:transform];
         thumbView.transformIndex = ti;     // encode the index of this transform
         thumbView.tag = ti + TRANSFORM_BASE_TAG;
-
+        UIImageView *imageView;
+        
         [self adjustThumbView:thumbView selected:NO];
         if (transform.type == DepthVis) {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapDepthVis:)];
-            UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
                 [depthThumbTasks createTaskForTargetImageView:imageView
-                                                                     named:transform.name
-                                                            thumbTransform:transform];
-                [thumbView addSubview:imageView];
+                                                        named:transform.name
+                                               thumbTransform:transform];
             }
         } else {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapThumb:)];
-            UIImageView *imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
                 [thumbTasks createTaskForTargetImageView:imageView
-                                                                named:transform.name
-                                                       thumbTransform:transform];
+                                                   named:transform.name
+                                          thumbTransform:transform];
             }
-            [thumbView addSubview:imageView];
         }
+        [thumbView addSubview:imageView];
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
                                                          initWithTarget:self action:@selector(doHelp:)];
@@ -1138,9 +1138,9 @@ static NSString * const imageOrientationName[] = {
 
 //    NSLog(@"LLLL scanning %lu layouts", (unsigned long)layouts.count);
     for (Layout *layout in layouts) {
+#ifdef NOTDEF
         NSLog(@"CCCC format: %@", layout.format);
         NSLog(@"   dformats: %@", layout.format.supportedDepthDataFormats);
-#ifdef NOTDEF
         NSLog(@"%3d   %.3f  %.3f %.3f    %lu", i++,
               layout.displayFrac, layout.score, layout.thumbFrac,
               (unsigned long)editedLayouts.count);
@@ -1357,7 +1357,7 @@ static NSString * const imageOrientationName[] = {
     }
     ThumbView *newThumbView = (ThumbView *)recognizer.view;
     long newTransformIndex = newThumbView.transformIndex;
-    if (newTransformIndex == currentTransformIndex) {
+    if (newTransformIndex == currentTransformIndex) {   // retap current depth transform.  Just turn it off.
         // just turn depth transform off
         [screenTasks configureGroupWithNewDepthTransform:nil];
         return;
@@ -1984,9 +1984,11 @@ static NSString * const imageOrientationName[] = {
 
 - (void) doTransformsOn:(UIImage *)sourceImage depth:(DepthBuf *) rawDepthBuf {
     [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
-
-    if (DISPLAYING_THUMBS)
+    
+    if (DISPLAYING_THUMBS) {
+        [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
         [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
+    }
     if (cameraSourceThumb) {
         [cameraSourceThumb setImage:sourceImage];
         [cameraSourceThumb setNeedsDisplay];

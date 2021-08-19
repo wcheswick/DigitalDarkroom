@@ -246,14 +246,14 @@ static PixelIndex_t dPI(int x, int y) {
     
     // we copy the pixels into the correctly-sized, previously-created imBuf0,
     // which is also imBufs[0]
-    [srcBuf copyPixelsTo:imBuf0];
     UIImage *finalImage;
+    [srcBuf copyPixelsTo:imBuf0];
 
     if (thumbTransform) {   // just one transform, for the thumbnail
         assert(thumbInstance);
         if (!thumbTransform.broken) {
             if (thumbTransform.type == DepthVis) {  // depth thumbnail
-                depthTransform.depthVisF(depthBuf, imBuf0, thumbInstance);
+                thumbTransform.depthVisF(depthBuf, imBuf0, thumbInstance);
                 finalImage = [self pixbufToImage:imBuf0];
             } else {
                 [srcBuf copyPixelsTo:imBuf0];
@@ -273,8 +273,8 @@ static PixelIndex_t dPI(int x, int y) {
     // each of the selected transforms.
 
     assert(taskStatus == Running);
-    
-    if (transformList.count == 0) { // just display the input
+
+    if (transformList.count == 0 && !depthTransform) { // just display the input
         UIImage *unmodifiedSourceImage = [self pixbufToImage:imBufs[0]];
         [self updateTargetWith:unmodifiedSourceImage];
         return;

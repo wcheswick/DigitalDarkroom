@@ -102,7 +102,7 @@
 
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
-        if (task.depthTransform)    // fixed depth transform for thumb, don't change
+        if (task.thumbTransform)    // fixed depth transform for thumb, don't change
             continue;
         [task useDepthTransform:dt];
         depthTransform = dt;
@@ -223,24 +223,24 @@
         return;
     }
     
-    if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
-        // cheap scaling: XXXX use the hardware
-        double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
-        double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
-        for (int x=0; x<depthBuf.w; x++) {
-            int sx = trunc(x/xScale);
-            assert(sx <= rawDepthBuf.w);
-            for (int y=0; y<depthBuf.h; y++) {
-                int sy = trunc(y/yScale);
-                assert(sy < rawDepthBuf.h);
-                depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
+    if (rawDepthBuf) {
+        if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
+            // cheap scaling: XXXX use the hardware
+            double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
+            double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
+            for (int x=0; x<depthBuf.w; x++) {
+                int sx = trunc(x/xScale);
+                assert(sx <= rawDepthBuf.w);
+                for (int y=0; y<depthBuf.h; y++) {
+                    int sy = trunc(y/yScale);
+                    assert(sy < rawDepthBuf.h);
+                    depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
+                }
             }
+            depthBuf.minDepth = rawDepthBuf.minDepth;
+            depthBuf.maxDepth = rawDepthBuf.maxDepth;
         }
-        //        activeDepthBuf = depthBuf;
-        depthBuf.minDepth = rawDepthBuf.minDepth;
-        depthBuf.maxDepth = rawDepthBuf.maxDepth;
     }
-    
     if (taskCtrl.reconfigurationNeeded)
         [taskCtrl idleTransforms];
 
