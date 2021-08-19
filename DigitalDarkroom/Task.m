@@ -102,7 +102,7 @@ static PixelIndex_t dPI(int x, int y) {
         depthInstance = [[TransformInstance alloc]
                                        initFromTransform:(Transform *)transform];
     }
-    NSLog(@" task '%@' using depth transform '%@'", taskName, depthTransform.name);
+//    NSLog(@" task '%@' using depth transform '%@'", taskName, depthTransform.name);
 }
 
 - (long) appendTransformToTask:(Transform *) transform {
