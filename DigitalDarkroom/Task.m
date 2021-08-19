@@ -253,8 +253,8 @@ static PixelIndex_t dPI(int x, int y) {
         assert(thumbInstance);
         if (!thumbTransform.broken) {
             if (thumbTransform.type == DepthVis) {  // depth thumbnail
-                thumbTransform.depthVisF(depthBuf, imBuf0, thumbInstance);
-                finalImage = [self pixbufToImage:imBuf0];
+                thumbTransform.depthVisF(imBuf0, imBuf1, depthBuf, thumbInstance);
+                finalImage = [self pixbufToImage:imBuf1];
             } else {
                 [srcBuf copyPixelsTo:imBuf0];
                 size_t destIndex = [self performTransform:thumbTransform
@@ -279,14 +279,16 @@ static PixelIndex_t dPI(int x, int y) {
         [self updateTargetWith:unmodifiedSourceImage];
         return;
     }
+ 
+    size_t sourceIndex = 0; // imBuf0, where the input is
     
     NSDate *startTime = [NSDate now];
     if (depthTransform) {   // do the depth first, if there is one
-        depthTransform.depthVisF(depthBuf, imBuf0, depthInstance);
+        depthTransform.depthVisF(imBuf0, imBuf1, depthBuf, thumbInstance);
+        sourceIndex = 1;    // depth always goes from 0 to 1
     }
-    size_t sourceIndex = 0; // imBuf0, where the input is
+
     size_t destIndex;
-    
     for (int i=0; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
             taskStatus = Stopped;

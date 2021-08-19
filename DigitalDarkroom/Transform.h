@@ -49,14 +49,15 @@ typedef void (^ __nullable __unsafe_unretained
 #endif
 
 typedef void (^ __nullable __unsafe_unretained
-              areaFunction_t)(PixBuf *src,
+              areaFunction_t)(const PixBuf *src,
                               PixBuf *dest,
                               ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
-              depthVis_t)(const DepthBuf *depthBuf,
-                          PixBuf *pixBuf,
+              depthVis_t)(const PixBuf *src,
+                          PixBuf *dest,
+                          const DepthBuf *depthBuf,
                           TransformInstance *instance);
 
 @interface Transform : NSObject {
