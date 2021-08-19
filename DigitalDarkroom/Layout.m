@@ -32,7 +32,7 @@ NSString * __nullable displayOptionNames[] = {
 
 @implementation Layout
 
-@synthesize format;
+@synthesize format, depthFormat;
 @synthesize displayOption, thumbsPosition;
 @synthesize sourceSize;
 
@@ -55,7 +55,7 @@ NSString * __nullable displayOptionNames[] = {
     if (self) {
         scale = 0.0;
         score = BAD_LAYOUT;
-        format = nil;
+        format = depthFormat = nil;
         thumbArrayRect = CGRectZero;
         displayRect = CGRectZero;
         transformSize = CGSizeZero;
@@ -275,10 +275,10 @@ NSString * __nullable displayOptionNames[] = {
               displayRect.size.width, displayRect.size.height];
     shortStatus = stats;
 
-#define ASPECT_DIFF_OK  5.0   // percent
     float displayAspect = displayRect.size.width / displayRect.size.height;
-    float aspectDiffPct = 100*fabsf(aspectRatio - displayAspect)/aspectRatio;
-    assert(aspectDiffPct < ASPECT_DIFF_OK); // must be within 3%
+//    float aspectDiffPct = 100*fabsf(aspectRatio - displayAspect)/aspectRatio;
+    float aspectDiffPct = DIFF_PCT(aspectRatio, displayAspect);
+    assert(aspectDiffPct < ASPECT_PCT_DIFF_OK); // must be within this pct
 
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
     assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);

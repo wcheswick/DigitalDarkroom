@@ -13,9 +13,9 @@
 
 //#define DEBUG_ORIENTATION 1
 
-//#define DEBUG_CAMERA  1
+#define DEBUG_CAMERA  1
 //#define DEBUG_TASK_BUSY 1
-#define DEBUG_TASK_CONFIGURATION  1
+//#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_DEPTH  1
 //#define DEBUG_SOURCE  1
 //#define DEBUG_THUMB_PLACEMENT 1
@@ -110,6 +110,9 @@ typedef long PixelIndex_t;
 // There is always a bit of display available, for pinching
 #define MIN_DISPLAY_W   THUMB_W
 #define MIN_DISPLAY_H   THUMB_W
+
+#define ASPECT_PCT_DIFF_OK  5.0
+#define DIFF_PCT(a,b)   (100.0*fabsf((a) - (b))/(a))
 
 #define DEGRAD(d)   (((d)/180.0) * M_PI)
 

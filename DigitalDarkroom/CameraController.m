@@ -120,9 +120,10 @@
     }
 }
 
-- (BOOL) depthFormatHasUsefulSubtype: (AVCaptureDeviceFormat *)format {
-    FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-    //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
++ (BOOL) depthFormat:(AVCaptureDeviceFormat *)depthFormat
+       isSuitableFor:(AVCaptureDeviceFormat *)format {
+    // is subtype what we want?
+    FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(depthFormat.formatDescription);
     switch (mediaSubType) {
         case kCVPixelFormatType_DisparityFloat16:   // 'hdis'
             //IEEE754-2008 binary16 (half float), describing the normalized shift
@@ -137,11 +138,18 @@
             return NO;
         case kCVPixelFormatType_DepthFloat32:       //'fdep'
             // IEEE754-2008 binary32 float, describing the depth (distance to an object) in meters */
-            return YES;
+            break;
       default:
             NSLog(@"??? Unknown depth subtype encountered in format: %@", format);
             return NO;
     }
+    // Do the aspect ratios match?
+    CMVideoDimensions depthSize = CMVideoFormatDescriptionGetDimensions(depthFormat.formatDescription);
+    float depthAR = depthSize.width / depthSize.height;
+    CMVideoDimensions videoSize = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
+    float videoAr = videoSize.width / videoSize.height;
+    float aspectDiffPct = DIFF_PCT(depthAR, videoAr);
+    return (aspectDiffPct < ASPECT_PCT_DIFF_OK);
 }
 
 - (BOOL) selectCameraOnSide:(BOOL)front {
@@ -183,7 +191,8 @@
 
 // need an up-to-date deviceorientation
 // need capturedevice set
-- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format {
+- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
+                          depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat {
     NSError *error;
     dispatch_queue_t outputQueue = dispatch_queue_create("output queue", DISPATCH_QUEUE_SERIAL);
 
@@ -195,17 +204,8 @@
     }
     captureSession = [[AVCaptureSession alloc] init];
     [captureSession beginConfiguration];
-//    [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
 
 #pragma mark - Capture device
-
-    NSArray<AVCaptureDeviceFormat *> *depthFormats = format.supportedDepthDataFormats;
-    AVCaptureDeviceFormat *chosenDepthFormat = nil;
-    for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
-        if (![self depthFormatHasUsefulSubtype:depthFormat])
-            continue;
-        chosenDepthFormat = depthFormat;    // we will be more selective later.  Use the largest for now
-    }
     [captureDevice lockForConfiguration:&error];
     if (error) {
         NSLog(@"startSession: could not lock camera: %@",
@@ -214,12 +214,11 @@
         return;
     }
     assert(format);
-#ifdef NOTDEF
+
+    [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
     captureDevice.activeFormat = format;
-    if (chosenDepthFormat)
-        captureDevice.activeDepthDataFormat = chosenDepthFormat;
-#endif
-    
+    captureDevice.activeDepthDataFormat = depthFormat;
+
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
     
@@ -289,9 +288,6 @@
         assert(depthConnection);  // we were told it is available
         [depthConnection setVideoOrientation:videoOrientation];
         depthConnection.videoMirrored = YES;
-        
-        NSLog(@"depthConnection: %@", depthConnection);
-        NSLog(@"depthConnection: %@", depthConnection);
     }
    
 #ifdef NOPE
@@ -300,8 +296,10 @@
     previewLayer.videoGravity = .resizeAspectFill
     videoView.layer.addSublayer(previewLayer)
 #endif
-//    captureSession.sessionPreset = AVCaptureSessionPresetInputPriority;
 
+    frameCount = depthFrames = videoFrames = 0;
+    depthMissing = videoDropped = depthDropped = 0;
+    
     outputSynchronizer = [[AVCaptureDataOutputSynchronizer alloc]
               initWithDataOutputs:
               depthDataAvailable ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
@@ -309,12 +307,14 @@
     [outputSynchronizer setDelegate:self queue:outputQueue];
 
     [captureSession commitConfiguration];
+#ifdef DEBUG_CAMERA
+    NSLog(@"CCCC format: %@", captureDevice.activeFormat);
+    NSLog(@"      depth: %@", captureDevice.activeDepthDataFormat);
+#endif
     return;
 }
 
 #pragma mark - AVCaptureDataOutputSynchronizer (Video + Depth)
-
-// from https://git.fuwafuwa.moe/mindcrime/Source-SCCamera/commit/402429fa18b08aef139b44700fb44a4d6310c076
 
 static int frameCount = 0;
 static int depthFrames = 0;
@@ -328,8 +328,8 @@ static int depthDropped = 0;
 
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
-    CVPixelBufferRef depthPixelBuffer = nil;
-    CVPixelBufferRef videoPixelBuffer = nil;
+    CVPixelBufferRef depthPixelBufferRef = nil;
+    CVPixelBufferRef videoPixelBufferRef = nil;
     frameCount++;
     
 //    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
@@ -344,33 +344,42 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     } else {
         if(!syncedDepthBufferData.depthDataWasDropped) {
             depthFrames++;
-            depthPixelBuffer=[syncedDepthBufferData.depthData depthDataMap];
+            depthPixelBufferRef=[syncedDepthBufferData.depthData depthDataMap];
 //            NSLog(@" ***      depthPixelBuffer: %@", depthPixelBuffer);
         } else
             depthDropped++;
     }
 
-    if (depthPixelBuffer) {
+    if (depthPixelBufferRef) {
         AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
                                                     synchronizedDataForCaptureOutput:self.videoDataOutput];
         AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData=(AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
         if(syncedSampleBufferData.sampleBufferWasDropped) {
             videoDropped++;
         } else {
-            videoPixelBuffer = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
+            videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
             videoFrames++;
 //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
 //                      frameCount, videoFrames, depthFrames,
 //                      videoDropped, depthDropped, depthMissing, notRespond);
-            UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBuffer];
+            UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBufferRef];
             if (!capturedImage)
                 return;
+#ifdef DEBUG_CAMERA
+            if (videoFrames == 1) {
+                size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
+                size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
+                NSLog(@"CCCC captured size %.0f x %.0f   depth %zu x %zu",
+                      capturedImage.size.width, capturedImage.size.height,
+                      width, height);
+            }
+#endif
             [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
-                                                                            depth:depthPixelBuffer];
+                                                                            depth:depthPixelBufferRef];
         }
     }
     //    }
-    if (NO && frameCount % 500 == 0)
+    if (YES && (frameCount-1) % 500 == 0)
         NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
               frameCount, videoFrames, depthFrames,
               videoDropped, depthDropped, depthMissing);

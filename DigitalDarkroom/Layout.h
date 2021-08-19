@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface Layout : NSObject {
     AVCaptureDeviceFormat * __nullable format;
+    AVCaptureDeviceFormat * __nullable depthFormat;
     DisplayOptions displayOption;
     ThumbsPosition thumbsPosition;
     CGSize sourceSize;
@@ -44,6 +45,7 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 @property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
+@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable depthFormat;
 @property (assign)              DisplayOptions displayOption;
 @property (assign)              ThumbsPosition thumbsPosition;
 @property (assign)              CGSize sourceSize;

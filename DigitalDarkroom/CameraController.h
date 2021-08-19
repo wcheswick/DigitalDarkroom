@@ -29,7 +29,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
-- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format;
+- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
+                          depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat;
 - (BOOL) selectCameraOnSide:(BOOL)front;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
@@ -38,6 +39,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) stopCamera;
 
 + (NSString *) dumpDeviceOrientationName: (UIDeviceOrientation) o;
++ (BOOL) depthFormat:(AVCaptureDeviceFormat *)depthFormat
+       isSuitableFor:(AVCaptureDeviceFormat *)format;
 - (NSString *) dumpFormatType:(OSType) t;
 
 @end

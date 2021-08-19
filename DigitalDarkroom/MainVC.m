@@ -343,7 +343,7 @@ MainVC *mainVC = nil;
             }
         }
         [self saveDepthTransformName];
-        currentDepthTransformIndex = NO_TRANSFORM;
+        currentDepthTransformIndex = NO_TRANSFORM;  // DEBUG, start clean, maybe always
 
         taskCtrl = [[TaskCtrl alloc] init];
         taskCtrl.mainVC = self;
@@ -1138,6 +1138,8 @@ static NSString * const imageOrientationName[] = {
 
 //    NSLog(@"LLLL scanning %lu layouts", (unsigned long)layouts.count);
     for (Layout *layout in layouts) {
+        NSLog(@"CCCC format: %@", layout.format);
+        NSLog(@"   dformats: %@", layout.format.supportedDepthDataFormats);
 #ifdef NOTDEF
         NSLog(@"%3d   %.3f  %.3f %.3f    %lu", i++,
               layout.displayFrac, layout.score, layout.thumbFrac,
@@ -1150,6 +1152,16 @@ static NSString * const imageOrientationName[] = {
             previousLayout = layout;
             continue;
         }
+        // find best depth format for this.  Must have same aspect ratio, and correct type.
+
+        NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
+        layout.depthFormat = nil;
+        for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
+            if (![CameraController depthFormat:depthFormat isSuitableFor:layout.format])
+                continue;
+            layout.depthFormat = depthFormat;
+        }
+
 #ifdef NOTDEF
         if (i % 10 == 0)
             NSLog(@"pause %d", i);
@@ -2561,7 +2573,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     if (currentSourceImage)
         [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
     else {
-        [cameraController setupCameraSessionWithFormat:layout.format];
+        [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
         //cameraController.captureVideoPreviewLayer = previewLayer;
         [taskCtrl enableTasks];
