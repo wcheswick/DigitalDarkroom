@@ -35,6 +35,10 @@ typedef struct {
     channel b, g, r, a;
 } Pixel;
 
+typedef struct {
+    channel h, s, v, a;
+} HSVPixel;
+
 // PixelIndex_t: index into an image, range 0..configuredPixelsInImage, or
 //  several small negative numbers indicating a particular color instead of
 //  an existing pixel.

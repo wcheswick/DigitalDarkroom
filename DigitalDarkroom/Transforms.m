@@ -51,6 +51,84 @@ static PixelIndex_t dPI(int x, int y) {
 #endif
 #endif
 
+// From https://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb-in-range-0-255-for-both
+
+static
+Pixel HSVtoRGB(HSVPixel hsv) {
+    Pixel rgb;
+    unsigned char region, remainder, p, q, t;
+
+    rgb.a = hsv.a;
+
+    if (hsv.s == 0) {
+        rgb.r = hsv.v;
+        rgb.g = hsv.v;
+        rgb.b = hsv.v;
+        return rgb;
+    }
+
+    region = hsv.h / 43;
+    remainder = (hsv.h - (region * 43)) * 6;
+
+    p = (hsv.v * (Z - hsv.s)) >> 8;
+    q = (hsv.v * (Z - ((hsv.s * remainder) >> 8))) >> 8;
+    t = (hsv.v * (Z - ((hsv.s * (Z - remainder)) >> 8))) >> 8;
+
+    switch (region) {
+        case 0:
+            rgb.r = hsv.v; rgb.g = t; rgb.b = p;
+            break;
+        case 1:
+            rgb.r = q; rgb.g = hsv.v; rgb.b = p;
+            break;
+        case 2:
+            rgb.r = p; rgb.g = hsv.v; rgb.b = t;
+            break;
+        case 3:
+            rgb.r = p; rgb.g = q; rgb.b = hsv.v;
+            break;
+        case 4:
+            rgb.r = t; rgb.g = p; rgb.b = hsv.v;
+            break;
+        default:
+            rgb.r = hsv.v; rgb.g = p; rgb.b = q;
+            break;
+    }
+    return rgb;
+}
+
+static
+HSVPixel RGBtoHSV(Pixel rgb) {
+    HSVPixel hsv;
+
+    
+    long rgbMin = MIN(MIN(rgb.r,rgb.g), rgb.b);
+    long rgbMax = MAX(MAX(rgb.r,rgb.g), rgb.b);
+
+    hsv.a = rgb.a;
+    
+    hsv.v = rgbMax;
+    if (hsv.v == 0) {
+        hsv.h = 0;
+        hsv.s = 0;
+        return hsv;
+    }
+
+    hsv.s = Z * (rgbMax - rgbMin) / hsv.v;
+    if (hsv.s == 0) {
+        hsv.h = 0;
+        return hsv;
+    }
+
+    if (rgbMax == rgb.r)
+        hsv.h = 0 + 43 * (rgb.g - rgb.b) / (rgbMax - rgbMin);
+    else if (rgbMax == rgb.g)
+        hsv.h = 85 + 43 * (rgb.b - rgb.r) / (rgbMax - rgbMin);
+    else
+        hsv.h = 171 + 43 * (rgb.r - rgb.g) / (rgbMax - rgbMin);
+    return hsv;
+}
+
 @interface Transforms ()
 
 @property (strong, nonatomic)   Transform *lastTransform;
@@ -312,6 +390,7 @@ mostCommonColorInHist(Hist_t *hists) {
 }
 
 - (void) addTestTransforms {
+#ifdef DEBUG
     lastTransform = [Transform areaTransform: @"Flat polar test"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -326,6 +405,22 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 
+    lastTransform = [Transform depthVis: @"HSV test"
+                            description: @""
+                               depthVis: ^(const PixBuf *src,
+                                           PixBuf *dest,
+                                           const DepthBuf *depthBuf,
+                                           TransformInstance *instance) {
+        for (int i=0; i<dest.w*dest.h; i++) {
+            Pixel p = src.pb[i];
+            HSVPixel hsv = RGBtoHSV(p);
+            Distance z = depthBuf.db[i];
+            dest.pb[i] = HSVtoRGB(hsv);
+        }
+    }];
+    [self addTransform:lastTransform];
+#endif
+    
     lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
                                 areaFunction:^(PixBuf *src, PixBuf *dest,
@@ -841,26 +936,39 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            PixBuf *dest,
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
-        float min = depthBuf.maxDepth;
-        float max = depthBuf.minDepth;
-//        float depthSpan = max - min;
+        
+        float backgroundDepth = depthBuf.maxDepth;
+        if (backgroundDepth > 3.0)
+            backgroundDepth = 3.0;
+        float D = backgroundDepth - depthBuf.minDepth;
+        assert(D);
+        Pixel white = White;
         for (int i=0; i<dest.w*dest.h; i++) {
             Pixel p = src.pb[i];
-            UIColor *pixelColor = [UIColor colorWithRed:p.r green:p.g blue:p.b alpha:1.0];
-            CGFloat hue;
-            CGFloat saturation;
-            CGFloat brightness;
-            CGFloat alpha;
-            BOOL success = [pixelColor getHue:&hue saturation:&saturation brightness:&brightness alpha:&alpha];
-            assert(success);
-            Distance z = depthBuf.db[i];
-            float frac = 1.0 - (z/max);
-            saturation *= frac; // saturation vanished to zero in the distance
-            pixelColor = [UIColor colorWithHue:hue saturation:saturation brightness:brightness alpha:1.0];
-            CGFloat r, g, b, a;
-            success = [pixelColor getRed:&r green:&g blue:&b alpha:&a];
-            dest.pb[i] = CRGB(r,g,b);
-            assert(success);
+            Distance d = depthBuf.db[i];
+            if (d > backgroundDepth)
+                dest.pb[i] = White;
+            else {
+#ifdef LINEAR_FADE
+                float depthFrac = (float)d/D;
+                // the deeper it is, the more white (Z) we use
+                dest.pb[i] = CRGB(
+                                    (1.0 - depthFrac)*p.r + depthFrac*white.r,
+                                    (1.0 - depthFrac)*p.g + depthFrac*white.g,
+                                    (1.0 - depthFrac)*p.b + depthFrac*white.b);
+#else   // log fade, 1+d to maxdepth
+                float frac = log(depthBuf.minDepth + 1 + d);
+//                float frac = exp(depthBuf.minDepth + 1 + d);
+                if (frac > 1.0)
+                    dest.pb[i] = White;
+                else {
+                    dest.pb[i] = CRGB(
+                                      (1.0 - frac)*p.r + frac*Z,
+                                      (1.0 - frac)*p.g + frac*Z,
+                                      (1.0 - frac)*p.b + frac*white.b);
+                }
+#endif
+            }
         }
     }];
     lastTransform.hasParameters = NO;
