@@ -344,8 +344,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     } else {
         if(!syncedDepthBufferData.depthDataWasDropped) {
             depthFrames++;
-            depthPixelBufferRef=[syncedDepthBufferData.depthData depthDataMap];
-//            NSLog(@" ***      depthPixelBuffer: %@", depthPixelBuffer);
+            depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
         } else
             depthDropped++;
     }

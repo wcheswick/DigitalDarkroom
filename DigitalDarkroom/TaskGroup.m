@@ -208,6 +208,9 @@
     // We also prepare a readonly depth buffer (if depth supplied) that is scaled
     // to this group's image size.  The scaling is a bit crude at the moment,
     // and probably should be done in hardware.
+    //
+    // NB: the depth buffer has dirty values: negative and NaN.  Set these to
+    // the maximum distance.
     
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
@@ -226,6 +229,8 @@
     if (rawDepthBuf) {
         if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
             // cheap scaling: XXXX use the hardware
+            depthBuf.minDepth = rawDepthBuf.minDepth;
+            depthBuf.maxDepth = rawDepthBuf.maxDepth;
             double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
             double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
             for (int x=0; x<depthBuf.w; x++) {
@@ -234,11 +239,15 @@
                 for (int y=0; y<depthBuf.h; y++) {
                     int sy = trunc(y/yScale);
                     assert(sy < rawDepthBuf.h);
-                    depthBuf.da[y][x] = rawDepthBuf.da[sy][sx];   // XXXXXX died here during reconfiguration
+                    Distance d = rawDepthBuf.da[sy][sx];
+                    if (isnan(d) || d > depthBuf.maxDepth) {
+                        d = depthBuf.maxDepth;
+                    } else if (d < depthBuf.minDepth)
+                        d = depthBuf.minDepth;
+                    assert(d >= depthBuf.minDepth && d <= depthBuf.maxDepth);
+                    depthBuf.da[y][x] = d;   // XXXXXX died here during reconfiguration
                 }
             }
-            depthBuf.minDepth = rawDepthBuf.minDepth;
-            depthBuf.maxDepth = rawDepthBuf.maxDepth;
         }
     }
     if (taskCtrl.reconfigurationNeeded)

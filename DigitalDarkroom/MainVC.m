@@ -1974,6 +1974,7 @@ static NSString * const imageOrientationName[] = {
         memcpy(rawDepthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
         CVPixelBufferUnlockBaseAddress(depthPixelBufRef, 0);
         [rawDepthBuf findDepthRange];
+        // NB: the depth data is dirty, with negative and NaN values in there
     }
     
     dispatch_async(dispatch_get_main_queue(), ^{

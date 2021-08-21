@@ -109,10 +109,12 @@
     maxDepth = 0.0;
     for (int i=0; i<w * h; i++) {
         float z = db[i];
-        if (z > maxDepth)
-            maxDepth = z;
-        if (z < minDepth)
-            minDepth = z;
+        if (!isnan(z) && z > 0) {   // ignore bad depth data
+            if (z > maxDepth)
+                maxDepth = z;
+            if (z < minDepth)
+                minDepth = z;
+        }
     }
 }
 

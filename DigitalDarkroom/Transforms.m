@@ -929,7 +929,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 - (void) addDepthVisualizations {
     // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
     
-    
     lastTransform = [Transform depthVis: @"Deep fog"
                             description: @""
                                depthVis: ^(const PixBuf *src,
@@ -938,36 +937,31 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            TransformInstance *instance) {
         
         float backgroundDepth = depthBuf.maxDepth;
-        if (backgroundDepth > 3.0)
-            backgroundDepth = 3.0;
+        if (backgroundDepth > 1.0)
+            backgroundDepth = 1.0;
+        assert(depthBuf.minDepth < backgroundDepth);
         float D = backgroundDepth - depthBuf.minDepth;
         assert(D);
-        Pixel white = White;
+//#define FADE(d) ((d))               // linear
+#define FADE(d) ((d)*(d))           // quadratic
+// #define FADE(d) ((d)*(d)*(d))    // cubic
+        
+        // fading needs a number between 0 (closest) to 1 (farthest)
+        float maxFade = FADE(D);
+        NSLog(@"min: %.1f   max: %.1f", depthBuf.minDepth, depthBuf.maxDepth);
+        Pixel background = LightGrey;
         for (int i=0; i<dest.w*dest.h; i++) {
             Pixel p = src.pb[i];
             Distance d = depthBuf.db[i];
+            assert(d >= depthBuf.minDepth && d <= depthBuf.maxDepth);//did we get this right?
             if (d > backgroundDepth)
-                dest.pb[i] = White;
+                dest.pb[i] = background;
             else {
-#ifdef LINEAR_FADE
-                float depthFrac = (float)d/D;
-                // the deeper it is, the more white (Z) we use
+                float fradFrac = FADE(d - depthBuf.minDepth)/maxFade;
                 dest.pb[i] = CRGB(
-                                    (1.0 - depthFrac)*p.r + depthFrac*white.r,
-                                    (1.0 - depthFrac)*p.g + depthFrac*white.g,
-                                    (1.0 - depthFrac)*p.b + depthFrac*white.b);
-#else   // log fade, 1+d to maxdepth
-                float frac = log(depthBuf.minDepth + 1 + d);
-//                float frac = exp(depthBuf.minDepth + 1 + d);
-                if (frac > 1.0)
-                    dest.pb[i] = White;
-                else {
-                    dest.pb[i] = CRGB(
-                                      (1.0 - frac)*p.r + frac*Z,
-                                      (1.0 - frac)*p.g + frac*Z,
-                                      (1.0 - frac)*p.b + frac*white.b);
-                }
-#endif
+                                  (1.0 - fradFrac)*p.r + fradFrac*background.r,
+                                  (1.0 - fradFrac)*p.g + fradFrac*background.g,
+                                  (1.0 - fradFrac)*p.b + fradFrac*background.b);
             }
         }
     }];
