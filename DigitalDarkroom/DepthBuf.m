@@ -104,6 +104,33 @@
     }
 }
 
+// moving averages to smooth out changes in minimum and maximum depths used
+
+#define MA_COUNT    (MAX_FRAME_RATE/2)
+
+typedef struct ma_buf {
+    int n;
+    float sum;
+    int next;
+    float buf[MA_COUNT];
+} ma_buff_t;
+
+ma_buff_t min_dist_buf = {0, 0.0};
+ma_buff_t max_dist_buf = {0, 0.0};
+
+float
+ma(ma_buff_t *b, float v) {
+    if (b->n < MA_COUNT) {
+        b->n++;
+        b->sum += v;
+    } else {
+        b->sum += v - b->buf[b->next];
+    }
+    b->buf[b->next] = v;
+    b->next = (b->next + 1) % MA_COUNT;
+    return b->sum/b->n;
+}
+
 - (void) findDepthRange {
     minDepth = MAXFLOAT;
     maxDepth = 0.0;
@@ -116,6 +143,8 @@
                 minDepth = z;
         }
     }
+    minDepth = ma(&min_dist_buf, minDepth);
+    maxDepth = ma(&max_dist_buf, maxDepth);
 }
 
 - (void) copyDepthsTo:(DepthBuf *) dest {

@@ -105,8 +105,8 @@
         if (task.thumbTransform)    // fixed depth transform for thumb, don't change
             continue;
         [task useDepthTransform:dt];
-        depthTransform = dt;
     }
+    depthTransform = dt;
 }
 
 - (void) removeAllTransforms {

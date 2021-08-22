@@ -927,22 +927,20 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define RGB_SPACE   ((float)((1<<24) - 1))
 
 - (void) addDepthVisualizations {
-    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
-    
     lastTransform = [Transform depthVis: @"Fog"
                             description: @""
                                depthVis: ^(const PixBuf *src,
                                            PixBuf *dest,
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
-        
         float backgroundDepth = depthBuf.maxDepth;
-        if (backgroundDepth > 1.0)
-            backgroundDepth = 1.0;
+        float paramMaxDepth = instance.value/1000.0;
+        if (backgroundDepth > paramMaxDepth)
+            backgroundDepth = paramMaxDepth;
         assert(depthBuf.minDepth < backgroundDepth);
         float D = backgroundDepth - depthBuf.minDepth;
         assert(D);
-#define FADE(d) ((d))               // linear
+#define FADE(d) (d)               // linear
 //#define FADE(d) ((d)*(d))           // quadratic
 // #define FADE(d) ((d)*(d)*(d))    // cubic
         
@@ -965,14 +963,16 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
         }
     }];
-    lastTransform.hasParameters = NO;
-    lastTransform.paramName = @"max depth";
-    lastTransform.broken = NO;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Max depth (mm)";
+    lastTransform.low = 20; // millimeters
+    lastTransform.value = 1000;
+    lastTransform.high = 10000;
     [self addTransform:lastTransform];
 
+    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
 #define EYE_SEP 62  // mm
 #define PDOT    0.4
-    
     lastTransform = [Transform depthVis: @"Anaglyph"
                             description: @"Complementary color anaglyph"
                                depthVis: ^(const PixBuf *src,

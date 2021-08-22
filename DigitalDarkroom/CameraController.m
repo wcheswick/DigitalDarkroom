@@ -12,7 +12,6 @@
 #import "Defines.h"
 
 
-#define MAX_FRAME_RATE  24
 
 @interface CameraController ()
 

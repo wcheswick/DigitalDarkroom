@@ -103,6 +103,7 @@ static PixelIndex_t dPI(int x, int y) {
     } else {
         depthInstance = [[TransformInstance alloc]
                                        initFromTransform:(Transform *)transform];
+        assert(depthInstance);
     }
 //    NSLog(@" task '%@' using depth transform '%@'", taskName, depthTransform.name);
 }
@@ -205,6 +206,8 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (void) configureTransform:(Transform *) transform
                            andInstance:(TransformInstance *) instance {
+    if (transform.hasParameters)
+        assert(instance);
     CGSize s = taskGroup.transformSize;
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    TT %-15@   configureTransform  %zu size %.0f x %.0f", taskName, index, s.width, s.height);
@@ -286,7 +289,7 @@ static PixelIndex_t dPI(int x, int y) {
     
     NSDate *startTime = [NSDate now];
     if (depthTransform) {   // do the depth first, if there is one
-        depthTransform.depthVisF(imBuf0, imBuf1, depthBuf, thumbInstance);
+        depthTransform.depthVisF(imBuf0, imBuf1, depthBuf, depthInstance);
         sourceIndex = 1;    // depth always goes from 0 to 1
     }
 
