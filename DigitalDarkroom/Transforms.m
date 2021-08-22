@@ -969,52 +969,19 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.high = 10000;
     [self addTransform:lastTransform];
 
-    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
-#define EYE_SEP 62  // mm
-#define PDOT    0.4
-    lastTransform = [Transform depthVis: @"Anaglyph"
-                            description: @"Complementary color anaglyph"
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
-                                           TransformInstance *instance) {
-        for (int i=0; i<dest.w*dest.h; i++)
-            dest.pb[i] = White;
-
-        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
-            for (int x=0; x<depthBuf.w; x++) {
-                float z = depthBuf.da[y][x];
-                float r = (rand() % 100) / 100.0;
-                if (r > PDOT) {
-//                    if (pixBuf.pa[y][x] == White)
-//                        pixBuf.pa[y][x] = Black;
-                    continue;
-                }
-                
-                float sep = (EYE_SEP/2.0) * ((depthBuf.maxDepth - z)/depthBuf.maxDepth);
-                int leftX = x - sep;
-                int rightX = x + sep;
-                if (leftX < 0 || rightX >= depthBuf.w)
-                    continue;
-                dest.pa[y][leftX] = Cyan;
-                dest.pa[y][rightX] = Red;
-            }
-        }
-    }];
-    lastTransform.hasParameters = YES;
-    lastTransform.low = 10;
-    lastTransform.value = 62;
-    lastTransform.high = 100;
-    lastTransform.broken = NO;
-    lastTransform.paramName = @"Pupil separation";
-    [self addTransform:lastTransform];
-
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
                                depthVis: ^(const PixBuf *src,
                                            PixBuf *dest,
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
+        float backgroundDepth = depthBuf.maxDepth;
+        float paramMaxDepth = instance.value/1000.0;
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
+            backgroundDepth = paramMaxDepth;
+        float D = backgroundDepth - depthBuf.minDepth;
+        assert(D);
+#ifdef OLD
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
 
@@ -1022,8 +989,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         float max = depthBuf.minDepth;
 #define VSCALE  10.0
         float selectedMax = instance.value/VSCALE;
+#endif
         for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
             Distance z = depthBuf.db[i];
+            Pixel p;
+#ifdef OLD
             if (z < min)
                 min = z;
             if (z > selectedMax)
@@ -1032,8 +1002,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 newMaxDepth = z;
             if (z < newMinDepth)
                 newMinDepth = z;
-
-            Pixel p;
+#endif
 #ifdef HSV
             float frac = (d - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
             float hue = frac;
@@ -1047,10 +1016,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #else
             if (z < depthBuf.minDepth)
                 p = Red;
-            else if (z >= selectedMax)
+            else if (z >= D)
                 p = Black;
             else {
-                float frac = (z - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
+                float frac = (z - depthBuf.minDepth)/(D - depthBuf.minDepth);
                 UInt32 cv = trunc(RGB_SPACE * frac);
                 p.b = cv % 256;
                 cv /= 256;
@@ -1063,15 +1032,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #endif
             dest.pb[i] = p;
         }
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
     }];
-    lastTransform.low = 1*VSCALE;
-    lastTransform.value = 5*VSCALE;
-    lastTransform.high = 10.0*VSCALE;
     lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Depth scale";
-    lastTransform.broken = NO;
+    lastTransform.paramName = @"Max depth (mm)";
+    lastTransform.low = 20; // millimeters
+    lastTransform.value = 4000;
+    lastTransform.high = 10000;
     [self addTransform:lastTransform];
        
 #ifdef DEBUG_TRANSFORMS
@@ -1321,7 +1287,62 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.broken = YES;
     lastTransform.paramName = @"Color scale?";
     [self addTransform:lastTransform];
-    
+
+    // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
+#define EYE_SEP 62  // mm
+#define PDOT    0.2
+    lastTransform = [Transform depthVis: @"Anaglyph"
+                            description: @"Complementary color anaglyph"
+                               depthVis: ^(const PixBuf *src,
+                                           PixBuf *dest,
+                                           const DepthBuf *depthBuf,
+                                           TransformInstance *instance) {
+        float backgroundDepth = depthBuf.maxDepth;
+        float paramMaxDepth = instance.value/1000.0;
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
+            backgroundDepth = paramMaxDepth;
+        float D = backgroundDepth - depthBuf.minDepth;
+        assert(D);
+        for (int i=0; i<dest.w*dest.h; i++)
+            if (depthBuf.db[i] > D)
+                dest.pb[i] = White;
+            else
+                dest.pb[i] = src.pb[i];     // was White;
+
+        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
+            for (int x=0; x<depthBuf.w; x++) {
+                float z = depthBuf.da[y][x];
+                float r = (rand() % 100) / 100.0;
+                if (r > PDOT) {
+                    dest.pa[y][x] = src.pa[y][x];
+                    continue;
+                }
+                
+                float sep = (EYE_SEP/2.0) * ((depthBuf.maxDepth - z)/depthBuf.maxDepth);
+                int leftX = x - sep;
+                int rightX = x + sep;
+                if (leftX < 0 || rightX >= depthBuf.w)
+                    continue;
+                dest.pa[y][leftX] = Cyan;
+                dest.pa[y][rightX] = Red;
+            }
+        }
+    }];
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Max depth (mm)";
+    lastTransform.low = 20; // millimeters
+    lastTransform.value = 1000;
+    lastTransform.high = 10000;
+#ifdef NOTDEF
+    lastTransform.hasParameters = YES;
+    lastTransform.low = 10;
+    lastTransform.value = 62;
+    lastTransform.high = 100;
+    lastTransform.broken = NO;
+    lastTransform.paramName = @"Pupil separation";
+#endif
+    [self addTransform:lastTransform];
+
     depthTransformCount = transforms.count;
 }
 

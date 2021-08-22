@@ -106,7 +106,7 @@
 
 // moving averages to smooth out changes in minimum and maximum depths used
 
-#define MA_COUNT    (MAX_FRAME_RATE/2)
+#define MA_COUNT    4   // (MAX_FRAME_RATE/2)  // half second is too long for slow depth viz
 
 typedef struct ma_buf {
     int n;
