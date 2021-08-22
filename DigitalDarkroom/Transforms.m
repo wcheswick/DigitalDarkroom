@@ -929,7 +929,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 - (void) addDepthVisualizations {
     // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
     
-    lastTransform = [Transform depthVis: @"Deep fog"
+    lastTransform = [Transform depthVis: @"Fog"
                             description: @""
                                depthVis: ^(const PixBuf *src,
                                            PixBuf *dest,
@@ -942,13 +942,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         assert(depthBuf.minDepth < backgroundDepth);
         float D = backgroundDepth - depthBuf.minDepth;
         assert(D);
-//#define FADE(d) ((d))               // linear
-#define FADE(d) ((d)*(d))           // quadratic
+#define FADE(d) ((d))               // linear
+//#define FADE(d) ((d)*(d))           // quadratic
 // #define FADE(d) ((d)*(d)*(d))    // cubic
         
         // fading needs a number between 0 (closest) to 1 (farthest)
         float maxFade = FADE(D);
-        NSLog(@"min: %.1f   max: %.1f", depthBuf.minDepth, depthBuf.maxDepth);
+//        NSLog(@"min: %.1f   max: %.1f", depthBuf.minDepth, depthBuf.maxDepth);
         Pixel background = LightGrey;
         for (int i=0; i<dest.w*dest.h; i++) {
             Pixel p = src.pb[i];

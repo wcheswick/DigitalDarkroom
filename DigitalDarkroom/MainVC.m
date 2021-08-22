@@ -336,7 +336,7 @@ MainVC *mainVC = nil;
         assert(transforms.depthTransformCount > 0);
         currentDepthTransformIndex = NO_TRANSFORM;
         for (int i=0; i < transforms.depthTransformCount; i++) {
-            Transform *transform = [transforms.transforms objectAtIndex:i];
+            Transform *transform = transforms.transforms[i];
             if ([transform.name isEqual:defaultDepthTransformName]) {
                 currentDepthTransformIndex = i;
                 break;
@@ -625,6 +625,8 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) saveDepthTransformName {
+    if (currentDepthTransformIndex == NO_TRANSFORM)
+        return;
     Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
     [[NSUserDefaults standardUserDefaults] setObject:transform.name
                                               forKey:LAST_DEPTH_TRANSFORM_KEY];
@@ -1357,9 +1359,11 @@ static NSString * const imageOrientationName[] = {
     }
     ThumbView *newThumbView = (ThumbView *)recognizer.view;
     long newTransformIndex = newThumbView.transformIndex;
-    if (newTransformIndex == currentTransformIndex) {   // retap current depth transform.  Just turn it off.
+    if (newTransformIndex == currentDepthTransformIndex) {   // retap current depth transform.  Just turn it off.
         // just turn depth transform off
+        currentDepthTransformIndex = NO_TRANSFORM;
         [screenTasks configureGroupWithNewDepthTransform:nil];
+        [self updateExecuteView];
         return;
     }
     
@@ -1370,6 +1374,7 @@ static NSString * const imageOrientationName[] = {
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
+    [self updateExecuteView];
 }
 
 - (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
@@ -2094,14 +2099,19 @@ UIImageOrientation lastOrientation;
 
 - (void) updateExecuteView {
     NSString *t = nil;
-    long start = screenTask.depthTransform ? -1 : 0;
-    long displaySteps = screenTask.transformList.count - start;
+    
+    long step = 0;
+    long displaySteps = screenTask.transformList.count;
+    if (screenTask.depthTransform) {
+        step--;    // index -1 means there is a depth transform
+        displaySteps++;
+    }
     CGFloat bestH = EXECUTE_H_FOR(displaySteps);
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
     NSString *sep = onePerLine ? @"\n" : @" ";
     
-    for (long step=start; step<screenTask.transformList.count; step++) {
-        Transform *transform = (start < 0) ? screenTask.depthTransform : screenTask.transformList[step];
+    for (int i=0; i<displaySteps; i++, step++) {
+        Transform *transform = (step < 0) ? screenTask.depthTransform : screenTask.transformList[step];
          NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
         if (!t)
             t = name;
@@ -2109,7 +2119,6 @@ UIImageOrientation lastOrientation;
             t = [NSString stringWithFormat:@"%@  +%@%@", t, sep, name];
         }
         
-#ifdef STUB
         // append string showing the parameter value, if one is specified
         if (transform.hasParameters) {
             int value = [screenTask valueForStep:step];
@@ -2120,7 +2129,7 @@ UIImageOrientation lastOrientation;
                  value == transform.high ? @"]" : @">"];
             
             if (paramView) {
-                paramView.text = [NSString stringWithFormat:@"%@  %d  %@",
+                paramLabel.text = [NSString stringWithFormat:@"%@  %d  %@",
                                   value == transform.low ? @"[" : @"<",
                                   value,
                                   value == transform.high ? @"]" : @">"];
@@ -2129,7 +2138,6 @@ UIImageOrientation lastOrientation;
         }
         if (onePerLine && ![transform.description isEqual:@""])
             t = [NSString stringWithFormat:@"%@   (%@)", t, transform.description];
-#endif
     }
     
     if (IS_PLUS_ON || screenTask.transformList.count == 0)

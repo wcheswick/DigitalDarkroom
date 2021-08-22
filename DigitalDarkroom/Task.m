@@ -91,6 +91,8 @@ static PixelIndex_t dPI(int x, int y) {
 - (Transform *) lastTransform {
     if (transformList.count > 0)
         return [transformList lastObject];
+    if (depthTransform)
+        return depthTransform;
     return nil;
 }
 

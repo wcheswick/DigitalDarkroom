@@ -378,7 +378,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
     }
     //    }
-    if (YES && (frameCount-1) % 500 == 0)
+    if (NO && (frameCount-1) % 500 == 0)
         NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
               frameCount, videoFrames, depthFrames,
               videoDropped, depthDropped, depthMissing);
