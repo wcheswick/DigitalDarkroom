@@ -88,12 +88,23 @@ static PixelIndex_t dPI(int x, int y) {
     taskStatus = Idle;
 }
 
-- (Transform *) lastTransform {
+- (long) lastTransformIndex {
     if (transformList.count > 0)
-        return [transformList lastObject];
-    if (depthTransform)
-        return depthTransform;
-    return nil;
+        return transformList.count - 1;
+    else if (depthTransform)
+        return DEPTH_TRANSFORM;
+    return NO_TRANSFORM;
+}
+
+- (Transform *) lastTransform {
+    switch ([self lastTransformIndex]) {
+        case NO_TRANSFORM:
+            return nil;
+        case DEPTH_TRANSFORM:
+            return depthTransform;
+        default:
+            return [transformList lastObject];
+    }
 }
 
 - (void) useDepthTransform:(Transform *__nullable) transform {
@@ -184,18 +195,33 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (BOOL) updateParamOfLastTransformTo:(int) newParam {
-    long index = paramList.count - 1;
-    Transform *lastTransform = transformList[index];
-    if (lastTransform.type == NullTrans)
-        return NO;
-    TransformInstance *lastInstance = paramList[index];
-    if (lastInstance.value == newParam)
-        return NO;
-    if (newParam > lastTransform.high || newParam < lastTransform.low)
-        return NO;
-    lastInstance.value = newParam;
-    [self configureTransformAtIndex:index];
-    return YES;
+    TransformInstance *lastInstance;
+    
+    long lastIndex = [self lastTransformIndex];
+    switch (lastIndex) {
+        case NO_TRANSFORM:
+            return NO;
+        case DEPTH_TRANSFORM:
+            lastInstance = depthInstance;
+            if (lastInstance.value == newParam)
+                return NO;
+            if (newParam > depthTransform.high || newParam < depthTransform.low)
+                return NO;
+            depthInstance.value = newParam;
+            [self configureTransform:depthTransform andInstance:depthInstance];
+            return YES;
+        default: {
+            Transform *lastTransform = transformList[lastIndex];
+            lastInstance = paramList[lastIndex];
+            if (lastInstance.value == newParam)
+                return NO;
+            if (newParam > lastTransform.high || newParam < lastTransform.low)
+                return NO;
+            lastInstance.value = newParam;
+            [self configureTransformAtIndex:lastIndex];
+            return YES;
+        }
+    }
 }
 
 - (void) configureTransformAtIndex:(size_t)index {

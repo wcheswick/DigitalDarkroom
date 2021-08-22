@@ -935,9 +935,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            TransformInstance *instance) {
         float backgroundDepth = depthBuf.maxDepth;
         float paramMaxDepth = instance.value/1000.0;
-        if (backgroundDepth > paramMaxDepth)
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
             backgroundDepth = paramMaxDepth;
-        assert(depthBuf.minDepth < backgroundDepth);
         float D = backgroundDepth - depthBuf.minDepth;
         assert(D);
 #define FADE(d) (d)               // linear

@@ -1352,7 +1352,9 @@ static NSString * const imageOrientationName[] = {
 
 // select a new depth visualization.
 - (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
+    Transform *oldDepthTransform = nil;
     if (currentDepthTransformIndex != NO_TRANSFORM) {
+        oldDepthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
         // turn off old depth transform.  There can be only one.
         ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
         [self adjustThumbView:oldSelectedDepthThumb selected:NO];
@@ -1363,6 +1365,7 @@ static NSString * const imageOrientationName[] = {
         // just turn depth transform off
         currentDepthTransformIndex = NO_TRANSFORM;
         [screenTasks configureGroupWithNewDepthTransform:nil];
+        [self adjustParametersFrom:oldDepthTransform to:nil];
         [self updateExecuteView];
         return;
     }
@@ -1374,6 +1377,7 @@ static NSString * const imageOrientationName[] = {
     [self saveDepthTransformName];
 
     [screenTasks configureGroupWithNewDepthTransform:depthTransform];
+    [self adjustParametersFrom:oldDepthTransform to:depthTransform];
     [self updateExecuteView];
 }
 
@@ -1425,9 +1429,14 @@ static NSString * const imageOrientationName[] = {
     }
     [self doTransformsOn:currentSourceImage depth:rawDepthBuf]; // XXXXXX depth of saved image
 //    [self updateOverlayView];
+    [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
-    BOOL oldParameters = lastTransform && lastTransform.hasParameters;
-    BOOL newParameters = tappedTransform && tappedTransform.hasParameters;
+    [self adjustBarButtons];
+}
+
+- (void) adjustParametersFrom:(Transform *)oldTransform to:(Transform *)newTransform {
+    BOOL oldParameters = oldTransform && oldTransform.hasParameters;
+    BOOL newParameters = newTransform && newTransform.hasParameters;
     if (oldParameters) {
         [UIView animateWithDuration:0.5 animations:^(void) {
             SET_VIEW_Y(self->paramView, BELOW(self->transformView.frame));
@@ -1445,7 +1454,6 @@ static NSString * const imageOrientationName[] = {
             [self adjustParamView];
         }];
     }
-    [self adjustBarButtons];
 }
 
 - (IBAction) doPlus:(UIBarButtonItem *)caller {
@@ -1766,10 +1774,10 @@ static NSString * const imageOrientationName[] = {
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
-//    NSLog(@"slider value %.1f", slider.value);
+    NSLog(@"slider value %.1f", slider.value);
     [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
-        [self doTransformsOn:previousSourceImage depth:rawDepthBuf];    // XXXXXX depth of source image
+//        [self doTransformsOn:previousSourceImage depth:rawDepthBuf];    // XXXXXX depth of source image
         [self updateParamViewFor: lastTransform];
         [self updateExecuteView];
     }
@@ -1792,7 +1800,7 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) updateParamViewFor:(Transform *)transform {
-     paramLabel.text = [NSString stringWithFormat:@"%@  %@: %.0f",
+     paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
                        transform.name,
                        transform.paramName,
                        paramSlider.value];
@@ -2129,10 +2137,13 @@ UIImageOrientation lastOrientation;
                  value == transform.high ? @"]" : @">"];
             
             if (paramView) {
+                [self updateParamViewFor:transform];
+#ifdef OLD
                 paramLabel.text = [NSString stringWithFormat:@"%@  %d  %@",
                                   value == transform.low ? @"[" : @"<",
                                   value,
                                   value == transform.high ? @"]" : @">"];
+#endif
                 [paramView setNeedsDisplay];
             }
         }

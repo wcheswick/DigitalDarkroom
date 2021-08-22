@@ -16,7 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define DEPTH_TRANSFORM_SECTION 0
 
-#define NO_TRANSFORM    (-1)    // for indicies into transform array
+#define DEPTH_TRANSFORM (-1)
+#define NO_TRANSFORM    (-2)    // for indicies into transform array
 
 #define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
 #define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)
