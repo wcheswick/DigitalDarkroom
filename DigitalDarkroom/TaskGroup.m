@@ -196,7 +196,8 @@
 }
 
 - (void) executeTasksWithImage:(UIImage *) srcImage
-                                         depth:(const DepthBuf *__nullable) rawDepthBuf {
+                         depth:(const DepthBuf *__nullable) rawDepthBuf
+                      dumpFile:(NSFileHandle *__nullable)imageFileHandle {
     // we prepare a read-only PixBuf for this image.
     // Task must not change it: it is shared among the tasks.
     // At the end of the loop, we don't need it any more
@@ -291,6 +292,21 @@
     CGColorSpaceRelease(colorSpace);
     CGContextRelease(context);
 
+    if (imageFileHandle) {
+        NSString *line = [NSMutableString stringWithFormat:@"%lu %lu %d\n",
+                           (unsigned long)width, (unsigned long)height,
+                           rawDepthBuf ? 4 : 3];
+        [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+        for (int y=0; y < height; y++) {
+            for (int x=0; x < width; x++) {
+                NSString *d = rawDepthBuf ? [NSString stringWithFormat:@"%f", depthBuf.da[y][x]] : @"";
+                line = [NSString stringWithFormat:@"%d %d %d %@\n",
+                        srcPix.pa[y][x].r, srcPix.pa[y][x].g, srcPix.pa[y][x].b, d];
+                [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            }
+        }
+    }
+    
     @synchronized (srcPix) {
         for (Task *task in tasks) {
             if (task.taskStatus == Running)

@@ -34,6 +34,9 @@ NS_ASSUME_NONNULL_BEGIN
 #define Yellow          SETRGB(Z,Z,0)
 #define Magenta         SETRGB(Z,0,Z)
 #define Cyan            SETRGB(0,Z,Z)
+#define Amaranth        SETRGB(159,43,104)
+#define BrightPurple    SETRGB(191,64,191)
+#define Burgundy        SETRGB(128,0,32)
 #define UnsetColor      SETRGBA(Z,Z/2,Z,Z-1)
 
 @interface Transforms : NSObject {

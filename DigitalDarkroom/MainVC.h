@@ -8,6 +8,8 @@
 
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <MessageUI/MessageUI.h>
+
 #import "ThumbView.h"
 #import "InputSource.h"
 
@@ -38,6 +40,7 @@ typedef enum {
 //        UICollectionViewDelegateFlowLayout,
 //        UIScrollViewDelegate,
         videoSampleProcessorDelegate,
+        MFMailComposeViewControllerDelegate,
         UIPopoverPresentationControllerDelegate> {
     // layout looks at these:
     BOOL isPortrait, isiPhone;

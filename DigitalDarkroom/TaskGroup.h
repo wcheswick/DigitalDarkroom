@@ -37,9 +37,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSMutableArray *tasks;
 @property (assign, atomic)      CGSize transformSize;
 @property (assign, atomic)      volatile int busyCount;
-@property (assign)          size_t bytesPerRow, pixelsInImage, pixelsPerRow;
-@property (assign)          size_t bitsPerComponent;
-@property (assign)          size_t bytesInImage;
+@property (assign)              size_t bytesPerRow, pixelsInImage, pixelsPerRow;
+@property (assign)              size_t bitsPerComponent;
+@property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
 
 - (id)initWithController:(TaskCtrl *) caller;
@@ -48,7 +48,8 @@ NS_ASSUME_NONNULL_BEGIN
                          thumbTransform:(Transform *__nullable) thumbTransform;
 - (void) configureGroupForSize:(CGSize) s;
 - (void) executeTasksWithImage:(UIImage *) srcImage
-                              depth:(const DepthBuf *__nullable) rawDepthBuf;
+                         depth:(const DepthBuf *__nullable) rawDepthBuf
+                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform

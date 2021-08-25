@@ -255,6 +255,8 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
 @property (nonatomic, strong)   UIScrollView *thumbScrollView;
 
+@property (assign)              BOOL imageDumpRequested;
+
 @end
 
 @implementation MainVC
@@ -316,6 +318,7 @@ MainVC *mainVC = nil;
 @synthesize sourceSelectionView;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
+@synthesize imageDumpRequested;
 
 - (id) init {
     self = [super init];
@@ -329,6 +332,7 @@ MainVC *mainVC = nil;
         helpNavVC = nil;
         showControls = NO;
         plusMode = NoPlus;
+        imageDumpRequested = NO;
         layouts = [[NSMutableArray alloc] init];
         
         NSString *defaultDepthTransformName = [[NSUserDefaults standardUserDefaults]
@@ -1738,11 +1742,63 @@ static NSString * const imageOrientationName[] = {
     [self adjustControls];
 }
 
+// debug: create a pnm file from current live image, and email it
+
 - (IBAction) didLongPressTransformView:(UIGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateEnded)
         return;
-    layoutValuesView.hidden = !layoutValuesView.hidden;
-    [self didTapTransformView:recognizer];
+    imageDumpRequested = YES;
+//    layoutValuesView.hidden = !layoutValuesView.hidden;
+//    [self didTapTransformView:recognizer];
+}
+
+#define MAIL_HOME   @"ches@cheswick.com"
+
+- (void) doMail:(NSString *)imageFilePath {
+    if (![MFMailComposeViewController canSendMail]) {
+       NSLog(@"Mail services are not available.");
+       return;
+    }
+    MFMailComposeViewController *mc = [[MFMailComposeViewController alloc] init];
+    mc.mailComposeDelegate = self;
+    [mc setToRecipients:[NSArray arrayWithObject:MAIL_HOME]];
+    NSString *emailTitle = [NSString
+                            stringWithFormat:@"DigitalDarkroom image"];
+    [mc setSubject:emailTitle];
+    [mc setMessageBody:@"ASCII image data from the DigitalDarkroom" isHTML:NO];
+    NSData *imageData = [NSData dataWithContentsOfFile:imageFilePath];
+    [mc addAttachmentData:imageData mimeType:@"image/text" fileName:@"DD image"];
+    [self presentViewController:mc animated:YES completion:NULL];
+}
+
+- (void) mailComposeController:(MFMailComposeViewController *)controller
+           didFinishWithResult:(MFMailComposeResult)result
+                         error:(NSError *)error {
+    if (error)
+        NSLog(@"mail error %@", [error localizedDescription]);
+    switch (result) {
+        case MFMailComposeResultCancelled:
+            break;
+        case MFMailComposeResultSaved:
+            break;
+        case MFMailComposeResultSent:
+            break;
+        case MFMailComposeResultFailed: {
+            NSLog(@"Mail sent failure: %@", [error localizedDescription]);
+            UIAlertController * alert = [UIAlertController
+                                         alertControllerWithTitle:@"Mail failed"
+                                         message:[error localizedDescription]
+                                         preferredStyle:UIAlertControllerStyleAlert];
+            [self presentViewController:alert animated:YES completion:nil];
+            break;
+        }
+        default:
+            NSLog(@"inconceivable: unknown mail result %ld", (long)result);
+            break;
+    }
+    
+    // Close the Mail Interface
+    [self dismissViewControllerAnimated:YES completion:NULL];
 }
 
 - (void) adjustControls {
@@ -1997,11 +2053,28 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) doTransformsOn:(UIImage *)sourceImage depth:(DepthBuf *) rawDepthBuf {
-    [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
-    
+    if (imageDumpRequested) {
+#define IMAGE_DUMP_FILE @"ImageDump"
+        NSString *tmpImageFile = [NSTemporaryDirectory() stringByAppendingPathComponent:IMAGE_DUMP_FILE];
+        
+        if (![[NSFileManager defaultManager] createFileAtPath:tmpImageFile contents:NULL attributes:NULL]) {
+            NSLog(@"tmp create failed, inconceivable");
+            return;
+        }
+        NSFileHandle *imageFileHandle = [NSFileHandle fileHandleForUpdatingAtPath:tmpImageFile];
+        [screenTasks executeTasksWithImage:sourceImage
+                                     depth:rawDepthBuf
+                                  dumpFile:(NSFileHandle *)imageFileHandle];
+        [imageFileHandle closeFile];
+        imageDumpRequested = NO;
+        [self doMail:tmpImageFile];
+        return;
+    }
+    [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+
     if (DISPLAYING_THUMBS) {
-        [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
-        [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf];
+        [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+        [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
     }
     if (cameraSourceThumb) {
         [cameraSourceThumb setImage:sourceImage];

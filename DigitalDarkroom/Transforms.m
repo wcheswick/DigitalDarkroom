@@ -133,6 +133,7 @@ HSVPixel RGBtoHSV(Pixel rgb) {
 
 @property (strong, nonatomic)   Transform *lastTransform;
 @property (strong, nonatomic)   NSString *helpPath;
+@property (assign)              float screenScale;
 
 @end
 
@@ -143,11 +144,20 @@ HSVPixel RGBtoHSV(Pixel rgb) {
 @synthesize depthTransformCount;
 @synthesize debugTransforms;
 @synthesize transforms;
+@synthesize screenScale;
 
 
 - (id)init {
     self = [super init];
     if (self) {
+        screenScale = 1.0;
+        
+        if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
+            screenScale = [[UIScreen mainScreen] scale];
+        } else
+            screenScale = 1.0;
+        NSLog(@"TTTT screen scale is %.1f", screenScale);
+
 #ifdef DEBUG_TRANSFORMS
         debugTransforms = YES;
 #else
@@ -968,6 +978,39 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 1000;
     lastTransform.high = 10000;
     [self addTransform:lastTransform];
+    
+    lastTransform = [Transform depthVis: @"cm. contours"
+                            description: @""
+                               depthVis: ^(const PixBuf *src,
+                                           PixBuf *dest,
+                                           const DepthBuf *depthBuf,
+                                           TransformInstance *instance) {
+        float backgroundDepth = depthBuf.maxDepth;
+        float paramMaxDepthMM = instance.value;
+        if (backgroundDepth > paramMaxDepthMM && backgroundDepth > depthBuf.minDepth)
+            backgroundDepth = paramMaxDepthMM;
+        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
+            int mm = round(depthBuf.db[i]*1000.0);
+            Pixel p;
+            if (mm > paramMaxDepthMM)
+                p = White;
+            else if (mm % 1000 == 0)
+                p = BrightPurple;
+            else if (mm % 100 == 0)
+                p = Cyan;
+            else if (mm % 10 == 0)
+                p = Yellow;
+            else
+                p = src.pb[i];
+            dest.pb[i] = p;
+        }
+    }];
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Max depth (mm)";
+    lastTransform.low = 20; // millimeters
+    lastTransform.value = 4000;
+    lastTransform.high = 10000;
+    [self addTransform:lastTransform];
 
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
@@ -1046,7 +1089,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define DIST(x,y)  depthBuf.da[y][x]
 #endif
 
-#ifdef BROKEN
 #define MU (1.0/3.0)
     
     //#define E round(2.5*dpi)
@@ -1062,31 +1104,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            PixBuf *dest,
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
-        float scale = 1;
-        
-        if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
-            scale = [[UIScreen mainScreen] scale];
-        }
-        float dpi = (640/8.3) * scale;
-        
-        Distance newMinDepth = MAXFLOAT;
-        Distance newMaxDepth = 0.0;
-        // scale the distances from MIN - MAX to mu - 0, near to far.
-        // find
-#define MAX_S_DEP MAX_DEPTH // 2.0
-#define MIN_S_DEP   0   // MIN_DEPTH
-        
-        for (int i=0; i<depthBuf.w * depthBuf.h; i++) {
-            float z = depthBuf.db[i];
-            if (z > newMaxDepth)
-                newMaxDepth = z;
-            if (z < newMinDepth)
-                newMinDepth = z;
-            float dz = (z - depthBuf.minDepth)/(depthBuf.maxDepth - depthBuf.minDepth);
-            float dfz = MU - dz*MU;
-            assert(dfz <= MU && dfz >= 0);  // XXXXX dies here
-            depthBuf.db[i] = dfz;
-        }
+        float dpi = (640/8.3) * self->screenScale;
         
         for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
             channel pix[depthBuf.w];
@@ -1142,7 +1160,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     pix[x] = random()&1;  // free choice, do it randomly
                 else
                     pix[x] = pix[same[x]];  // constrained choice, obey constraint
-                pixBuf.pa[y][x] = pix[x] ? Black : White;
+                src.pa[y][x] = pix[x] ? Black : White;
             }
         }
         
@@ -1160,19 +1178,18 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         int rx = depthBuf.w/2 + FARAWAY/2 - NW/2;
         for (int dy=0; dy<6; dy++) {
             for (int dx=0; dx<NW; dx++) {
-                pixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
-                pixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
+                dest.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
+                dest.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
             }
         }
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
+//        depthBuf.minDepth = newMinDepth;
+//        depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.broken = YES;
     //lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     //lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Pupil separation";
     [self addTransform:lastTransform];
-#endif
     
     lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
