@@ -89,13 +89,20 @@
 //    assert(transformSize.width > 0);    // group must be configured for a size already
     Task *newTask = [[Task alloc] initTaskNamed:tn
                                         inGroup:self];
+    [self checkTasks];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
     if (thumbTransform) {
-        newTask.thumbTransform = thumbTransform;
+        [self checkTasks];
+       newTask.thumbTransform = thumbTransform;
+        [self checkTasks];
+        [newTask check];
+
         newTask.thumbInstance = [[TransformInstance alloc]
                                        initFromTransform:thumbTransform];
+        [self checkTasks];
     }
+    [self checkTasks];
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
 }
@@ -215,7 +222,8 @@
     
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
-    
+    [self checkTasks];
+
     if (taskCtrl.reconfigurationNeeded) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
@@ -226,7 +234,8 @@
         [taskCtrl tasksAreIdled];
         return;
     }
-    
+    [self checkTasks];
+
     if (rawDepthBuf) {
         if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
             // cheap scaling: XXXX use the hardware
@@ -308,10 +317,12 @@
     }
     
     @synchronized (srcPix) {
+        [self checkTasks];
         for (Task *task in tasks) {
             if (task.taskStatus == Running)
                 continue;
             busyCount++;
+//            [task check];
             [task executeTransformsFromPixBuf:srcPix
                                         depth:(const DepthBuf *)depthBuf];
             busyCount--;
@@ -322,5 +333,10 @@
         [taskCtrl idleTransforms];
 }
 
+- (void) checkTasks {
+    for (Task *task in tasks) {
+        [task check];
+    }
+}
 
 @end

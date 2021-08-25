@@ -457,7 +457,8 @@ MainVC *mainVC = nil;
 
     UITapGestureRecognizer *touch;
     NSString *lastSection = nil;
-    
+    [depthThumbTasks checkTasks];
+
     for (size_t ti=0; ti<transforms.transforms.count; ti++) {
         ThumbView *thumbView = [[ThumbView alloc] init];
 
@@ -484,9 +485,11 @@ MainVC *mainVC = nil;
             if (transform.broken) {
                 imageView.image = brokenImage;
             } else {
+                [depthThumbTasks checkTasks];
                 [depthThumbTasks createTaskForTargetImageView:imageView
                                                         named:transform.name
                                                thumbTransform:transform];
+                [depthThumbTasks checkTasks];
             }
         } else {
             touch = [[UITapGestureRecognizer alloc]
@@ -510,6 +513,7 @@ MainVC *mainVC = nil;
 
         [thumbViewsArray addObject:thumbView];
     }
+    [depthThumbTasks checkTasks];
 
     // contains transform thumbs and sections.  Positions and sizes decided
     // as needed.
@@ -2028,6 +2032,7 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     busy = YES;
+    [depthThumbTasks checkTasks];
     
     if (depthPixelBufRef) {
         size_t width = CVPixelBufferGetWidth(depthPixelBufRef);
@@ -2070,10 +2075,13 @@ static NSString * const imageOrientationName[] = {
         [self doMail:tmpImageFile];
         return;
     }
+    [depthThumbTasks checkTasks];
     [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
 
     if (DISPLAYING_THUMBS) {
+        [depthThumbTasks checkTasks];
         [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+        [thumbTasks checkTasks];
         [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
     }
     if (cameraSourceThumb) {
@@ -2616,6 +2624,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // then display (possibly scaled) onto transformView.
     
     [screenTasks configureGroupForSize: layout.transformSize];
+    [depthThumbTasks checkTasks];
+
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
     [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
     //    [externalTask configureForSize: processingSize];

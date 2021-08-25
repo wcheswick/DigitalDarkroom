@@ -61,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL) isReadyForLayout;
 - (void) enable;
+- (void) checkTasks; // nasty memory overwrite
 
 @end
 

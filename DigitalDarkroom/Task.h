@@ -71,6 +71,8 @@ typedef enum {
                                depth:(const DepthBuf *__nullable)activeDepthBuf;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 
+- (void) check;
+
 @end
 
 NS_ASSUME_NONNULL_END

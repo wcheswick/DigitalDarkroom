@@ -83,6 +83,11 @@ static PixelIndex_t dPI(int x, int y) {
     return self;
 }
 
+- (void) check {
+    assert((long)depthTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
+    assert((long)thumbTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
+}
+
 - (void) enable {
     //assert(taskStatus == Stopped);
     taskStatus = Idle;
