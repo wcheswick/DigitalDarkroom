@@ -47,7 +47,6 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskName;
 @synthesize transformList;
 @synthesize depthTransform, depthInstance;
-@synthesize thumbTransform, thumbInstance;
 @synthesize paramList;
 @synthesize targetImageView;
 @synthesize chBuf0, chBuf1;
@@ -56,7 +55,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
-@synthesize enabled;
+@synthesize enabled, isThumbTask;
 
 - (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg {
     self = [super init];
@@ -68,8 +67,7 @@ static PixelIndex_t dPI(int x, int y) {
         transformList = [[NSMutableArray alloc] init];
         depthTransform = nil;
         depthInstance = nil;
-        thumbTransform = nil;   // instead of the list
-        thumbInstance = nil;
+        isThumbTask = NO;
         paramList = [[NSMutableArray alloc] init];
         
         enabled = YES;
@@ -81,11 +79,6 @@ static PixelIndex_t dPI(int x, int y) {
         assert(imBufs);
     }
     return self;
-}
-
-- (void) check {
-    assert((long)depthTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
-    assert((long)thumbTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
 }
 
 - (void) enable {
@@ -125,12 +118,17 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (long) appendTransformToTask:(Transform *) transform {
-    [transformList addObject:transform];
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
-    [paramList addObject:instance];
-    long newIndex = transformList.count - 1;
-    return newIndex;
+   if (isThumbTask && transform.type == DepthVis)  {
+        depthTransform = transform;
+        depthInstance = instance;
+       return DEPTH_TRANSFORM;
+    } else {
+        [transformList addObject:transform];
+        [paramList addObject:instance];
+        return transformList.count - 1;
+    }
 }
 
 - (long) removeLastTransform {
@@ -175,8 +173,12 @@ static PixelIndex_t dPI(int x, int y) {
     assert(chBuf0);
     assert(chBuf1);
     
-    if (thumbTransform) {
-        [self configureTransform:thumbTransform andInstance:thumbInstance];
+    if (isThumbTask) {
+        assert(depthTransform || transformList.count == 1);
+        if (depthTransform)
+            [self configureTransform:depthTransform andInstance:depthInstance];
+        else
+            [self configureTransformAtIndex:0];
     } else {
         if (depthTransform)
             [self configureTransform:depthTransform andInstance:depthInstance];
@@ -284,23 +286,35 @@ static PixelIndex_t dPI(int x, int y) {
     // which is also imBufs[0]
     UIImage *finalImage;
     [srcBuf copyPixelsTo:imBuf0];
-
-    if (thumbTransform) {   // just one transform, for the thumbnail
-        assert(thumbInstance);
-        if (!thumbTransform.broken) {
-            if (thumbTransform.type == DepthVis) {  // depth thumbnail
-                thumbTransform.depthVisF(imBuf0, imBuf1, depthBuf, thumbInstance);
-                finalImage = [self pixbufToImage:imBuf1];
-            } else {
-                [srcBuf copyPixelsTo:imBuf0];
-                size_t destIndex = [self performTransform:thumbTransform
-                                              instance:thumbInstance
-                                                source:0];
-                finalImage = [self pixbufToImage:imBufs[destIndex]];
-            }
-            [self updateTargetWith:finalImage];
-            taskStatus = Idle;
+    
+    if (isThumbTask) {
+        // just one transform, for the thumbnail, is special processing
+        assert(depthTransform || transformList.count == 1);
+        assert((long)depthTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
+        Transform *transform;
+        
+        if (depthTransform) {
+            transform = depthTransform;
+            assert((long)depthTransform.depthVisF != 0xaaaaaaaaaaaaaaaa);
+        } else {
+            transform = transformList[0];
         }
+        assert((long)transform.depthVisF != 0xaaaaaaaaaaaaaaaa);
+
+        if (transform.broken)
+            return;
+        if (transform.type == DepthVis) {  // depth thumbnail
+            transform.depthVisF(imBuf0, imBuf1, depthBuf, depthInstance);
+            finalImage = [self pixbufToImage:imBuf1];
+        } else {
+            [srcBuf copyPixelsTo:imBuf0];
+            size_t destIndex = [self performTransform:transform
+                                             instance:paramList[0]
+                                               source:0];
+            finalImage = [self pixbufToImage:imBufs[destIndex]];
+        }
+        [self updateTargetWith:finalImage];
+        taskStatus = Idle;
         taskStatus = Idle;
         return;
     }

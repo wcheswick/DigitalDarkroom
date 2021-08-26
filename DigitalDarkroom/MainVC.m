@@ -457,7 +457,6 @@ MainVC *mainVC = nil;
 
     UITapGestureRecognizer *touch;
     NSString *lastSection = nil;
-    [depthThumbTasks checkTasks];
 
     for (size_t ti=0; ti<transforms.transforms.count; ti++) {
         ThumbView *thumbView = [[ThumbView alloc] init];
@@ -477,33 +476,29 @@ MainVC *mainVC = nil;
         UIImageView *imageView;
         
         [self adjustThumbView:thumbView selected:NO];
+        if (transform.broken) {
+            imageView.image = brokenImage;
+        } else
+            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+        
+        Task *thumbTask = nil;
         if (transform.type == DepthVis) {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapDepthVis:)];
-            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-            if (transform.broken) {
-                imageView.image = brokenImage;
-            } else {
-                [depthThumbTasks checkTasks];
-                [depthThumbTasks createTaskForTargetImageView:imageView
-                                                        named:transform.name
-                                               thumbTransform:transform];
-                [depthThumbTasks checkTasks];
-            }
+            thumbTask = [depthThumbTasks createTaskForTargetImageView:imageView
+                                                                named:transform.name];
         } else {
             touch = [[UITapGestureRecognizer alloc]
                      initWithTarget:self
                      action:@selector(doTapThumb:)];
-            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-            if (transform.broken) {
-                imageView.image = brokenImage;
-            } else {
-                [thumbTasks createTaskForTargetImageView:imageView
-                                                   named:transform.name
-                                          thumbTransform:transform];
-            }
+            thumbTask = [thumbTasks createTaskForTargetImageView:imageView
+                                                           named:transform.name];
         }
+        thumbTask.isThumbTask = YES;
+        [thumbTask appendTransformToTask:transform];
+        assert(thumbTask.isThumbTask);
+        assert(thumbTask.depthTransform || thumbTask.transformList.count == 1);
         [thumbView addSubview:imageView];
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
@@ -513,7 +508,6 @@ MainVC *mainVC = nil;
 
         [thumbViewsArray addObject:thumbView];
     }
-    [depthThumbTasks checkTasks];
 
     // contains transform thumbs and sections.  Positions and sizes decided
     // as needed.
@@ -933,8 +927,7 @@ static NSString * const imageOrientationName[] = {
     [containerView addSubview:executeView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
-                                                     named:@"main"
-                                            thumbTransform:nil];
+                                                     named:@"main"];
     
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
@@ -2032,7 +2025,6 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     busy = YES;
-    [depthThumbTasks checkTasks];
     
     if (depthPixelBufRef) {
         size_t width = CVPixelBufferGetWidth(depthPixelBufRef);
@@ -2075,13 +2067,10 @@ static NSString * const imageOrientationName[] = {
         [self doMail:tmpImageFile];
         return;
     }
-    [depthThumbTasks checkTasks];
     [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
 
     if (DISPLAYING_THUMBS) {
-        [depthThumbTasks checkTasks];
         [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
-        [thumbTasks checkTasks];
         [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
     }
     if (cameraSourceThumb) {
@@ -2624,7 +2613,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // then display (possibly scaled) onto transformView.
     
     [screenTasks configureGroupForSize: layout.transformSize];
-    [depthThumbTasks checkTasks];
 
     [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
     [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];

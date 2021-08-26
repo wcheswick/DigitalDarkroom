@@ -44,8 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn
-                         thumbTransform:(Transform *__nullable) thumbTransform;
+                                  named:(NSString *)tn;
 - (void) configureGroupForSize:(CGSize) s;
 - (void) executeTasksWithImage:(UIImage *) srcImage
                          depth:(const DepthBuf *__nullable) rawDepthBuf
@@ -61,7 +60,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL) isReadyForLayout;
 - (void) enable;
-- (void) checkTasks; // nasty memory overwrite
 
 @end
 

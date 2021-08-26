@@ -81,35 +81,22 @@
     }
 }
 
-// Create a task with a name that is internally useful.  If the task's
-// only job is to process a thumb transform image, the set that up.
+// Create a task with a name that is internally useful.
+
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
-                                  named:(NSString *)tn
-                         thumbTransform:(Transform *__nullable) thumbTransform {
+                                  named:(NSString *)tn {
 //    assert(transformSize.width > 0);    // group must be configured for a size already
     Task *newTask = [[Task alloc] initTaskNamed:tn
                                         inGroup:self];
-    [self checkTasks];
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
-    if (thumbTransform) {
-        [self checkTasks];
-       newTask.thumbTransform = thumbTransform;
-        [self checkTasks];
-        [newTask check];
-
-        newTask.thumbInstance = [[TransformInstance alloc]
-                                       initFromTransform:thumbTransform];
-        [self checkTasks];
-    }
-    [self checkTasks];
     [tasks addObject:newTask];
     return newTask;   // XXX not sure we are going to use this
 }
 
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
-        if (task.thumbTransform)    // fixed depth transform for thumb, don't change
+        if (task.isThumbTask)    // fixed depth transform for thumb, don't change
             continue;
         [task useDepthTransform:dt];
     }
@@ -222,7 +209,6 @@
     
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
-    [self checkTasks];
 
     if (taskCtrl.reconfigurationNeeded) {
         for (Task *task in tasks) {
@@ -234,7 +220,6 @@
         [taskCtrl tasksAreIdled];
         return;
     }
-    [self checkTasks];
 
     if (rawDepthBuf) {
         if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
@@ -317,7 +302,6 @@
     }
     
     @synchronized (srcPix) {
-        [self checkTasks];
         for (Task *task in tasks) {
             if (task.taskStatus == Running)
                 continue;
@@ -331,12 +315,6 @@
     }
     if (taskCtrl.reconfigurationNeeded)
         [taskCtrl idleTransforms];
-}
-
-- (void) checkTasks {
-    for (Task *task in tasks) {
-        [task check];
-    }
 }
 
 @end

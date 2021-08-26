@@ -129,11 +129,12 @@ HSVPixel RGBtoHSV(Pixel rgb) {
     return hsv;
 }
 
+static float screenScale;
+
 @interface Transforms ()
 
 @property (strong, nonatomic)   Transform *lastTransform;
 @property (strong, nonatomic)   NSString *helpPath;
-@property (assign)              float screenScale;
 
 @end
 
@@ -144,14 +145,11 @@ HSVPixel RGBtoHSV(Pixel rgb) {
 @synthesize depthTransformCount;
 @synthesize debugTransforms;
 @synthesize transforms;
-@synthesize screenScale;
 
 
 - (id)init {
     self = [super init];
     if (self) {
-        screenScale = 1.0;
-        
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
             screenScale = [[UIScreen mainScreen] scale];
         } else
@@ -938,12 +936,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 - (void) addDepthVisualizations {
     
+//#ifdef NOTDEF
 #define EYESEP round(dpi*2.5)
-#define separation(z) round((1.0-mu*z)*EYESEP/(2.0-mu*(z)))
+#define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
+#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
 #define FARAWAY separation(0)
     
 // Z ranges from 0.0 to 1.0, for farthest to nearest distance.
-#define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
     
     // SIDRS computation taken from
     // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
@@ -957,14 +956,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            PixBuf *dest,
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
-        float mu = 100.0/(float)instance.value;
-        float dpi = (640/8.3) * self->screenScale;
+        float mu = (float)instance.value/100.0;
+        float dpi = (640/8.3) * screenScale;
         float depthRange = depthBuf.maxDepth - depthBuf.minDepth;
+        BOOL darkPixel[depthBuf.w];
+        int same[depthBuf.w];
         
         for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
-            channel pix[depthBuf.w];
-            NSLog(@" pix size is %lu", sizeof(pix));
-            int same[depthBuf.w];
             int stereoSep;
             int left, right;    // x values for left and right eyes
             
@@ -974,7 +972,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             
             for (int x=0; x < depthBuf.w; x++ ) {
                 float z = depthBuf.da[y][x]; // DIST(x,y);
-                stereoSep = separation(z);
+                float zd = ZD(z);
+                assert(zd >= 0.0 && zd <= depthRange);
+                stereoSep = round((1.0-mu*zd)*EYESEP/(2.0-mu*zd));
+                //stereoSep = separation(zd);
+                assert(stereoSep >= 0);
                 left = x - stereoSep/2;
                 right = left + stereoSep;   // pixels at left and right must be the same
                 if (left >= 0 && right < depthBuf.w) {
@@ -1012,20 +1014,14 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
             for (long x=depthBuf.w-1; x>=0; x--)    { // set the pixels in the scan line
                 if (same[x] == x)
-                    pix[x] = random()&1;  // free choice, do it randomly
+                    darkPixel[x] = random()&1;  // free choice, do it randomly
                 else
-                    pix[x] = pix[same[x]];  // constrained choice, obey constraint
-                src.pa[y][x] = pix[x] ? Black : White;
+                    darkPixel[x] = darkPixel[same[x]];  // constrained choice, obey constraint
+                dest.pa[y][x] = darkPixel[x] ? Black : White;
             }
         }
         
 #ifdef notdef
-        for (int y=5; y<15; y++) {
-            for (int x=10; x < W-10; x++) {
-                dest[PI(x,y)] = Green;
-            }
-        }
-        
 #define NW      10
 #define BOTTOM_Y   (5)
         int lx = depthBuf.w/2 - FARAWAY/2 - NW/2;
@@ -1046,9 +1042,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Depth of field";
     [self addTransform:lastTransform];
-    depthTransformCount = transforms.count;
-
-    return;
+//#endif
     
     lastTransform = [Transform depthVis: @"Fog"
                             description: @""
