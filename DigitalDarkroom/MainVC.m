@@ -2070,7 +2070,8 @@ static NSString * const imageOrientationName[] = {
     [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
 
     if (DISPLAYING_THUMBS) {
-        [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+        if (cameraController.depthDataAvailable && rawDepthBuf)
+            [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
         [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
     }
     if (cameraSourceThumb) {

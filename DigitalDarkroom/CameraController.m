@@ -216,7 +216,8 @@
 
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
     captureDevice.activeFormat = format;
-    captureDevice.activeDepthDataFormat = depthFormat;
+    if (depthFormat)
+        captureDevice.activeDepthDataFormat = depthFormat;
 
     // these must be after the activeFormat is set.  there are other conditions, see
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
@@ -302,7 +303,6 @@
     outputSynchronizer = [[AVCaptureDataOutputSynchronizer alloc]
               initWithDataOutputs:
               depthDataAvailable ? @[videoDataOutput, depthDataOutput] : @[videoDataOutput]];
-    assert(outputSynchronizer.dataOutputs.count == 2);  // we are expecting depth and video
     [outputSynchronizer setDelegate:self queue:outputQueue];
 
     [captureSession commitConfiguration];
@@ -328,7 +328,6 @@ static int depthDropped = 0;
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
     CVPixelBufferRef depthPixelBufferRef = nil;
-    CVPixelBufferRef videoPixelBufferRef = nil;
     frameCount++;
     
 //    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
@@ -347,34 +346,32 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         } else
             depthDropped++;
     }
-
-    if (depthPixelBufferRef) {
-        AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
-                                                    synchronizedDataForCaptureOutput:self.videoDataOutput];
-        AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData=(AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
-        if(syncedSampleBufferData.sampleBufferWasDropped) {
-            videoDropped++;
-        } else {
-            videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
-            videoFrames++;
-//                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
-//                      frameCount, videoFrames, depthFrames,
-//                      videoDropped, depthDropped, depthMissing, notRespond);
-            UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBufferRef];
-            if (!capturedImage)
-                return;
+    
+    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
+                                                synchronizedDataForCaptureOutput:self.videoDataOutput];
+    AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData=(AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
+    if(syncedSampleBufferData.sampleBufferWasDropped) {
+        videoDropped++;
+    } else {
+        CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
+        videoFrames++;
+        //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
+        //                      frameCount, videoFrames, depthFrames,
+        //                      videoDropped, depthDropped, depthMissing, notRespond);
+        UIImage *capturedImage = [self imageFromSampleBuffer:videoPixelBufferRef];
+        if (!capturedImage)
+            return;
 #ifdef DEBUG_CAMERA
-            if (videoFrames == 1) {
-                size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
-                size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
-                NSLog(@"CCCC captured size %.0f x %.0f   depth %zu x %zu",
-                      capturedImage.size.width, capturedImage.size.height,
-                      width, height);
-            }
-#endif
-            [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
-                                                                            depth:depthPixelBufferRef];
+        if (videoFrames == 1) {
+            size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
+            size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
+            NSLog(@"CCCC captured size %.0f x %.0f   depth %zu x %zu",
+                  capturedImage.size.width, capturedImage.size.height,
+                  width, height);
         }
+#endif
+        [(id<videoSampleProcessorDelegate>)videoProcessor processVideoCapture:capturedImage
+                                                                        depth:depthPixelBufferRef];
     }
     //    }
     if (NO && (frameCount-1) % 500 == 0)

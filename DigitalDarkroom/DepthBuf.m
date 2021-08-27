@@ -134,17 +134,23 @@ ma(ma_buff_t *b, float v) {
 - (void) findDepthRange {
     minDepth = MAXFLOAT;
     maxDepth = 0.0;
+    int okCount = 0;
     for (int i=0; i<w * h; i++) {
         float z = db[i];
         if (!isnan(z) && z > 0) {   // ignore bad depth data
+            okCount++;
             if (z > maxDepth)
                 maxDepth = z;
             if (z < minDepth)
                 minDepth = z;
         }
     }
-    minDepth = ma(&min_dist_buf, minDepth);
-    maxDepth = ma(&max_dist_buf, maxDepth);
+    assert(okCount);
+    if (minDepth <= maxDepth) {
+        minDepth = ma(&min_dist_buf, minDepth);
+        maxDepth = ma(&max_dist_buf, maxDepth);
+    }
+    assert(minDepth <= maxDepth);
 }
 
 - (void) copyDepthsTo:(DepthBuf *) dest {

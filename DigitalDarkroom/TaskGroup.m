@@ -222,6 +222,7 @@
     }
 
     if (rawDepthBuf) {
+        assert(rawDepthBuf.minDepth <= rawDepthBuf.maxDepth);
         if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
             // cheap scaling: XXXX use the hardware
             depthBuf.minDepth = rawDepthBuf.minDepth;

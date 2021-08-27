@@ -303,7 +303,7 @@ static PixelIndex_t dPI(int x, int y) {
 
         if (transform.broken)
             return;
-        if (transform.type == DepthVis) {  // depth thumbnail
+        if (depthBuf && transform.type == DepthVis) {  // depth thumbnail
             transform.depthVisF(imBuf0, imBuf1, depthBuf, depthInstance);
             finalImage = [self pixbufToImage:imBuf1];
         } else {

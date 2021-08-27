@@ -9,11 +9,15 @@
 // color effect filters from apple:
 // https://developer.apple.com/documentation/coreimage/methods_and_protocols_for_filter_creation/color_effect_filters?language=objc
 
+#include <sys/types.h>
+#include <sys/sysctl.h>
+
 #import "Transforms.h"
 #import "RemapBuf.h"
 #import "Defines.h"
 
 //#define DEBUG_TRANSFORMS    1   // bounds checking and a lot of assertions
+#define SHOW_GRID   1             // 1 in marks to check display dpu
 
 #define LUM(p)  (channel)((((p).r)*299 + ((p).g)*587 + ((p).b)*114)/1000)
 #define CLIP(c) ((c)<0 ? 0 : ((c)>Z ? Z : (c)))
@@ -130,6 +134,8 @@ HSVPixel RGBtoHSV(Pixel rgb) {
 }
 
 static float screenScale;
+static int dpi;
+
 
 @interface Transforms ()
 
@@ -150,11 +156,65 @@ static float screenScale;
 - (id)init {
     self = [super init];
     if (self) {
+#ifdef OLD
         if ([[UIScreen mainScreen] respondsToSelector:@selector(scale)]) {
             screenScale = [[UIScreen mainScreen] scale];
         } else
             screenScale = 1.0;
-        NSLog(@"TTTT screen scale is %.1f", screenScale);
+#endif
+
+        CGRect bounds = [[UIScreen mainScreen] bounds];
+        CGRect nativeBounds = [[UIScreen mainScreen] nativeBounds];
+        float nativeScale = [[UIScreen mainScreen] nativeScale];
+        NSLog(@"TTTT screen scale is %.1f, DPI: %.0f",
+              screenScale, dpi);
+        NSLog(@"         bounds: %.0f, %.0f",
+              bounds.size.width, bounds.size.height);
+        NSLog(@"    native size: %.0f, %.0f",
+              nativeBounds.size.width, nativeBounds.size.height);
+        NSLog(@"   native scale: %.0f", nativeScale);
+        NSString *model = [UIDevice currentDevice].model;
+        NSLog(@"          model: %@", model);
+
+        size_t size;
+        sysctlbyname("hw.machine", NULL, &size, NULL, 0);
+        char *machine = malloc(size);
+        sysctlbyname("hw.machine", machine, &size, NULL, 0);
+        NSString *platform = [NSString stringWithUTF8String:machine];
+        free(machine);
+        NSLog(@"       platform: %@", platform);
+
+        // iPhone 12 Max - 6.1-inch, 2532 x 1170 OLED display, 460 ppi.
+        // iPhone 12 Pro - 6.1-inch, 2532 x 1170 OLED Display, 460 ppi.
+        // iPhone 12 Pro Max - 6.7-inch, 2778 x 1284 OLED Display, 458 ppi.
+        
+        int ppi;
+        if ([platform isEqual:@"iPad8,7"]) // ipad pro 12.9 in 3rd gen
+            ppi = 264;
+        else if ([model isEqual:@"iPad5,4"]) // ipad air 2
+            ppi = 264;
+        else if ([model hasPrefix:@"iPad8"]) // generic ipad
+            ppi = 265;
+       else if ([model hasPrefix:@"iPad"]) // generic ipad
+            ppi = 266;
+        else if ([platform isEqual:@"iPhone13,4"]) // iphone pro max
+            ppi = 458;
+        else if ([platform isEqual:@"iPhone10,6"]) // iphone X
+            ppi = 458;
+        else if ([model hasPrefix:@"iPhoneX"]) // generic ipad
+             ppi = 458;
+       else if ([model hasPrefix:@"iPhone13"]) // generic ipad
+            ppi = 459;
+        else if ([model hasPrefix:@"iPhone"]) // generic ipad
+            ppi = 459;
+        else if ([model hasPrefix:@"iPad"]) // generic ipad
+            ppi = 240*nativeScale;
+        else    // generic iPhone
+            ppi = 240*nativeScale;
+
+        dpi = ppi / nativeScale;
+        NSLog(@"       ppi: %d", ppi);
+        NSLog(@"       dpi: %d", dpi);
 
 #ifdef DEBUG_TRANSFORMS
         debugTransforms = YES;
@@ -924,6 +984,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 dest.pa[y][x] = SETRGB(c,c,c);
             }
         }
+#ifdef SHOW_GRID
+        for (int x = 0; x<dest.w; x += dpi) {
+            for (int y=0; y<40 && y < dest.h; y++)
+                dest.pa[y][x] = Red;
+        }
+#endif
     }];
     [self addTransform:lastTransform];
     
@@ -957,7 +1023,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                            const DepthBuf *depthBuf,
                                            TransformInstance *instance) {
         float mu = (float)instance.value/100.0;
-        float dpi = (640/8.3) * screenScale;
         float depthRange = depthBuf.maxDepth - depthBuf.minDepth;
         BOOL darkPixel[depthBuf.w];
         int same[depthBuf.w];
@@ -971,10 +1036,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
             
             for (int x=0; x < depthBuf.w; x++ ) {
-                float z = depthBuf.da[y][x]; // DIST(x,y);
-                float zd = ZD(z);
-                assert(zd >= 0.0 && zd <= depthRange);
-                stereoSep = round((1.0-mu*zd)*EYESEP/(2.0-mu*zd));
+                float z = 1.0 - (depthBuf.da[y][x] - depthBuf.minDepth)/depthRange;
+                assert(z >= 0 && z <= 1.0);
+                stereoSep = round((1.0-mu*z)*EYESEP/(2.0-mu*z));
                 //stereoSep = separation(zd);
                 assert(stereoSep >= 0);
                 left = x - stereoSep/2;
@@ -1036,7 +1100,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 //        depthBuf.maxDepth = newMaxDepth;
 #endif
     }];
-    lastTransform.low = -100;
+    lastTransform.low = 0;
     lastTransform.high = 100;
     lastTransform.value = 100/3;    // recommended value, non-crosseyed
     lastTransform.hasParameters = YES;
@@ -1062,7 +1126,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         
         // fading needs a number between 0 (closest) to 1 (farthest)
         float maxFade = FADE(D);
-//        NSLog(@"min: %.1f   max: %.1f", depthBuf.minDepth, depthBuf.maxDepth);
         Pixel background = LightGrey;
         for (int i=0; i<dest.w*dest.h; i++) {
             Pixel p = src.pb[i];
@@ -1078,6 +1141,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                   (1.0 - fradFrac)*p.b + fradFrac*background.b);
             }
         }
+#ifdef SHOW_GRID
+        for (int x = 0; x<dest.w; x += dpi) {
+            for (int y=0; y<40 && y < dest.h; y++)
+                dest.pa[y][x] = Red;
+        }
+#endif
     }];
     lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Max depth (mm)";
