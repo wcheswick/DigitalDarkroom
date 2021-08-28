@@ -166,7 +166,7 @@ static int dpi;
         CGRect bounds = [[UIScreen mainScreen] bounds];
         CGRect nativeBounds = [[UIScreen mainScreen] nativeBounds];
         float nativeScale = [[UIScreen mainScreen] nativeScale];
-        NSLog(@"TTTT screen scale is %.1f, DPI: %.0f",
+        NSLog(@"TTTT screen scale is %.1f, DPI: %.0d",
               screenScale, dpi);
         NSLog(@"         bounds: %.0f, %.0f",
               bounds.size.width, bounds.size.height);
@@ -1002,8 +1002,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 - (void) addDepthVisualizations {
     
-//#ifdef NOTDEF
-#define EYESEP round(dpi*2.5)
+#define MM_PER_IN   25.4
+#define CHES_EYESEP_MM  62
+#define EYESEP_PIX round(CHES_EYESEP_MM*dpi/MM_PER_IN)
 #define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
 #define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
 #define FARAWAY separation(0)
@@ -1038,7 +1039,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             for (int x=0; x < depthBuf.w; x++ ) {
                 float z = 1.0 - (depthBuf.da[y][x] - depthBuf.minDepth)/depthRange;
                 assert(z >= 0 && z <= 1.0);
-                stereoSep = round((1.0-mu*z)*EYESEP/(2.0-mu*z));
+                stereoSep = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
                 //stereoSep = separation(zd);
                 assert(stereoSep >= 0);
                 left = x - stereoSep/2;
@@ -1048,7 +1049,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
                     float zt;       //  Z-coord of ray at these two points
                     do {
-                        zt = ZD(depthBuf.da[y][x]) + 2*(2 - mu*ZD(depthBuf.da[y][x]))*t/(mu*EYESEP);
+                        zt = ZD(depthBuf.da[y][x]) + 2*(2 - mu*ZD(depthBuf.da[y][x]))*t/(mu*EYESEP_PIX);
                         BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
                         visible = inRange && ZD(depthBuf.da[y][x-t]) < zt && ZD(depthBuf.da[y][x+t]) < zt;  // false if obscured
                         t++;

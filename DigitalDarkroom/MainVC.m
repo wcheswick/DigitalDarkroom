@@ -823,22 +823,6 @@ static NSString * const imageOrientationName[] = {
     runningButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     runningButton.frame = CGRectMake(LATER, LATER,
                                          CONTROL_BUTTON_SIZE*4, CONTROL_BUTTON_SIZE*4);
-#ifdef OLD
-    runningButton.imageView.contentMode = UIViewContentModeScaleAspectFit;
-//    runningButton.imageView.contentScaleFactor = 4.0;
-    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
-                                        toSize:runningButton.frame.size centered:YES]
-                       forState:UIControlStateSelected];
-    [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.fill"]
-                                        toSize:runningButton.frame.size centered:YES]
-                       forState:UIControlStateNormal];
-    [runningButton setTintColor:[UIColor whiteColor]];
-    [runningButton setTitle:UNICODE_PAUSE forState:UIControlStateNormal];
-    [runningButton setTitle:@"▶️" forState:UIControlStateSelected];
-    runningButton.titleLabel.font = [UIFont boldSystemFontOfSize:CONTROL_BUTTON_SIZE-6];
-    runningButton.titleLabel.textAlignment = NSTextAlignmentCenter;
-    runningButton.enabled = YES;
-#endif
     [runningButton addTarget:self
                           action:@selector(togglePauseResume:)
                 forControlEvents:UIControlEventTouchUpInside];
@@ -856,6 +840,7 @@ static NSString * const imageOrientationName[] = {
     [snapButton setImage:[self fitImage:[UIImage systemImageNamed:@"largecircle.fill.circle"]
                                  toSize:snapButton.frame.size centered:YES]
                        forState:UIControlStateNormal];
+    snapButton.tintColor = [UIColor whiteColor];
     [snapButton addTarget:self
                           action:@selector(doSave)
                 forControlEvents:UIControlEventTouchUpInside];
@@ -867,6 +852,8 @@ static NSString * const imageOrientationName[] = {
     paramView.hidden = YES;
     paramView.opaque = NO;
     paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.8];
+    paramView.layer.cornerRadius = 6.0;
+    paramView.clipsToBounds = YES;
     [transformView addSubview:paramView];
 
     paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_LABEL_H)];
@@ -882,7 +869,6 @@ static NSString * const imageOrientationName[] = {
     [paramView addSubview:paramSlider];
 
     SET_VIEW_HEIGHT(paramView, BELOW(paramSlider.frame) + SEP);
-    SET_VIEW_Y(paramView, BELOW(transformView.frame));    // off screen for starters
     
     executeView = [[UITextView alloc]
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
@@ -1719,6 +1705,7 @@ static NSString * const imageOrientationName[] = {
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"pause.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
+        [cameraController startCamera];
     } else {
         [cameraController stopCamera];
         currentSourceImage = previousSourceImage;
@@ -1805,23 +1792,6 @@ static NSString * const imageOrientationName[] = {
     [runningButton setNeedsDisplay];
 }
 
-- (void) positionControls {
-    CGRect f = transformView.frame;
-    f.origin.x = f.size.width - CONTROL_BUTTON_SIZE - SEP;
-    f.origin.y = f.size.height/2 - CONTROL_BUTTON_SIZE/2;
-    f.size = snapButton.frame.size;
-    snapButton.frame = f;
-    
-    f.origin.x = transformView.frame.size.width/2 - CONTROL_BUTTON_SIZE/2;
-    runningButton.frame = f;
-    
-    SET_VIEW_WIDTH(paramView, transformView.frame.size.width);
-    SET_VIEW_Y(paramView, BELOW(transformView.frame));  // off screen
-    SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
-    SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
-    [self adjustParamView];
-}
-
 - (IBAction)doParamSlider:(UISlider *)slider {
     Transform *lastTransform = [screenTask lastTransform];
     if (!lastTransform || !lastTransform.hasParameters) {
@@ -1836,10 +1806,12 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
+// reveal or hide the parameter slider
 - (void) adjustParamView {
     Transform *lastTransform = [screenTask lastTransform];
     if (!lastTransform || !lastTransform.hasParameters) {
         paramView.hidden = YES;
+        SET_VIEW_Y(paramView, transformView.frame.size.height);    // under the bottom
         return;
     }
     paramView.hidden = NO;
@@ -2329,6 +2301,14 @@ static CGSize startingPinchSize;
 //        [self liveOn:YES];
 }
 
+- (void) changeSourceTo:(NSInteger)nextIndex {
+    if (nextIndex == NO_SOURCE)
+        return;
+//    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
+    nextSourceIndex = nextIndex;
+    [self->taskCtrl idleTransforms];
+}
+
 - (IBAction) selectOptions:(UIButton *)button {
     OptionsVC *oVC = [[OptionsVC alloc] initWithOptions:options];
     UINavigationController *optionsNavVC = [[UINavigationController alloc]
@@ -2661,8 +2641,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [layoutValuesView setNeedsDisplay];
     
     [self updateExecuteView];
-//    [self adjustBarButtons];  // redundant call
-    [self adjustParamView];
     [taskCtrl enableTasks];
     if (currentSourceImage)
         [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
@@ -2675,46 +2653,29 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     }
 }
 
-#ifdef OLD
-int startParam;
+// The bottom of the image has, from right to left
+// - the snap button
+// - the running/pause button
+// - the parameter slider
 
-- (IBAction) doPanParams:(UIPanGestureRecognizer *)recognizer { // adjust value of selected transform
-    Transform *lastTransform = [screenTask lastTransform:cameraController.usingDepthCamera];
-    if (!lastTransform)
-        return;
-    int currentParam = [screenTask valueForStep:screenTask.transformList.count - 1];
-    switch (recognizer.state) {
-        case UIGestureRecognizerStateBegan: {
-            startParam = currentParam;
-            break;
-        }
-        case UIGestureRecognizerStateChanged: {
-            int range = lastTransform.high - lastTransform.low + 1;
-            int pixelsPerRange = transformView.frame.size.width / range;
-            CGPoint dist = [recognizer translationInView:recognizer.view];
-            int paramDelta = dist.x/pixelsPerRange;
-            int newParam = startParam + paramDelta;
-//            NSLog(@"changed  %.0f ppr %d   delta %d  new %d  current %d",
-//                  dist.x, pixelsPerRange, paramDelta, newParam, currentParam);
-            if ([screenTask updateParamOfLastTransformTo:newParam]) {
-                [self doTransformsOn:previousSourceImage depth:rawDepthBuf];
-                [self adjustParamView];
-                [self updateExecuteView];
-            }
-            break;
-        }
-        default:
-            ;;
-    }
-}
-#endif
-
-- (void) changeSourceTo:(NSInteger)nextIndex {
-    if (nextIndex == NO_SOURCE)
-        return;
-//    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
-    nextSourceIndex = nextIndex;
-    [self->taskCtrl idleTransforms];
+- (void) positionControls {
+    CGRect f = transformView.frame;
+    f.origin.x = f.size.width - CONTROL_BUTTON_SIZE - SEP;
+    f.origin.y = f.size.height - CONTROL_BUTTON_SIZE - SEP;
+    f.size = snapButton.frame.size;
+    snapButton.frame = f;
+    
+    f.origin.x -= f.size.width + SEP;
+    runningButton.frame = f;
+    
+    f.origin.x = INSET;
+    f.origin.y = transformView.frame.size.height;   // off screen below transform window
+    f.size.width = runningButton.frame.origin.x - SEP - f.origin.x;
+    f.size.height = paramView.frame.size.height;
+    paramView.frame = f;
+    SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
+    SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
+    [self adjustParamView];
 }
 
 @end
