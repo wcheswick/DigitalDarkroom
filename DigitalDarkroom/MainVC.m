@@ -232,7 +232,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *saveBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *plusBarButtonItem;
 @property (nonatomic, strong)   UIBarButtonItem *cameraBarButtonItem;
@@ -303,7 +303,7 @@ MainVC *mainVC = nil;
 @synthesize cameraController;
 @synthesize layout;
 
-@synthesize undoBarButton, saveBarButton, trashBarButton;
+@synthesize undoBarButton, shareBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
@@ -716,11 +716,11 @@ static NSString * const imageOrientationName[] = {
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
     
-    saveBarButton = [[UIBarButtonItem alloc]
+    shareBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
                      style:UIBarButtonItemStylePlain
                      target:self
-                     action:@selector(doSave)];
+                      action:@selector(doShare:)];
     
     undoBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
@@ -777,7 +777,7 @@ static NSString * const imageOrientationName[] = {
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
                                                docBarButton,
 //                                               fixedSpace,
-                                               saveBarButton,
+                                               shareBarButton,
 //                                               fixedSpace,
                                                undoBarButton,
 //                                               fixedSpace,
@@ -1897,6 +1897,93 @@ static NSString * const imageOrientationName[] = {
     }];
 #endif
 }
+
+- (IBAction) doShare:(UIBarButtonItem *)shareButton {
+    NSArray *items = @[transformView.image]; // build an activity view controller
+    UIActivityViewController *activityController = [[UIActivityViewController alloc]
+                                                    initWithActivityItems:items
+                                                    applicationActivities:nil];
+    // exclude the ones we want to be displayed:
+    activityController.excludedActivityTypes = @[
+        UIActivityTypeAddToReadingList,
+        UIActivityTypeOpenInIBooks,
+        UIActivityTypePostToVimeo,
+        UIActivityTypeMarkupAsPDF,
+        @"com.apple.mobilenotes.SharingExtension",
+        @"com.apple.reminders.RemindersEditorExtension"
+    //      UIActivityTypeAssignToContact,
+    //      UIActivityTypePrint,
+    //      UIActivityTypeSaveToCameraRoll,
+    //  UIActivityTypePostToFacebook,
+    //  UIActivityTypePostToTwitter,
+    //  UIActivityTypePostToWeibo,
+    //  UIActivityTypePostToTencentWeibo
+    //  UIActivityTypeCopyToPasteboard,
+    //  UIActivityTypePostToFlickr,
+    //  UIActivityTypeMail,
+    //  UIActivityTypeMessage,
+    //  UIActivityTypeAirDrop,
+    ];
+    activityController.modalPresentationStyle = UIModalPresentationPopover;
+    [self presentViewController:activityController animated:YES completion:^{
+        
+    }];
+    
+    UIPopoverPresentationController *popController = [activityController popoverPresentationController];
+    popController.permittedArrowDirections = UIPopoverArrowDirectionAny;
+    popController.barButtonItem = shareButton;
+
+  // access the completion handler
+    activityController.completionWithItemsHandler = ^(NSString *activityType,
+                                                      BOOL completed,
+                                                      NSArray *returnedItems,
+                                                      NSError *error) {
+        // react to the completion
+        if (completed) {
+            // user shared an item
+            NSLog(@"We used activity type%@", activityType);
+            
+        } else {
+            // user cancelled
+            NSLog(@"We didn't want to share anything after all.");
+        }
+        
+        if (error) {
+            NSLog(@"An Error occured: %@, %@", error.localizedDescription, error.localizedFailureReason);
+        }
+    };
+}
+
+#ifdef MAYBE
+    NSArray *activityItems = @[@"",[NSURL URLWithString:@"http://www.example.com"]];
+    NSArray *applicationActivities = nil;
+    UIActivityViewController * activityController = [[UIActivityViewController alloc] initWithActivityItems:activityItems applicationActivities:applicationActivities];
+    [self presentViewController:activityController animated:YES completion:nil];
+#endif
+
+#ifdef OLD
+    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
+    [self flash];
+
+    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
+    UIWindow* keyWindow = nil;
+    if (@available(iOS 13.0, *)) {
+        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
+            if (wScene.activationState == UISceneActivationStateForegroundActive) {
+                keyWindow = wScene.windows.firstObject;
+                break;
+            }
+        }
+    }
+    CGRect rect = [keyWindow bounds];
+    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
+    CGContextRef context = UIGraphicsGetCurrentContext();
+    [keyWindow.layer renderInContext:context];
+    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
+    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
+}
+#endif
 
 #ifdef NOTDEEF
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {

@@ -1004,11 +1004,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
 #define MM_PER_IN   25.4
 #define CHES_EYESEP_MM  62
-#define EYESEP_PIX round(CHES_EYESEP_MM*dpi/MM_PER_IN)
+#define EYESEP_PIX ((int)(CHES_EYESEP_MM*dpi/MM_PER_IN))
 #define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
-#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
-#define FARAWAY separation(0)
-    
+//#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
+//#define FARAWAY separation(0)
+#define Z_TO_SEP_X(z)   round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z))
+
 // Z ranges from 0.0 to 1.0, for farthest to nearest distance.
     
     // SIDRS computation taken from
@@ -1029,7 +1030,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         int same[depthBuf.w];
         
         for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
-            int stereoSep;
+            int stereoSepX;
             int left, right;    // x values for left and right eyes
             
             for (int x=0; x < depthBuf.w; x++ ) {  // link initial pixels with themselves
@@ -1038,12 +1039,19 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             
             for (int x=0; x < depthBuf.w; x++ ) {
                 float z = 1.0 - (depthBuf.da[y][x] - depthBuf.minDepth)/depthRange;
+                // z = 0 is max depth, 1.0 is vision plane.
                 assert(z >= 0 && z <= 1.0);
-                stereoSep = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
+                stereoSepX = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
+                if (src.w > 100) {
+                    NSLog(@"mu, z, EYESEP_PIX: %.3f %.3f  %d", mu, z, EYESEP_PIX);
+                    NSLog(@"   sep X = %d", stereoSepX);
+                    NSLog(@"sepx range: %.2f,  %.2f,  %.f2", Z_TO_SEP_X(0.0), Z_TO_SEP_X(z), Z_TO_SEP_X(1.0));
+                }
+//                stereoSepX = Z_TO_SEP_X(z);
                 //stereoSep = separation(zd);
-                assert(stereoSep >= 0);
-                left = x - stereoSep/2;
-                right = left + stereoSep;   // pixels at left and right must be the same
+                assert(stereoSepX >= 0);
+                left = x - stereoSepX/2;
+                right = left + stereoSepX;   // pixels at left and right must be the same
                 if (left >= 0 && right < depthBuf.w) {
                     int visible;    // first, perform hidden surface removal
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
@@ -1085,6 +1093,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 dest.pa[y][x] = darkPixel[x] ? Black : White;
             }
         }
+        
         
 #ifdef notdef
 #define NW      10
