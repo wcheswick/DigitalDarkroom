@@ -17,8 +17,8 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
 @interface DepthBuf : NSObject {
     size_t w, h;
     Distance minDepth, maxDepth;
-    DepthArray_t da;  // pixel array, pb[y][x] in our code
-    Distance *db;      // pixel buffer, w*h contiguous pixels
+    DepthArray_t da;    // depth array, da[y][x]
+    Distance *db;       // depth buffer, pointer to w*h contiguous depths in da
 }
 
 @property (assign)  Distance minDepth, maxDepth;

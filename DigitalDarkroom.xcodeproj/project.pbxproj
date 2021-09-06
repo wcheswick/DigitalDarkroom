@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB1C854E26E64B18005AED48 /* Frame.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1C854D26E64B18005AED48 /* Frame.m */; };
 		FB20A72125D1791C0005CA53 /* Options.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A71F25D1791C0005CA53 /* Options.m */; };
 		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
@@ -58,6 +59,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FB1C854C26E64B18005AED48 /* Frame.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Frame.h; sourceTree = "<group>"; };
+		FB1C854D26E64B18005AED48 /* Frame.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Frame.m; sourceTree = "<group>"; };
 		FB20A71F25D1791C0005CA53 /* Options.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Options.m; sourceTree = "<group>"; };
 		FB20A72025D1791C0005CA53 /* Options.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Options.h; sourceTree = "<group>"; };
 		FB20A72325D17A760005CA53 /* OptionsVC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OptionsVC.h; sourceTree = "<group>"; };
@@ -261,12 +264,14 @@
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
 				FB3012BD250BA85C0062A1FA /* InputSource.h */,
 				FB3012BE250BA85C0062A1FA /* InputSource.m */,
+				FB1C854C26E64B18005AED48 /* Frame.h */,
+				FB1C854D26E64B18005AED48 /* Frame.m */,
 				FBB2C8AC2586A9E400AB0B09 /* PixBuf.h */,
 				FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */,
-				FBB2C8B92586B9AA00AB0B09 /* RemapBuf.h */,
-				FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */,
 				FBB2C8B02586A9F800AB0B09 /* DepthBuf.h */,
 				FBB2C8B12586A9F800AB0B09 /* DepthBuf.m */,
+				FBB2C8B92586B9AA00AB0B09 /* RemapBuf.h */,
+				FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */,
 				FBB2C8B42586AA3C00AB0B09 /* ChBuf.h */,
 				FBB2C8B52586AA3C00AB0B09 /* ChBuf.m */,
 				FB389A49254055F500E29530 /* ColorTable.h */,
@@ -373,6 +378,7 @@
 				FBB1D9FE2330FD0900845DF1 /* Transform.m in Sources */,
 				FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */,
 				FBB1D9E6232FE44400845DF1 /* area.c in Sources */,
+				FB1C854E26E64B18005AED48 /* Frame.m in Sources */,
 				FB97DAF226B1915A0025EE56 /* PopoverMenuVC.m in Sources */,
 				FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */,
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,

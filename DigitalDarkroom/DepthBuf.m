@@ -153,6 +153,7 @@ ma(ma_buff_t *b, float v) {
     assert(minDepth <= maxDepth);
 }
 
+// NOTUSED at the moment
 - (void) copyDepthsTo:(DepthBuf *) dest {
     assert(w == dest.w);
     assert(h == dest.h);    // the PixelArray pointers in the destination will do

@@ -1942,24 +1942,15 @@ static NSString * const imageOrientationName[] = {
         if (completed) {
             // user shared an item
             NSLog(@"We used activity type%@", activityType);
-            
         } else {
             // user cancelled
             NSLog(@"We didn't want to share anything after all.");
         }
-        
         if (error) {
             NSLog(@"An Error occured: %@, %@", error.localizedDescription, error.localizedFailureReason);
         }
     };
 }
-
-#ifdef MAYBE
-    NSArray *activityItems = @[@"",[NSURL URLWithString:@"http://www.example.com"]];
-    NSArray *applicationActivities = nil;
-    UIActivityViewController * activityController = [[UIActivityViewController alloc] initWithActivityItems:activityItems applicationActivities:applicationActivities];
-    [self presentViewController:activityController animated:YES completion:nil];
-#endif
 
 #ifdef OLD
     UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
@@ -1985,7 +1976,7 @@ static NSString * const imageOrientationName[] = {
 }
 #endif
 
-#ifdef NOTDEEF
+#ifdef NOTDEF
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
     // XXXXX use this for something else
     if (recognizer.state != UIGestureRecognizerStateBegan)
