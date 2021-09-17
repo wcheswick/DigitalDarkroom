@@ -278,7 +278,11 @@ static PixelIndex_t dPI(int x, int y) {
         return frame;
     }
 #endif
-    [sourceFrame copyTo:frame0];
+    frame0 = [sourceFrame copy];
+    frames[0] = frame0;
+//    [sourceFrame copyTo:frame0];
+    assert(frame0.depthBuf);
+    assert(frame0.depthBuf.minDepth > 0);
 
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
