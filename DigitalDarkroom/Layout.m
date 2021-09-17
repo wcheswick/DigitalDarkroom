@@ -17,6 +17,15 @@
 
 @end
 
+
+BOOL
+same_aspect(CGSize r1, CGSize r2) {
+    float ar1 = r1.width/r1.height;
+    float ar2 = r2.width/r2.height;
+    float diffPct = DIFF_PCT(ar1,ar2);
+    return diffPct < ASPECT_PCT_DIFF_OK;
+};
+
 NSString * __nullable displayThumbsPosition[] = {
     @"U",
     @"R",
@@ -34,12 +43,11 @@ NSString * __nullable displayOptionNames[] = {
 
 @synthesize format, depthFormat;
 @synthesize displayOption, thumbsPosition;
-@synthesize sourceSize;
 
 @synthesize minDisplayFrac, bestMinDisplayFrac;
 @synthesize minThumbFrac, bestMinThumbFrac;
 @synthesize minThumbRows, minThumbCols;
-@synthesize targetDisplaySize;
+@synthesize imageSourceSize;
 @synthesize transformSize, displayRect;
 @synthesize displayFrac, thumbFrac;
 @synthesize thumbArrayRect;
@@ -61,6 +69,7 @@ NSString * __nullable displayOptionNames[] = {
         transformSize = CGSizeZero;
         executeRect = CGRectZero;
         status = shortStatus = nil;
+        imageSourceSize = CGSizeZero;
         
         // these values are tweaked to satisfy the all the cameras on two
         // different iPhones and two different iPads.
@@ -91,13 +100,15 @@ NSString * __nullable displayOptionNames[] = {
 //static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
 
 
-// return NO if it can't be done, usually too many thumbs. if NO,
+// Figure out a reasonable layout for a particular incoming size.
+// return NO if it can't be done. if NO,
 // then the score is not computed.
 
-- (BOOL) tryLayoutForSize:(CGSize) sourceSize
+- (BOOL) tryLayoutForSize:(CGSize) ss
           thumbRows:(int) rowsWanted
        thumbColumns:(int) columnsWanted {
     int thumbsShown;
+    imageSourceSize = ss;
     
     if (rowsWanted == 0 && columnsWanted == 0)
         thumbsPosition = None;
@@ -108,7 +119,7 @@ NSString * __nullable displayOptionNames[] = {
     else
         thumbsPosition = Both;  // not implemented
     
-    aspectRatio = sourceSize.width / sourceSize.height;
+    aspectRatio = imageSourceSize.width / imageSourceSize.height;
 
 #define NO_SCALE    (-2.0)
 #define SCALE_UNINITIALIZED (-1.0)
@@ -128,7 +139,7 @@ NSString * __nullable displayOptionNames[] = {
     if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
         return NO;
     
-    displayRect.size = [Layout fitSize:sourceSize toSize:displayRect.size];
+    displayRect.size = [Layout fitSize:imageSourceSize toSize:displayRect.size];
     displayRect.origin = CGPointZero;   // needs centering
     thumbArrayRect = CGRectZero;
 
@@ -189,7 +200,7 @@ NSString * __nullable displayOptionNames[] = {
 
     transformSize = displayRect.size;
     if (scale == SCALE_UNINITIALIZED)
-        scale = displayRect.size.width / sourceSize.width;
+        scale = displayRect.size.width / imageSourceSize.width;
     
     int thumbCount = (int)mainVC.thumbViewsArray.count;
     long wastedThumbs = thumbsShown - thumbCount;
@@ -275,11 +286,7 @@ NSString * __nullable displayOptionNames[] = {
               displayRect.size.width, displayRect.size.height];
     shortStatus = stats;
 
-    float displayAspect = displayRect.size.width / displayRect.size.height;
-//    float aspectDiffPct = 100*fabsf(aspectRatio - displayAspect)/aspectRatio;
-    float aspectDiffPct = DIFF_PCT(aspectRatio, displayAspect);
-    assert(aspectDiffPct < ASPECT_PCT_DIFF_OK); // must be within this pct
-
+    assert(same_aspect(imageSourceSize, displayRect.size));
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
     assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
     assert(BELOW(executeRect) <= mainVC.containerView.frame.size.height);

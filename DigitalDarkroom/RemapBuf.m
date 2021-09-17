@@ -18,7 +18,7 @@
 
 void
 remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
-    if (sx < remapBuf.w && sx >= 0 && sy < remapBuf.h && sy >= 0)
+    if (sx < remapBuf.size.width && sx >= 0 && sy < remapBuf.size.height && sy >= 0)
         UNSAFE_REMAP_TO(tx, ty, sx, sy);
     else
         REMAP_COLOR(tx, ty, Remap_OutOfRange);
@@ -26,26 +26,26 @@ remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
 
 @implementation RemapBuf
 
-@synthesize w, h;
+@synthesize size;
 @synthesize rb;
 @synthesize buffer;
 
-- (id)initWithWidth:(size_t) w height:(size_t)h {
+- (id)initWithSize:(CGSize) s {
     self = [super init];
     if (self) {
-        size_t bufferSize = w * sizeof(BufferIndex) * h;
+        self.size = s;
+        size_t bufferSize = size.width * sizeof(BufferIndex) * size.height;
         buffer = [[NSMutableData alloc] initWithLength:bufferSize];
         assert(buffer);
         assert(buffer.length >= bufferSize);
         rb = (BufferIndex *)buffer.bytes;
-        self.w = w;
-        self.h = h;
+        self.size = size;
     }
     return self;
 }
 
 - (void) verify {
-    size_t bufferSize = w * h;
+    size_t bufferSize = size.width * size.height;
     for (int i=0; i<bufferSize; i++) {
         BufferIndex bi = rb[i];
         if (bi < 0)

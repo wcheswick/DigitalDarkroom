@@ -8,8 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "DepthBuf.h"
-#import "PixBuf.h"
+#import "Frame.h"
 #import "RemapBuf.h"
 #import "DepthBuf.h"
 #import "ChBuf.h"
@@ -20,13 +19,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class TransformInstance;
 
-#define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
 
 typedef enum {
     ColorTrans,
     GeometricTrans,
-    RemapTrans,
-    RemapPolarTrans,
+    RemapImage,
+    RemapPolar,
+    RemapSize,
     AreaTrans,
     DepthVis,
     EtcTrans,
@@ -34,14 +33,17 @@ typedef enum {
 } transform_t;
 
 
-typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Pixel *buf, size_t n, int v);
+typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Frame *frame, int v);
 
-typedef void (^ __nullable __unsafe_unretained ComputeRemap_t)
+typedef void (^ __nullable __unsafe_unretained RemapImage_t)
             (RemapBuf *remapBuf, TransformInstance *instance);
 
-typedef void (^ __nullable __unsafe_unretained ComputePolarRemap_t)
+typedef void (^ __nullable __unsafe_unretained RemapPolar_t)
             (RemapBuf *remapBuf, float r, float a, TransformInstance *instance,
              int tX, int tY);
+
+typedef void (^ __nullable __unsafe_unretained RemapSize_t)
+            (RemapBuf *remapBuf, CGSize sourceSize, TransformInstance *instance);
 
 #ifdef NOTUSED
 typedef void (^ __nullable __unsafe_unretained
@@ -49,15 +51,14 @@ typedef void (^ __nullable __unsafe_unretained
 #endif
 
 typedef void (^ __nullable __unsafe_unretained
-              areaFunction_t)(const PixBuf *src,
-                              PixBuf *dest,
+              areaFunction_t)(const Frame *srcFrame,
+                              Frame *dstFrame,
                               ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
-              depthVis_t)(const PixBuf *src,
-                          PixBuf *dest,
-                          const DepthBuf *depthBuf,
+              depthVis_t)(const Frame *srcFrame,
+                          Frame *dstFrame,
                           TransformInstance *instance);
 
 @interface Transform : NSObject {
@@ -73,8 +74,9 @@ typedef void (^ __nullable __unsafe_unretained
     int low, value, high;   // parameter range
     NSString *paramName;
     NSString *lowValueFormat, *highValueFormat;
-    ComputeRemap_t remapImageF;
-    ComputePolarRemap_t polarRemapF;
+    RemapImage_t remapImageF;
+    RemapPolar_t remapPolarF;
+    RemapSize_t remapSizeF;
 }
 
 @property (nonatomic, strong)   NSString *name, *description, *helpPath;
@@ -84,8 +86,9 @@ typedef void (^ __nullable __unsafe_unretained
 //@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
-@property (unsafe_unretained)   ComputeRemap_t remapImageF;
-@property (unsafe_unretained)   ComputePolarRemap_t polarRemapF;
+@property (unsafe_unretained)   RemapImage_t remapImageF;
+@property (unsafe_unretained)   RemapPolar_t remapPolarF;
+@property (unsafe_unretained)   RemapSize_t remapSizeF;
 @property (assign)              transform_t type;
 @property (assign)              int low, value, high;
 @property (nonatomic, strong)   NSString *paramName;
@@ -107,10 +110,13 @@ typedef void (^ __nullable __unsafe_unretained
                 areaFunction:(areaFunction_t) f;
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapImage:(ComputeRemap_t) f;
+                remapImage:(RemapImage_t) f;
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapPolar:(ComputePolarRemap_t) f;
+                remapPolar:(RemapPolar_t) f;
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                remapSize:(RemapSize_t) f;
 
 + (Transform *) depthVis:(NSString *) n description:(NSString *) d
                 depthVis:(depthVis_t) f;

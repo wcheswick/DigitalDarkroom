@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import "Transform.h"
 #import "TransformInstance.h"
+#import "Frame.h"
 
 #import "TaskCtrl.h"
 
@@ -22,34 +23,34 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TaskGroup : NSObject {
     TaskCtrl *taskCtrl;
-    Transform * __nullable depthTransform;
+    Transform * __nullable incomingSizeTransform;   // adjust incoming size to needed size
     NSMutableArray *tasks;
     volatile int busyCount;
-    CGSize transformSize;
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
     size_t bytesInImage;
     size_t bitsPerComponent;
     NSString *groupName;        // for debug display purposes
+    CGSize targetSize;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
-@property (nonatomic, strong)   Transform * __nullable depthTransform;
+@property (nonatomic, strong)   Transform * __nullable incomingSizeTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
-@property (assign, atomic)      CGSize transformSize;
 @property (assign, atomic)      volatile int busyCount;
 @property (assign)              size_t bytesPerRow, pixelsInImage, pixelsPerRow;
 @property (assign)              size_t bitsPerComponent;
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
+@property (assign)              CGSize targetSize;
+
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
-- (void) configureGroupForSize:(CGSize) s;
-- (void) executeTasksWithImage:(UIImage *) srcImage
-                         depth:(const DepthBuf *__nullable) rawDepthBuf
+- (void) configureGroupForTargetSize:(CGSize)targetSize;
+- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
                       dumpFile:(NSFileHandle *__nullable)imageFileHandle;
-- (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
+//- (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

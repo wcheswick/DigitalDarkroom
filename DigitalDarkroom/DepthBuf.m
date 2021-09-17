@@ -19,18 +19,17 @@
 
 @synthesize da, db;
 @synthesize minDepth, maxDepth;
-@synthesize w, h;
+@synthesize size;
 @synthesize buffer;
 
 - (id)initWithSize:(CGSize) s {
     self = [super init];
     if (self) {
-        w = s.width;
-        h = s.height;
+        self.size = s;
         minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
-        size_t rowSize = sizeof(Distance) * w;
-        size_t arraySize = sizeof(Distance *) * h;
-        buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
+        size_t rowSize = sizeof(Distance) * size.width;
+        size_t arraySize = sizeof(Distance *) * size.height;
+        buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * size.height];
         assert(buffer);
         da = (DepthArray_t)buffer.bytes;
         db = (Distance *)buffer.bytes + arraySize;
@@ -38,9 +37,9 @@
         // point rows pointer to appropriate location in 2D array
 
         Distance **drp = da;
-        for (int y = 0; y < h; y++) {
+        for (int y = 0; y < size.height; y++) {
             *drp++ = rowPtr;
-            rowPtr += w;
+            rowPtr += (int)size.height;
         }
 #ifdef EARLYDEBUG
         size_t bytes = (void *)rowPtr - (void *)db;
@@ -65,14 +64,14 @@
     //    NSLog(@"&pb[0]   = %p", &pb[0]);
 
     size_t bufferLen = buffer.length;
-    void *bufferEnd = &db[w*h];
+    void *bufferEnd = &db[(int)(size.width * size.height)];
     assert(buffer.length >= (bufferEnd - (void *)db));
     // troll for access errors:
     assert((void *)db >= buffer.bytes);
     assert((void *)db < buffer.bytes + bufferLen);
 
     // is our pixel buffer addressable?
-    for (int i=0; i<h * w; i++) {
+    for (int i=0; i<(int)(size.width * size.height); i++) {
         assert((void *)&db[i] < bufferEnd);
         Distance p = db[i];
         USED(p);
@@ -80,23 +79,23 @@
     
     // are the row arrays in range? First, the location of each row array pointer.
     // This array is at the beginning of our memory block, before the pixel buffer.
-    for (int y=0; y<h; y++) {
+    for (int y=0; y<size.height; y++) {
         assert((void *)&da[y] >= buffer.bytes);
         assert((void *)&da[y] < (void *)db);
     }
     
     // do their row pointers fall into the pixel buffer area?
-    for (int y=0; y<h; y++) {
+    for (int y=0; y<size.height; y++) {
         assert((void *)da[y] >= (void *)db);
         assert((void *)da[y] < bufferEnd);
     }
     
-    for (int y=0; y<h; y++) {
-        for (int x=0; x<w; x++) {
+    for (int y=0; y<size.height; y++) {
+        for (int x=0; x<size.width; x++) {
             void *pixAddr = (void *)&da[y][x];
             assert(pixAddr >= (void *)db);
             assert(pixAddr < bufferEnd);
-            long pixIndex = (void *)db + w * h * sizeof(Distance) - pixAddr;
+            long pixIndex = (void *)db + (int)(size.width * size.height) * sizeof(Distance) - pixAddr;
             Distance d = da[y][x];  // try an access
             USED(pixIndex);
             USED(d);
@@ -135,7 +134,7 @@ ma(ma_buff_t *b, float v) {
     minDepth = MAXFLOAT;
     maxDepth = 0.0;
     int okCount = 0;
-    for (int i=0; i<w * h; i++) {
+    for (int i=0; i<(int)(size.width * size.height); i++) {
         float z = db[i];
         if (!isnan(z) && z > 0) {   // ignore bad depth data
             okCount++;
@@ -155,17 +154,41 @@ ma(ma_buff_t *b, float v) {
 
 // NOTUSED at the moment
 - (void) copyDepthsTo:(DepthBuf *) dest {
-    assert(w == dest.w);
-    assert(h == dest.h);    // the PixelArray pointers in the destination will do
-    memcpy(dest.db, db, w * h * sizeof(Distance));
+    assert(size.width == dest.size.width);
+    assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
+    memcpy(dest.db, db, (int)(size.width * size.height) * sizeof(Distance));
     [self verify];
 }
 
-// not used at the moment, maybe never:
 - (id)copyWithZone:(NSZone *)zone {
-    DepthBuf *copy = [[DepthBuf alloc] initWithSize:CGSizeMake(w, h)];
-    memcpy(copy.db, db, w * h * sizeof(Distance));
+    DepthBuf *copy = [[DepthBuf alloc] initWithSize:size];
+    memcpy(copy.db, db, (int)(size.width * size.height) * sizeof(Distance));
+    copy.maxDepth = self.maxDepth;
+    copy.minDepth = self.minDepth;
+    copy.size = self.size;
     return copy;
+}
+
+- (void) scaleFrom:(DepthBuf *) sourceDepthBuf {
+    minDepth = sourceDepthBuf.minDepth; // preserve original range
+    maxDepth = sourceDepthBuf.maxDepth;
+    double yScale = size.height/sourceDepthBuf.size.height;
+    double xScale = size.width/sourceDepthBuf.size.width;
+    for (int x=0; x<size.width; x++) {
+        int sx = trunc(x/xScale);
+        assert(sx <= sourceDepthBuf.size.width);
+        for (int y=0; y<size.height; y++) {
+            int sy = trunc(y/yScale);
+            assert(sy < sourceDepthBuf.size.height);
+            Distance d = sourceDepthBuf.da[sy][sx];
+            if (isnan(d) || d > sourceDepthBuf.maxDepth) {
+                d = sourceDepthBuf.maxDepth;
+            } else if (d < sourceDepthBuf.minDepth)
+                d = sourceDepthBuf.minDepth;
+            assert(d >= sourceDepthBuf.minDepth && d <= sourceDepthBuf.maxDepth);
+            da[y][x] = d;   // XXXXXX died here during reconfiguration
+        }
+    }
 }
 
 @end

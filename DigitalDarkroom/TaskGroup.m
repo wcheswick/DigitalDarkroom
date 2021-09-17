@@ -13,8 +13,7 @@
 
 @interface TaskGroup ()
 
-@property (nonatomic, strong)   PixBuf *srcPix;   // common source pixels for all tasks in this group
-@property (nonatomic, strong)   DepthBuf *depthBuf;
+@property (nonatomic, strong)   Frame *groupSrcFrame;
 // remapping for every transform of current size, plus parameter
 @property (nonatomic, strong)   NSMutableDictionary *remapCache;
 
@@ -23,18 +22,17 @@
 @implementation TaskGroup
 
 @synthesize taskCtrl;
-@synthesize srcPix;
-@synthesize depthBuf;
-@synthesize depthTransform;
+@synthesize groupSrcFrame;
+@synthesize incomingSizeTransform;
 
 @synthesize tasks;
 @synthesize remapCache;
 @synthesize bytesPerRow, pixelsInImage, pixelsPerRow;
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
-@synthesize transformSize;
 @synthesize groupName;
 @synthesize busyCount;
+@synthesize targetSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -43,36 +41,47 @@
         groupName = @"";
         tasks = [[NSMutableArray alloc] init];
         remapCache = [[NSMutableDictionary alloc] init];
-        srcPix = nil;
-        depthBuf = nil;
+        groupSrcFrame = nil;
         bytesPerRow = 0;    // no current configuration
-        transformSize = CGSizeZero; // unconfigured group
         busyCount = 0;
+        targetSize = CGSizeZero;
     }
     return self;
 }
 
-// Must be called before any tasks are added.  May be called afterwords to
-// change size. Is this true?
+// Configure all tasks for possibly a new target image size. The task controller
+// has the source image size.  We deal with depth data as we need to.
 
-- (void) configureGroupForSize:(CGSize) s {
+- (void) configureGroupForTargetSize:(CGSize) ts {
+    targetSize = ts;
 #ifdef DEBUG_TASK_CONFIGURATION
-    NSLog(@" GG  %@: configure group for size %.0f x %.0f", groupName, s.width, s.height);
+    NSLog(@" GG  %@: configureGroupForTargetSize %.0f x %.0f",
+          targetSize.width, targetSize.height);
 #endif
     assert(busyCount == 0);
-    assert(s.width > 0 && s.height > 0);
-    transformSize = s;
-    
-    if (!srcPix || srcPix.w != transformSize.width ||
-            srcPix.h != transformSize.height) {
-        srcPix = [[PixBuf alloc] initWithSize:transformSize];
+    assert(taskCtrl.sourceSize.width > 0 && taskCtrl.sourceSize.height > 0);
+    assert(targetSize.width > 0 && targetSize.height > 0);
+    if (!groupSrcFrame || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize)) {
+        if (!groupSrcFrame) {
+            groupSrcFrame = [[Frame alloc] init];
+        }
+        groupSrcFrame.pixBuf.size = targetSize;
+        if (!groupSrcFrame.pixBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
+            groupSrcFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
+        if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
+            groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
     }
     
-    if (!depthBuf || depthBuf.w != transformSize.width ||
-            depthBuf.h != transformSize.height) {
-        depthBuf = [[DepthBuf alloc] initWithSize:transformSize];
+    // source size must be scaled to targetsize.
+    
+    if (!groupSrcFrame.pixBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize)) {
+        groupSrcFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
     }
-
+    
+    if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.depthBuf.size, targetSize)) {
+        groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
+    }
+    
     // clear and recompute any remaps
     [remapCache removeAllObjects];
     
@@ -94,6 +103,7 @@
     return newTask;   // XXX not sure we are going to use this
 }
 
+#ifdef OLD
 - (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt {
     for (Task *task in tasks) {
         if (task.isThumbTask)    // fixed depth transform for thumb, don't change
@@ -102,6 +112,7 @@
     }
     depthTransform = dt;
 }
+#endif
 
 - (void) removeAllTransforms {
     for (Task *task in tasks)
@@ -111,6 +122,124 @@
 - (void) removeLastTransform {
     for (Task *task in tasks)
         [task removeLastTransform];
+}
+
+- (BOOL) isReadyForLayout {
+    assert(taskCtrl.reconfigurationNeeded);
+    for (Task *task in tasks) {
+        if (task.taskStatus != Stopped)
+            return NO;
+    }
+    return YES;
+}
+
+- (void) enable {
+    for (Task *task in tasks) {
+        [task enable];
+    }
+}
+
+// transform the image.
+// return the frame of the image finally displayed by the last task.
+
+- (Frame * __nullable) executeTasksWithFrame:(const Frame *) frame
+                      dumpFile:(NSFileHandle *__nullable)imageFileHandle {
+    // XXXXX this is mostly wrong now:
+    assert(frame);
+    // we prepare a read-only PixBuf for this image.
+    // Task must not change it: it is shared among the tasks.
+    // At the end of the loop, we don't need it any more
+    // We assume (and verify) that the incoming buffer has
+    // certain properties that not all iOS pixel buffer formats have.
+    // srcBuf's pixels are copied out of the kernel buffer, so we
+    // don't have to hold the memory lock.
+    
+    // We also prepare a readonly depth buffer (if depth supplied) that is scaled
+    // to this group's image size.  The scaling is a bit crude at the moment,
+    // and probably should be done in hardware.
+    //
+    // NB: the depth buffer has dirty values: negative and NaN.  Set these to
+    // the maximum distance.
+    
+    // The incoming image size might be larger than the transform size.  Reduce it.
+    // The aspect ratio should not change.
+
+    if (taskCtrl.reconfigurationNeeded) {
+        for (Task *task in tasks) {
+            if (task.taskStatus != Stopped) {   // still waiting for this one
+                return nil;
+            }
+        }
+        // The are all stopped.  Inform the authorities
+        [taskCtrl tasksAreIdled];
+        return nil;
+    }
+
+    Frame *scaledFrame = [[Frame alloc] init];
+    Frame *lastFrame = nil;
+        
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl idleTransforms];
+    
+    if (frame.depthBuf) {
+        scaledFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
+        [scaledFrame.depthBuf scaleFrom:frame.depthBuf];
+    }
+
+    if (!SAME_SIZE(frame.pixBuf.size, targetSize)) {
+        scaledFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
+        [scaledFrame.pixBuf scaleFrom:frame.pixBuf];
+    } else
+        scaledFrame.pixBuf = frame.pixBuf;
+
+//#define SKIPTRANSFORMS  1
+#ifdef SKIPTRANSFORMS   // for debugging
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (Task *task in self->tasks) {
+            if (task.taskStatus == Running)
+                continue;
+            task.targetImageView.image = scaledImage;
+            [task.targetImageView setNeedsDisplay];
+        }
+     });
+    return;
+#endif
+
+    if (imageFileHandle) {
+        NSString *line = [NSMutableString stringWithFormat:@"%lu %lu %d\n",
+                           (unsigned long)scaledFrame.pixBuf.size.width, (unsigned long)scaledFrame.pixBuf.size.height,
+                          scaledFrame.depthBuf ? 4 : 3];
+        [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+        if (scaledFrame.depthBuf)
+            assert(SAME_SIZE(scaledFrame.depthBuf.size, scaledFrame.pixBuf.size));
+        for (int y=0; y < scaledFrame.pixBuf.size.height; y++) {
+            for (int x=0; x < scaledFrame.pixBuf.size.width; x++) {
+                NSString *d = scaledFrame.depthBuf ? [NSString stringWithFormat:@"%f", frame.depthBuf.da[y][x]] : @"";
+                line = [NSString stringWithFormat:@"%d %d %d %@\n",
+                        scaledFrame.pixBuf.pa[y][x].r, scaledFrame.pixBuf.pa[y][x].g, scaledFrame.pixBuf.pa[y][x].b, d];
+                [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+            }
+        }
+    }
+    assert(frame.depthBuf);
+    assert(scaledFrame.depthBuf);
+    
+    BOOL hasDepth = scaledFrame.depthBuf != nil;
+    
+    @synchronized (scaledFrame) {   // frame, or scaledFrame?
+        for (Task *task in tasks) {
+            if (task.taskStatus == Running)
+                continue;
+            busyCount++;
+//            [task check];
+            lastFrame = [task executeTransformsFromFrame:scaledFrame];
+            busyCount--;
+            assert(busyCount >= 0);
+        }
+    }
+    if (taskCtrl.reconfigurationNeeded)
+        [taskCtrl idleTransforms];
+    return lastFrame;
 }
 
 // This is called back from task for transforms that remap pixels.  The remapping is based
@@ -134,13 +263,12 @@
     NSLog(@"    GG new remap %@   size %.0f x %.0f",
           groupName, transformSize.width, transformSize.height);
 #endif
-    remapBuf = [[RemapBuf alloc] initWithWidth:transformSize.width
-                                        height:transformSize.height];
-    if (transform.type == RemapTrans) {
+    remapBuf = [[RemapBuf alloc] initWithSize:targetSize];
+    if (transform.type == RemapImage) {
         transform.remapImageF(remapBuf, instance);
     } else {  // polar remap
-        int centerX = transformSize.width/2;
-        int centerY = transformSize.height/2;
+        int centerX = remapBuf.size.width/2;
+        int centerY = remapBuf.size.height/2;
         
         for (int dx=0; dx<=centerX; dx++) {
             for (int dy=0; dy<=centerY; dy++) {
@@ -148,20 +276,20 @@
                 double a = (dx + dy == 0) ? 0 : atan2(dy,dx);
                 
                 // third quadrant
-                transform.polarRemapF(remapBuf, r, M_PI + a, instance,
+                transform.remapPolarF(remapBuf, r, M_PI + a, instance,
                                       centerX - dx, centerY - dy);
                 
                 // second quandrant
-                if (centerY + dy < remapBuf.h)
-                    transform.polarRemapF(remapBuf, r, M_PI - a, instance, centerX - dx, centerY + dy);
+                if (centerY + dy < remapBuf.size.height)
+                    transform.remapPolarF(remapBuf, r, M_PI - a, instance, centerX - dx, centerY + dy);
                 
-                if (centerX + dx < remapBuf.w) {
+                if (centerX + dx < remapBuf.size.width) {
                     // fourth quadrant
-                    transform.polarRemapF(remapBuf, r, -a, instance, centerX + dx, centerY - dy);
+                    transform.remapPolarF(remapBuf, r, -a, instance, centerX + dx, centerY - dy);
                     
                     // first quadrant
-                    if (centerY + dy < remapBuf.h)
-                        transform.polarRemapF(remapBuf, r, a, instance, centerX + dx, centerY + dy);
+                    if (centerY + dy < remapBuf.size.height)
+                        transform.remapPolarF(remapBuf, r, a, instance, centerX + dx, centerY + dy);
                 }
             }
         }
@@ -174,148 +302,5 @@
     return remapBuf;
 }
 
-- (BOOL) isReadyForLayout {
-    assert(taskCtrl.reconfigurationNeeded);
-    for (Task *task in tasks) {
-        if (task.taskStatus != Stopped)
-            return NO;
-    }
-    return YES;
-}
-
-- (void) enable {
-    for (Task *task in tasks) {
-        [task enable];
-    }
-}
-
-- (void) executeTasksWithImage:(UIImage *) srcImage
-                         depth:(const DepthBuf *__nullable) rawDepthBuf
-                      dumpFile:(NSFileHandle *__nullable)imageFileHandle {
-    // we prepare a read-only PixBuf for this image.
-    // Task must not change it: it is shared among the tasks.
-    // At the end of the loop, we don't need it any more
-    // We assume (and verify) that the incoming buffer has
-    // certain properties that not all iOS pixel buffer formats have.
-    // srcBuf's pixels are copied out of the kernel buffer, so we
-    // don't have to hold the memory lock.
-    
-    // We also prepare a readonly depth buffer (if depth supplied) that is scaled
-    // to this group's image size.  The scaling is a bit crude at the moment,
-    // and probably should be done in hardware.
-    //
-    // NB: the depth buffer has dirty values: negative and NaN.  Set these to
-    // the maximum distance.
-    
-    // The incoming image size might be larger than the transform size.  Reduce it.
-    // The aspect ratio should not change.
-
-    if (taskCtrl.reconfigurationNeeded) {
-        for (Task *task in tasks) {
-            if (task.taskStatus != Stopped) {   // still waiting for this one
-                return;
-            }
-        }
-        // The are all stopped.  Inform the authorities
-        [taskCtrl tasksAreIdled];
-        return;
-    }
-
-    if (rawDepthBuf) {
-        assert(rawDepthBuf.minDepth <= rawDepthBuf.maxDepth);
-        if (depthBuf.w != rawDepthBuf.w || depthBuf.h != rawDepthBuf.h) {
-            // cheap scaling: XXXX use the hardware
-            depthBuf.minDepth = rawDepthBuf.minDepth;
-            depthBuf.maxDepth = rawDepthBuf.maxDepth;
-            double yScale = (double)depthBuf.h/(double)rawDepthBuf.h;
-            double xScale = (double)depthBuf.w/(double)rawDepthBuf.w;
-            for (int x=0; x<depthBuf.w; x++) {
-                int sx = trunc(x/xScale);
-                assert(sx <= rawDepthBuf.w);
-                for (int y=0; y<depthBuf.h; y++) {
-                    int sy = trunc(y/yScale);
-                    assert(sy < rawDepthBuf.h);
-                    Distance d = rawDepthBuf.da[sy][sx];
-                    if (isnan(d) || d > depthBuf.maxDepth) {
-                        d = depthBuf.maxDepth;
-                    } else if (d < depthBuf.minDepth)
-                        d = depthBuf.minDepth;
-                    assert(d >= depthBuf.minDepth && d <= depthBuf.maxDepth);
-                    depthBuf.da[y][x] = d;   // XXXXXX died here during reconfiguration
-                }
-            }
-        }
-    }
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl idleTransforms];
-
-    UIImage *scaledImage;
-    if (srcPix.h != srcImage.size.height || srcPix.w != srcImage.size.width) {  // scale
-        UIGraphicsBeginImageContext(CGSizeMake(srcPix.w, srcPix.h));
-        [srcImage drawInRect:CGRectMake(0, 0, srcPix.w, srcPix.h)];
-        scaledImage = UIGraphicsGetImageFromCurrentImageContext();
-        UIGraphicsEndImageContext();
-    } else
-        scaledImage = srcImage;
-
-//#define SKIPTRANSFORMS  1
-#ifdef SKIPTRANSFORMS   // for debugging
-    dispatch_async(dispatch_get_main_queue(), ^{
-        for (Task *task in self->tasks) {
-            if (task.taskStatus == Running)
-                continue;
-            task.targetImageView.image = scaledImage;
-            [task.targetImageView setNeedsDisplay];
-        }
-     });
-    return;
-#endif
-
-    CGImageRef imageRef = [scaledImage CGImage];
-    NSUInteger width = CGImageGetWidth(imageRef);
-    NSUInteger height = CGImageGetHeight(imageRef);
-    NSUInteger bytesPerRow = CGImageGetBytesPerRow(imageRef);
-    bytesPerRow = width * sizeof(Pixel);    // previous value has un
-    NSUInteger bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    assert(srcPix.w == width);
-    assert(srcPix.h == height);
-    CGContextRef context = CGBitmapContextCreate(srcPix.pb, width, height,
-                                                 bitsPerComponent, bytesPerRow, colorSpace,
-                                                 BITMAP_OPTS);
-    CGContextDrawImage(context, CGRectMake(0, 0, width, height), imageRef);
-    CGColorSpaceRelease(colorSpace);
-    CGContextRelease(context);
-
-    if (imageFileHandle) {
-        NSString *line = [NSMutableString stringWithFormat:@"%lu %lu %d\n",
-                           (unsigned long)width, (unsigned long)height,
-                           rawDepthBuf ? 4 : 3];
-        [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-        for (int y=0; y < height; y++) {
-            for (int x=0; x < width; x++) {
-                NSString *d = rawDepthBuf ? [NSString stringWithFormat:@"%f", depthBuf.da[y][x]] : @"";
-                line = [NSString stringWithFormat:@"%d %d %d %@\n",
-                        srcPix.pa[y][x].r, srcPix.pa[y][x].g, srcPix.pa[y][x].b, d];
-                [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            }
-        }
-    }
-    
-    @synchronized (srcPix) {
-        for (Task *task in tasks) {
-            if (task.taskStatus == Running)
-                continue;
-            busyCount++;
-//            [task check];
-            [task executeTransformsFromPixBuf:srcPix
-                                        depth:(const DepthBuf *)depthBuf];
-            busyCount--;
-            assert(busyCount >= 0);
-        }
-    }
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl idleTransforms];
-}
 
 @end

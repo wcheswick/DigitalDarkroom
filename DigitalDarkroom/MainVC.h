@@ -12,6 +12,7 @@
 
 #import "ThumbView.h"
 #import "InputSource.h"
+#import "Frame.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -30,8 +31,7 @@ typedef enum {
 } DisplayOptions;
 
 @protocol videoSampleProcessorDelegate
-- (void) processVideoCapture:(UIImage *)capturedImage
-                       depth:(CVPixelBufferRef) depthPixelBufRef;
+- (void) processCaptureFrame:(Frame *)captureFrame;
 @end
 
 @interface MainVC : UIViewController

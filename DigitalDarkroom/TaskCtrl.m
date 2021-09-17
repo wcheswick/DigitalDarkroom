@@ -17,11 +17,11 @@
 
 @implementation TaskCtrl
 
-@synthesize mainVC;
 @synthesize transforms;
 @synthesize taskGroups;
 @synthesize reconfigurationNeeded;
 @synthesize layingOut;
+@synthesize sourceSize;     // size of incoming images.  Depth may be difference
 
 - (id)init {
     self = [super init];
@@ -31,6 +31,7 @@
         assert(taskGroups);
         reconfigurationNeeded = NO;
         layingOut = NO;
+        sourceSize = CGSizeZero;
     }
     return self;
 }
@@ -66,7 +67,7 @@
             return;
     }
     reconfigurationNeeded = NO;
-    [self->mainVC transformsIdle];
+    [mainVC transformsIdle];
 #ifdef OLD
     dispatch_async(dispatch_get_main_queue(), ^{
 #ifdef DEBUG_TASK_BUSY

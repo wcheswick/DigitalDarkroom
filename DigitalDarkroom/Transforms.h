@@ -14,10 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define A(im, x,y)  (Pixel *)((im).image + (x) + (y)*(im).bytes_per_row) // address of Pixel at x, y
 
-#define DEPTH_TRANSFORM_SECTION 0
-
-#define DEPTH_TRANSFORM (-1)
-#define NO_TRANSFORM    (-2)    // for indicies into transform array
+#define NO_TRANSFORM    (-1)    // for indicies into transform array
 
 #define SETRGBA(r,g,b,a)   (Pixel){b,g,r,a}
 #define SETRGB(r,g,b)   SETRGBA(r,g,b,Z)

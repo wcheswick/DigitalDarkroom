@@ -104,13 +104,10 @@ Pixel HSVtoRGB(HSVPixel hsv) {
 static
 HSVPixel RGBtoHSV(Pixel rgb) {
     HSVPixel hsv;
-
-    
     long rgbMin = MIN(MIN(rgb.r,rgb.g), rgb.b);
     long rgbMax = MAX(MAX(rgb.r,rgb.g), rgb.b);
 
     hsv.a = rgb.a;
-    
     hsv.v = rgbMax;
     if (hsv.v == 0) {
         hsv.h = 0;
@@ -151,7 +148,6 @@ static int dpi;
 @synthesize depthTransformCount;
 @synthesize debugTransforms;
 @synthesize transforms;
-
 
 - (id)init {
     self = [super init];
@@ -272,7 +268,8 @@ static int dpi;
 // if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
 // we use the a channel of our pixel buffers.
 
-void convolution(ChBuf *in, ChBuf *out,
+void
+convolution(ChBuf *in, ChBuf *out,
                  const float *kernel, const int kn, const BOOL normalize) {
     long W = in.w;
     long H = in.h;
@@ -462,8 +459,8 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform = [Transform areaTransform: @"Flat polar test"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(a);
         long sy = centerY + r*sin(a);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -475,15 +472,14 @@ mostCommonColorInHist(Hist_t *hists) {
 
     lastTransform = [Transform depthVis: @"HSV test"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame,
+                                           Frame *dstFrame,
                                            TransformInstance *instance) {
-        for (int i=0; i<dest.w*dest.h; i++) {
-            Pixel p = src.pb[i];
+        for (int i=0; i<dstFrame.pixBuf.size.width*dstFrame.pixBuf.size.height; i++) {
+            Pixel p = srcFrame.pixBuf.pb[i];
             HSVPixel hsv = RGBtoHSV(p);
-            Distance z = depthBuf.db[i];
-            dest.pb[i] = HSVtoRGB(hsv);
+//            Distance z = srcFrame.depthBuf.db[i];
+            dstFrame.pixBuf.pb[i] = HSVtoRGB(hsv);
         }
     }];
     [self addTransform:lastTransform];
@@ -491,19 +487,17 @@ mostCommonColorInHist(Hist_t *hists) {
     
     lastTransform = [Transform areaTransform: @"Sobel"
                                  description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = src.w;
-        long H = src.h;
-        for (int i=0; i<src.h*src.w; i++) {
-            chBuf0.cb[i] = LUM(src.pb[i]);
+        for (int i=0; i<srcFrame.pixBuf.size.height*srcFrame.pixBuf.size.width; i++) {
+            chBuf0.cb[i] = LUM(srcFrame.pixBuf.pb[i]);
         }
         // gerard's sobol, which is right
         sobel(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
+        for (int y=0; y<srcFrame.pixBuf.size.height; y++) {
+            for (int x=0; x<srcFrame.pixBuf.size.width; x++) {
                 channel d = chBuf1.ca[y][x];
-                dest.pa[y][x] = SETRGB(d,d,d);
+                dstFrame.pixBuf.pa[y][x] = SETRGB(d,d,d);
             }
         }
     }];
@@ -511,20 +505,17 @@ mostCommonColorInHist(Hist_t *hists) {
     
     lastTransform = [Transform areaTransform: @"Neg. Sobel"
                                  description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = src.w;
-        long H = src.h;
-        long N = W * H;
-        for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = LUM(src.pb[i]);
+        for (int i=0; i<srcFrame.pixBuf.size.height*srcFrame.pixBuf.size.width; i++) {
+            chBuf0.cb[i] = LUM(srcFrame.pixBuf.pb[i]);
         }
         // gerard's sobol, which is right
         sobel(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
+        for (int y=0; y<srcFrame.pixBuf.size.height; y++) {
+            for (int x=0; x<srcFrame.pixBuf.size.width; x++) {
                 channel d = Z - chBuf1.ca[y][x];
-                dest.pa[y][x] = SETRGB(d,d,d);
+                dstFrame.pixBuf.pa[y][x] = SETRGB(d,d,d);
             }
         }
     }];
@@ -533,25 +524,25 @@ mostCommonColorInHist(Hist_t *hists) {
     // channel-based
     lastTransform = [Transform areaTransform: @"Color\nSobel"
                                  description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long N = src.w * src.h;
+        long N = srcFrame.pixBuf.size.width * srcFrame.pixBuf.size.height;
         for (int i=0; i<N; i++) { // do the red channel
-            chBuf0.cb[i] = src.pb[i].r;
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].r;
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) {
-            dest.pb[i] = SETRGB(chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
-            chBuf0.cb[i] = src.pb[i].g;     // ... and get green
+            dstFrame.pixBuf.pb[i] = SETRGB(chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].g;     // ... and get green
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) { // do the red channel
-            dest.pb[i].g = chBuf1.cb[i];     // store green...
-            chBuf0.cb[i] = src.pb[i].b;     // ... and get blue
+            dstFrame.pixBuf.pb[i].g = chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].b;     // ... and get blue
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) { // do the red channel
-            dest.pb[i].b = chBuf1.cb[i];     // store blue
+            dstFrame.pixBuf.pb[i].b = chBuf1.cb[i];     // store blue
         }
     }];
     [self addTransform:lastTransform];
@@ -559,36 +550,36 @@ mostCommonColorInHist(Hist_t *hists) {
     // channel-based
     lastTransform = [Transform areaTransform: @"Neg. Color Sobel"
                                  description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long N = src.w * src.h;
+        long N = srcFrame.pixBuf.size.width * srcFrame.pixBuf.size.height;
         for (int i=0; i<N; i++) { // do the red channel
-            chBuf0.cb[i] = src.pb[i].r;
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].r;
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) {
-            dest.pb[i] = SETRGB(Z - chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
-            chBuf0.cb[i] = src.pb[i].g;     // ... and get green
+            dstFrame.pixBuf.pb[i] = SETRGB(Z - chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].g;     // ... and get green
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) { // do the red channel
-            dest.pb[i].g = Z - chBuf1.cb[i];     // store green...
-            chBuf0.cb[i] = src.pb[i].b;     // ... and get blue
+            dstFrame.pixBuf.pb[i].g = Z - chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].b;     // ... and get blue
         }
         sobel(chBuf0, chBuf1);
         for (int i=0; i<N; i++) { // do the red channel
-            dest.pb[i].b = Z - chBuf1.cb[i];     // store blue
+            dstFrame.pixBuf.pb[i].b = Z - chBuf1.cb[i];     // store blue
         }
     }];
     [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"conv. sobel filter "
                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-
-        for (int i=0; i<src.h*src.w; i++) {
-            chBuf0.cb[i] = LUM(src.pb[i]);
+        long N = srcFrame.pixBuf.size.width * srcFrame.pixBuf.size.height;
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = LUM(srcFrame.pixBuf.pb[i]);
         }
         const float Gx[] = {-1, 0, 1,
                             -2, 0, 2,
@@ -600,45 +591,45 @@ mostCommonColorInHist(Hist_t *hists) {
                             -1,-2,-1};
         convolution(chBuf1, chBuf0, Gy, 3, NO);
         
-        for (int i=0; i<src.h*src.w; i++) {
+        for (int i=0; i<N; i++) {
             int c = chBuf0.cb[i];
-            dest.pb[i] = SETRGB(c,c,c);
+            dstFrame.pixBuf.pb[i] = SETRGB(c,c,c);
         }
     }];
     [self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Focus"
                                   description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = src.w;
-        long H = src.h;
+        long W = srcFrame.pixBuf.size.width;
+        long H = srcFrame.pixBuf.size.height;
         long N = W * H;
         for (int i=0; i<N; i++) {           // red
-            chBuf0.cb[i] = src.pb[i].r;
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].r;
         }
         focus(chBuf0, chBuf1);
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
-                dest.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
+                dstFrame.pixBuf.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
             }
         }
         for (int i=0; i<N; i++) {           // green
-            chBuf0.cb[i] = src.pb[i].g;
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].g;
         }
         focus(chBuf0, chBuf1);
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
-                dest.pa[y][x].g = chBuf1.ca[y][x];
+                dstFrame.pixBuf.pa[y][x].g = chBuf1.ca[y][x];
             }
         }
         for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = src.pb[i].b;
+            chBuf0.cb[i] = srcFrame.pixBuf.pb[i].b;
         }
         focus(chBuf0, chBuf1);              // blue
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
-                dest.pa[y][x].b = chBuf1.ca[y][x];
+                dstFrame.pixBuf.pa[y][x].b = chBuf1.ca[y][x];
             }
         }
     }];
@@ -647,16 +638,16 @@ mostCommonColorInHist(Hist_t *hists) {
 #ifdef NOTDEF
     lastTransform = [Transform areaTransform: @"Null test"
                                   description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = src.w;
-        long H = src.h;
+        long W = srcFrame.pixBuf.w;
+        long H = srcFrame.pixBuf.h;
 //        long N = W * H;
         for (int y=0; y<H; y++) {
             for (int x=0; x<W; x++) {
-                channel r = src.pa[y][x].r;
-                channel g = src.pa[y][x].g;
-                channel b = src.pa[y][x].b;
+                channel r = srcFrame.pixBuf.pa[y][x].r;
+                channel g = srcFrame.pixBuf.pa[y][x].g;
+                channel b = srcFrame.pixBuf.pa[y][x].b;
                 dest.pa[y][x].r = r;
                 dest.pa[y][x].g = g;
                 dest.pa[y][x].b = b;
@@ -695,8 +686,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double newa = a + DEGRAD((float)instance.value);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(newa);
         long sy = centerY + r*sin(newa);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -716,8 +707,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double newa = a + ((float)instance.value/50.0)*r*(M_PI/180.0);
 //        double newa = a + DEGRAD((float)instance.value/100.0)((float)instance.value/100.0)*r*(M_PI/180.0);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(newa);
         long sy = centerY + r*sin(newa);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -758,11 +749,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a,
                                                TransformInstance *instance, int tX, int tY) {
-        double R = hypot(remapBuf.w,remapBuf.h);
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        double R = hypot(W, H);
         float zoomFactor = instance.value/10.0; // XXXX this is broken, I think
         double r1 = r*r/(R/zoomFactor);
-        int x = (int)remapBuf.w/2 + (int)(r1*cos(a));
-        int y = (int)remapBuf.h/2 + (int)(r1*sin(a));
+        int x = (int)W/2 + (int)(r1*cos(a));
+        int y = (int)H/2 + (int)(r1*sin(a));
         REMAP_TO(tX, tY, x, y);
     }];
     lastTransform.low = 10; // XXXXXX these are bogus
@@ -775,8 +768,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Cone projection"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         float maxR = MIN(centerX, centerY);
         double r1 = sqrt(r*maxR);
         long sx = centerX + (int)(r1*cos(a));
@@ -791,9 +786,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        int centerX = (int)remapBuf.w/2;
-        int centerY = (int)remapBuf.h/2;
-        float maxR = MIN(remapBuf.w-1, remapBuf.h-1)/2.0;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        float maxR = MIN(W-1, H-1)/2.0;
         float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
         float halfTheta = theta/2.0;
         
@@ -804,11 +801,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         // mirrored, to all the other pixels.
         
         // we fix out the remap ())or color) for each pixel
-        for (int yi=0; yi<remapBuf.h; yi++) {
+        for (int yi=0; yi<H; yi++) {
             // for computation, it is easier to thing of the top of the image
             // as y > 0.
-            int y = ((int)remapBuf.h - yi) - 1;
-            for (int x=0; x<remapBuf.w; x++) {
+            int y = ((int)H - yi) - 1;
+            for (int x=0; x<W; x++) {
                 float xc = x - centerX;
                 // we use standard cartesian angles, with y==0 on the bottom
                 float yc = y - centerY;
@@ -827,8 +824,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 //                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
                 int scx = r * cos(sourceTheta);
                 int scy = r * sin(sourceTheta);
-                int xs = centerX + scx;
-                int ys = centerY + scy;
+                long xs = centerX + scx;
+                long ys = centerY + scy;
                 UNSAFE_REMAP_TO(x, yi, xs, ys);
             }
         }
@@ -850,8 +847,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         //    return frame[CENTER_Y+(short)(r*cos(a))]
         //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
 
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         long sx = centerX + (r-(cos(a)/300.0)*sin(a));
         long sy = centerY + r*sin(a);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -864,8 +863,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Andrew"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
         int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -879,10 +880,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform = [Transform areaTransform: @"Paul"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         double x = r*cos(a);
         double y = r*sin(a);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
         long sx = centerX + r*sin((y*x)/4.0+a);
         long sy = centerY + r*cos(a);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -905,9 +908,11 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         // or
         //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
 
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         float p = instance.value/10.0;
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
         long sx = centerX + a*p;
         long sy = centerY + r*p;
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -935,8 +940,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
 
         float p = instance.value/10.0;
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
         long sx = centerX + ((r - sin(a))/300.0)*sin(a);
         long sy = centerY + cos(a);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -957,15 +964,15 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        size_t h = src.h;
-        size_t w = src.w;
+        size_t h = srcFrame.pixBuf.size.height;
+        size_t w = srcFrame.pixBuf.size.width;
 #define L chBuf0.ca
         assert(chBuf0.w == w && chBuf0.h == h);
         for (int y=1; y<h-1; y++)
             for (int x=1; x<w-1; x++)
-                L[y][x] = LUM(src.pa[y][x]);
+                L[y][x] = LUM(srcFrame.pixBuf.pa[y][x]);
 
         for (int y=1; y<h-1; y++) {
             for (int x=1; x<w-1; x++) {
@@ -981,21 +988,17 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     c = Z;
                 else
                     c = s;
-                dest.pa[y][x] = SETRGB(c,c,c);
+                dstFrame.pixBuf.pa[y][x] = SETRGB(c,c,c);
             }
         }
 #ifdef SHOW_GRID
-        for (int x = 0; x<dest.w; x += dpi) {
-            for (int y=0; y<40 && y < dest.h; y++)
-                dest.pa[y][x] = Red;
+        for (int x = 0; x<w; x += dpi) {
+            for (int y=0; y<40 && y < h; y++)
+                dstFrame.pixBuf.pa[y][x] = Red;
         }
 #endif
     }];
     [self addTransform:lastTransform];
-    
-#ifdef UNDEBUGGED
-#endif
-    
 }
 
 #define RGB_SPACE   ((float)((1<<24) - 1))
@@ -1005,7 +1008,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define MM_PER_IN   25.4
 #define CHES_EYESEP_MM  62
 #define EYESEP_PIX ((int)(CHES_EYESEP_MM*dpi/MM_PER_IN))
-#define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
+#define ZD(d)    (depthRange - ((d) - srcFrame.depthBuf.minDepth)/depthRange)
 //#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
 //#define FARAWAY separation(0)
 #define Z_TO_SEP_X(z)   round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z))
@@ -1020,29 +1023,31 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"SIRDS"
                             description: @"Random dot stereogram"
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
-        float mu = (float)instance.value/100.0;
-        float depthRange = depthBuf.maxDepth - depthBuf.minDepth;
-        BOOL darkPixel[depthBuf.w];
-        int same[depthBuf.w];
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
         
-        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
+        float mu = (float)instance.value/100.0;
+        float depthRange = srcFrame.depthBuf.maxDepth - srcFrame.depthBuf.minDepth;
+        assert(depthRange);
+        BOOL darkPixel[W];
+        int same[W];
+        
+        for (int y=0; y<H; y++) {    // convert scan lines independently
             int stereoSepX;
             int left, right;    // x values for left and right eyes
             
-            for (int x=0; x < depthBuf.w; x++ ) {  // link initial pixels with themselves
+            for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
                 same[x] = x;
             }
             
-            for (int x=0; x < depthBuf.w; x++ ) {
-                float z = 1.0 - (depthBuf.da[y][x] - depthBuf.minDepth)/depthRange;
+            for (int x=0; x < W; x++ ) {
+                float z = 1.0 - (srcFrame.depthBuf.da[y][x] - srcFrame.depthBuf.minDepth)/depthRange;
                 // z = 0 is max depth, 1.0 is vision plane.
                 assert(z >= 0 && z <= 1.0);
                 stereoSepX = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
-                if (src.w > 100) {
+                if (W > 100) {
                     NSLog(@"mu, z, EYESEP_PIX: %.3f %.3f  %d", mu, z, EYESEP_PIX);
                     NSLog(@"   sep X = %d", stereoSepX);
                     NSLog(@"sepx range: %.2f,  %.2f,  %.f2", Z_TO_SEP_X(0.0), Z_TO_SEP_X(z), Z_TO_SEP_X(1.0));
@@ -1052,32 +1057,33 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 assert(stereoSepX >= 0);
                 left = x - stereoSepX/2;
                 right = left + stereoSepX;   // pixels at left and right must be the same
-                if (left >= 0 && right < depthBuf.w) {
+                if (left >= 0 && right < W) {
                     int visible;    // first, perform hidden surface removal
                     int t = 1;      // We will check the points (x-t,y) and (x+t,y)
                     float zt;       //  Z-coord of ray at these two points
                     do {
-                        zt = ZD(depthBuf.da[y][x]) + 2*(2 - mu*ZD(depthBuf.da[y][x]))*t/(mu*EYESEP_PIX);
-                        BOOL inRange = (x-t >= 0) && (x+t < depthBuf.w);
-                        visible = inRange && ZD(depthBuf.da[y][x-t]) < zt && ZD(depthBuf.da[y][x+t]) < zt;  // false if obscured
+                        zt = ZD(srcFrame.depthBuf.da[y][x]) + 2*(2 - mu*ZD(srcFrame.depthBuf.da[y][x]))*t/(mu*EYESEP_PIX);
+                        BOOL inRange = (x-t >= 0) && (x+t < W);
+                        visible = inRange && ZD(srcFrame.depthBuf.da[y][x-t]) < zt &&
+                            ZD(srcFrame.depthBuf.da[y][x+t]) < zt;  // false if obscured
                         t++;
                     } while (visible && zt < 1);    // end of hidden surface removal
                     if (visible) {  // record that pixels at l and r are the same
-                        assert(left >= 0 && left < depthBuf.w);
+                        assert(left >= 0 && left < W);
                         int l = same[left];
-                        assert(l >= 0 && l < depthBuf.w);
+                        assert(l >= 0 && l < W);
                         while (l != left && l != right) {
                             if (l < right) {    // first, jiggle the pointers...
                                 left = l;       // until either same[left] == left
-                                assert(left >= 0 && left < depthBuf.w);
+                                assert(left >= 0 && left < srcFrame.depthBuf.size.width);
                                 l = same[left]; // .. or same[left == right
-                                assert(l >= 0 && l < depthBuf.w);
+                                assert(l >= 0 && l < srcFrame.depthBuf.size.width);
                             } else {
-                                assert(left >= 0 && left < depthBuf.w);
+                                assert(left >= 0 && left < W);
                                 same[left] = right;
                                 left = right;
                                 l = same[left];
-                                assert(l >= 0 && l < depthBuf.w);
+                                assert(l >= 0 && l < W);
                                 right = l;
                             }
                         }
@@ -1085,12 +1091,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     }
                 }
             }
-            for (long x=depthBuf.w-1; x>=0; x--)    { // set the pixels in the scan line
+            for (long x=W-1; x>=0; x--)    { // set the pixels in the scan line
                 if (same[x] == x)
                     darkPixel[x] = random()&1;  // free choice, do it randomly
                 else
                     darkPixel[x] = darkPixel[same[x]];  // constrained choice, obey constraint
-                dest.pa[y][x] = darkPixel[x] ? Black : White;
+                dstFrame.pixBuf.pa[y][x] = darkPixel[x] ? Black : White;
             }
         }
         
@@ -1098,8 +1104,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #ifdef notdef
 #define NW      10
 #define BOTTOM_Y   (5)
-        int lx = depthBuf.w/2 - FARAWAY/2 - NW/2;
-        int rx = depthBuf.w/2 + FARAWAY/2 - NW/2;
+        int lx = W/2 - FARAWAY/2 - NW/2;
+        int rx = W/2 + FARAWAY/2 - NW/2;
         for (int dy=0; dy<6; dy++) {
             for (int dx=0; dx<NW; dx++) {
                 dest.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
@@ -1120,15 +1126,15 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"Fog"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
-        float backgroundDepth = depthBuf.maxDepth;
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+        float backgroundDepth = srcFrame.depthBuf.maxDepth;
         float paramMaxDepth = instance.value/1000.0;
-        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > srcFrame.depthBuf.minDepth)
             backgroundDepth = paramMaxDepth;
-        float D = backgroundDepth - depthBuf.minDepth;
+        float D = backgroundDepth - srcFrame.depthBuf.minDepth;
         assert(D);
 #define FADE(d) (d)               // linear
 //#define FADE(d) ((d)*(d))           // quadratic
@@ -1137,24 +1143,24 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         // fading needs a number between 0 (closest) to 1 (farthest)
         float maxFade = FADE(D);
         Pixel background = LightGrey;
-        for (int i=0; i<dest.w*dest.h; i++) {
-            Pixel p = src.pb[i];
-            Distance d = depthBuf.db[i];
-            assert(d >= depthBuf.minDepth && d <= depthBuf.maxDepth);//did we get this right?
+        for (int i=0; i<W*H; i++) {
+            Pixel p = srcFrame.pixBuf.pb[i];
+            Distance d = srcFrame.depthBuf.db[i];
+            assert(d >= srcFrame.depthBuf.minDepth && d <= srcFrame.depthBuf.maxDepth);//did we get this right?
             if (d > backgroundDepth)
-                dest.pb[i] = background;
+                dstFrame.pixBuf.pb[i] = background;
             else {
-                float fradFrac = FADE(d - depthBuf.minDepth)/maxFade;
-                dest.pb[i] = CRGB(
+                float fradFrac = FADE(d - srcFrame.depthBuf.minDepth)/maxFade;
+                dstFrame.pixBuf.pb[i] = CRGB(
                                   (1.0 - fradFrac)*p.r + fradFrac*background.r,
                                   (1.0 - fradFrac)*p.g + fradFrac*background.g,
                                   (1.0 - fradFrac)*p.b + fradFrac*background.b);
             }
         }
 #ifdef SHOW_GRID
-        for (int x = 0; x<dest.w; x += dpi) {
-            for (int y=0; y<40 && y < dest.h; y++)
-                dest.pa[y][x] = Red;
+        for (int x = 0; x<W; x += dpi) {
+            for (int y=0; y<40 && y < H; y++)
+                dstFrame.pixBuf.pa[y][x] = Red;
         }
 #endif
     }];
@@ -1167,16 +1173,16 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"cm. contours"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
-        float backgroundDepth = depthBuf.maxDepth;
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+        float backgroundDepth = srcFrame.depthBuf.maxDepth;
         float paramMaxDepthMM = instance.value;
-        if (backgroundDepth > paramMaxDepthMM && backgroundDepth > depthBuf.minDepth)
+        if (backgroundDepth > paramMaxDepthMM && backgroundDepth > srcFrame.depthBuf.minDepth)
             backgroundDepth = paramMaxDepthMM;
-        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
-            int mm = round(depthBuf.db[i]*1000.0);
+        for (int i=0; i<H * W; i++) {
+            int mm = round(srcFrame.depthBuf.db[i]*1000.0);
             Pixel p;
             if (mm > paramMaxDepthMM)
                 p = White;
@@ -1187,8 +1193,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             else if (mm % 10 == 0)
                 p = Yellow;
             else
-                p = src.pb[i];
-            dest.pb[i] = p;
+                p = srcFrame.pixBuf.pb[i];
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
     lastTransform.hasParameters = YES;
@@ -1200,27 +1206,27 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
     lastTransform = [Transform depthVis: @"Encode depth"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
-        float backgroundDepth = depthBuf.maxDepth;
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+        float backgroundDepth = srcFrame.depthBuf.maxDepth;
         float paramMaxDepth = instance.value/1000.0;
-        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > srcFrame.depthBuf.minDepth)
             backgroundDepth = paramMaxDepth;
-        float D = backgroundDepth - depthBuf.minDepth;
+        float D = backgroundDepth - srcFrame.depthBuf.minDepth;
         assert(D);
 #ifdef OLD
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
 
-        float min = depthBuf.maxDepth;
-        float max = depthBuf.minDepth;
+        float min = srcFrame.depthBuf.maxDepth;
+        float max = srcFrame.depthBuf.minDepth;
 #define VSCALE  10.0
         float selectedMax = instance.value/VSCALE;
 #endif
-        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
-            Distance z = depthBuf.db[i];
+        for (int i=0; i<W * H; i++) {
+            Distance z = srcFrame.depthBuf.db[i];
             Pixel p;
 #ifdef OLD
             if (z < min)
@@ -1233,7 +1239,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 newMinDepth = z;
 #endif
 #ifdef HSV
-            float frac = (d - depthBuf.minDepth)/(selectedMax - depthBuf.minDepth);
+            float frac = (d - srcFrame.depthBuf.minDepth)/(selectedMax - srcFrame.depthBuf.minDepth);
             float hue = frac;
             float sat = 1.0;
             float bri = 1.0 - frac;
@@ -1243,12 +1249,12 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             [color getRed:&r green:&g blue:&b alpha:&a];
             p = CRGB(Z*r, Z*g, Z*b);
 #else
-            if (z < depthBuf.minDepth)
+            if (z < srcFrame.depthBuf.minDepth)
                 p = Red;
             else if (z >= D)
                 p = Black;
             else {
-                float frac = (z - depthBuf.minDepth)/(D - depthBuf.minDepth);
+                float frac = (z - srcFrame.depthBuf.minDepth)/(D - srcFrame.depthBuf.minDepth);
                 UInt32 cv = trunc(RGB_SPACE * frac);
                 p.b = cv % 256;
                 cv /= 256;
@@ -1259,7 +1265,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 p.a = Z;    // alpha on, not used at the moment
             }
 #endif
-            dest.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
     lastTransform.hasParameters = YES;
@@ -1277,18 +1283,18 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
-        
-        assert(depthBuf.minDepth > 0.0);    // no log of zero
-        float logMin = log(depthBuf.minDepth);
-        float logMax = log(depthBuf.maxDepth);
-        for (int i=0; i<depthBuf.w*depthBuf.h; i++) {
-            Distance d = depthBuf.db[i];
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+
+        assert(dstFrame.depthBuf.minDepth > 0.0);    // no log of zero
+        float logMin = log(srcFrame.depthBuf.minDepth);
+        float logMax = log(srcFrame.depthBuf.maxDepth);
+        for (int i=0; i<W * H; i++) {
+            Distance d = srcFrame.depthBuf.db[i];
             if (d > newMaxDepth)
                 newMaxDepth = d;
             if (d < newMinDepth)
@@ -1297,25 +1303,25 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             float frac = (v - logMin)/(logMax - logMin);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
-            dest.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
+        srcFrame.depthBuf.minDepth = newMinDepth;
+        srcFrame.depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.broken = NO;
     [self addTransform:lastTransform];
 
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
         float mincm = 10.0;
         float maxcm = mincm + 100.0;
         float depthcm = maxcm - mincm;
-        for (int i=0; i<depthBuf.h * depthBuf.w; i++) {
-            Distance d = depthBuf.db[i];
+        for (int i=0; i<H * W; i++) {
+            Distance d = srcFrame.depthBuf.db[i];
             Distance dcm = d * 100.0;    // distance in centimeters
             Pixel p;
             if (dcm < mincm) {
@@ -1336,7 +1342,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 [color getRed:&r green:&g blue:&b alpha:&a];
                 p = SETRGB(r*Z,g*Z,b*Z);
             }
-            dest.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
@@ -1347,17 +1353,17 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     
     lastTransform = [Transform depthVis: @"3D level visualization"
                             description: @""
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
         Distance newMinDepth = MAXFLOAT;
         Distance newMaxDepth = 0.0;
-        
-        for (int i=0; i< depthBuf.h * depthBuf.w; i++) {
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+
+        for (int i=0; i< H * W; i++) {
             Pixel p;
             channel c;
-            Distance z = depthBuf.db[i];
+            Distance z = srcFrame.depthBuf.db[i];
             if (z > newMaxDepth)
                 newMaxDepth = z;
             if (z < newMinDepth)
@@ -1365,9 +1371,9 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             
             // closest to farthest, even v is dark blue to light blue,
             // odd v is yellow to dark yellow
-            if (z >= depthBuf.maxDepth)
+            if (z >= srcFrame.depthBuf.maxDepth)
                 p = Black;
-            else if (instance.value <= depthBuf.minDepth)
+            else if (instance.value <= srcFrame.depthBuf.minDepth)
                 p = Green;
             else {
                 if (instance.value & 0x1) {  // odd luminance
@@ -1378,10 +1384,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     p = SETRGB(c,c,0);
                 }
             }
-            dest.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
-        depthBuf.minDepth = newMinDepth;
-        depthBuf.maxDepth = newMaxDepth;
+        dstFrame.depthBuf.minDepth = newMinDepth;
+        dstFrame.depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
@@ -1394,38 +1400,38 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define PDOT    0.2
     lastTransform = [Transform depthVis: @"Anaglyph"
                             description: @"Complementary color anaglyph"
-                               depthVis: ^(const PixBuf *src,
-                                           PixBuf *dest,
-                                           const DepthBuf *depthBuf,
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame,
                                            TransformInstance *instance) {
-        float backgroundDepth = depthBuf.maxDepth;
+        int W = srcFrame.depthBuf.size.width;
+        int H = srcFrame.depthBuf.size.height;
+        float backgroundDepth = srcFrame.depthBuf.maxDepth;
         float paramMaxDepth = instance.value/1000.0;
-        if (backgroundDepth > paramMaxDepth && backgroundDepth > depthBuf.minDepth)
+        if (backgroundDepth > paramMaxDepth && backgroundDepth > srcFrame.depthBuf.minDepth)
             backgroundDepth = paramMaxDepth;
-        float D = backgroundDepth - depthBuf.minDepth;
+        float D = backgroundDepth - srcFrame.depthBuf.minDepth;
         assert(D);
-        for (int i=0; i<dest.w*dest.h; i++)
-            if (depthBuf.db[i] > D)
-                dest.pb[i] = White;
+        for (int i=0; i<W*H; i++)
+            if (srcFrame.depthBuf.db[i] > D)
+                dstFrame.pixBuf.pb[i] = White;
             else
-                dest.pb[i] = src.pb[i];     // was White;
+                dstFrame.pixBuf.pb[i] = srcFrame.pixBuf.pb[i];     // was White;
 
-        for (int y=0; y<depthBuf.h; y++) {    // convert scan lines independently
-            for (int x=0; x<depthBuf.w; x++) {
-                float z = depthBuf.da[y][x];
+        for (int y=0; y<H; y++) {    // convert scan lines independently
+            for (int x=0; x<W; x++) {
+                float z = srcFrame.depthBuf.da[y][x];
                 float r = (rand() % 100) / 100.0;
                 if (r > PDOT) {
-                    dest.pa[y][x] = src.pa[y][x];
+                    dstFrame.pixBuf.pa[y][x] = srcFrame.pixBuf.pa[y][x];
                     continue;
                 }
                 
-                float sep = (EYE_SEP/2.0) * ((depthBuf.maxDepth - z)/depthBuf.maxDepth);
+                float sep = (EYE_SEP/2.0) * ((srcFrame.depthBuf.maxDepth - z)/srcFrame.depthBuf.maxDepth);
                 int leftX = x - sep;
                 int rightX = x + sep;
-                if (leftX < 0 || rightX >= depthBuf.w)
+                if (leftX < 0 || rightX >= W)
                     continue;
-                dest.pa[y][leftX] = Cyan;
-                dest.pa[y][rightX] = Red;
+                dstFrame.pixBuf.pa[y][leftX] = Cyan;
+                dstFrame.pixBuf.pa[y][rightX] = Red;
             }
         }
     }];
@@ -1456,20 +1462,22 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 - (void) addPointTransforms {
     lastTransform = [Transform colorTransform: @"Negative"
                                  description: @""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(Z-p.r, Z-p.g, Z-p.b);
         }
     }];
     [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Solarize"
                                  description: @"Simulate extreme overexposure"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r < Z/2 ? p.r : Z-p.r,
                                    p.g < Z/2 ? p.g : Z-p.g,
                                    p.b < Z/2 ? p.b : Z-p.r);
         }
@@ -1478,10 +1486,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Red"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r,0,0);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r,0,0);
         }
         return ;
     }];
@@ -1489,10 +1498,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Green"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(0,p.g,0);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(0,p.g,0);
         }
         return ;
     }];
@@ -1500,22 +1510,23 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform:@"Blue"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(0,0,p.b);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(0,0,p.b);
         }
         return ;
     }];
     [self addTransform:lastTransform];
-
     
     lastTransform = [Transform colorTransform:@"No blue"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r,p.g,0);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r,p.g,0);
         }
         return ;
     }];
@@ -1523,10 +1534,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform:@"No green"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r,0,p.b);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r,0,p.b);
         }
         return ;
     }];
@@ -1534,10 +1546,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform:@"No red"
                                   description:@""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(0,p.g,p.b);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(0,p.g,p.b);
         }
         return ;
     }];
@@ -1545,32 +1558,35 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform: @"No color"
                                  description: @"Convert to brightness"
-                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                               inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
        for (int i=0; i<n; i++) {
-           channel c = LUM(buf[i]);
-           buf[i] = SETRGB(c,c,c);
+           channel c = LUM(frame.pixBuf.pb[i]);
+           frame.pixBuf.pb[i] = SETRGB(c,c,c);
        }
     }];
     [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"Colorize"
                                  description: @""
-                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                               inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
        for (int i=0; i<n; i++) {
-           Pixel p = buf[i];
+           Pixel p = frame.pixBuf.pb[i];
            channel pw = (((p.r>>3)^(p.g>>3)^(p.b>>3)) + (p.r>>3) + (p.g>>3) + (p.b>>3))&(Z >> 3);
-           buf[i] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
+           frame.pixBuf.pb[i] = SETRGB(rl[pw]<<3, gl[pw]<<3, bl[pw]<<3);
        }
     }];
     [self addTransform:lastTransform];
 
     lastTransform = [Transform colorTransform: @"Truncate colors"
                                  description: @""
-                               inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                               inPlacePtFunc: ^(Frame *frame, int v) {
         channel mask = ((1<<v) - 1) << (8 - v);
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-           Pixel p = buf[i];
-            buf[i] = SETRGB(p.r&mask, p.g&mask, p.b&mask);
+           Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r&mask, p.g&mask, p.b&mask);
        }
     }];
     lastTransform.low = 1; lastTransform.value = 2; lastTransform.high = 7;
@@ -1580,10 +1596,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform: @"Brighten"
                                   description: @""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.r+(Z-p.r)/8,
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.r+(Z-p.r)/8,
                             p.g+(Z-p.g)/8,
                             p.b+(Z-p.b)/8);
         }
@@ -1592,10 +1609,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     
     lastTransform = [Transform colorTransform: @"High contrast"
                                   description: @""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(CLIP((p.r-HALF_Z)*2+HALF_Z),
                             CLIP((p.g-HALF_Z)*2+HALF_Z),
                             CLIP((p.b-HALF_Z)*2+HALF_Z));
         }
@@ -1604,17 +1622,19 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform colorTransform: @"Swap colors"
                                   description: @"r→g, g→b, b→r"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
-            buf[i] = SETRGB(p.g, p.b, p.r);
+            Pixel p = frame.pixBuf.pb[i];
+            frame.pixBuf.pb[i] = SETRGB(p.g, p.b, p.r);
         }
     }];
     [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Auto contrast"
                                   description: @""
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int n = frame.pixBuf.size.width * frame.pixBuf.size.height;
         u_long ps;
         u_long hist[Z+1];
         float map[Z+1];
@@ -1624,7 +1644,7 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             map[i] = 0.0;
         }
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
+            Pixel p = frame.pixBuf.pb[i];
             hist[LUM(p)]++;
         }
         ps = 0;
@@ -1633,13 +1653,13 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             ps += hist[i];
         }
         for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
+            Pixel p = frame.pixBuf.pb[i];
             channel l = LUM(p);
             float a = (map[l] - l)/(float)Z;
             int r = p.r + (a*(Z-p.r));
             int g = p.g + (a*(Z-p.g));
             int b = p.b + (a*(Z-p.b));
-            buf[i] = CRGB(r,g,b);
+            frame.pixBuf.pb[i] = CRGB(r,g,b);
         }
     }];
     [self addTransform:lastTransform];
@@ -1650,9 +1670,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Mirror"
                                   description: @"Reflect the image"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x, y, remapBuf.w - x - 1, y);
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
+                REMAP_TO(x, y, remapBuf.size.width - x - 1, y);
             }
         }
     }];
@@ -1661,9 +1681,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Flip"
                                   description: @"vertical reflection"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
-                REMAP_TO(x, y, x, remapBuf.h - y - 1);
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
+                REMAP_TO(x, y, x, remapBuf.size.width - y - 1);
             }
         }
     }];
@@ -1672,9 +1692,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Horizontal shift"
                                   description: @"shift left/right"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long xPixelShift = remapBuf.w * (instance.value/100.0);
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
+        long xPixelShift = remapBuf.size.width * (instance.value/100.0);
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
                 long sx = x - xPixelShift;
                 if (REMAPBUF_IN_RANGE(sx, y))
                     REMAP_TO(x, y, sx, y);
@@ -1693,9 +1713,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Vertical shift"
                                   description: @"shift up/down"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long yPixelShift = remapBuf.h * (instance.value/100.0);
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
+        long yPixelShift = remapBuf.size.height * (instance.value/100.0);
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
                 long sy = y + yPixelShift;
                 if (REMAPBUF_IN_RANGE(x, sy))
                     REMAP_TO(x, y, x, sy);
@@ -1714,11 +1734,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"O no!"
                                  description: @"Reflect the right half of the screen on the left"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long centerX = remapBuf.w/2;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
+        long centerX = remapBuf.size.width/2;
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
                 if (x < centerX)
-                    REMAP_TO(x, y, remapBuf.w - x - 1, y);
+                    REMAP_TO(x, y, remapBuf.size.width - x - 1, y);
                 else
                     REMAP_TO(x, y, x, y);
             }
@@ -1730,10 +1750,10 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                  description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         float zoom = instance.value;
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
                 long sx = centerX + (x-centerX)/zoom;
                 long sy = centerY + (y-centerY)/zoom;
                 REMAP_TO(x,y, sx,sy);
@@ -1754,15 +1774,15 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                  description: @"Through wavy glass"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         int cpp = instance.value;   // pixels per cycle
-        int ncyc = (int)remapBuf.w / cpp;
-        for (int y=0; y<remapBuf.h; y++) { // why is this loop needed?
-            for (int x=0; x<remapBuf.w; x++) {
+        int ncyc = (int)remapBuf.size.width / cpp;
+        for (int y=0; y<remapBuf.size.height; y++) { // why is this loop needed?
+            for (int x=0; x<remapBuf.size.width; x++) {
                 REMAP_TO(x,y, x,y);
             }
         }
-        for (int y=0; y<remapBuf.h; y++) {  // XX thumbnail not very wavy
-            for (int x=0; x<remapBuf.w; x++) {
-                int dx = (int)(ncyc*sin(cpp*x*2*M_PI/remapBuf.w));
+        for (int y=0; y<remapBuf.size.height; y++) {  // XX thumbnail not very wavy
+            for (int x=0; x<remapBuf.size.width; x++) {
+                int dx = (int)(ncyc*sin(cpp*x*2*M_PI/remapBuf.size.width));
                     REMAP_TO(x,y, x+dx,y);
             }
         }
@@ -1778,8 +1798,8 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                                   description: @"Giant pixels"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
         int pixSize = instance.value;
-        for (int y=0; y<remapBuf.h; y++) {
-            for (int x=0; x<remapBuf.w; x++) {
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<remapBuf.size.width; x++) {
                 REMAP_TO(x, y, (x/pixSize)*pixSize, (y/pixSize)*pixSize);
             }
         }
@@ -1794,35 +1814,35 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Terry's kite"
                                  description: @"Designed by an 8-year old"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        assert(remapBuf.w > 0 && remapBuf.h > 0);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
-//        NSLog(@" kite %zu x %zu", remapBuf.w, remapBuf.h);
-        for (int y=0; y<remapBuf.h; y++) {
+        assert(remapBuf.size.width > 0 && remapBuf.size.height > 0);
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
+//        NSLog(@" kite %zu x %zu", remapBuf.size.width, remapBuf.size.height);
+        for (int y=0; y<remapBuf.size.height; y++) {
             size_t ndots;
             
             if (y <= centerY)
-                ndots = (y*(remapBuf.w-1))/remapBuf.h;
+                ndots = (y*(remapBuf.size.width-1))/remapBuf.size.height;
             else
-                ndots = ((remapBuf.h-y-1)*(remapBuf.w))/remapBuf.h;
+                ndots = ((remapBuf.size.height-y-1)*(remapBuf.size.width))/remapBuf.size.height;
             
 //            NSLog(@" kite %d, %zu", y, ndots);
 
-            assert(y>= 0 && y < remapBuf.h);
+            assert(y>= 0 && y < remapBuf.size.height);
             REMAP_TO(centerX,y, centerX, y);
             REMAP_TO(centerX,y, centerX, y);
             REMAP_COLOR(0,y, Remap_White);
             
             for (int x=1; x<=ndots; x++) {
                 size_t dist = (x*(centerX-1))/ndots;
-                assert(centerX - dist >= 0 && centerX - dist < remapBuf.w);
-                assert(centerX + dist >= 0 && centerX + dist < remapBuf.w);
+                assert(centerX - dist >= 0 && centerX - dist < remapBuf.size.width);
+                assert(centerX + dist >= 0 && centerX + dist < remapBuf.size.width);
                 REMAP_TO(centerX+x,y, centerX + dist,y);
                 REMAP_TO(centerX-x,y, centerX - dist,y);
             }
             for (size_t x=ndots; x<centerX; x++) {
-                assert(centerX - x >= 0 && centerX - x < remapBuf.w);
-                assert(centerX + x >= 0 && centerX + x < remapBuf.w);
+                assert(centerX - x >= 0 && centerX - x < remapBuf.size.width);
+                assert(centerX + x >= 0 && centerX + x < remapBuf.size.width);
                 REMAP_COLOR(centerX+x,y, Remap_White);
                 REMAP_COLOR(centerX-x,y, Remap_White);
              }
@@ -1838,13 +1858,13 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform = [Transform areaTransform: @"Cylinder"
                                   description: @""
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long centerX = remapBuf.w/2;
-        for (int y=0; y<remapBuf.h; y++) {
+        long centerX = remapBuf.size.width/2;
+        for (int y=0; y<remapBuf.size.height; y++) {
             for (int x=0; x<=centerX; x++) {
                 int fromX = centerX*sin((M_PI/2.0)*x/centerX);
-                assert(fromX >= 0 && fromX < remapBuf.w);
+                assert(fromX >= 0 && fromX < remapBuf.size.width);
                 REMAP_TO(x,y, fromX, y);
-                REMAP_TO(remapBuf.w-1-x,y, remapBuf.w-1-fromX, y);
+                REMAP_TO(remapBuf.size.width-1-x,y, remapBuf.size.width-1-fromX, y);
             }
         }
     }];
@@ -1852,11 +1872,11 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 
     lastTransform = [Transform areaTransform: @"Tin Type"
                                  description: @"Edge detection"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         Pixel p = {0,0,0,Z};
-        size_t h = src.h;
-        size_t w = src.w;
+        size_t h = srcFrame.pixBuf.size.height;
+        size_t w = srcFrame.pixBuf.size.width;
 
         for (int y=0; y<h; y++) {
             int x;
@@ -1865,18 +1885,18 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                 int r, g, b;
                 long xin = (x+2) >= w ? w - 1 : x+2;
                 long yin = (y+2) >= h ? h - 1 : y+2;
-                pin = src.pa[yin][xin];
-                r = src.pa[y][x].r + Z/2 - pin.r;
-                g = src.pa[y][x].g + Z/2 - pin.g;
-                b = src.pa[y][x].b + Z/2 - pin.b;
+                pin = srcFrame.pixBuf.pa[yin][xin];
+                r = srcFrame.pixBuf.pa[y][x].r + Z/2 - pin.r;
+                g = srcFrame.pixBuf.pa[y][x].g + Z/2 - pin.g;
+                b = srcFrame.pixBuf.pa[y][x].b + Z/2 - pin.b;
                 p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
-                dest.pa[y][x] = p;
+                dstFrame.pixBuf.pa[y][x] = p;
             }
-            dest.pa[y][x-3] = Grey;
-            dest.pa[y][x-2] = Grey;
-            dest.pa[y][x-1] = Grey;
-            dest.pa[y][x  ] = Grey;
-            dest.pa[y][x+1] = Grey;
+            dstFrame.pixBuf.pa[y][x-3] = Grey;
+            dstFrame.pixBuf.pa[y][x-2] = Grey;
+            dstFrame.pixBuf.pa[y][x-1] = Grey;
+            dstFrame.pixBuf.pa[y][x  ] = Grey;
+            dstFrame.pixBuf.pa[y][x+1] = Grey;
         }
     }];
     [self addTransform:lastTransform];
@@ -1884,14 +1904,14 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     // this destroys src
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                  description: @"Tom Duff's logo transform"
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        size_t h = src.h;
-        size_t w = src.w;
+        size_t h = srcFrame.pixBuf.size.height;
+        size_t w = srcFrame.pixBuf.size.width;
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = LUM(src.pa[y][x]);
-                src.pa[y][x] = SETRGB(c,c,c);
+                channel c = LUM(srcFrame.pixBuf.pa[y][x]);
+                srcFrame.pixBuf.pa[y][x] = SETRGB(c,c,c);
             }
         }
         
@@ -1906,18 +1926,18 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             for (int x=0; x < w; x++) {
                 c=0;
                 for(y0=0; y0<hgt; y0++)
-                c += src.pa[y+y0][x].r;
+                c += srcFrame.pixBuf.pa[y+y0][x].r;
                 y0 = y+(hgt-1)/2;
                 y1 = y+(hgt-1-(hgt-1)/2);
                 for (; y0 >= y; --y0, ++y1)
-                c = stripe(src.pa, x, y0, y1, c);
+                c = stripe(srcFrame.pixBuf.pa, x, y0, y1, c);
             }
         }
         
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = src.pa[y][x].r;
-                dest.pa[y][x] = SETRGB(c, c, c);
+                channel c = srcFrame.pixBuf.pa[y][x].r;
+                dstFrame.pixBuf.pa[y][x] = SETRGB(c, c, c);
             }
         }
     }];
@@ -1925,7 +1945,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     lastTransform.hasParameters = YES;
     lastTransform.paramName = @"Band thickness";
     [self addTransform:lastTransform];
-
 }
 
 
@@ -2010,52 +2029,52 @@ irand(int i) {
      */
     lastTransform = [Transform areaTransform: @"Oil paint"
                                  description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         int x, y;
         int oilD = 1 << instance.value; // powers of two
         Hist_t hists;
 
-        long W = src.w;
-        long H = src.h;
+        long W = srcFrame.pixBuf.size.width;
+        long H = srcFrame.pixBuf.size.height;
 
         // set the border
         for (y=0; y<H; y++) {
             for (x=0; x<oilD; x++) {
-                dest.pa[y][x] = dest.pa[y][W - x - 1] = White;
+                dstFrame.pixBuf.pa[y][x] = dstFrame.pixBuf.pa[y][W - x - 1] = White;
             }
             if (y < oilD || y > H - oilD)
                 for (int x=0; x < W; x++)
-                    dest.pa[y][x] = White;
+                    dstFrame.pixBuf.pa[y][x] = White;
         }
         
         x = y = oilD;   // start in the upper left corner
         BOOL goingRight = YES;
         memset(&hists, 0, sizeof(hists));   // clear the histograms
-        setHistAround(src.pa, x, y, oilD, &hists);
+        setHistAround(srcFrame.pixBuf.pa, x, y, oilD, &hists);
         do {
-            dest.pa[y][x] = mostCommonColorInHist(&hists);
+            dstFrame.pixBuf.pa[y][x] = mostCommonColorInHist(&hists);
             if (goingRight) {
                 if (x + oilD - 1 < W) {
                     x++;
-                    moveHistRight(src.pa, x, y, oilD, &hists);
+                    moveHistRight(srcFrame.pixBuf.pa, x, y, oilD, &hists);
                 } else {
                     // go down one pixel and change directions
                     y++;
                     if (y + oilD == H)
                         break;  // hit the bottom
                     goingRight = NO;
-                    moveHistDown(src.pa, x, y, oilD, &hists);
+                    moveHistDown(srcFrame.pixBuf.pa, x, y, oilD, &hists);
                 }
             } else {    // going left
                 if (x > oilD) {
                     x--;
-                    moveHistLeft(src.pa, x, y, oilD, &hists);
+                    moveHistLeft(srcFrame.pixBuf.pa, x, y, oilD, &hists);
                 } else {
                     y++;
                     if (y + oilD == H)
                         break;  // hit the bottom
-                    moveHistDown(src.pa, x, y, oilD, &hists);
+                    moveHistDown(srcFrame.pixBuf.pa, x, y, oilD, &hists);
                     goingRight = YES;
                 }}
         } while (1);
@@ -2071,8 +2090,8 @@ irand(int i) {
         for (y=oilD; y<H-oilD; y++) {
             for (x=oilD; x<W-oilD; x++) {
                 memset(&hists, 0, sizeof(hists));   // clear the histograms
-                setHistAround(src.pa, x, y, oilD, &hists);
-                dest.pa[y][x] = mostCommonColorAround(src.pa, x, y, oilD, &hists);
+                setHistAround(srcFrame.pixBuf.pa, x, y, oilD, &hists);
+                dstFrame.pixBuf.pa[y][x] = mostCommonColorAround(srcFrame.pixBuf.pa, x, y, oilD, &hists);
             }
         }
 #endif
@@ -2086,12 +2105,12 @@ irand(int i) {
     
     lastTransform = [Transform areaTransform: @"Charcoal sketch"
                                  description: @""
-                                areaFunction:^(PixBuf *src, PixBuf *dest,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         // monochrome sobel...
-        long N = src.w * src.h;
+        long N = srcFrame.pixBuf.size.width * srcFrame.pixBuf.size.height;
         for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = LUM(src.pb[i]);
+            chBuf0.cb[i] = LUM(srcFrame.pixBuf.pb[i]);
         }
         // gerard's sobol, which is right
         sobel(chBuf0, chBuf1);
@@ -2103,33 +2122,34 @@ irand(int i) {
             channel c = chBuf1.cb[i];
             channel nc = Z - CLIP((c-HALF_Z)*2+HALF_Z);
             Pixel p = SETRGB(nc, nc, nc);
-            dest.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
     [self addTransform:lastTransform];
     
     lastTransform = [Transform colorTransform: @"Warhol"
                                   description: @"cartoon colors"
-                                inPlacePtFunc: ^(Pixel *buf, size_t n, int v) {
+                                inPlacePtFunc: ^(Frame *frame, int v) {
+        int N = frame.pixBuf.size.height * frame.pixBuf.size.width;
         int ave_r=0, ave_g=0, ave_b=0;
         
-        for (int i=0; i<n; i++) {
-            Pixel p = buf[i];
+        for (int i=0; i<N; i++) {
+            Pixel p = frame.pixBuf.pb[i];
             ave_r += p.r;
             ave_g += p.g;
             ave_b += p.b;
         }
         
-        ave_r /= n;
-        ave_g /= n;
-        ave_b /= n;
+        ave_r /= N;
+        ave_g /= N;
+        ave_b /= N;
         
-        for (int i=0; i<n; i++) {
+        for (int i=0; i<N; i++) {
             Pixel p = {0,0,0,Z};
-            p.r = (buf[i].r >= ave_r) ? Z : 0;
-            p.g = (buf[i].g >= ave_g) ? Z : 0;
-            p.b = (buf[i].b >= ave_b) ? Z : 0;
-            buf[i] = p;
+            p.r = (frame.pixBuf.pb[i].r >= ave_r) ? Z : 0;
+            p.g = (frame.pixBuf.pb[i].g >= ave_g) ? Z : 0;
+            p.b = (frame.pixBuf.pb[i].b >= ave_b) ? Z : 0;
+            frame.pixBuf.pb[i] = p;
         }
     }];
     [self addTransform:lastTransform];
@@ -2140,13 +2160,13 @@ irand(int i) {
         pixPerSide = instance.value;
         dxToBlockCenter = ((int)(pixPerSide*sqrt(0.75)));
         
-        for (int x=0; x<remapBuf.w; x++) {
-            for (int y=0; y<remapBuf.h; y++)
+        for (int x=0; x<remapBuf.size.width; x++) {
+            for (int y=0; y<remapBuf.size.height; y++)
                 REMAP_COLOR(x, y,Remap_White);
         }
 
-        int nxBlocks = (((int)remapBuf.w/(2*dxToBlockCenter)) + 2);
-        int nyBlocks = (int)((remapBuf.h/(3*pixPerSide/2)) + 2);
+        int nxBlocks = (((int)remapBuf.size.width/(2*dxToBlockCenter)) + 2);
+        int nyBlocks = (int)((remapBuf.size.height/(3*pixPerSide/2)) + 2);
         
         struct block_list {
             int    x,y;    // the location of the lower left corner
@@ -2205,13 +2225,13 @@ irand(int i) {
                     int ul = (ll + 1 + dir) % 4;
 #endif
                     
-                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)remapBuf.w;
-                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)remapBuf.w;
-                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)remapBuf.h;
-                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)remapBuf.h;
+                    dxx = (CORNERS[lr].x - CORNERS[ll].x)/(float)remapBuf.size.width;
+                    dxy = (CORNERS[lr].y - CORNERS[ll].y)/(float)remapBuf.size.width;
+                    dyx = (CORNERS[ul].x - CORNERS[ll].x)/(float)remapBuf.size.height;
+                    dyy = (CORNERS[ul].y - CORNERS[ll].y)/(float)remapBuf.size.height;
                     
-                    for (int y=0; y<remapBuf.h; y++) {    // we could actually skip some of these
-                        for (int x=0; x<remapBuf.w; x++)    {
+                    for (int y=0; y<remapBuf.size.height; y++) {    // we could actually skip some of these
+                        for (int x=0; x<remapBuf.size.width; x++)    {
                             int nx = CORNERS[ll].x + y*dyx + x*dxx;
                             int ny = CORNERS[ll].y + y*dyy + x*dxy;
                             if (IS_IN_REMAP(nx, ny, remapBuf))
@@ -2233,8 +2253,8 @@ irand(int i) {
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
         double newa = a + (r/3.0)*(M_PI/180.0);
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(newa);
         long sy = centerY + r*sin(newa);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -2247,8 +2267,8 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Edvard Munch #2"    // old Ken twist
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(a);
         long sy = centerY + r*sin(a + r/30.0);
         if (REMAPBUF_IN_RANGE(sx, sy))
@@ -2261,8 +2281,8 @@ irand(int i) {
     lastTransform = [Transform areaTransform: @"Dali"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        long centerX = remapBuf.w/2;
-        long centerY = remapBuf.h/2;
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
         long sx = centerX + r*cos(a);
         long sy = centerY + r*sin(a);
         sx = centerX + (r*cos(a + (sy*sx/(16*17000.0))));

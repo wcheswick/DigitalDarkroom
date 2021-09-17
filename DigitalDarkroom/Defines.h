@@ -29,7 +29,11 @@
 #define UNICODE_PAUSE   @"\u23F8"   // two bars
 #define UNICODE_PLAY    @"\u25B6"   // play triangle
 
+#define BITMAP_OPTS kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
+
 #define USED(x) ((void)(x)) // to suppress "variable unused" messages
+
+#define SAME_SIZE(s1, s2)   ((s1).width == (s2).width && (s1).height == (s2).height)
 
 typedef uint8_t channel;
 

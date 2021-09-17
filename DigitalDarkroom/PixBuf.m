@@ -16,18 +16,17 @@
 
 @implementation PixBuf
 
-@synthesize w, h;
+@synthesize size;
 @synthesize pa, pb;
 @synthesize buffer;
 
 - (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
-        self.w = s.width;
-        self.h = s.height;
-        size_t rowSize = sizeof(Pixel) * w;
-        size_t arraySize = sizeof(Pixel *) * h;
-        buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * h];
+        self.size = s;
+        size_t rowSize = sizeof(Pixel) * size.width;
+        size_t arraySize = sizeof(Pixel *) * size.height;
+        buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * size.height];
         assert(buffer);
         pa = (PixelArray_t)buffer.bytes;
         pb = (Pixel *)buffer.bytes + arraySize;
@@ -35,9 +34,9 @@
         // point rows pointer to appropriate location in 2D array
 
         Pixel **prp = pa;
-        for (int y = 0; y < h; y++) {
+        for (int y = 0; y < size.height; y++) {
             *prp++ = rowPtr;
-            rowPtr += w;
+            rowPtr += (int)size.width;
         }
 #ifdef EARLYDEBUG
         size_t bytes = (void *)rowPtr - (void *)pb;
@@ -62,14 +61,14 @@
     //    NSLog(@"&pb[0]   = %p", &pb[0]);
 
     size_t bufferLen = buffer.length;
-    void *bufferEnd = &pb[w*h];
+    void *bufferEnd = &pb[(int)(size.height * size.width)];
     assert(buffer.length >= (bufferEnd - (void *)pb));
     // troll for access errors:
     assert((void *)pb >= buffer.bytes);
     assert((void *)pb < buffer.bytes + bufferLen);
 
     // is our pixel buffer addressable?
-    for (int i=0; i<h * w; i++) {
+    for (int i=0; i<size.height * size.width; i++) {
         assert((void *)&pb[i] < bufferEnd);
         Pixel p = pb[i];
         USED(p);
@@ -77,23 +76,23 @@
     
     // are the row arrays in range? First, the location of each row array pointer.
     // This array is at the beginning of our memory block, before the pixel buffer.
-    for (int y=0; y<h; y++) {
+    for (int y=0; y<size.height; y++) {
         assert((void *)&pa[y] >= buffer.bytes);
         assert((void *)&pa[y] < (void *)pb);
     }
     
     // do their row pointers fall into the pixel buffer area?
-    for (int y=0; y<h; y++) {
+    for (int y=0; y<size.height; y++) {
         assert((void *)pa[y] >= (void *)pb);
         assert((void *)pa[y] < bufferEnd);
     }
     
-    for (int y=0; y<h; y++) {
-        for (int x=0; x<w; x++) {
+    for (int y=0; y<size.height; y++) {
+        for (int x=0; x<size.width; x++) {
             void *pixAddr = (void *)&pa[y][x];
             assert(pixAddr >= (void *)pb);
             assert(pixAddr < bufferEnd);
-            long pixIndex = (void *)pb + w * h * sizeof(Pixel) - pixAddr;
+            long pixIndex = (void *)(pb) + (int)(size.width * size.height) * sizeof(Pixel) - pixAddr;
             USED(pixIndex);
             Pixel p = pa[y][x];
             USED(p);
@@ -102,8 +101,8 @@
     
     // contiguous and consistent addressing?
     int i=0;
-    for (int y=0; y<h; y++) {
-        for (int x=0; x<w; x++) {
+    for (int y=0; y<size.height; y++) {
+        for (int x=0; x<size.width; x++) {
             void *pixAddr = (void *)&pa[y][x];
             void *bAddr = (void *)&pb[i++];
             assert(pixAddr == bAddr);
@@ -113,32 +112,47 @@
 
 - (void) copyPixelsTo:(PixBuf *) dest {
     assert(dest);
-    if (w != dest.w || h != dest.h) {
-        NSLog(@"copyPixelsTo: size mismatch %zu x %zu to %zu x %zu",
-              w, h, dest.w, dest.h);
+    if (!SAME_SIZE(self.size, dest.size)) {
+        NSLog(@"copyPixelsTo: size mismatch %.0f x %.0f to %.0f x %.0f",
+              size.width, size.height, dest.size.width, dest.size.height);
         abort();
     }
-    assert(w == dest.w);
-    assert(h == dest.h);    // the PixelArray pointers in the destination will do
-    memcpy(dest.pb, pb, w * h * sizeof(Pixel));
+    assert(size.width == dest.size.width);
+    assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
+    memcpy(dest.pb, pb, size.width * size.height * sizeof(Pixel));
     [dest verify];
 }
 
-// not used at the moment, maybe never:
-- (id)copyWithZone:(NSZone *)zone {
-    PixBuf *copy = [[PixBuf alloc] initWithSize:CGSizeMake(w, h)];
-    memcpy(copy.pb, pb, w * h * sizeof(Pixel));
-    return copy;
-}
-
 - (void) assertPaInrange: (int) y x:(int)x {
-    assert(x >= 0 && x < self.w);
-    assert(y >= 0 && y < self.h);
+    assert(x >= 0 && x < size.width);
+    assert(y >= 0 && y < size.height);
 }
 
 - (Pixel) check_get_Pa:(int) y X:(int)x {
     [self assertPaInrange:y x:x];
     return self.pa[y][x];
+}
+
+// This should be cleverer than just picking pixels
+- (void) scaleFrom:(PixBuf *) sourcePixBuf {
+    double yScale = size.height/sourcePixBuf.size.height;
+    double xScale = size.width/sourcePixBuf.size.width;
+    for (int x=0; x<size.width; x++) {
+        int sx = trunc(x/xScale);
+        assert(sx <= sourcePixBuf.size.width);
+        for (int y=0; y<size.height; y++) {
+            int sy = trunc(y/yScale);
+            assert(sy < sourcePixBuf.size.height);
+            pa[y][x] = sourcePixBuf.pa[sy][sx];   // XXXXXX died here during reconfiguration
+        }
+    }
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    PixBuf *copy = [[PixBuf alloc] initWithSize:size];
+    memcpy(copy.pb, pb, size.width * size.height * sizeof(Pixel));
+    [copy verify];
+    return copy;
 }
 
 @end

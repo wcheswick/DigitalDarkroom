@@ -19,7 +19,8 @@
 @synthesize areaF;
 @synthesize depthVisF;
 @synthesize remapImageF;
-@synthesize polarRemapF;
+@synthesize remapPolarF;
+@synthesize remapSizeF;
 @synthesize low, value, high;
 @synthesize paramName, lowValueFormat, highValueFormat;
 @synthesize newValue;
@@ -37,7 +38,8 @@
 //        pointF = nil;
         areaF = nil;
         remapImageF = nil;
-        polarRemapF = nil;
+        remapPolarF = nil;
+        remapSizeF = nil;
         depthVisF = nil;
         low = high = 0;
         newValue = NO;
@@ -81,22 +83,32 @@
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                remapImage:(ComputeRemap_t) f {
+                remapImage:(RemapImage_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
-    t.type = RemapTrans;
+    t.type = RemapImage;
     t.remapImageF = f;
     return t;
 }
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
-                   remapPolar:(ComputePolarRemap_t) f {
+                   remapPolar:(RemapPolar_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
-    t.type = RemapPolarTrans;
-    t.polarRemapF = f;
+    t.type = RemapPolar;
+    t.remapPolarF = f;
+    return t;
+}
+
++ (Transform *) areaTransform:(NSString *) n description:(NSString *) d
+                   remapSize:(RemapSize_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = RemapSize;
+    t.remapSizeF = f;
     return t;
 }
 
@@ -122,7 +134,8 @@
     NSLog(@" **** copy areaTransform %@,   areaF: %p:", copy.name, copy.areaF);
     copy.depthVisF = depthVisF;
     copy.remapImageF = remapImageF;
-    copy.polarRemapF = polarRemapF;
+    copy.remapPolarF = remapPolarF;
+    copy.remapSizeF = remapSizeF;
     copy.low = low;
     copy.high = high;
     copy.value = value;

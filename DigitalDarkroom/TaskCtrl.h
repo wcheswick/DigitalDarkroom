@@ -29,19 +29,18 @@ typedef enum {
 @class TaskGroup;
 
 @interface TaskCtrl : NSObject {
-    MainVC *mainVC;
     Transforms *transforms;
     NSMutableArray *taskGroups;
+    CGSize sourceSize;
     volatile BOOL reconfigurationNeeded;
 }
 
-@property (nonatomic, strong)   MainVC *mainVC;
 @property (nonatomic, strong)   NSMutableArray *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign, atomic)      volatile BOOL reconfigurationNeeded;
+@property (assign)              CGSize sourceSize;
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
-
 - (BOOL) tasksAreIdled;
 - (void) enableTasks;
 - (void) idleTransforms;

@@ -27,22 +27,18 @@ typedef enum {
     NSString *taskName;
     TaskGroup *taskGroup;
     TaskStatus_t taskStatus;        // only this routine changes this
-    Transform *__nullable depthTransform;
-    TransformInstance *__nullable depthInstance;
     NSMutableArray *transformList;  // Transforms after depth transform
     NSMutableArray *paramList;
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL isThumbTask;   // must have exactly one transform, which is always run
-    BOOL enabled;   // if transform target is on-screen
+    BOOL enabled;   // if transform target is on-screen and needs update
 }
 
 @property (nonatomic, strong)   NSString *taskName;
 @property (assign, atomic)      TaskStatus_t taskStatus;
 @property (nonatomic, strong)   UIImageView *targetImageView;
-@property (nonatomic, strong)   Transform *__nullable depthTransform;
-@property (nonatomic, strong)   TransformInstance *depthInstance;
 @property (strong, nonatomic)   NSMutableArray *transformList;
 @property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
@@ -53,7 +49,7 @@ typedef enum {
             inGroup:(TaskGroup *) tg;
 - (void) configureTaskForSize;
 - (BOOL) updateParamOfLastTransformTo:(int) newParam;
-- (int) valueForStep:(long) step;
+- (int) valueForStep:(size_t) step;
 - (long) lastStep;
 - (void) enable;    // task must be stopped when calling this
 
@@ -61,11 +57,9 @@ typedef enum {
 - (void) removeTransformAtIndex:(long) index;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
-- (void) useDepthTransform:(Transform *__nullable) transform;
 - (Transform *) lastTransform;
 
-- (void) executeTransformsFromPixBuf:(const PixBuf *) srcBuf
-                               depth:(const DepthBuf *__nullable)activeDepthBuf;
+- (Frame * __nullable) executeTransformsFromFrame:(Frame *)sourceFrame;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 
 @end

@@ -7,7 +7,10 @@
 //
 
 #import <UIKit/UIKit.h>
-#include "Transform.h"
+#import "Task.h"
+#import "Transform.h"
+
+@class Task;    // why the heck is this needed?
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -17,19 +20,29 @@ NS_ASSUME_NONNULL_BEGIN
 #define SECTION_SWITCH_H    31
 #define SECTION_SWITCH_W    51  // apparently fixed?
 
-#define IS_SECTION_HEADER(t)    ((t).sectionName != nil)
+typedef enum {
+    ThumbAvailable,
+    ThumbUnAvailable,
+    ThumbActive,
+    ThumbTransformBroken,
+    SectionHeader,
+} thumbStatus_t;
 
 @interface ThumbView : UIView {
+    thumbStatus_t status;
     NSString *sectionName;  // nil if thumb, else section header
-    long transformIndex;
+    Transform *transform;
+    Task *task;             // for updating thumbnail
 }
 
+@property (assign)              thumbStatus_t status;;
 @property (nonatomic, strong)   NSString *sectionName;
-@property (assign)              long transformIndex;
+@property (nonatomic, strong)   Transform *transform;
+@property (nonatomic, strong)   Task *task;
 
 - (void) configureForTransform:(Transform *) transform;
 - (void) configureSectionThumbNamed:(NSString *)sectionName;
-- (void) enable:(BOOL) enable;
+- (void) adjustStatus:(thumbStatus_t) newStatus;
 
 @end
 

@@ -15,7 +15,7 @@ typedef float Distance;     // in meters
 typedef Distance *_Nullable *_Nonnull DepthArray_t;
 
 @interface DepthBuf : NSObject {
-    size_t w, h;
+    CGSize size;
     Distance minDepth, maxDepth;
     DepthArray_t da;    // depth array, da[y][x]
     Distance *db;       // depth buffer, pointer to w*h contiguous depths in da
@@ -24,13 +24,14 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
 @property (assign)  Distance minDepth, maxDepth;
 @property (assign)  DepthArray_t da;
 @property (assign)  Distance *db;
-@property (assign)  size_t w, h;
+@property (assign)  CGSize size;
 
 - (id)initWithSize:(CGSize) s;
 //- (Distance) distAtX:(int)x Y:(int)y;
 - (void) copyDepthsTo:(DepthBuf *) dest;
 - (void) verify;
 - (void) findDepthRange;
+- (void) scaleFrom:(DepthBuf *) sourceDepthBuf;
 
 NS_ASSUME_NONNULL_END
 

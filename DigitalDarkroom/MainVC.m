@@ -25,7 +25,6 @@
 
 #define LAST_FILE_SOURCE_KEY    @"LastFileSource"
 #define UI_MODE_KEY             @"UIMode"
-#define LAST_DEPTH_TRANSFORM_KEY    @"LastDepthTransform"
 #define LAST_SOURCE_KEY      @"Current source index"
 
 #define BUTTON_FONT_SIZE    20
@@ -174,7 +173,7 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   TaskGroup *screenTasks; // only one task in this group
-@property (nonatomic, strong)   TaskGroup *thumbTasks, *depthThumbTasks;    // XXXX not clear why these are separate
+@property (nonatomic, strong)   TaskGroup *thumbTasks;
 @property (nonatomic, strong)   TaskGroup *externalTasks;   // not yet, only one task in this group
 @property (nonatomic, strong)   TaskGroup *hiresTasks;       // not yet, only one task in this group
 
@@ -185,6 +184,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *depthBarButton;
+@property (nonatomic, strong)   Frame *displayedFrame;  // what's on the screen
 
 // in containerview:
 @property (nonatomic, strong)   UIView *paramView;
@@ -195,6 +195,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UILabel *layoutValuesView;
 
 @property (assign)              BOOL showControls, live;
+@property (assign)              BOOL transformChainChanged;
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
 
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
@@ -211,14 +212,12 @@ MainVC *mainVC = nil;
 
 @property (assign)              NSInteger currentSourceIndex, nextSourceIndex;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
-@property (nonatomic, strong)   UIImage *currentSourceImage;    // what we are transforming, or nil if get an image from the camera
-@property (nonatomic, strong)   UIImage *previousSourceImage;   // last used
+@property (nonatomic, strong)   Frame *currentSourceFrame;    // what we are transforming, or nil if get an image from the camera
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign)              int cameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-@property (assign)              long currentDepthTransformIndex; // or NO_TRANSFORM
 @property (assign)              long currentTransformIndex; // or NO_TRANSFORM
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
@@ -262,13 +261,14 @@ MainVC *mainVC = nil;
 @implementation MainVC
 
 @synthesize taskCtrl;
-@synthesize screenTasks, thumbTasks, depthThumbTasks, externalTasks;
+@synthesize screenTasks, thumbTasks, externalTasks;
 @synthesize hiresTasks;
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
 @synthesize depthBarButton, flipBarButton, sourceBarButton;
 @synthesize transformView;
+@synthesize transformChainChanged;
 @synthesize overlayDebugStatus;
 @synthesize runningButton, snapButton;
 @synthesize thumbViewsArray, thumbsView;
@@ -294,9 +294,8 @@ MainVC *mainVC = nil;
 @synthesize currentSourceIndex, nextSourceIndex;
 @synthesize inputSources;
 @synthesize cameraSourceThumb;
-@synthesize currentDepthTransformIndex;
 @synthesize currentTransformIndex;
-@synthesize currentSourceImage, previousSourceImage;
+@synthesize currentSourceFrame;
 @synthesize live;
 @synthesize cameraCount;
 
@@ -319,43 +318,28 @@ MainVC *mainVC = nil;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
 @synthesize imageDumpRequested;
+@synthesize displayedFrame;
 
 - (id) init {
     self = [super init];
     if (self) {
-        mainVC = self;  // a global is easier
         transforms = [[Transforms alloc] init];
         
         currentTransformIndex = NO_TRANSFORM;
-        currentSourceImage = nil;
+        currentSourceFrame = nil;
         layout = nil;
         helpNavVC = nil;
         showControls = NO;
+        transformChainChanged = NO;
         plusMode = NoPlus;
         imageDumpRequested = NO;
+        displayedFrame = nil;
         layouts = [[NSMutableArray alloc] init];
-        
-        NSString *defaultDepthTransformName = [[NSUserDefaults standardUserDefaults]
-                                        stringForKey:LAST_DEPTH_TRANSFORM_KEY];
-        assert(transforms.depthTransformCount > 0);
-        currentDepthTransformIndex = NO_TRANSFORM;
-        for (int i=0; i < transforms.depthTransformCount; i++) {
-            Transform *transform = transforms.transforms[i];
-            if ([transform.name isEqual:defaultDepthTransformName]) {
-                currentDepthTransformIndex = i;
-                break;
-            }
-        }
-        [self saveDepthTransformName];
-        currentDepthTransformIndex = NO_TRANSFORM;  // DEBUG, start clean, maybe always
-
         taskCtrl = [[TaskCtrl alloc] init];
-        taskCtrl.mainVC = self;
         deviceOrientation = UIDeviceOrientationUnknown;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        depthThumbTasks = [taskCtrl newTaskGroupNamed:@"DepthThumbs"];
         //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         
         transformTotalElapsed = 0;
@@ -449,56 +433,44 @@ MainVC *mainVC = nil;
 }
 
 - (void) createThumbArray {
-    NSString *brokenPath = [[NSBundle mainBundle]
-                            pathForResource:@"images/brokenTransform.png" ofType:@""];
-    UIImage *brokenImage = [UIImage imageNamed:brokenPath];
-
     thumbViewsArray = [[NSMutableArray alloc] init];
 
     UITapGestureRecognizer *touch;
     NSString *lastSection = nil;
 
     for (size_t ti=0; ti<transforms.transforms.count; ti++) {
+        Transform *transform = [transforms.transforms objectAtIndex:ti];
         ThumbView *thumbView = [[ThumbView alloc] init];
 
-        Transform *transform = [transforms.transforms objectAtIndex:ti];
         NSString *section = [transform.helpPath pathComponents][0];
         if (!lastSection || ![lastSection isEqualToString:section]) {   // new section.
             [thumbView configureSectionThumbNamed:section];
             [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
             
             thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
+            thumbView.transform = transform;
             lastSection = section;
         }
         [thumbView configureForTransform:transform];
-        thumbView.transformIndex = ti;     // encode the index of this transform
         thumbView.tag = ti + TRANSFORM_BASE_TAG;
-        UIImageView *imageView;
+        UIImageView *imageView = [[UIImageView alloc] init];
+        imageView.tag = THUMB_IMAGE_TAG;
+        [thumbView addSubview:imageView];
         
-        [self adjustThumbView:thumbView selected:NO];
         if (transform.broken) {
-            imageView.image = brokenImage;
-        } else
-            imageView = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-        
-        Task *thumbTask = nil;
-        if (transform.type == DepthVis) {
-            touch = [[UITapGestureRecognizer alloc]
-                     initWithTarget:self
-                     action:@selector(doTapDepthVis:)];
-            thumbTask = [depthThumbTasks createTaskForTargetImageView:imageView
-                                                                named:transform.name];
+            [thumbView adjustStatus:ThumbTransformBroken];
         } else {
-            touch = [[UITapGestureRecognizer alloc]
-                     initWithTarget:self
-                     action:@selector(doTapThumb:)];
-            thumbTask = [thumbTasks createTaskForTargetImageView:imageView
-                                                           named:transform.name];
+            [thumbView adjustStatus:ThumbAvailable];
         }
-        thumbTask.isThumbTask = YES;
-        [thumbTask appendTransformToTask:transform];
-        assert(thumbTask.isThumbTask);
-        assert(thumbTask.depthTransform || thumbTask.transformList.count == 1);
+        
+        touch = [[UITapGestureRecognizer alloc]
+                 initWithTarget:self
+                 action:@selector(didTapThumb:)];
+        thumbView.task = [thumbTasks createTaskForTargetImageView:imageView
+                                                       named:transform.name];
+        thumbView.task.enabled = YES;
+        thumbView.task.isThumbTask = YES;
+        [thumbView.task appendTransformToTask:transform];
         [thumbView addSubview:imageView];
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
@@ -567,7 +539,7 @@ CGFloat topOfNonDepthArray = 0;
     
     // run through the thumbview array
     for (ThumbView *thumbView in thumbViewsArray) {
-        if (IS_SECTION_HEADER(thumbView)) {   // new section
+        if (thumbView.status == SectionHeader) {   // new section
 #ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Section %@",
                   nextButtonFrame.origin.x, nextButtonFrame.origin.y,
@@ -586,8 +558,7 @@ CGFloat topOfNonDepthArray = 0;
             thumbView.frame = nextButtonFrame;  // this is a little incomplete
             lastSection = thumbView.sectionName;
         } else {
-            Transform *transform = [transforms.transforms objectAtIndex:thumbView.transformIndex];
-            thumbView.userInteractionEnabled = !transform.broken;
+            thumbView.userInteractionEnabled = !thumbView.transform.broken;
 #ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
                   nextButtonFrame.origin.x, nextButtonFrame.origin.y,
@@ -596,17 +567,10 @@ CGFloat topOfNonDepthArray = 0;
 #endif
             UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             thumbImage.frame = layout.thumbImageRect;
-            if (transform.type == DepthVis) {
-                [thumbView enable: cameraController.depthDataAvailable];
-                if (cameraController.depthDataAvailable) {
-                    BOOL selected = thumbView.transformIndex == currentDepthTransformIndex;
-                    [self adjustThumbView:thumbView selected:selected];
-                    if (selected) {
-                        [screenTasks configureGroupWithNewDepthTransform:transform];
-                    }
-                } else {
-                    thumbImage.image = noDepthImage;
-                }
+            if (thumbView.transform.type == DepthVis) {
+                [thumbView adjustStatus: (displayedFrame.depthBuf != nil) ? ThumbAvailable : ThumbUnAvailable];
+            } else {
+                thumbImage.image = noDepthImage;
             }
             
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
@@ -624,15 +588,6 @@ CGFloat topOfNonDepthArray = 0;
     thumbScrollView.contentOffset = thumbsView.frame.origin;
     
     [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
-}
-
-- (void) saveDepthTransformName {
-    if (currentDepthTransformIndex == NO_TRANSFORM)
-        return;
-    Transform *transform = [transforms.transforms objectAtIndex:currentDepthTransformIndex];
-    [[NSUserDefaults standardUserDefaults] setObject:transform.name
-                                              forKey:LAST_DEPTH_TRANSFORM_KEY];
-    [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (void) saveSourceIndex {
@@ -654,7 +609,6 @@ CGFloat topOfNonDepthArray = 0;
     [inputSources addObject:source];
 }
 
-
 #ifdef NOTUSED
 static NSString * const imageOrientationName[] = {
     @"default",            // default orientation
@@ -671,6 +625,8 @@ static NSString * const imageOrientationName[] = {
 - (void) viewDidLoad {
     [super viewDidLoad];
     
+    mainVC = self;  // a global is easier
+
 #ifdef DEBUG_ORIENTATION
     NSLog(@"OOOO viewDidLoad orientation: %@",
           [CameraController dumpDeviceOrientationName:deviceOrientation]);
@@ -697,8 +653,6 @@ static NSString * const imageOrientationName[] = {
                                       action:@selector(flipCamera:)];
 
 #ifdef DISABLED
-
-
     UIBarButtonItem *otherMenuButton = [[UIBarButtonItem alloc]
                                         initWithImage:[UIImage systemImageNamed:@"ellipsis"]
                                         style:UIBarButtonItemStylePlain
@@ -914,7 +868,8 @@ static NSString * const imageOrientationName[] = {
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
                                                      named:@"main"];
-    
+    //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
+
     thumbScrollView = [[UIScrollView alloc] init];
     thumbScrollView.pagingEnabled = NO;
     //thumbScrollView.autoresizingMask = UIViewAutoresizingFlexibleHeight;
@@ -932,11 +887,7 @@ static NSString * const imageOrientationName[] = {
     [containerView addSubview:thumbScrollView];
 
     [self.view addSubview:containerView];
-    
-    //externalTask = [externalTasks createTaskForTargetImage:transformImageView.image];
-    
     self.view.backgroundColor = [UIColor whiteColor];
-    
     [self createThumbArray];
 }
 
@@ -1036,6 +987,7 @@ static NSString * const imageOrientationName[] = {
         }
 
         currentSourceIndex = nextSourceIndex;
+        transformChainChanged = YES;
 //        NSLog(@"III switching to source index %ld, %@",
         //  (long)currentSourceIndex, CURRENT_SOURCE.label);
         nextSourceIndex = NO_SOURCE;
@@ -1049,7 +1001,9 @@ static NSString * const imageOrientationName[] = {
             [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
             [self liveOn:YES];
         } else {    // source is a file, it is our source image
-            currentSourceImage = [UIImage imageNamed: source.imagePath];
+            currentSourceFrame = [[Frame alloc] init];
+            [currentSourceFrame readImageFromPath: source.imagePath];
+            transformChainChanged = YES;
         }
         [self saveSourceIndex];
     }
@@ -1203,8 +1157,8 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) tryAllThumbLayouts {
-    if (currentSourceImage) { // file or captured image input
-        [self tryAllThumbsForSize:currentSourceImage.size format:nil];
+    if (currentSourceFrame) { // file or captured image input
+        [self tryAllThumbsForSize:currentSourceFrame.pixBuf.size format:nil];
     } else {
         assert(cameraController);
         assert(live);   // select camera setting for available area
@@ -1226,7 +1180,6 @@ static NSString * const imageOrientationName[] = {
 
 - (void) tryAllThumbsForSize:(CGSize) size
                       format:(AVCaptureDeviceFormat *)format {
-    
     // first, layout full-screen version
     Layout *trialLayout = [[Layout alloc] init];
     if (format)
@@ -1337,6 +1290,7 @@ static NSString * const imageOrientationName[] = {
     atStartOfRow = YES;
 }
 
+#ifdef OLD
 // select a new depth visualization.
 - (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
     Transform *oldDepthTransform = nil;
@@ -1344,7 +1298,7 @@ static NSString * const imageOrientationName[] = {
         oldDepthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
         // turn off old depth transform.  There can be only one.
         ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
-        [self adjustThumbView:oldSelectedDepthThumb selected:NO];
+        [self adjustThumb:oldSelectedDepthThumb selected:NO];
     }
     ThumbView *newThumbView = (ThumbView *)recognizer.view;
     long newTransformIndex = newThumbView.transformIndex;
@@ -1357,7 +1311,7 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     
-    [self adjustThumbView:newThumbView selected:YES];
+    [self adjustThumb:newThumbView selected:YES];
     currentDepthTransformIndex = newTransformIndex;
     Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
     assert(depthTransform.type == DepthVis);
@@ -1367,8 +1321,9 @@ static NSString * const imageOrientationName[] = {
     [self adjustParametersFrom:oldDepthTransform to:depthTransform];
     [self updateExecuteView];
 }
+#endif
 
-- (IBAction) doTapThumb:(UITapGestureRecognizer *)recognizer {
+- (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
 #ifdef OLD
     @synchronized (transforms.sequence) {
         [transforms.sequence removeAllObjects];
@@ -1376,7 +1331,7 @@ static NSString * const imageOrientationName[] = {
     }
 #endif
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
-    Transform *tappedTransform = transforms.transforms[tappedThumb.transformIndex];
+    Transform *tappedTransform = tappedThumb.transform;
 
     Transform *lastTransform = nil;
     if (screenTask.transformList.count) {
@@ -1386,13 +1341,14 @@ static NSString * const imageOrientationName[] = {
     if (IS_PLUS_LOCKED || IS_PLUS_ON) {  // add new transform
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTaskForSize];
-        [self adjustThumbView:tappedThumb selected:YES];
+        [tappedThumb adjustStatus:ThumbActive];
 //        if (!IS_PLUS_LOCKED)
 //            [self adjustPlusTo:NoPlus];
     } else {    // not plus mode
 #ifdef NEW
         if (screenTasks.tasks.count > 0) {  // clear everything
             [self deselectAllThumbs];
+            [self transformChainAdjusted];
         }
 #endif
         // XXX in minus mode, selecting a selected transform should simply remove it
@@ -1400,21 +1356,24 @@ static NSString * const imageOrientationName[] = {
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
             [screenTask removeLastTransform];
             ThumbView *oldThumb = [self thumbForTransform:lastTransform];
-            [self adjustThumbView:oldThumb selected:NO];
+            [oldThumb adjustStatus:ThumbAvailable];
             if (reTap) {
                 // retapping a transform in not plus mode means just remove it, and we are done
                 [self updateExecuteView];
                 [self adjustBarButtons];
                 tappedTransform = nil;
             }
+
         }
         if (tappedTransform) {
             [screenTask appendTransformToTask:tappedTransform];
-            [self adjustThumbView:tappedThumb selected:YES];
+            [tappedThumb adjustStatus:ThumbActive];
+
         }
         [screenTask configureTaskForSize];
     }
-    [self doTransformsOn:currentSourceImage depth:rawDepthBuf]; // XXXXXX depth of saved image
+    transformChainChanged = YES;
+    [self doTransformsOnFrame:currentSourceFrame];
 //    [self updateOverlayView];
     [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
@@ -1612,25 +1571,6 @@ static NSString * const imageOrientationName[] = {
 }
 #endif
 
-- (void) adjustThumbView:(ThumbView *) thumb selected:(BOOL)selected {
-    UILabel *label = [thumb viewWithTag:THUMB_LABEL_TAG];
-    if (selected) {
-        label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
-        thumb.layer.borderWidth = 5.0;
-        currentTransformIndex = thumb.transformIndex;
-        label.highlighted = YES;    // this doesn't seem to do anything
-    } else {
-        label.font = [UIFont systemFontOfSize:THUMB_FONT_SIZE];
-        if (thumb.sectionName)
-            thumb.layer.borderWidth = 0;
-        else
-            thumb.layer.borderWidth = 1.0;
-        label.highlighted = NO;
-    }
-    [label setNeedsDisplay];
-    [thumb setNeedsDisplay];
-}
-
 - (void) updateStats: (float) fps
          depthPerSec:(float) depthps
        droppedPerSec:(float)dps
@@ -1697,8 +1637,7 @@ static NSString * const imageOrientationName[] = {
 - (void) liveOn:(BOOL) on {
     live = on;
     if (live) {
-        currentSourceImage = nil;
-        previousSourceImage = nil;
+        currentSourceFrame = nil;
         runningButton.selected = NO;
         [runningButton setNeedsDisplay];
 //        [taskCtrl idleTransforms];
@@ -1708,7 +1647,6 @@ static NSString * const imageOrientationName[] = {
         [cameraController startCamera];
     } else {
         [cameraController stopCamera];
-        currentSourceImage = previousSourceImage;
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
@@ -1847,9 +1785,7 @@ static NSString * const imageOrientationName[] = {
         ThumbView *thumbView = (ThumbView *)gesture.view;
         sourceView = thumbView;
         
-        long transformIndex = thumbView.transformIndex;
-        assert(transformIndex >= 0 && transformIndex < transforms.transforms.count);
-        Transform *transform = [transforms transformAtIndex:transformIndex];
+        Transform *transform = thumbView.transform;
         helpPath = transform.helpPath;
         if (!helpPath) {
             UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
@@ -2064,44 +2000,24 @@ static NSString * const imageOrientationName[] = {
 }
 
 // new video frame data and perhaps depth data from the cameracontroller:
-- (void) processVideoCapture:(UIImage *)capturedImage
-                       depth:(CVPixelBufferRef) depthPixelBufRef {
-    if (!live)    // PAUSED displayed means no new images
-        return;
-    if (taskCtrl.reconfigurationNeeded)
-        return;
-    if (busy) {
-        busyCount++;
+- (void) processCaptureFrame:(Frame *)capturedFrame {
+    currentSourceFrame = [capturedFrame copy];
+    if (!live || taskCtrl.reconfigurationNeeded || busy) {
+        if (busy)
+            busyCount++;
+        assert(capturedFrame.writeLockCount >= 0);
         return;
     }
     busy = YES;
-    
-    if (depthPixelBufRef) {
-        size_t width = CVPixelBufferGetWidth(depthPixelBufRef);
-        size_t height = CVPixelBufferGetHeight(depthPixelBufRef);
-        if (!rawDepthBuf || rawDepthBuf.w != width || rawDepthBuf.h != height) {
-            rawDepthBuf = [[DepthBuf alloc]
-                        initWithSize: CGSizeMake(width, height)];
-        }
-        
-        CVPixelBufferLockBaseAddress(depthPixelBufRef,  kCVPixelBufferLock_ReadOnly);
-        assert(sizeof(Distance) == sizeof(float));
-        float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufRef);
-        memcpy(rawDepthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
-        CVPixelBufferUnlockBaseAddress(depthPixelBufRef, 0);
-        [rawDepthBuf findDepthRange];
-        // NB: the depth data is dirty, with negative and NaN values in there
-    }
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self doTransformsOn:capturedImage depth:self->rawDepthBuf];    // and depthbuf
-        self->busy = NO;    // XXXXXX busy now wrong
-    });
+    [self doTransformsOnFrame:capturedFrame];
+    self->busy = NO;    // XXXXXX busy now wrong
 }
 
-- (void) doTransformsOn:(UIImage *)sourceImage depth:(DepthBuf *) rawDepthBuf {
-    if (imageDumpRequested) {
 #define IMAGE_DUMP_FILE @"ImageDump"
+
+- (void) doTransformsOnFrame:(Frame *)frame {
+    assert(frame.writeLockCount > 0);
+    if (imageDumpRequested) {
         NSString *tmpImageFile = [NSTemporaryDirectory() stringByAppendingPathComponent:IMAGE_DUMP_FILE];
         
         if (![[NSFileManager defaultManager] createFileAtPath:tmpImageFile contents:NULL attributes:NULL]) {
@@ -2109,26 +2025,24 @@ static NSString * const imageOrientationName[] = {
             return;
         }
         NSFileHandle *imageFileHandle = [NSFileHandle fileHandleForUpdatingAtPath:tmpImageFile];
-        [screenTasks executeTasksWithImage:sourceImage
-                                     depth:rawDepthBuf
+        [screenTasks executeTasksWithFrame:frame
                                   dumpFile:(NSFileHandle *)imageFileHandle];
         [imageFileHandle closeFile];
         imageDumpRequested = NO;
         [self doMail:tmpImageFile];
         return;
     }
-    [screenTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+    displayedFrame = [screenTasks executeTasksWithFrame:frame dumpFile:nil];
+    if (transformChainChanged)
+        [self updateThumbAvailability];
 
     if (DISPLAYING_THUMBS) {
-        if (cameraController.depthDataAvailable && rawDepthBuf)
-            [depthThumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
-        [thumbTasks executeTasksWithImage:sourceImage depth:rawDepthBuf dumpFile:nil];
+        [thumbTasks executeTasksWithFrame:displayedFrame dumpFile:nil];
     }
     if (cameraSourceThumb) {
-        [cameraSourceThumb setImage:sourceImage];
+        [cameraSourceThumb setImage:[frame toUIImage]];
         [cameraSourceThumb setNeedsDisplay];
     }
-    previousSourceImage = sourceImage;  // XXXXXX need previous depth, too
 }
 
 #ifdef DEBUG_TASK_CONFIGURATION
@@ -2146,7 +2060,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
     [self deselectAllThumbs];
-    [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
+    [self doTransformsOnFrame:currentSourceFrame];
 //    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -2155,10 +2069,8 @@ UIImageOrientation lastOrientation;
 - (void) deselectAllThumbs {
     for (ThumbView *thumbView in thumbViewsArray) {
         // deselect all selected thumbs
-        UILabel *thumbLabel = [thumbView viewWithTag:THUMB_LABEL_TAG];
-        if (thumbLabel.highlighted) {
-            [self adjustThumbView:thumbView selected:NO];
-        }
+        if (thumbView.status == ThumbActive)
+            [thumbView adjustStatus:ThumbAvailable];
     }
 }
 
@@ -2210,9 +2122,9 @@ UIImageOrientation lastOrientation;
     if (screenTask.transformList.count > 1) {
         Transform *lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
         ThumbView *thumbView = [self thumbForTransform:lastTransform];
-        [self adjustThumbView:thumbView selected:NO];
+        [thumbView adjustStatus:ThumbAvailable];
         [screenTask removeLastTransform];
-        [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
+        [self doTransformsOnFrame:currentSourceFrame];
 //        [self updateOverlayView];
         [self updateExecuteView];
         [self adjustBarButtons];
@@ -2231,16 +2143,12 @@ UIImageOrientation lastOrientation;
     
     long step = 0;
     long displaySteps = screenTask.transformList.count;
-    if (screenTask.depthTransform) {
-        step--;    // index -1 means there is a depth transform
-        displaySteps++;
-    }
     CGFloat bestH = EXECUTE_H_FOR(displaySteps);
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
     NSString *sep = onePerLine ? @"\n" : @" ";
     
     for (int i=0; i<displaySteps; i++, step++) {
-        Transform *transform = (step < 0) ? screenTask.depthTransform : screenTask.transformList[step];
+        Transform *transform = screenTask.transformList[step];
          NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
         if (!t)
             t = name;
@@ -2380,6 +2288,7 @@ static CGSize startingPinchSize;
 }
 
 - (void) changeSourceTo:(NSInteger)nextIndex {
+    transformChainChanged = YES;
     if (nextIndex == NO_SOURCE)
         return;
 //    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
@@ -2629,8 +2538,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     assert(below <= BELOW(containerView.frame));
 
     thumbsView.frame = CGRectMake(0, 0,
-                                      thumbScrollView.frame.size.width,
-                                      thumbScrollView.frame.size.height);
+                                  thumbScrollView.frame.size.width,
+                                  thumbScrollView.frame.size.height);
 #ifdef NOTDEF
     NSLog(@"layout selected:");
 
@@ -2671,11 +2580,10 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // layout.transformSize is what the tasks get to run.  They
     // then display (possibly scaled) onto transformView.
     
-    [screenTasks configureGroupForSize: layout.transformSize];
-
-    [thumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    [depthThumbTasks configureGroupForSize:layout.thumbImageRect.size];
-    //    [externalTask configureForSize: processingSize];
+    taskCtrl.sourceSize = layout.imageSourceSize;
+    [screenTasks configureGroupForTargetSize:layout.transformSize];
+    [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
+//    [externalTask configureGroupForTargetSize:processingSize];
 
 // no longer?    [layout positionExecuteRect];
     executeView.frame = layout.executeRect;
@@ -2720,8 +2628,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     
     [self updateExecuteView];
     [taskCtrl enableTasks];
-    if (currentSourceImage)
-        [self doTransformsOn:currentSourceImage depth:rawDepthBuf];
+    if (currentSourceFrame)
+        [self doTransformsOnFrame:currentSourceFrame];
     else {
         [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
@@ -2754,6 +2662,21 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
     SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
     [self adjustParamView];
+}
+
+// update the thumbs to show which are available for the end of the new transform chain
+// displayedFrame has the source frame.  if nil?
+- (void) updateThumbAvailability {
+    assert(displayedFrame);
+    BOOL depthAvailable = displayedFrame.depthBuf != nil;
+    for (ThumbView *thumbView in thumbViewsArray) {
+        Transform *transform = thumbView.transform;
+        if (transform.type != DepthVis)
+            continue;
+        thumbView.task.enabled = depthAvailable;
+        [thumbView adjustStatus:depthAvailable ? ThumbAvailable : ThumbUnAvailable];
+    }
+    transformChainChanged = NO;
 }
 
 @end

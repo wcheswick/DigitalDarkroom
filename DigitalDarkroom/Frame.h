@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 #import "PixBuf.h"
 #import "DepthBuf.h"
@@ -14,16 +15,21 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface Frame : NSObject {
+    NSDate *creationTime;
     PixBuf *__nullable pixBuf;
     DepthBuf *__nullable depthBuf;
-    NSDate *creationTime;
+    int writeLockCount;
 }
 
+@property (nonatomic, strong)   NSDate *creationTime;
 @property (nonatomic, strong)   PixBuf *__nullable pixBuf;
 @property (nonatomic, strong)   DepthBuf *__nullable depthBuf;
-@property (nonatomic, strong)   NSDate *creationTime;
+@property (assign, atomic)      int writeLockCount;
 
 - (void) save;
+- (void) readImageFromPath:(NSString *) path;
+- (UIImage *) toUIImage;
+- (void) copyTo:(Frame *) dest;
 
 @end
 

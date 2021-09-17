@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -33,27 +34,29 @@ enum SpecialRemaps {
 
 typedef int BufferIndex;      // index into a buffer at x,y
 
-#define CLIPX(x)      (((x) < 0) ? 0 : (((x) >= remapBuf.w) ? remapBuf.w - 1 : (x)))
+#define CLIPX(x)      (((x) < 0) ? 0 : (((x) >= remapBuf.size.width) ? remapBuf.size.width - 1 : (x)))
 
 // These macros all assume that remapBuf is available
 
-#define RBI(x,y)                ((CLIPX(x)) + (remapBuf.w)*(y))  // buffer index as function of x,y
+#define RBI(x,y)    (int)((CLIPX(x)) + ((int)remapBuf.size.width)*(y))  // buffer index as function of x,y
 #define REMAP_TO(tx,ty, fx,fy)  remapTo(remapBuf, tx, ty, fx, fy)
 #define UNSAFE_REMAP_TO(tx,ty, fx,fy)  remapBuf.rb[RBI((tx),(ty))] = (int)RBI((fx),(fy))
 #define REMAP_COLOR(tx, ty, rc) remapBuf.rb[RBI((tx),(ty))] = rc
-#define IS_IN_REMAP(x,y,rb)    ((x) >= 0 && (x) < rb.w && (y) >= 0 && (y) < rb.h)
+#define IS_IN_REMAP(x,y,rb)    ((x) >= 0 && (x) < rb.size.width && \
+    (y) >= 0 && (y) < rb.size.height)
 
-#define REMAPBUF_IN_RANGE(x,y)   ((x) >= 0 && (x) < remapBuf.w && (y) >= 0 && (y) < remapBuf.h)
+#define REMAPBUF_IN_RANGE(x,y)   ((x) >= 0 && (x) < remapBuf.size.width && \
+    (y) >= 0 && (y) < remapBuf.size.height)
 
 @interface RemapBuf : NSMutableData {
-    size_t w, h;
+    CGSize size;
     BufferIndex *rb;  // remap buffer
 }
 
-@property (assign)  size_t w, h;
+@property (assign)  CGSize size;
 @property (assign)  BufferIndex *rb;
 
-- (id)initWithWidth:(size_t) w height:(size_t)h;
+- (id)initWithSize:(CGSize) s;
 - (void) verify;
 
 extern void remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy);

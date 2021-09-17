@@ -16,12 +16,12 @@ NS_ASSUME_NONNULL_BEGIN
 typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 
 @interface PixBuf : NSMutableData {
-    size_t w, h;
+    CGSize size;    // always integer values here
     PixelArray_t pa;  // pixel array, pb[y][x] in our code
     Pixel *pb;      // pixel buffer, w*h contiguous pixels
 }
 
-@property (assign)  size_t w, h;
+@property (assign)  CGSize size;;
 @property (assign)  PixelArray_t pa;
 @property (assign)  Pixel *pb;
 
@@ -31,6 +31,7 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 
 - (void) assertPaInrange: (int) y x:(int)x;
 - (Pixel) check_get_Pa:(int) y X:(int)x;
+- (void) scaleFrom:(PixBuf *) sourcePixBuf;
 
 @end
 

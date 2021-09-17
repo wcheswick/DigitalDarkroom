@@ -9,22 +9,42 @@
 #import "ThumbView.h"
 #import "Defines.h"
 
+@interface ThumbView ()
+
+@property (nonatomic, strong)   UIImage *brokenThumbImage;
+@property (nonatomic, strong)   UIImage *depthUnavailableThumbImage;
+
+@end
+
 @implementation ThumbView
 
+@synthesize status;
 @synthesize sectionName;
-@synthesize transformIndex;
-
+@synthesize brokenThumbImage, depthUnavailableThumbImage;
+@synthesize transform, task;;
 
 - (id)init {
     self = [super init];
     if (self) {
         self.frame = CGRectMake(0, LATER, LATER, LATER);
         sectionName = nil;
+        transform = nil;
+        task = nil;
+        
+        brokenThumbImage = [UIImage imageNamed:[[NSBundle mainBundle]
+                                                         pathForResource:@"images/brokenTransform.png"
+                                                         ofType:@""]];
+        depthUnavailableThumbImage = [UIImage imageNamed:[[NSBundle mainBundle]
+                                                         pathForResource:@"images/no3Dcamera.png"
+                                                         ofType:@""]];
+        [self adjustStatus:ThumbUnAvailable];
     }
     return self;
 }
 
+#ifdef OLD
 - (void) enable:(BOOL) enable {
+    status = enable ? ThumbActive : ThumbAvailable;
     self.userInteractionEnabled = enable;
     if (enable) {
         self.alpha = 1.0f;
@@ -34,7 +54,7 @@
         self.backgroundColor = [UIColor grayColor];
     }
 }
-
+#endif
 
 - (void) configureForTransform:(Transform *) transform {
     UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
@@ -79,6 +99,7 @@
 
 - (void) configureSectionThumbNamed:(NSString *)sn {
     sectionName = sn;
+    [self adjustStatus:SectionHeader];
     
     UILabel *sectionLabel = [[UILabel alloc] initWithFrame:CGRectMake(THUMB_LABEL_SEP, LATER, LATER, LATER)];
     sectionLabel.tag = THUMB_LABEL_TAG;
@@ -114,6 +135,40 @@
 #endif
     sectionLabel.opaque = NO;
     [self addSubview:sectionLabel];
+}
+
+- (void) adjustStatus:(thumbStatus_t) newStatus {
+    UILabel *label = [self viewWithTag:THUMB_LABEL_TAG];
+    UIImageView *imageView= [self viewWithTag:THUMB_IMAGE_TAG];;
+
+    switch (newStatus) {
+        case ThumbAvailable:
+            label.font = [UIFont systemFontOfSize:THUMB_FONT_SIZE];
+            if (sectionName)
+                self.layer.borderWidth = 0;
+            else
+                self.layer.borderWidth = 1.0;
+            label.highlighted = NO;
+            break;
+        case ThumbActive:
+            label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
+            self.layer.borderWidth = 5.0;
+            label.highlighted = YES;    // this doesn't seem to do anything
+            break;
+        case ThumbTransformBroken:
+            imageView.image = brokenThumbImage;
+            [imageView setNeedsDisplay];
+            break;
+        case ThumbUnAvailable:
+            imageView.image = depthUnavailableThumbImage;
+            [imageView setNeedsDisplay];
+            break;
+        case SectionHeader:
+            break;
+    }
+    status = newStatus;
+    [label setNeedsDisplay];
+    [self setNeedsDisplay];
 }
 
 @end
