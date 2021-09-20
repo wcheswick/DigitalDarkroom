@@ -11,6 +11,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+#define BAD_DEPTH   -2.0    // NaN or zero
+
 typedef float Distance;     // in meters
 typedef Distance *_Nullable *_Nonnull DepthArray_t;
 
@@ -21,7 +23,7 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
     Distance *db;       // depth buffer, pointer to w*h contiguous depths in da
 }
 
-@property (assign)  Distance minDepth, maxDepth;
+@property (assign)  Distance minDepth, maxDepth;    // some depth values are NAN, skip them and assume something
 @property (assign)  DepthArray_t da;
 @property (assign)  Distance *db;
 @property (assign)  CGSize size;
@@ -32,6 +34,7 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
 - (void) verify;
 - (void) findDepthRange;
 - (void) scaleFrom:(DepthBuf *) sourceDepthBuf;
+- (void) verifyDepthRange;
 
 NS_ASSUME_NONNULL_END
 

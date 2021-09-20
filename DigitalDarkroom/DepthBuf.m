@@ -39,7 +39,7 @@
         Distance **drp = da;
         for (int y = 0; y < size.height; y++) {
             *drp++ = rowPtr;
-            rowPtr += (int)size.height;
+            rowPtr += (int)size.width;
         }
 #ifdef EARLYDEBUG
         size_t bytes = (void *)rowPtr - (void *)db;
@@ -101,6 +101,16 @@
             USED(d);
         }
     }
+    int i = 0;
+    for (int y=0; y<size.height; y++) {
+        for (int x=0; x<size.width; x++, i++) {
+            float *p1 = &da[y][x];
+            float *p2 = &db[i];
+//            NSLog(@"%3d,%3d:  %p %p  %5.1f   %5.1f", x, y, &da[y][x], &db[i], *p1, *p2);
+            assert(p1 == p2);
+            assert(*p1 == *p2);
+        }
+    }
 }
 
 // moving averages to smooth out changes in minimum and maximum depths used
@@ -136,13 +146,14 @@ ma(ma_buff_t *b, float v) {
     int okCount = 0;
     for (int i=0; i<(int)(size.width * size.height); i++) {
         float z = db[i];
-        if (!isnan(z) && z > 0) {   // ignore bad depth data
-            okCount++;
-            if (z > maxDepth)
-                maxDepth = z;
-            if (z < minDepth)
-                minDepth = z;
-        }
+        if (isnan(z))
+            continue;
+        assert(z >= 0);
+        okCount++;
+        if (z > maxDepth)
+            maxDepth = z;
+        if (z < minDepth)
+            minDepth = z;
     }
     assert(okCount);
     if (minDepth <= maxDepth) {
@@ -150,6 +161,7 @@ ma(ma_buff_t *b, float v) {
         maxDepth = ma(&max_dist_buf, maxDepth);
     }
     assert(minDepth <= maxDepth);
+    [self verifyDepthRange];
 }
 
 // NOTUSED at the moment
@@ -174,20 +186,31 @@ ma(ma_buff_t *b, float v) {
     maxDepth = sourceDepthBuf.maxDepth;
     double yScale = size.height/sourceDepthBuf.size.height;
     double xScale = size.width/sourceDepthBuf.size.width;
-    for (int x=0; x<size.width; x++) {
-        int sx = trunc(x/xScale);
-        assert(sx <= sourceDepthBuf.size.width);
-        for (int y=0; y<size.height; y++) {
-            int sy = trunc(y/yScale);
-            assert(sy < sourceDepthBuf.size.height);
+    for (int y=0; y<size.height; y++) {
+        int sy = trunc(y/yScale);
+        assert(sy < sourceDepthBuf.size.height);
+        for (int x=0; x<size.width; x++) {
+            int sx = trunc(x/xScale);
+            assert(sx < sourceDepthBuf.size.width);
             Distance d = sourceDepthBuf.da[sy][sx];
-            if (isnan(d) || d > sourceDepthBuf.maxDepth) {
-                d = sourceDepthBuf.maxDepth;
-            } else if (d < sourceDepthBuf.minDepth)
-                d = sourceDepthBuf.minDepth;
-            assert(d >= sourceDepthBuf.minDepth && d <= sourceDepthBuf.maxDepth);
+            if (d == BAD_DEPTH)
+                d = maxDepth;
+            assert(d >= minDepth);
             da[y][x] = d;   // XXXXXX died here during reconfiguration
         }
+    }
+#ifdef DEBUG
+    [self verifyDepthRange];
+#endif
+}
+
+- (void) verifyDepthRange {
+    for (int i=0; i<size.width*size.height; i++) {
+        float d = db[i];
+        if (d == BAD_DEPTH)
+            continue;
+        assert(d >= minDepth);
+        assert(d <= maxDepth);
     }
 }
 

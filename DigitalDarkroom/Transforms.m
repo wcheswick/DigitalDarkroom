@@ -1146,7 +1146,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         for (int i=0; i<W*H; i++) {
             Pixel p = srcFrame.pixBuf.pb[i];
             Distance d = srcFrame.depthBuf.db[i];
-            assert(d >= srcFrame.depthBuf.minDepth && d <= srcFrame.depthBuf.maxDepth);//did we get this right?
+            if (isnan(d) || d == 0)
+                d = srcFrame.depthBuf.maxDepth;
             if (d > backgroundDepth)
                 dstFrame.pixBuf.pb[i] = background;
             else {
@@ -1290,7 +1291,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         int W = srcFrame.depthBuf.size.width;
         int H = srcFrame.depthBuf.size.height;
 
-        assert(dstFrame.depthBuf.minDepth > 0.0);    // no log of zero
+        assert(srcFrame.depthBuf.minDepth > 0.0);    // no log of zero
         float logMin = log(srcFrame.depthBuf.minDepth);
         float logMax = log(srcFrame.depthBuf.maxDepth);
         for (int i=0; i<W * H; i++) {

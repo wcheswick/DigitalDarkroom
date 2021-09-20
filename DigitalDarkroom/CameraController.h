@@ -9,6 +9,8 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import "Stats.h"
+
 #import "MainVC.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -21,12 +23,14 @@ NS_ASSUME_NONNULL_BEGIN
     __unsafe_unretained id videoProcessor;
     NSMutableArray *formatList;     // from the device, edited to what we could use
     BOOL depthDataAvailable;
+    Stats *stats;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id videoProcessor;
 @property (assign)  volatile BOOL depthDataAvailable;
 @property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
+@property (nonatomic, strong)   Stats *stats;
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 

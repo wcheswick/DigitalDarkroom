@@ -13,6 +13,7 @@
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
 		FB56160F2654620500E5BE54 /* ThumbView.m in Sources */ = {isa = PBXBuildFile; fileRef = FB56160E2654620500E5BE54 /* ThumbView.m */; };
+		FB57A28B26F8B133001A6583 /* Stats.m in Sources */ = {isa = PBXBuildFile; fileRef = FB57A28A26F8B133001A6583 /* Stats.m */; };
 		FB625E1E260B9DFA008636FC /* UndebuggedTransforms.m in Sources */ = {isa = PBXBuildFile; fileRef = FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */; };
 		FB79D712258A67FC00DEAD6A /* Task.m in Sources */ = {isa = PBXBuildFile; fileRef = FB79D711258A67FC00DEAD6A /* Task.m */; };
 		FB7F0F6925681ABD006E3CB1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB7F0F6825681ABD006E3CB1 /* Launch Screen.storyboard */; };
@@ -72,6 +73,8 @@
 		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
 		FB56160D2654620500E5BE54 /* ThumbView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThumbView.h; sourceTree = "<group>"; };
 		FB56160E2654620500E5BE54 /* ThumbView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ThumbView.m; sourceTree = "<group>"; };
+		FB57A28926F8B133001A6583 /* Stats.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Stats.h; sourceTree = "<group>"; };
+		FB57A28A26F8B133001A6583 /* Stats.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Stats.m; sourceTree = "<group>"; };
 		FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UndebuggedTransforms.m; sourceTree = "<group>"; };
 		FB79D710258A67FC00DEAD6A /* Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Task.h; sourceTree = "<group>"; };
 		FB79D711258A67FC00DEAD6A /* Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Task.m; sourceTree = "<group>"; };
@@ -262,6 +265,8 @@
 				FB79D711258A67FC00DEAD6A /* Task.m */,
 				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
 				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
+				FB57A28926F8B133001A6583 /* Stats.h */,
+				FB57A28A26F8B133001A6583 /* Stats.m */,
 				FB3012BD250BA85C0062A1FA /* InputSource.h */,
 				FB3012BE250BA85C0062A1FA /* InputSource.m */,
 				FB1C854C26E64B18005AED48 /* Frame.h */,
@@ -384,6 +389,7 @@
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
 				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
+				FB57A28B26F8B133001A6583 /* Stats.m in Sources */,
 				FBB1D9D5232FB24800845DF1 /* Transforms.m in Sources */,
 				FBB1D9F9232FE56700845DF1 /* colorblind.c in Sources */,
 				FBF5B3AE232E973F00DDFC4E /* MainVC.m in Sources */,

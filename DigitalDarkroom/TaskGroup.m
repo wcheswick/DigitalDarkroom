@@ -182,10 +182,12 @@
         [taskCtrl idleTransforms];
     
     if (frame.depthBuf) {
+        [frame.depthBuf verifyDepthRange];
         scaledFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
         [scaledFrame.depthBuf scaleFrom:frame.depthBuf];
     }
 
+    assert(frame.pixBuf);
     if (!SAME_SIZE(frame.pixBuf.size, targetSize)) {
         scaledFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
         [scaledFrame.pixBuf scaleFrom:frame.pixBuf];
@@ -221,10 +223,11 @@
             }
         }
     }
-    assert(frame.depthBuf);
-    assert(scaledFrame.depthBuf);
+    if (frame.depthBuf)
+        assert(scaledFrame.depthBuf);
+    [scaledFrame.depthBuf verifyDepthRange];
     
-    BOOL hasDepth = scaledFrame.depthBuf != nil;
+//    BOOL hasDepth = scaledFrame.depthBuf != nil;
     
     @synchronized (scaledFrame) {   // frame, or scaledFrame?
         for (Task *task in tasks) {

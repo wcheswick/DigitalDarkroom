@@ -319,6 +319,7 @@ MainVC *mainVC = nil;
 @synthesize thumbScrollView;
 @synthesize imageDumpRequested;
 @synthesize displayedFrame;
+@synthesize stats;
 
 - (id) init {
     self = [super init];
@@ -337,6 +338,7 @@ MainVC *mainVC = nil;
         layouts = [[NSMutableArray alloc] init];
         taskCtrl = [[TaskCtrl alloc] init];
         deviceOrientation = UIDeviceOrientationUnknown;
+        stats = [[Stats alloc] init];
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
@@ -359,7 +361,9 @@ MainVC *mainVC = nil;
 #else
         cameraController = [[CameraController alloc] init];
         cameraController.videoProcessor = self;
+        cameraController.stats = self.stats;
 #endif
+        
 
         inputSources = [[NSMutableArray alloc] init];
         cameraSourceThumb = nil;
@@ -1999,8 +2003,14 @@ static NSString * const imageOrientationName[] = {
     return newImage;
 }
 
-// new video frame data and perhaps depth data from the cameracontroller:
+// new video frame data and perhaps depth data from the cameracontroller.
+// This is a copy of the incoming frame, and further incoming frames will be
+// ignored until this routine is done.  At this point, the depth data, if it
+// is present, has min and max values computed, but one or more depths may
+// be BAD_DEPTH.
+
 - (void) processCaptureFrame:(Frame *)capturedFrame {
+    [capturedFrame.depthBuf verifyDepthRange];
     currentSourceFrame = [capturedFrame copy];
     if (!live || taskCtrl.reconfigurationNeeded || busy) {
         if (busy)
@@ -2016,7 +2026,6 @@ static NSString * const imageOrientationName[] = {
 #define IMAGE_DUMP_FILE @"ImageDump"
 
 - (void) doTransformsOnFrame:(Frame *)frame {
-    assert(frame.writeLockCount > 0);
     if (imageDumpRequested) {
         NSString *tmpImageFile = [NSTemporaryDirectory() stringByAppendingPathComponent:IMAGE_DUMP_FILE];
         
@@ -2032,12 +2041,15 @@ static NSString * const imageOrientationName[] = {
         [self doMail:tmpImageFile];
         return;
     }
+    
+    // update the screen with transforms on the incoming image
     displayedFrame = [screenTasks executeTasksWithFrame:frame dumpFile:nil];
     if (transformChainChanged)
         [self updateThumbAvailability];
 
     if (DISPLAYING_THUMBS) {
-        [thumbTasks executeTasksWithFrame:displayedFrame dumpFile:nil];
+        if (displayedFrame)
+            [thumbTasks executeTasksWithFrame:displayedFrame dumpFile:nil];
     }
     if (cameraSourceThumb) {
         [cameraSourceThumb setImage:[frame toUIImage]];
@@ -2667,8 +2679,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // update the thumbs to show which are available for the end of the new transform chain
 // displayedFrame has the source frame.  if nil?
 - (void) updateThumbAvailability {
-    assert(displayedFrame);
-    BOOL depthAvailable = displayedFrame.depthBuf != nil;
+    BOOL depthAvailable = cameraController.depthDataAvailable;
     for (ThumbView *thumbView in thumbViewsArray) {
         Transform *transform = thumbView.transform;
         if (transform.type != DepthVis)

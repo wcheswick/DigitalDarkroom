@@ -22,8 +22,7 @@
 @property (nonatomic, strong)   AVCaptureDepthDataOutput *depthDataOutput;
 @property (nonatomic, strong)   AVCaptureDataOutputSynchronizer *outputSynchronizer;
 
-@property (nonatomic, strong)   Frame *lastCapturedFrame;
-
+@property (nonatomic, strong)   Frame *capturedFrame;
 @property (assign)              BOOL depthCaptureEnabled;
 
 @end
@@ -42,7 +41,8 @@
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
 @synthesize formatList;
-@synthesize lastCapturedFrame;
+@synthesize capturedFrame;
+@synthesize stats;
 
 - (id)init {
     self = [super init];
@@ -50,7 +50,7 @@
         captureVideoPreviewLayer = nil;
         captureDevice = nil;
         captureSession = nil;
-        lastCapturedFrame = nil;
+        capturedFrame = nil;
         videoOrientation = -1;  // not initialized
         formatList = [[NSMutableArray alloc] init];
     }
@@ -297,9 +297,6 @@
     previewLayer.videoGravity = .resizeAspectFill
     videoView.layer.addSublayer(previewLayer)
 #endif
-
-    frameCount = depthFrames = videoFrames = 0;
-    depthMissing = videoDropped = depthDropped = 0;
     
     outputSynchronizer = [[AVCaptureDataOutputSynchronizer alloc]
               initWithDataOutputs:
@@ -316,116 +313,139 @@
 
 #pragma mark - AVCaptureDataOutputSynchronizer (Video + Depth)
 
-static int frameCount = 0;
-static int emptyFrame = 0;
-static int depthFrames = 0;
-static int depthMissing = 0;
-static int videoFrames = 0;
-static int videoDropped = 0;
-static int depthDropped = 0;
+// From:
+//   https://github.com/sjy234sjy234/Learn-Metal/blob/master/TrueDepthStreaming/
+//      TrueDepthStreaming/Utility/Device/FrontCamera.m
 
-// Clean code, but still not working, from
-//   https://github.com/sjy234sjy234/Learn-Metal/blob/master/TrueDepthStreaming/TrueDepthStreaming/Utility/Device/FrontCamera.m
-
-volatile int captureFrameLocked = 0;
 
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
-    frameCount++;
-
-//    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
-//    NSLog(@"           depthDataOutput: %@", depthDataOutput);
+    stats.framesReceived++;
+    
+    //    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
+    //    NSLog(@"           depthDataOutput: %@", depthDataOutput);
     if (synchronizedDataCollection.count == 0) {
         // no data, I wonder why
-        emptyFrame++;;
+        stats.emptyFrames++;
         return;
     }
-    if (!lastCapturedFrame) {
-        lastCapturedFrame = [[Frame alloc] init];
+    if (!capturedFrame) {
+        capturedFrame = [[Frame alloc] init];
         NSLog(@"dataOutputSynchronizer    new frame");
-    } else if (lastCapturedFrame.writeLockCount) {
-        return;
+    } else {
+        if (capturedFrame.writeLockCount) {
+            stats.framesIgnored++;
+            return;
+        }
     }
-    
-    AVCaptureSynchronizedData *syncedDepthData=[synchronizedDataCollection
-                                                synchronizedDataForCaptureOutput:depthDataOutput];
-//    NSLog(@"           syncedDepthData: %@", syncedDepthData);
+    AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
+                                                  synchronizedDataForCaptureOutput:depthDataOutput];
+    //    NSLog(@"           syncedDepthData: %@", syncedDepthData);
     AVCaptureSynchronizedDepthData *syncedDepthBufferData = (AVCaptureSynchronizedDepthData *)syncedDepthData;
-//    NSLog(@"     syncedDepthBufferData: %@", syncedDepthBufferData);
+    //    NSLog(@"     syncedDepthBufferData: %@", syncedDepthBufferData);
     if (!syncedDepthBufferData) {
-        depthMissing++; // not so rare, maybe 5% in one test
+        stats.depthMissing++;       // not so rare, maybe 5% in one test
         if (depthDataAvailable) {   // missing, ignore the image
             return;
         }
-        lastCapturedFrame.depthBuf = nil;
-    }
-    lastCapturedFrame.writeLockCount++;
-    if(!syncedDepthBufferData.depthDataWasDropped) {
-        depthFrames++;
-        CVPixelBufferRef depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
-        if (depthPixelBufferRef) {
-            CVPixelBufferLockBaseAddress(depthPixelBufferRef,  kCVPixelBufferLock_ReadOnly);
-            size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
-            size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
-            CGSize ds = CGSizeMake(width, height);
-            if (!lastCapturedFrame.depthBuf || !SAME_SIZE(lastCapturedFrame.depthBuf.size, ds)) {
-                lastCapturedFrame.depthBuf = [[DepthBuf alloc] initWithSize:ds];
-                NSLog(@"dataOutputSynchronizer    new depth     %.0f X %.0f",
-                      lastCapturedFrame.depthBuf.size.width,
-                      lastCapturedFrame.depthBuf.size.height);
-            }
-            assert(sizeof(Distance) == sizeof(float));
-            float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
-            memcpy(lastCapturedFrame.depthBuf.db, capturedDepthBuffer, width*height*sizeof(Distance));
-            CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
-            [lastCapturedFrame.depthBuf findDepthRange];
-            // NB: the depth data is dirty, with negative and NaN values in there
-        }
-    } else
-        depthDropped++; // this should be rare
-    
-    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
-                                                synchronizedDataForCaptureOutput:self.videoDataOutput];
-    AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
-    if(syncedSampleBufferData.sampleBufferWasDropped) {
-        videoDropped++;
-        lastCapturedFrame.pixBuf = nil;
     } else {
-        videoFrames++;
-        CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
-        //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
-        //                      frameCount, videoFrames, depthFrames,
-        //                      videoDropped, depthDropped, depthMissing, notRespond);
-        if (videoPixelBufferRef) {
-            CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
-            size_t width = CVPixelBufferGetWidth(videoPixelBufferRef);
-            size_t height = CVPixelBufferGetHeight(videoPixelBufferRef);
-            CGSize imageSize = CGSizeMake(width, height);
-
-            if (!lastCapturedFrame.pixBuf || !SAME_SIZE(lastCapturedFrame.pixBuf.size, imageSize)) {
-                lastCapturedFrame.pixBuf = [[PixBuf alloc] initWithSize:imageSize];
-                NSLog(@"dataOutputSynchronizer    new pixBuf  %.0f X %.0f",
-                      lastCapturedFrame.pixBuf.size.width,
-                      lastCapturedFrame.pixBuf.size.height);
+        if(syncedDepthBufferData.depthDataWasDropped) {
+            stats.depthDropped++; // this should be rare
+            capturedFrame.depthBuf = nil;
+        } else {
+            stats.depthFrames++;
+            capturedFrame.writeLockCount = 1;
+            CVPixelBufferRef depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
+            if (depthPixelBufferRef) {
+                CVPixelBufferLockBaseAddress(depthPixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+                // copy the given depth data to our capture.  It seems to change under us, so
+                // save most processing until after the depths are firmed up
+                size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
+                size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
+                CGSize ds = CGSizeMake(width, height);
+                // reuse the previous depthbuf, if it exists and is the right size
+                if (!capturedFrame.depthBuf || !SAME_SIZE(capturedFrame.depthBuf.size, ds)) {
+                    capturedFrame.depthBuf = [[DepthBuf alloc] initWithSize:ds];
+                    NSLog(@"dataOutputSynchronizer    new depth     %.0f X %.0f",
+                          capturedFrame.depthBuf.size.width,
+                          capturedFrame.depthBuf.size.height);
+                }
+                assert(sizeof(Distance) == sizeof(float));
+                float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
+                capturedFrame.depthBuf.minDepth = MAXFLOAT;
+                capturedFrame.depthBuf.maxDepth = -1.0;
+                for (size_t i=0; i < width*height; i++) {
+                    float d = capturedDepthBuffer[i];
+                    if (isnan(d)) {
+                        stats.depthNaNs++;
+                        d = BAD_DEPTH;
+                    } else if (d == 0.0) {
+                        stats.depthZeros++;
+                        d = BAD_DEPTH;
+                    } else {
+                        if (d < capturedFrame.depthBuf.minDepth)
+                            capturedFrame.depthBuf.minDepth = d;
+                        if (d > capturedFrame.depthBuf.maxDepth)
+                            capturedFrame.depthBuf.maxDepth = d;
+                    }
+                    capturedFrame.depthBuf.db[i] = d;
+                }
+                CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
+                assert(capturedFrame.depthBuf.minDepth > 0);
+                assert(capturedFrame.depthBuf.maxDepth > 0 || capturedFrame.depthBuf.maxDepth < MAXFLOAT);
+                assert(capturedFrame.depthBuf.minDepth <= capturedFrame.depthBuf.maxDepth);
+                // NB: the depth data is dirty, with BAD_DEPTH values
             }
-            
-            void *baseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
-            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
-            assert(bytesPerRow == width*sizeof(Pixel));
-            memcpy(lastCapturedFrame.pixBuf.pb, baseAddress, bytesPerRow * height);
-            CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [(id<videoSampleProcessorDelegate>)self->videoProcessor processCaptureFrame:self->lastCapturedFrame];
-            self->lastCapturedFrame.writeLockCount--;
-            assert(self->lastCapturedFrame.writeLockCount >= 0);
-        });
+        
+        AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
+                                                    synchronizedDataForCaptureOutput:self.videoDataOutput];
+        AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
+        if(syncedSampleBufferData.sampleBufferWasDropped) {
+            stats.imagesDropped++;
+            capturedFrame.writeLockCount = 0;
+            return;
+        } else {
+            stats.imageFrames++;
+            capturedFrame.writeLockCount = 1;
+            CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
+            //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
+            //                      frameCount, videoFrames, depthFrames,
+            //                      videoDropped, depthDropped, depthMissing, notRespond);
+            if (videoPixelBufferRef) {
+                CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
+                size_t width = CVPixelBufferGetWidth(videoPixelBufferRef);
+                size_t height = CVPixelBufferGetHeight(videoPixelBufferRef);
+                CGSize imageSize = CGSizeMake(width, height);
+                
+                // reuse the pixbuf, if it exists and is the same size
+                if (!capturedFrame.pixBuf || !SAME_SIZE(capturedFrame.pixBuf.size, imageSize)) {
+                    capturedFrame.pixBuf = [[PixBuf alloc] initWithSize:imageSize];
+                    NSLog(@"dataOutputSynchronizer    new pixBuf  %.0f X %.0f",
+                          capturedFrame.pixBuf.size.width,
+                          capturedFrame.pixBuf.size.height);
+                }
+                
+                void *baseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
+                size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
+                assert(bytesPerRow == width*sizeof(Pixel));
+                memcpy(capturedFrame.pixBuf.pb, baseAddress, bytesPerRow * height);
+                CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [(id<videoSampleProcessorDelegate>)self->videoProcessor processCaptureFrame:self->capturedFrame];
+                self->capturedFrame.writeLockCount--;
+                assert(self->capturedFrame.writeLockCount >= 0);
+            });
+        }
+#ifdef UNDEF
+        if (NO && (frameCount-1) % 500 == 0)
+            NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
+                  frameCount, videoFrames, depthFrames,
+                  videoDropped, depthDropped, depthMissing);
+#endif
+        return;
     }
-    if (NO && (frameCount-1) % 500 == 0)
-        NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
-              frameCount, videoFrames, depthFrames,
-              videoDropped, depthDropped, depthMissing);
-    return;
 }
 
 #ifdef OLD

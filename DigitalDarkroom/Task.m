@@ -238,10 +238,10 @@ static PixelIndex_t dPI(int x, int y) {
 
 - (Frame * __nullable) executeTransformsFromFrame:(Frame *)sourceFrame {
     if (taskStatus == Stopped || !enabled)
-        return nil;     // not now
+        return sourceFrame;     // not now
     if (taskGroup.taskCtrl.reconfigurationNeeded) {
         taskStatus = Stopped;
-        return nil;
+        return sourceFrame;
     }
     taskStatus = Running;
     
@@ -271,7 +271,6 @@ static PixelIndex_t dPI(int x, int y) {
         return lastFrame;
     }
 
-
     if (transformList.count == 0 && !depthTransform) { // just display the input
         UIImage *unmodifiedSourceImage = [self pixbufToImage:imBufs[0]];
         [self updateTargetWith:unmodifiedSourceImage];
@@ -281,8 +280,6 @@ static PixelIndex_t dPI(int x, int y) {
     frame0 = [sourceFrame copy];
     frames[0] = frame0;
 //    [sourceFrame copyTo:frame0];
-    assert(frame0.depthBuf);
-    assert(frame0.depthBuf.minDepth > 0);
 
     size_t sourceIndex = 0; // imBuf0, where the input is
     size_t destIndex;
@@ -291,7 +288,7 @@ static PixelIndex_t dPI(int x, int y) {
     for (int i=0; i<transformList.count; i++) {
         if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
             taskStatus = Stopped;
-            return nil;
+            return sourceFrame;
         }
         Transform *transform = transformList[i];
         TransformInstance *instance = paramList[i];
@@ -308,6 +305,7 @@ static PixelIndex_t dPI(int x, int y) {
     }
     
     Frame *lastFrame = frames[sourceIndex];
+    assert(lastFrame);
     finalImage = [lastFrame toUIImage];
     [self updateTargetWith:finalImage];
     taskStatus = Idle;

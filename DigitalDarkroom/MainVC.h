@@ -13,6 +13,7 @@
 #import "ThumbView.h"
 #import "InputSource.h"
 #import "Frame.h"
+#import "Stats.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -46,11 +47,13 @@ typedef enum {
     BOOL isPortrait, isiPhone;
     UIView *containerView;
     NSMutableArray *thumbViewsArray;
+    Stats *stats;
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
 @property (nonatomic, strong)   UIView *containerView;
 @property (nonatomic, strong)   NSMutableArray *thumbViewsArray; // views that go into thumbsView
+@property (nonatomic, strong)   Stats *stats;
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
