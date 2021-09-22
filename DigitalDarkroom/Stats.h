@@ -14,15 +14,17 @@ NS_ASSUME_NONNULL_BEGIN
     int framesReceived, framesProcessed;
     int emptyFrames, framesIgnored, depthMissing;
     int depthFrames, depthDropped, imageFrames, imagesDropped;
-    int depthNaNs, depthZeros;
+    int depthNaNs, depthZeros, noVideoPixelBuffer;
     NSDate *lastProcessed;
 }
 
 @property (assign)              int framesReceived, framesProcessed;
 @property (assign)              int emptyFrames, framesIgnored, depthMissing, depthDropped;
 @property (assign)              int depthFrames, depthNaNs, depthZeros;
-@property (assign)              int imageFrames, imagesDropped;
+@property (assign)              int imageFrames, imagesDropped, noVideoPixelBuffer;
 @property (nonatomic, strong)   NSDate *lastProcessed;
+
+- (NSString *) report;
 
 @end
 

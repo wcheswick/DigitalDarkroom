@@ -205,10 +205,14 @@ ma(ma_buff_t *b, float v) {
 }
 
 - (void) verifyDepthRange {
+    assert(minDepth > 0);
+    assert(maxDepth > 0);
+    assert(minDepth <= maxDepth);
     for (int i=0; i<size.width*size.height; i++) {
         float d = db[i];
         if (d == BAD_DEPTH)
             continue;
+        assert(d);
         assert(d >= minDepth);
         assert(d <= maxDepth);
     }

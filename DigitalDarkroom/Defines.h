@@ -23,7 +23,7 @@
 //#define DEBUG_THUMB_LAYOUT 1
 //#define ONLY_RED    1   // process pure red input only
 
-#define MAX_FRAME_RATE  24
+#define MAX_FRAME_RATE  20
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars

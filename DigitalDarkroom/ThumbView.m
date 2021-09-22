@@ -57,6 +57,7 @@
 #endif
 
 - (void) configureForTransform:(Transform *) transform {
+    self.transform = transform;
     UILabel *transformLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     transformLabel.tag = THUMB_LABEL_TAG;
     transformLabel.textAlignment = NSTextAlignmentCenter;

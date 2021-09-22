@@ -36,6 +36,7 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
+@property (nonatomic, strong)   PixBuf *dstPixBuf;
 @property (nonatomic, strong)   ChBuf *chBuf0, *chBuf1;
 @property (nonatomic, strong)   Frame *frame0, *frame1;
 @property (nonatomic, strong)   NSMutableArray<Frame *> *frames;
@@ -48,6 +49,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize transformList;
 @synthesize paramList;
 @synthesize targetImageView;
+@synthesize dstPixBuf;
 @synthesize chBuf0, chBuf1;
 @synthesize frames, frame0, frame1;
 @synthesize taskGroup;
@@ -160,6 +162,7 @@ static PixelIndex_t dPI(int x, int y) {
         assert(frame.depthBuf);
     }
     
+    dstPixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
     chBuf0 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
     assert(chBuf0);
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
@@ -236,26 +239,24 @@ static PixelIndex_t dPI(int x, int y) {
 // task-specific copy of the source image, because other tasks need a clean
 // source.  Return the frame displayed.
 
-- (Frame * __nullable) executeTransformsFromFrame:(Frame *)sourceFrame {
+- (const Frame * __nullable) executeTransformsFromFrame:(const Frame *)sourceFrame {
     if (taskStatus == Stopped || !enabled)
         return sourceFrame;     // not now
     if (taskGroup.taskCtrl.reconfigurationNeeded) {
         taskStatus = Stopped;
         return sourceFrame;
     }
-    taskStatus = Running;
-    
-    // we copy the pixels into the correctly-sized, previously-created frame0,
-    UIImage *finalImage;
-    
-    if (isThumbTask)
-        assert(transformList.count == 1);
 
     if (transformList.count == 0) { // just display the input
         UIImage *unmodifiedSourceImage = [sourceFrame toUIImage];
         [self updateTargetWith:unmodifiedSourceImage];
         return sourceFrame;
     }
+    
+    taskStatus = Running;
+    
+    if (isThumbTask)
+        assert(transformList.count == 1);
 
 #ifdef EXTRA
     if (isThumbTask) {
@@ -265,8 +266,7 @@ static PixelIndex_t dPI(int x, int y) {
                                          instance:paramList[0]
                                            source:0];
         Frame *lastFrame = frames[destIndex];
-        finalImage = [lastFrame toUIImage];
-        [self updateTargetWith:finalImage];
+        [self updateTargetWith:[lastFrame toUIImage]];
         taskStatus = Idle;
         return lastFrame;
     }
@@ -277,12 +277,14 @@ static PixelIndex_t dPI(int x, int y) {
         return frame;
     }
 #endif
-    frame0 = [sourceFrame copy];
-    frames[0] = frame0;
-//    [sourceFrame copyTo:frame0];
-
-    size_t sourceIndex = 0; // imBuf0, where the input is
-    size_t destIndex;
+    Frame *activeFrame = [sourceFrame copy];
+    if (sourceFrame.depthBuf) {
+        [sourceFrame.depthBuf verify];
+        [sourceFrame.depthBuf verifyDepthRange];
+        assert(activeFrame.depthBuf);
+        [activeFrame.depthBuf verify];
+        [activeFrame.depthBuf verifyDepthRange];
+    }
     NSDate *startTime = [NSDate now];
 
     for (int i=0; i<transformList.count; i++) {
@@ -293,21 +295,27 @@ static PixelIndex_t dPI(int x, int y) {
         Transform *transform = transformList[i];
         TransformInstance *instance = paramList[i];
         
-        destIndex = [self performTransform:transform
-                                  instance:instance
-                                    source:sourceIndex];
-        assert(destIndex == 0 || destIndex == 1);
-        sourceIndex = destIndex;
+        [self performTransform:transform
+                      instance:instance
+                         frame:activeFrame];
+#ifdef NOTDEF
+        NSLog(@"transform %@", transform.name);
+        if (transform.type == DepthVis && sourceIndex != destIndex && frames[sourceIndex].depthBuf) {
+            frames[destIndex].depthBuf = frames[sourceIndex].depthBuf;
+            [frames[destIndex].depthBuf verifyDepthRange];
+        }
+#endif
         NSDate *transformEnd = [NSDate now];
         instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
         instance.timesCalled++;
         startTime = transformEnd;
     }
     
-    Frame *lastFrame = frames[sourceIndex];
+    Frame *lastFrame = activeFrame;
     assert(lastFrame);
-    finalImage = [lastFrame toUIImage];
-    [self updateTargetWith:finalImage];
+    if (lastFrame.depthBuf)
+        [lastFrame.depthBuf verifyDepthRange];
+    [self updateTargetWith:[lastFrame toUIImage]];
     taskStatus = Idle;
     return lastFrame;
 }
@@ -341,12 +349,9 @@ static PixelIndex_t dPI(int x, int y) {
      });
 }
 
-- (size_t) performTransform:(Transform *)transform
+- (void) performTransform:(Transform *)transform
                      instance:(TransformInstance *)instance
-                     source:(size_t)sourceIndex {
-    Frame *srcFrame = frames[sourceIndex];
-    size_t destIndex = 1 - sourceIndex;
-    Frame *dstFrame = frames[destIndex];        // we may not use this: transform may be in place
+                     frame:(Frame *)srcFrame {
     int N = srcFrame.pixBuf.size.width*srcFrame.pixBuf.size.height;
     
     switch (transform.type) {
@@ -354,13 +359,16 @@ static PixelIndex_t dPI(int x, int y) {
             assert(NO); // should never try a null, it is a placeholder for inactive stuff
         case ColorTrans:
             transform.ipPointF(srcFrame, instance.value);
-            return sourceIndex;     // was done in place
+            break;     // was done in place
         case AreaTrans:
-            transform.areaF(srcFrame, dstFrame, chBuf0, chBuf1, instance);
+            transform.areaF(srcFrame, dstPixBuf, chBuf0, chBuf1, instance);
+            memcpy(srcFrame.pixBuf.pb, dstPixBuf.pb,
+                   srcFrame.pixBuf.size.height * srcFrame.pixBuf.size.width * sizeof(Pixel));
             break;
         case DepthVis:
             if (srcFrame.depthBuf)
-                transform.depthVisF(srcFrame, dstFrame, instance);
+                transform.depthVisF(srcFrame, instance);
+            // result is in pixBuf, maybe with modified depthBuf
             break;
         case EtcTrans:
             NSLog(@"stub - etctrans");
@@ -374,7 +382,8 @@ static PixelIndex_t dPI(int x, int y) {
             assert(instance.remapBuf);
  //           [instance.remapBuf verify];
             BufferIndex *bip = instance.remapBuf.rb;
-            Pixel *dp = dstFrame.pixBuf.pb;
+            PixBuf *destPixBuf = [[PixBuf alloc] initWithSize:srcFrame.pixBuf.size];
+            Pixel *dp = destPixBuf.pb;
             for (int i=0; i<N; i++) {
                 Pixel p;
                 BufferIndex bi = *bip++;
@@ -409,9 +418,10 @@ static PixelIndex_t dPI(int x, int y) {
                 }
                 *dp++ = p;
             }
+            srcFrame.pixBuf = destPixBuf;   // swap in new bits
         }
     }
-    return destIndex;
+    return;
 }
 
 @end

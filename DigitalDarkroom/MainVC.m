@@ -29,7 +29,6 @@
 
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
-#define STATS_FONT_SIZE     18
 
 #define VALUE_W         45
 #define VALUE_LIMITS_W  35
@@ -85,6 +84,7 @@
 #define SLIDER_AREA_W   200
 
 #define SHOW_LAYOUT_FONT_SIZE   14
+#define MAIN_STATS_FONT_SIZE 20
 
 #define STATS_HEADER_INDEX  1   // second section is just stats
 #define TRANSFORM_USES_SLIDER(t) ((t).p != UNINITIALIZED_P)
@@ -184,7 +184,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 
 @property (nonatomic, strong)   UIBarButtonItem *depthBarButton;
-@property (nonatomic, strong)   Frame *displayedFrame;  // what's on the screen
+@property (nonatomic, strong)   Frame *lastDisplayedFrame;  // what's on the screen
 
 // in containerview:
 @property (nonatomic, strong)   UIView *paramView;
@@ -193,6 +193,7 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UIView *flashView;
 @property (nonatomic, strong)   UILabel *layoutValuesView;
+@property (nonatomic, strong)   UILabel *mainStatsView;
 
 @property (assign)              BOOL showControls, live;
 @property (assign)              BOOL transformChainChanged;
@@ -202,9 +203,9 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIButton *runningButton, *snapButton;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
-@property (nonatomic, strong)   UITextView *executeView;        // active transform list
+@property (nonatomic, strong)   UITextView *executeView;    // active transform list
 @property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
-@property (assign)              long layoutIndex;       // index into layouts
+@property (assign)              long layoutIndex;           // index into layouts
 
 @property (nonatomic, strong)   UINavigationController *helpNavVC;
 // in sources view
@@ -274,6 +275,7 @@ MainVC *mainVC = nil;
 @synthesize thumbViewsArray, thumbsView;
 @synthesize layouts, layoutIndex;
 @synthesize helpNavVC;
+@synthesize mainStatsView;
 
 @synthesize paramView, paramLabel, paramSlider;
 @synthesize showControls, flashView;
@@ -318,7 +320,7 @@ MainVC *mainVC = nil;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
 @synthesize imageDumpRequested;
-@synthesize displayedFrame;
+@synthesize lastDisplayedFrame;
 @synthesize stats;
 
 - (id) init {
@@ -334,7 +336,7 @@ MainVC *mainVC = nil;
         transformChainChanged = NO;
         plusMode = NoPlus;
         imageDumpRequested = NO;
-        displayedFrame = nil;
+        lastDisplayedFrame = nil;
         layouts = [[NSMutableArray alloc] init];
         taskCtrl = [[TaskCtrl alloc] init];
         deviceOrientation = UIDeviceOrientationUnknown;
@@ -363,7 +365,6 @@ MainVC *mainVC = nil;
         cameraController.videoProcessor = self;
         cameraController.stats = self.stats;
 #endif
-        
 
         inputSources = [[NSMutableArray alloc] init];
         cameraSourceThumb = nil;
@@ -572,7 +573,7 @@ CGFloat topOfNonDepthArray = 0;
             UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             thumbImage.frame = layout.thumbImageRect;
             if (thumbView.transform.type == DepthVis) {
-                [thumbView adjustStatus: (displayedFrame.depthBuf != nil) ? ThumbAvailable : ThumbUnAvailable];
+                [thumbView adjustStatus: (lastDisplayedFrame.depthBuf != nil) ? ThumbAvailable : ThumbUnAvailable];
             } else {
                 thumbImage.image = noDepthImage;
             }
@@ -760,11 +761,27 @@ static NSString * const imageOrientationName[] = {
     flashView.opaque = NO;
     flashView.hidden = YES;
     [containerView addSubview:flashView];
+
+    mainStatsView = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, MAIN_STATS_FONT_SIZE)];
+    mainStatsView.hidden = NO;
+    mainStatsView.text = @"";
+    mainStatsView.font = [UIFont fontWithName:@"Courier-Bold" size:MAIN_STATS_FONT_SIZE];
+    mainStatsView.textAlignment = NSTextAlignmentLeft;
+    mainStatsView.textColor = [UIColor whiteColor];
+    mainStatsView.adjustsFontSizeToFitWidth = YES;
+    //mainStatsView.lineBreakMode = NSLineBreakByTruncatingTail;
+    //    mainStatsView.lineBreakMode = NSLineBreakByWordWrapping;
+    mainStatsView.opaque = NO;
+    mainStatsView.numberOfLines = 0;
+    mainStatsView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.5];
+    [transformView addSubview:mainStatsView];
+    [transformView bringSubviewToFront:mainStatsView];
     
+    [UIFont boldSystemFontOfSize:SHOW_LAYOUT_FONT_SIZE];
+
     layoutValuesView = [[UILabel alloc] init];
     layoutValuesView.hidden = YES;
     layoutValuesView.font = [UIFont fontWithName:@"Courier-Bold" size:SHOW_LAYOUT_FONT_SIZE];
-    [UIFont boldSystemFontOfSize:SHOW_LAYOUT_FONT_SIZE];
     layoutValuesView.textAlignment = NSTextAlignmentLeft;
     layoutValuesView.textColor = [UIColor whiteColor];
     layoutValuesView.adjustsFontSizeToFitWidth = YES;
@@ -949,7 +966,7 @@ static NSString * const imageOrientationName[] = {
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     
-#define TICK_INTERVAL   0.1
+#define TICK_INTERVAL   1.0
     statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
                                                   target:self
                                                 selector:@selector(doTick:)
@@ -1372,12 +1389,11 @@ static NSString * const imageOrientationName[] = {
         if (tappedTransform) {
             [screenTask appendTransformToTask:tappedTransform];
             [tappedThumb adjustStatus:ThumbActive];
-
         }
         [screenTask configureTaskForSize];
     }
     transformChainChanged = YES;
-    [self doTransformsOnFrame:currentSourceFrame];
+    [self doTransformsOnFrame:lastDisplayedFrame];
 //    [self updateOverlayView];
     [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
@@ -2010,6 +2026,7 @@ static NSString * const imageOrientationName[] = {
 // be BAD_DEPTH.
 
 - (void) processCaptureFrame:(Frame *)capturedFrame {
+    assert(capturedFrame.pixBuf);       // we require an image
     [capturedFrame.depthBuf verifyDepthRange];
     currentSourceFrame = [capturedFrame copy];
     if (!live || taskCtrl.reconfigurationNeeded || busy) {
@@ -2026,6 +2043,8 @@ static NSString * const imageOrientationName[] = {
 #define IMAGE_DUMP_FILE @"ImageDump"
 
 - (void) doTransformsOnFrame:(Frame *)frame {
+    if (!frame)
+        return;
     if (imageDumpRequested) {
         NSString *tmpImageFile = [NSTemporaryDirectory() stringByAppendingPathComponent:IMAGE_DUMP_FILE];
         
@@ -2043,7 +2062,11 @@ static NSString * const imageOrientationName[] = {
     }
     
     // update the screen with transforms on the incoming image
-    displayedFrame = [screenTasks executeTasksWithFrame:frame dumpFile:nil];
+    [frame.depthBuf verifyDepthRange];
+    Frame *displayedFrame = [screenTasks executeTasksWithFrame:frame dumpFile:nil];
+    if (displayedFrame) {
+        lastDisplayedFrame = displayedFrame;
+    }
     if (transformChainChanged)
         [self updateThumbAvailability];
 
@@ -2095,7 +2118,8 @@ UIImageOrientation lastOrientation;
 
 - (void) doTick:(NSTimer *)sender {
 //    [taskCtrl checkReadyForLayout];
-    
+    mainStatsView.text = [stats report];
+    [mainStatsView setNeedsDisplay];
 #ifdef NOTYET
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];
@@ -2638,6 +2662,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     SET_VIEW_WIDTH(layoutValuesView, textSize.width)
     [layoutValuesView setNeedsDisplay];
     
+    SET_VIEW_WIDTH(mainStatsView, transformView.frame.size.width);
+    
     [self updateExecuteView];
     [taskCtrl enableTasks];
     if (currentSourceFrame)
@@ -2679,7 +2705,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // update the thumbs to show which are available for the end of the new transform chain
 // displayedFrame has the source frame.  if nil?
 - (void) updateThumbAvailability {
-    BOOL depthAvailable = cameraController.depthDataAvailable;
+    BOOL depthAvailable = (lastDisplayedFrame.depthBuf != nil); // cameraController.depthDataAvailable;
     for (ThumbView *thumbView in thumbViewsArray) {
         Transform *transform = thumbView.transform;
         if (transform.type != DepthVis)

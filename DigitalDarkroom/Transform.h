@@ -52,13 +52,12 @@ typedef void (^ __nullable __unsafe_unretained
 
 typedef void (^ __nullable __unsafe_unretained
               areaFunction_t)(const Frame *srcFrame,
-                              Frame *dstFrame,
+                              PixBuf *dstPixBuf,
                               ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
               depthVis_t)(const Frame *srcFrame,
-                          Frame *dstFrame,
                           TransformInstance *instance);
 
 @interface Transform : NSObject {

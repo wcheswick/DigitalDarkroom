@@ -142,7 +142,7 @@
 // transform the image.
 // return the frame of the image finally displayed by the last task.
 
-- (Frame * __nullable) executeTasksWithFrame:(const Frame *) frame
+- (Frame *) executeTasksWithFrame:(const Frame *) frame
                       dumpFile:(NSFileHandle *__nullable)imageFileHandle {
     // XXXXX this is mostly wrong now:
     assert(frame);
@@ -175,24 +175,24 @@
         return nil;
     }
 
-    Frame *scaledFrame = [[Frame alloc] init];
-    Frame *lastFrame = nil;
+    // grousrcframe is scaled frame, already allocated
+    
+    Frame * __nullable lastFrame = nil;
         
     if (taskCtrl.reconfigurationNeeded)
         [taskCtrl idleTransforms];
     
     if (frame.depthBuf) {
         [frame.depthBuf verifyDepthRange];
-        scaledFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
-        [scaledFrame.depthBuf scaleFrom:frame.depthBuf];
+        [groupSrcFrame.depthBuf scaleFrom:frame.depthBuf];
     }
 
     assert(frame.pixBuf);
     if (!SAME_SIZE(frame.pixBuf.size, targetSize)) {
-        scaledFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
-        [scaledFrame.pixBuf scaleFrom:frame.pixBuf];
+        [groupSrcFrame.pixBuf scaleFrom:frame.pixBuf];
     } else
-        scaledFrame.pixBuf = frame.pixBuf;
+        groupSrcFrame.pixBuf = frame.pixBuf;
+    assert(frame.pixBuf);
 
 //#define SKIPTRANSFORMS  1
 #ifdef SKIPTRANSFORMS   // for debugging
@@ -209,37 +209,36 @@
 
     if (imageFileHandle) {
         NSString *line = [NSMutableString stringWithFormat:@"%lu %lu %d\n",
-                           (unsigned long)scaledFrame.pixBuf.size.width, (unsigned long)scaledFrame.pixBuf.size.height,
-                          scaledFrame.depthBuf ? 4 : 3];
+                           (unsigned long)groupSrcFrame.pixBuf.size.width, (unsigned long)groupSrcFrame.pixBuf.size.height,
+                          groupSrcFrame.depthBuf ? 4 : 3];
         [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-        if (scaledFrame.depthBuf)
-            assert(SAME_SIZE(scaledFrame.depthBuf.size, scaledFrame.pixBuf.size));
-        for (int y=0; y < scaledFrame.pixBuf.size.height; y++) {
-            for (int x=0; x < scaledFrame.pixBuf.size.width; x++) {
-                NSString *d = scaledFrame.depthBuf ? [NSString stringWithFormat:@"%f", frame.depthBuf.da[y][x]] : @"";
+        if (groupSrcFrame.depthBuf)
+            assert(SAME_SIZE(groupSrcFrame.depthBuf.size, groupSrcFrame.pixBuf.size));
+        for (int y=0; y < groupSrcFrame.pixBuf.size.height; y++) {
+            for (int x=0; x < groupSrcFrame.pixBuf.size.width; x++) {
+                NSString *d = groupSrcFrame.depthBuf ? [NSString stringWithFormat:@"%f",
+                                                        frame.depthBuf.da[y][x]] : @"";
                 line = [NSString stringWithFormat:@"%d %d %d %@\n",
-                        scaledFrame.pixBuf.pa[y][x].r, scaledFrame.pixBuf.pa[y][x].g, scaledFrame.pixBuf.pa[y][x].b, d];
+                        groupSrcFrame.pixBuf.pa[y][x].r,
+                        groupSrcFrame.pixBuf.pa[y][x].g,
+                        groupSrcFrame.pixBuf.pa[y][x].b, d];
                 [imageFileHandle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
             }
         }
     }
-    if (frame.depthBuf)
-        assert(scaledFrame.depthBuf);
-    [scaledFrame.depthBuf verifyDepthRange];
     
 //    BOOL hasDepth = scaledFrame.depthBuf != nil;
     
-    @synchronized (scaledFrame) {   // frame, or scaledFrame?
-        for (Task *task in tasks) {
-            if (task.taskStatus == Running)
-                continue;
-            busyCount++;
-//            [task check];
-            lastFrame = [task executeTransformsFromFrame:scaledFrame];
-            busyCount--;
-            assert(busyCount >= 0);
-        }
+    for (Task *task in tasks) {
+        if (task.taskStatus == Running)
+            continue;
+        busyCount++;
+        // [task check];
+        lastFrame = (Frame *)[task executeTransformsFromFrame:groupSrcFrame];
+        busyCount--;
+        assert(busyCount >= 0);
     }
+    
     if (taskCtrl.reconfigurationNeeded)
         [taskCtrl idleTransforms];
     return lastFrame;
