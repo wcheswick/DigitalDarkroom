@@ -476,7 +476,6 @@ MainVC *mainVC = nil;
         thumbView.task.enabled = YES;
         thumbView.task.isThumbTask = YES;
         [thumbView.task appendTransformToTask:transform];
-        [thumbView addSubview:imageView];
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
                                                          initWithTarget:self action:@selector(doHelp:)];
@@ -577,6 +576,7 @@ CGFloat topOfNonDepthArray = 0;
             } else {
                 thumbImage.image = noDepthImage;
             }
+            thumbView.task.targetImageView = thumbImage;
             
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = transformNameRect;

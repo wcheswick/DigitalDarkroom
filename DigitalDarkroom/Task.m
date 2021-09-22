@@ -278,6 +278,7 @@ static PixelIndex_t dPI(int x, int y) {
     }
 #endif
     Frame *activeFrame = [sourceFrame copy];
+#ifdef DEBUG
     if (sourceFrame.depthBuf) {
         [sourceFrame.depthBuf verify];
         [sourceFrame.depthBuf verifyDepthRange];
@@ -285,6 +286,7 @@ static PixelIndex_t dPI(int x, int y) {
         [activeFrame.depthBuf verify];
         [activeFrame.depthBuf verifyDepthRange];
     }
+#endif
     NSDate *startTime = [NSDate now];
 
     for (int i=0; i<transformList.count; i++) {
