@@ -7,6 +7,9 @@
 //
 
 #import "TaskCtrl.h"
+#import "Task.h"
+#import "MainVC.h"
+
 
 @interface TaskCtrl ()
 
@@ -19,17 +22,16 @@
 
 @synthesize transforms;
 @synthesize taskGroups;
-@synthesize reconfigurationNeeded;
+@synthesize state;
 @synthesize layingOut;
 @synthesize sourceSize;     // size of incoming images.  Depth may be difference
 
 - (id)init {
     self = [super init];
     if (self) {
-        mainVC = nil;
-        taskGroups = [[NSMutableArray alloc] initWithCapacity:N_TASK_GROUPS];
+        taskGroups = [[NSMutableArray alloc] init];
         assert(taskGroups);
-        reconfigurationNeeded = NO;
+        state = NeedsNewLayout;
         layingOut = NO;
         sourceSize = CGSizeZero;
     }
@@ -43,43 +45,25 @@
     return taskGroup;
 }
 
-- (BOOL) tasksAreIdled {
-    for (TaskGroup *taskGroup in taskGroups) {
-        if (![taskGroup isReadyForLayout])
-            return NO;
-    }
-    return YES;
-}
-
-- (void) idleTransforms {
+- (void) idleFor:(LayoutStatus_t) newStatus {
 #ifdef DEBUG_TASK_BUSY
-    NSLog(@"TTT idling tasks");
+    NSLog(@"TTT idling for %d", newStatus);
 #endif
-    reconfigurationNeeded = YES;
+    state = newStatus;
     [self checkForIdle];
 }
 
 - (void) checkForIdle {
-    if (!reconfigurationNeeded)
+    if (state == LayoutOK)
         return;
     for (TaskGroup *taskGroup in taskGroups) {
         if (taskGroup.busyCount)
             return;
     }
-    reconfigurationNeeded = NO;
-    [mainVC transformsIdle];
-#ifdef OLD
-    dispatch_async(dispatch_get_main_queue(), ^{
-#ifdef DEBUG_TASK_BUSY
-        NSLog(@"TTT    tasks now idle");
-#endif
-        [self->mainVC transformsIdle];
-    });
-#endif
+    [mainVC tasksReadyFor:state];
 }
 
 - (void) enableTasks {
-    reconfigurationNeeded = NO;
     for (TaskGroup *taskGroup in taskGroups)
         [taskGroup enable];
 }

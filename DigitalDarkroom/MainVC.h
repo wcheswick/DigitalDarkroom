@@ -10,6 +10,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <MessageUI/MessageUI.h>
 
+#import "TaskCtrl.h"
 #import "ThumbView.h"
 #import "InputSource.h"
 #import "Frame.h"
@@ -51,14 +52,14 @@ typedef enum {
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
-@property (nonatomic, strong)   UIView *containerView;
+@property (nonatomic, strong)   UIView *containerView;  // Layout uses this
 @property (nonatomic, strong)   NSMutableArray *thumbViewsArray; // views that go into thumbsView
 @property (nonatomic, strong)   Stats *stats;
 
-//- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
-
-- (void) transformsIdle;
+- (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
 - (void) newDeviceOrientation;
+
+//- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 
 extern MainVC *mainVC;
 

@@ -242,7 +242,7 @@ static PixelIndex_t dPI(int x, int y) {
 - (const Frame * __nullable) executeTransformsFromFrame:(const Frame *)sourceFrame {
     if (taskStatus == Stopped || !enabled)
         return sourceFrame;     // not now
-    if (taskGroup.taskCtrl.reconfigurationNeeded) {
+    if (taskGroup.taskCtrl.state != LayoutOK) {
         taskStatus = Stopped;
         return sourceFrame;
     }
@@ -290,7 +290,7 @@ static PixelIndex_t dPI(int x, int y) {
     NSDate *startTime = [NSDate now];
 
     for (int i=0; i<transformList.count; i++) {
-        if (taskGroup.taskCtrl.reconfigurationNeeded) {  // abort our processing
+        if (taskGroup.taskCtrl.state != LayoutOK) {  // abort our processing
             taskStatus = Stopped;
             return sourceFrame;
         }

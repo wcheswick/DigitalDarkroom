@@ -12,7 +12,6 @@
 #import "CameraController.h"
 
 #import "Transforms.h"  // includes DepthImage.h
-#import "TaskCtrl.h"
 #import "OptionsVC.h"
 #import "ReticleView.h"
 #import "Layout.h"
@@ -326,6 +325,8 @@ MainVC *mainVC = nil;
 - (id) init {
     self = [super init];
     if (self) {
+        mainVC = self;  // a global is easier
+
         transforms = [[Transforms alloc] init];
         
         currentTransformIndex = NO_TRANSFORM;
@@ -629,8 +630,6 @@ static NSString * const imageOrientationName[] = {
 
 - (void) viewDidLoad {
     [super viewDidLoad];
-    
-    mainVC = self;  // a global is easier
 
 #ifdef DEBUG_ORIENTATION
     NSLog(@"OOOO viewDidLoad orientation: %@",
@@ -929,7 +928,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 #endif
 
-    [taskCtrl idleTransforms];
+    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
@@ -945,7 +944,7 @@ static NSString * const imageOrientationName[] = {
 #endif
 #endif
     // not needed: we haven't started anything yet
-    [taskCtrl idleTransforms];
+    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
@@ -997,44 +996,53 @@ static NSString * const imageOrientationName[] = {
         return; // nothing new to see here, folks
     deviceOrientation = nextOrientation;
     if (layout) // already layed out, adjust it
-        [taskCtrl idleTransforms];
+        [taskCtrl idleFor:NeedsNewLayout];
 }
 
-- (void) transformsIdle {
-    // if we are changing sources, close down any currentSource stuff
-    if (nextSourceIndex != NO_SOURCE) {   // change sources
-        if (live) {
-            [self liveOn:NO];
-        }
-
-        currentSourceIndex = nextSourceIndex;
-        transformChainChanged = YES;
-//        NSLog(@"III switching to source index %ld, %@",
-        //  (long)currentSourceIndex, CURRENT_SOURCE.label);
-        nextSourceIndex = NO_SOURCE;
-        InputSource *source = inputSources[currentSourceIndex];
-
-        if (!isiPhone)
-            self.title = source.label;
-
-        if (IS_CAMERA(source)) {
-            [cameraController updateOrientationTo:deviceOrientation];
-            [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
-            [self liveOn:YES];
-        } else {    // source is a file, it is our source image
-            currentSourceFrame = [[Frame alloc] init];
-            [currentSourceFrame readImageFromPath: source.imagePath];
-            transformChainChanged = YES;
-        }
-        [self saveSourceIndex];
+- (void) tasksReadyFor:(LayoutStatus_t) layoutStatus {
+    switch (layoutStatus) {
+        case LayoutOK:
+            assert(NO); // should not be ok yet
+            break;
+        case NeedsNewLayout:
+            // On entry:
+            //  currentSource or nextSource
+            //  transform tasks must be idle
+            if (nextSourceIndex != NO_SOURCE) {   // change sources
+                if (live) {
+                    [self liveOn:NO];
+                }
+                
+                currentSourceIndex = nextSourceIndex;
+                transformChainChanged = YES;
+                //        NSLog(@"III switching to source index %ld, %@",
+                //  (long)currentSourceIndex, CURRENT_SOURCE.label);
+                nextSourceIndex = NO_SOURCE;
+                InputSource *source = inputSources[currentSourceIndex];
+                
+                if (!isiPhone)
+                    self.title = source.label;
+                
+                if (IS_CAMERA(source)) {
+                    [cameraController updateOrientationTo:deviceOrientation];
+                    [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
+                    [self liveOn:YES];
+                } else {    // source is a file, it is our source image
+                    currentSourceFrame = [[Frame alloc] init];
+                    [currentSourceFrame readImageFromPath: source.imagePath];
+                    transformChainChanged = YES;
+                }
+                [self saveSourceIndex];
+            }
+            
+            [self doLayout];
+            taskCtrl.state = ApplyLayout;
+            // FALLTHROUGH
+        case ApplyLayout:
+            [self applyScreenLayout: layoutIndex];     // top one is best
     }
-
-    [self doLayout];
+    taskCtrl.state = LayoutOK;
 }
-
-// On entry:
-//  currentSource or nextSource
-//  transform tasks must be idle
 
 - (void) doLayout {
 #ifdef DEBUG_LAYOUT
@@ -1154,7 +1162,6 @@ static NSString * const imageOrientationName[] = {
     }
 //    NSLog(@"LLLL remaining layouts: %lu, top score %.5f at %ld",
 //          (unsigned long)editedLayouts.count, topScore, layoutIndex);
-    
     layouts = editedLayouts;
     
 #ifdef DEBUG_LAYOUT
@@ -1174,7 +1181,155 @@ static NSString * const imageOrientationName[] = {
     
     [self adjustControls];
     [self adjustBarButtons];
-    [self applyScreenLayout: layoutIndex];     // top one is best
+}
+
+- (void) applyScreenLayout:(long) newLayoutIndex {
+    assert(newLayoutIndex >= 0 && newLayoutIndex < layouts.count);
+    
+    layoutIndex = newLayoutIndex;
+    layout = layouts[layoutIndex];
+#ifdef DEBUG_LAYOUT
+    NSLog(@"applyScreenLayout %ld", layoutIndex);
+    NSLog(@"screen format %@", layout.format);
+#endif
+
+    // We have several image sizes to consider and process:
+    //
+    // currentSource.imageSize  is the size of the source image.  For images from files, it is
+    //      just the available size.  For cameras, we can adjust it by changing the capture parameters,
+    //      adjusting for the largest image we need, shown below.
+    //
+    // Each taskgroup runs an image through zero or more translation chains.  The task group shares
+    //      a common transform size and caches certain common transform processing computations.
+    //      The results of each task chain in a taskgroup goes to a UIImage of a certain size, based
+    //      on the size of the resulting image:
+    //
+    // - the displayed transformed image size (computed just below) is based on layout considerations
+    // for the device screen size and orientation.
+    //      size in screenTasks.transformSize
+    //
+    // - thumbnail outputs all must fit in THUMB_W x SOURCE_THUMB_H
+    //      size in thumbTasks.transformSize
+    //
+    // - the external window image size, if implemented and connected.
+    //      size in externalTasks.transformSize, if externalTasks exists
+    //
+    // - If "hidef" is selected, the full image possible is captured, transformed, and made available
+    // for saving.
+    //      size in hiresTasks.transformSize, iff hiresTasks exists
+    //
+    // - I suppose there will be a video file capture option some day.  That would be another target.
+    
+    transformView.frame = layout.displayRect;
+    [self positionControls];
+    thumbScrollView.frame = layout.thumbArrayRect;
+    thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
+    thumbScrollView.layer.borderWidth = 3.0;
+    
+    CGFloat below = BELOW(thumbScrollView.frame);
+    assert(below <= BELOW(containerView.frame));
+
+    thumbsView.frame = CGRectMake(0, 0,
+                                  thumbScrollView.frame.size.width,
+                                  thumbScrollView.frame.size.height);
+#ifdef NOTDEF
+    NSLog(@"layout selected:");
+
+    NSLog(@"        capture:               %4.0f x %4.0f (%4.2f)  @%.1f",
+          layout.captureSize.width, layout.captureSize.height,
+          layout.captureSize.width/layout.captureSize.height, layout.scale);
+    NSLog(@" transform size:               %4.0f x %4.0f (%4.2f)  @%.1f",
+          layout.transformSize.width,
+          layout.transformSize.height,
+          layout.transformSize.width/layout.transformSize.height,
+          layout.scale);
+    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f (%4.2f)",
+          transformView.frame.origin.x,
+          transformView.frame.origin.y,
+          transformView.frame.size.width,
+          transformView.frame.size.height,
+          transformView.frame.size.width/transformView.frame.size.height);
+
+    NSLog(@"      container:               %4.0f x %4.0f (%4.2f)",
+          containerView.frame.size.width,
+          containerView.frame.size.height,
+          containerView.frame.size.width/containerView.frame.size.height);
+    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
+          executeView.frame.origin.x,
+          executeView.frame.origin.y,
+          executeView.frame.size.width,
+          executeView.frame.size.height);
+    NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
+          thumbScrollView.frame.origin.x,
+          thumbScrollView.frame.origin.y,
+          thumbScrollView.frame.size.width,
+          thumbScrollView.frame.size.height);
+    NSLog(@"    display frac: %.3f", layout.displayFrac);
+    NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
+    NSLog(@"           scale: %.3f", layout.scale);
+#endif
+    
+    // layout.transformSize is what the tasks get to run.  They
+    // then display (possibly scaled) onto transformView.
+    
+    taskCtrl.sourceSize = layout.imageSourceSize;
+    [screenTasks configureGroupForTargetSize:layout.transformSize];
+    [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
+//    [externalTask configureGroupForTargetSize:processingSize];
+
+// no longer?    [layout positionExecuteRect];
+    executeView.frame = layout.executeRect;
+    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
+        [UIView animateWithDuration:0.5 animations:^(void) {
+            // move views to where they need to be now.
+            [self layoutThumbs: self->layout];
+        }];
+    }
+    
+    layoutValuesView.frame = transformView.frame;
+    [containerView bringSubviewToFront:layoutValuesView];
+    NSString *formatList = @"";
+    long start = newLayoutIndex - 6;
+    long finish = newLayoutIndex + 6;
+    if (start < 0)
+        start = 0;
+    if (finish > layouts.count)
+        finish = layouts.count;
+    for (long i=start; i<finish; i++) {
+        if (i > start)
+            formatList = [formatList stringByAppendingString:@"\n"];
+        NSString *cursor = newLayoutIndex == i ? @">" : @" ";
+        Layout *layout = layouts[i];
+        NSString *line = [NSString stringWithFormat:@"%@%@", cursor, layout.status];
+        formatList = [formatList stringByAppendingString:line];
+#ifdef DEBUG_LAYOUT
+        if (i == newLayoutIndex)
+            NSLog(@"%1ld-%@", i, layout.status);
+        else
+            NSLog(@"%1ld %@", i, layout.status);
+#endif
+    }
+    //    [layoutValuesView sizeToFit];
+    layoutValuesView.text = formatList;
+    CGSize textSize = [formatList sizeWithFont:layoutValuesView.font
+                             constrainedToSize:transformView.frame.size
+                                 lineBreakMode:layoutValuesView.lineBreakMode];
+    SET_VIEW_HEIGHT(layoutValuesView, textSize.height)
+    SET_VIEW_WIDTH(layoutValuesView, textSize.width)
+    [layoutValuesView setNeedsDisplay];
+    
+    SET_VIEW_WIDTH(mainStatsView, transformView.frame.size.width);
+    
+    [self updateExecuteView];
+    [taskCtrl enableTasks];
+    if (currentSourceFrame)
+        [self doTransformsOnFrame:currentSourceFrame];
+    else {
+        [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
+        //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
+        //cameraController.captureVideoPreviewLayer = previewLayer;
+        [cameraController startCamera];
+    }
 }
 
 - (void) tryAllThumbLayouts {
@@ -1480,7 +1635,7 @@ static NSString * const imageOrientationName[] = {
         } while (nextSourceIndex < N_POSS_CAM);
         assert(nextSourceIndex < N_POSS_CAM); // this loop should never be called unless there is a useful answer
     }
-    [taskCtrl idleTransforms];  // selected camera
+    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 #ifdef OLD
@@ -2029,7 +2184,7 @@ static NSString * const imageOrientationName[] = {
     assert(capturedFrame.pixBuf);       // we require an image
     [capturedFrame.depthBuf verifyDepthRange];
     currentSourceFrame = [capturedFrame copy];
-    if (!live || taskCtrl.reconfigurationNeeded || busy) {
+    if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
         assert(capturedFrame.writeLockCount >= 0);
@@ -2120,6 +2275,8 @@ UIImageOrientation lastOrientation;
 //    [taskCtrl checkReadyForLayout];
     mainStatsView.text = [stats report];
     [mainStatsView setNeedsDisplay];
+    [taskCtrl checkForIdle];
+
 #ifdef NOTYET
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];
@@ -2271,6 +2428,7 @@ static CGSize startingPinchSize;
                 if (layoutIndex < 0)
                     layoutIndex = 0;
             }
+            [taskCtrl idleFor:ApplyLayout];
             [self applyScreenLayout:layoutIndex];
             break;
         }
@@ -2329,7 +2487,7 @@ static CGSize startingPinchSize;
         return;
 //    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
     nextSourceIndex = nextIndex;
-    [self->taskCtrl idleTransforms];
+    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -2340,7 +2498,7 @@ static CGSize startingPinchSize;
                        animated:YES
                      completion:^{
         [self adjustBarButtons];
-        [self->taskCtrl idleTransforms];
+        [self->taskCtrl idleFor:NeedsNewLayout];
     }];
 }
 
@@ -2523,158 +2681,8 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     oVC.view.frame = f;
     
     [self presentViewController:oVC animated:YES completion:^{
-        [self->taskCtrl idleTransforms];
+        [self->taskCtrl idleFor:NeedsNewLayout];
     }];
-}
-
-- (void) applyScreenLayout:(long) newLayoutIndex {
-    assert(newLayoutIndex >= 0 && newLayoutIndex < layouts.count);
-    
-    layoutIndex = newLayoutIndex;
-    layout = layouts[layoutIndex];
-#ifdef DEBUG_LAYOUT
-    NSLog(@"applyScreenLayout %ld", layoutIndex);
-    NSLog(@"screen format %@", layout.format);
-#endif
-
-    // We have several image sizes to consider and process:
-    //
-    // currentSource.imageSize  is the size of the source image.  For images from files, it is
-    //      just the available size.  For cameras, we can adjust it by changing the capture parameters,
-    //      adjusting for the largest image we need, shown below.
-    //
-    // Each taskgroup runs an image through zero or more translation chains.  The task group shares
-    //      a common transform size and caches certain common transform processing computations.
-    //      The results of each task chain in a taskgroup goes to a UIImage of a certain size, based
-    //      on the size of the resulting image:
-    //
-    // - the displayed transformed image size (computed just below) is based on layout considerations
-    // for the device screen size and orientation.
-    //      size in screenTasks.transformSize
-    //
-    // - thumbnail outputs all must fit in THUMB_W x SOURCE_THUMB_H
-    //      size in thumbTasks.transformSize
-    //
-    // - the external window image size, if implemented and connected.
-    //      size in externalTasks.transformSize, if externalTasks exists
-    //
-    // - If "hidef" is selected, the full image possible is captured, transformed, and made available
-    // for saving.
-    //      size in hiresTasks.transformSize, iff hiresTasks exists
-    //
-    // - I suppose there will be a video file capture option some day.  That would be another target.
-    
-    transformView.frame = layout.displayRect;
-    [self positionControls];
-    thumbScrollView.frame = layout.thumbArrayRect;
-    thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
-    thumbScrollView.layer.borderWidth = 3.0;
-    
-    CGFloat below = BELOW(thumbScrollView.frame);
-    assert(below <= BELOW(containerView.frame));
-
-    thumbsView.frame = CGRectMake(0, 0,
-                                  thumbScrollView.frame.size.width,
-                                  thumbScrollView.frame.size.height);
-#ifdef NOTDEF
-    NSLog(@"layout selected:");
-
-    NSLog(@"        capture:               %4.0f x %4.0f (%4.2f)  @%.1f",
-          layout.captureSize.width, layout.captureSize.height,
-          layout.captureSize.width/layout.captureSize.height, layout.scale);
-    NSLog(@" transform size:               %4.0f x %4.0f (%4.2f)  @%.1f",
-          layout.transformSize.width,
-          layout.transformSize.height,
-          layout.transformSize.width/layout.transformSize.height,
-          layout.scale);
-    NSLog(@"           view:  %4.0f, %4.0f   %4.0f x %4.0f (%4.2f)",
-          transformView.frame.origin.x,
-          transformView.frame.origin.y,
-          transformView.frame.size.width,
-          transformView.frame.size.height,
-          transformView.frame.size.width/transformView.frame.size.height);
-
-    NSLog(@"      container:               %4.0f x %4.0f (%4.2f)",
-          containerView.frame.size.width,
-          containerView.frame.size.height,
-          containerView.frame.size.width/containerView.frame.size.height);
-    NSLog(@"        execute:  %4.0f, %4.0f   %4.0f x %4.0f",
-          executeView.frame.origin.x,
-          executeView.frame.origin.y,
-          executeView.frame.size.width,
-          executeView.frame.size.height);
-    NSLog(@"         thumbs:  %4.0f, %4.0f   %4.0f x %4.0f",
-          thumbScrollView.frame.origin.x,
-          thumbScrollView.frame.origin.y,
-          thumbScrollView.frame.size.width,
-          thumbScrollView.frame.size.height);
-    NSLog(@"    display frac: %.3f", layout.displayFrac);
-    NSLog(@"      thumb frac: %.3f", layout.thumbFrac);
-    NSLog(@"           scale: %.3f", layout.scale);
-#endif
-    
-    // layout.transformSize is what the tasks get to run.  They
-    // then display (possibly scaled) onto transformView.
-    
-    taskCtrl.sourceSize = layout.imageSourceSize;
-    [screenTasks configureGroupForTargetSize:layout.transformSize];
-    [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
-//    [externalTask configureGroupForTargetSize:processingSize];
-
-// no longer?    [layout positionExecuteRect];
-    executeView.frame = layout.executeRect;
-    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            // move views to where they need to be now.
-            [self layoutThumbs: self->layout];
-        }];
-    }
-    
-    layoutValuesView.frame = transformView.frame;
-    [containerView bringSubviewToFront:layoutValuesView];
-    NSString *formatList = @"";
-    long start = newLayoutIndex - 6;
-    long finish = newLayoutIndex + 6;
-    if (start < 0)
-        start = 0;
-    if (finish > layouts.count)
-        finish = layouts.count;
-    for (long i=start; i<finish; i++) {
-        if (i > start)
-            formatList = [formatList stringByAppendingString:@"\n"];
-        NSString *cursor = newLayoutIndex == i ? @">" : @" ";
-        Layout *layout = layouts[i];
-        NSString *line = [NSString stringWithFormat:@"%@%@", cursor, layout.status];
-        formatList = [formatList stringByAppendingString:line];
-#ifdef DEBUG_LAYOUT
-        if (i == newLayoutIndex)
-            NSLog(@"%1ld-%@", i, layout.status);
-        else
-            NSLog(@"%1ld %@", i, layout.status);
-#endif
-    }
-    //    [layoutValuesView sizeToFit];
-    layoutValuesView.text = formatList;
-    CGSize textSize = [formatList sizeWithFont:layoutValuesView.font
-                             constrainedToSize:transformView.frame.size
-                                 lineBreakMode:layoutValuesView.lineBreakMode];
-    SET_VIEW_HEIGHT(layoutValuesView, textSize.height)
-    SET_VIEW_WIDTH(layoutValuesView, textSize.width)
-    [layoutValuesView setNeedsDisplay];
-    
-    SET_VIEW_WIDTH(mainStatsView, transformView.frame.size.width);
-    
-    [self updateExecuteView];
-    [taskCtrl enableTasks];
-    if (currentSourceFrame)
-        [self doTransformsOnFrame:currentSourceFrame];
-    else {
-        [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
-        //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
-        //cameraController.captureVideoPreviewLayer = previewLayer;
-        [taskCtrl enableTasks];
-        [cameraController startCamera];
-    }
 }
 
 // The bottom of the image has, from right to left

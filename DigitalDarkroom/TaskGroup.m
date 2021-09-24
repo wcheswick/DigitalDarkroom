@@ -9,6 +9,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import "TaskCtrl.h"
 #import "TaskGroup.h"
+#import "MainVC.h"
 #import "Task.h"
 
 @interface TaskGroup ()
@@ -124,15 +125,6 @@
         [task removeLastTransform];
 }
 
-- (BOOL) isReadyForLayout {
-    assert(taskCtrl.reconfigurationNeeded);
-    for (Task *task in tasks) {
-        if (task.taskStatus != Stopped)
-            return NO;
-    }
-    return YES;
-}
-
 - (void) enable {
     for (Task *task in tasks) {
         [task enable];
@@ -164,23 +156,20 @@
     // The incoming image size might be larger than the transform size.  Reduce it.
     // The aspect ratio should not change.
 
-    if (taskCtrl.reconfigurationNeeded) {
+    if (taskCtrl.state != LayoutOK) {
         for (Task *task in tasks) {
             if (task.taskStatus != Stopped) {   // still waiting for this one
                 return nil;
             }
         }
         // The are all stopped.  Inform the authorities
-        [taskCtrl tasksAreIdled];
+        [mainVC tasksReadyFor:taskCtrl.state];
         return nil;
     }
 
     // grousrcframe is scaled frame, already allocated
     
     Frame * __nullable lastFrame = nil;
-        
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl idleTransforms];
     
     if (frame.depthBuf) {
         [frame.depthBuf verifyDepthRange];
@@ -189,6 +178,7 @@
 
     assert(frame.pixBuf);
     if (!SAME_SIZE(frame.pixBuf.size, targetSize)) {
+//        XXXXXX scale to larger should await reconfiguration
         [groupSrcFrame.pixBuf scaleFrom:frame.pixBuf];
     } else
         groupSrcFrame.pixBuf = frame.pixBuf;
@@ -239,8 +229,6 @@
         assert(busyCount >= 0);
     }
     
-    if (taskCtrl.reconfigurationNeeded)
-        [taskCtrl idleTransforms];
     return lastFrame;
 }
 

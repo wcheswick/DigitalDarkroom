@@ -144,6 +144,8 @@
             int sy = trunc(y/yScale);
             assert(sy < sourcePixBuf.size.height);
             pa[y][x] = sourcePixBuf.pa[sy][sx];   // XXXXXX died here during reconfiguration
+// and again...
+            
         }
     }
 }

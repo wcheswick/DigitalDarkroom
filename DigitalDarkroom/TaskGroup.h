@@ -59,7 +59,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) removeLastTransform;
 // XXX need - (void) removeTransformAtIndex:(long) index;
 
-- (BOOL) isReadyForLayout;
 - (void) enable;
 
 @end
