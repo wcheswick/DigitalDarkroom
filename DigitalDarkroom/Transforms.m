@@ -120,7 +120,7 @@ HSVPixel RGBtoHSV(Pixel rgb) {
         hsv.h = 0;
         return hsv;
     }
-
+    assert(rgbMax != rgbMin);
     if (rgbMax == rgb.r)
         hsv.h = 0 + 43 * (rgb.g - rgb.b) / (rgbMax - rgbMin);
     else if (rgbMax == rgb.g)
@@ -1181,7 +1181,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         for (int i=0; i<H * W; i++) {
             int mm = round(srcFrame.depthBuf.db[i]*1000.0);
             Pixel p;
-            if (mm > paramMaxDepthMM)
+            if (mm > backgroundDepth)
                 p = White;
             else if (mm % 1000 == 0)
                 p = BrightPurple;
@@ -1371,7 +1371,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             else {
                 if (instance.value & 0x1) {  // odd luminance
                     c = Z - (instance.value/2);
-                    p = SETRGB(0,0,instance.value);
+                    p = SETRGB(c,c,instance.value);
+// was:                    p = SETRGB(0,0,instance.value);
                 } else {
                     c = Z/2 + instance.value/2;
                     p = SETRGB(c,c,0);

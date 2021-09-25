@@ -20,7 +20,6 @@
 @synthesize cameraIndex;
 @synthesize imagePath;
 @synthesize thumbImageCache;
-@synthesize capturedImage;
 
 - (id)init {
     self = [super init];
@@ -29,7 +28,6 @@
         imagePath = nil;
         thumbImageCache = nil;
         cameraIndex = NOT_A_CAMERA;
-        capturedImage = nil;
     }
     return self;
 }
@@ -37,7 +35,6 @@
 - (void) makeCameraSource:(NSString *)name cameraIndex:(int) ci {
     label = name;
     cameraIndex = ci;
-    capturedImage = nil;
     thumbImageCache = nil;
 }
 

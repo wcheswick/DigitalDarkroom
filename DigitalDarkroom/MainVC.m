@@ -540,7 +540,7 @@ CGFloat topOfNonDepthArray = 0;
     
     atStartOfRow = YES;
     CGFloat thumbsH = 0;
-    NSString *lastSection = nil;
+//    NSString *lastSection = nil;
     
     // run through the thumbview array
     for (ThumbView *thumbView in thumbViewsArray) {
@@ -561,7 +561,7 @@ CGFloat topOfNonDepthArray = 0;
             UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
             label.frame = sectionNameRect;
             thumbView.frame = nextButtonFrame;  // this is a little incomplete
-            lastSection = thumbView.sectionName;
+//            lastSection = thumbView.sectionName;
         } else {
             thumbView.userInteractionEnabled = !thumbView.transform.broken;
 #ifdef DEBUG_THUMB_LAYOUT
@@ -1311,11 +1311,19 @@ static NSString * const imageOrientationName[] = {
     }
     //    [layoutValuesView sizeToFit];
     layoutValuesView.text = formatList;
-    CGSize textSize = [formatList sizeWithFont:layoutValuesView.font
-                             constrainedToSize:transformView.frame.size
-                                 lineBreakMode:layoutValuesView.lineBreakMode];
-    SET_VIEW_HEIGHT(layoutValuesView, textSize.height)
-    SET_VIEW_WIDTH(layoutValuesView, textSize.width)
+    NSMutableParagraphStyle *paragraph = [[NSMutableParagraphStyle alloc] init];
+    paragraph.lineBreakMode = NSLineBreakByWordWrapping;
+
+    NSDictionary *attributes = @{NSFontAttributeName : layoutValuesView.font,
+                                   NSParagraphStyleAttributeName: paragraph};
+    
+    CGRect textRect = [formatList
+                       boundingRectWithSize:transformView.frame.size
+                       options:(NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading)
+                       attributes:attributes
+                       context:nil];
+    SET_VIEW_HEIGHT(layoutValuesView, textRect.size.height)
+    SET_VIEW_WIDTH(layoutValuesView, textRect.size.width);
     [layoutValuesView setNeedsDisplay];
     
     SET_VIEW_WIDTH(mainStatsView, transformView.frame.size.width);
@@ -1466,46 +1474,7 @@ static NSString * const imageOrientationName[] = {
     atStartOfRow = YES;
 }
 
-#ifdef OLD
-// select a new depth visualization.
-- (IBAction) doTapDepthVis:(UITapGestureRecognizer *)recognizer {
-    Transform *oldDepthTransform = nil;
-    if (currentDepthTransformIndex != NO_TRANSFORM) {
-        oldDepthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-        // turn off old depth transform.  There can be only one.
-        ThumbView *oldSelectedDepthThumb = [thumbsView viewWithTag:currentDepthTransformIndex + TRANSFORM_BASE_TAG];
-        [self adjustThumb:oldSelectedDepthThumb selected:NO];
-    }
-    ThumbView *newThumbView = (ThumbView *)recognizer.view;
-    long newTransformIndex = newThumbView.transformIndex;
-    if (newTransformIndex == currentDepthTransformIndex) {   // retap current depth transform.  Just turn it off.
-        // just turn depth transform off
-        currentDepthTransformIndex = NO_TRANSFORM;
-        [screenTasks configureGroupWithNewDepthTransform:nil];
-        [self adjustParametersFrom:oldDepthTransform to:nil];
-        [self updateExecuteView];
-        return;
-    }
-    
-    [self adjustThumb:newThumbView selected:YES];
-    currentDepthTransformIndex = newTransformIndex;
-    Transform *depthTransform = [transforms transformAtIndex:currentDepthTransformIndex];
-    assert(depthTransform.type == DepthVis);
-    [self saveDepthTransformName];
-
-    [screenTasks configureGroupWithNewDepthTransform:depthTransform];
-    [self adjustParametersFrom:oldDepthTransform to:depthTransform];
-    [self updateExecuteView];
-}
-#endif
-
 - (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
-#ifdef OLD
-    @synchronized (transforms.sequence) {
-        [transforms.sequence removeAllObjects];
-        transforms.sequenceChanged = YES;
-    }
-#endif
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
 
@@ -1906,7 +1875,7 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (IBAction)doParamSlider:(UISlider *)slider {
-    Transform *lastTransform = [screenTask lastTransform];
+    Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
@@ -1921,7 +1890,7 @@ static NSString * const imageOrientationName[] = {
 
 // reveal or hide the parameter slider
 - (void) adjustParamView {
-    Transform *lastTransform = [screenTask lastTransform];
+    Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
     if (!lastTransform || !lastTransform.hasParameters) {
         paramView.hidden = YES;
         SET_VIEW_Y(paramView, transformView.frame.size.height);    // under the bottom

@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 #define UNASSIGNED_TASK (-1)
 
+#define LAST_TRANSFORM_IN_TASK(t)   [(t).transformList lastObject]
+#define LAST_PARAM_IN_TASK(t)       [(t).transformList lastObject]
+#define LAST_TRANSFORM_INDEX(t)     ((t).transformList.count - 1)
+
 typedef enum {
     Idle,
     Running,
@@ -57,7 +61,6 @@ typedef enum {
 - (void) removeTransformAtIndex:(long) index;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
-- (Transform *) lastTransform;
 
 - (const Frame * __nullable) executeTransformsFromFrame:(const Frame *)sourceFrame;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;

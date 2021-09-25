@@ -168,7 +168,6 @@
             break;
     }
     status = newStatus;
-    [label setNeedsDisplay];
     [self setNeedsDisplay];
 }
 

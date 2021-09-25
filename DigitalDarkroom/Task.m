@@ -88,21 +88,6 @@ static PixelIndex_t dPI(int x, int y) {
     taskStatus = Idle;
 }
 
-- (long) lastTransformIndex {
-    if (transformList.count > 0)
-        return transformList.count - 1;
-    return NO_TRANSFORM;
-}
-
-- (Transform *) lastTransform {
-    switch ([self lastTransformIndex]) {
-        case NO_TRANSFORM:
-            return nil;
-         default:
-            return [transformList lastObject];
-    }
-}
-
 #ifdef OLD
 - (void) useDepthTransform:(Transform *__nullable) transform {
     depthTransform = transform;
@@ -126,12 +111,10 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (long) removeLastTransform {
-    long step = transformList.count - 1;
-    if (step >= 0) {
-        [transformList removeLastObject];
-        [paramList removeLastObject];
-    }
-    return step;
+    assert(transformList.count > 0);
+    [transformList removeLastObject];
+    [paramList removeLastObject];
+    return transformList.count;
 }
 
 - (void) removeAllTransforms {
@@ -184,19 +167,15 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (BOOL) updateParamOfLastTransformTo:(int) newParam {
-    TransformInstance *lastInstance;
-    
-    long lastIndex = [self lastTransformIndex];
-    if (lastIndex == NO_TRANSFORM)
-        return NO;
-    Transform *lastTransform = transformList[lastIndex];
-    lastInstance = paramList[lastIndex];
+    Transform *lastTransform = [transformList lastObject];
+    assert(lastTransform);
+    TransformInstance *lastInstance = [paramList lastObject];
     if (lastInstance.value == newParam)
         return NO;
     if (newParam > lastTransform.high || newParam < lastTransform.low)
         return NO;
     lastInstance.value = newParam;
-    [self configureTransformAtIndex:lastIndex];
+    [self configureTransformAtIndex:transformList.count - 1];
     return YES;
 }
 
