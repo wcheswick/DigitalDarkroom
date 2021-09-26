@@ -7,6 +7,8 @@
 //
 
 #import "PixBuf.h"
+#import "Stats.h"
+#import "Defines.h"
 
 @interface PixBuf ()
 
@@ -19,11 +21,13 @@
 @synthesize size;
 @synthesize pa, pb;
 @synthesize buffer;
+@synthesize readOnly;
 
 - (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
         self.size = s;
+        readOnly = NO;
         size_t rowSize = sizeof(Pixel) * size.width;
         size_t arraySize = sizeof(Pixel *) * size.height;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * size.height];
@@ -56,6 +60,7 @@
 // pointers and sizes make sense.
 
 - (void) verify {
+#ifdef VERIFY_PIXBUF_BUFFERS
     //    NSLog(@"&pa[%3d] %p is %p", 0, &pa[0], pa[0]);
     //    NSLog(@"&pa[%3lu] %p is %p", w-1, &pa[w-1], pa[w-1]);
     //    NSLog(@"&pb[0]   = %p", &pb[0]);
@@ -108,6 +113,7 @@
             assert(pixAddr == bAddr);
         }
     }
+#endif
 }
 
 - (void) copyPixelsTo:(PixBuf *) dest {
@@ -120,7 +126,9 @@
     assert(size.width == dest.size.width);
     assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
     memcpy(dest.pb, pb, size.width * size.height * sizeof(Pixel));
+    dest.readOnly = NO;
     [dest verify];
+    stats.pixbufCopies++;
 }
 
 - (void) assertPaInrange: (int) y x:(int)x {
@@ -142,10 +150,9 @@
         assert(sx <= sourcePixBuf.size.width);
         for (int y=0; y<size.height; y++) {
             int sy = trunc(y/yScale);
-            assert(sy < sourcePixBuf.size.height);
-            pa[y][x] = sourcePixBuf.pa[sy][sx];   // XXXXXX died here during reconfiguration
+            assert(sy >= 0 && sy < sourcePixBuf.size.height);
+            pa[y][x] = sourcePixBuf.pa[sy][sx];;   // XXXXXX died here during reconfiguration
 // and again...
-            
         }
     }
 }
@@ -153,7 +160,9 @@
 - (id)copyWithZone:(NSZone *)zone {
     PixBuf *copy = [[PixBuf alloc] initWithSize:size];
     memcpy(copy.pb, pb, size.width * size.height * sizeof(Pixel));
+    copy.readOnly = NO;
     [copy verify];
+    stats.pixbufCopies++;
     return copy;
 }
 

@@ -68,6 +68,22 @@
         [taskGroup enable];
 }
 
+// Each task group needs to rescale this raw input frame
+// into what it needs.  Then we can release the input frame,
+// and go compute the transforms.
+
+- (void) newFrameForTaskGroups:(const Frame * _Nonnull) newFrame {
+    if (state != LayoutOK)
+        return; // never mind
+    for (TaskGroup *group in taskGroups)
+        [group newFrameForTasks:newFrame];
+}
+
+- (void) doPendingGroupTransforms {
+    for (TaskGroup *group in taskGroups)
+        [group doPendingTransforms];
+}
+
 #ifdef GONE
 - (PixelIndex_t *) computeMappingFor:(Transform *) transform {
     assert(bytesPerRow);

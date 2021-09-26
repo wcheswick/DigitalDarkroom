@@ -248,8 +248,8 @@
         //
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
 
-    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
-    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FRAME_RATE );
+    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FPS );
+    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FPS );
     [captureDevice unlockForConfiguration];
 
     
@@ -450,7 +450,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     assert(capturedFrame.pixBuf);
     
     dispatch_async(dispatch_get_main_queue(), ^{
-        [(id<videoSampleProcessorDelegate>)self->videoProcessor processCaptureFrame:self->capturedFrame];
+        [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->capturedFrame];
         self->stats.framesProcessed++;
         self->capturedFrame.writeLockCount = 0;
     });

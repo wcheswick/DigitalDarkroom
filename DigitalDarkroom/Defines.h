@@ -9,6 +9,14 @@
 #ifndef Defines_h
 #define Defines_h
 
+#define VERIFY_PIXBUF_BUFFERS   1
+#ifdef NOTDEF
+// Performance hit for all of these together on my iPad pro: 10 FPS -> 5 FPS
+#define VERIFY_DEPTH_BUFFERS    1
+#define VERIFY_REMAP_BUFFERS    1
+#define VERIFY_DEPTH_RANGES     1
+#endif
+
 // #define DEBUG_LAYOUT    1
 
 //#define DEBUG_ORIENTATION 1
@@ -23,7 +31,7 @@
 //#define DEBUG_THUMB_LAYOUT 1
 //#define ONLY_RED    1   // process pure red input only
 
-#define MAX_FRAME_RATE  20
+#define MAX_FPS  30
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars

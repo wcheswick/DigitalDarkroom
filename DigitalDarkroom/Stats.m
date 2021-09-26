@@ -8,6 +8,8 @@
 
 #import "Stats.h"
 
+Stats *stats = nil;
+
 @implementation Stats
 
 @synthesize framesReceived, framesProcessed;
@@ -15,10 +17,12 @@
 @synthesize emptyFrames, framesIgnored, depthMissing, depthDropped;
 @synthesize depthFrames, depthNaNs, depthZeros;
 @synthesize imageFrames, imagesDropped, noVideoPixelBuffer;
+@synthesize depthCopies, pixbufCopies;
 
 - (id)init {
     self = [super init];
     if (self) {
+        stats = self;
         [self reset];
     }
     return self;
@@ -29,14 +33,17 @@
     emptyFrames = framesIgnored = depthMissing = depthDropped = 0;
     depthFrames = imageFrames = noVideoPixelBuffer = 0;
     depthNaNs = depthZeros = 0;
+    depthCopies = pixbufCopies = 0;
     lastProcessed = [NSDate now];
 }
 
 - (NSString *) report {
     NSDate *now = [NSDate now];
     NSTimeInterval t = [now timeIntervalSinceDate:lastProcessed];
-    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f", framesReceived, framesProcessed,
-                        framesReceived/t, framesProcessed/t];
+    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f",
+                        framesReceived, framesProcessed,
+                        framesReceived/t, framesProcessed/t,
+                        depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed];
     [self reset];
     return report;
 }

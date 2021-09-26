@@ -212,7 +212,7 @@ MainVC *mainVC = nil;
 
 @property (assign)              NSInteger currentSourceIndex, nextSourceIndex;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
-@property (nonatomic, strong)   Frame *currentSourceFrame;    // what we are transforming, or nil if get an image from the camera
+@property (nonatomic, strong)   Frame *fileSourceFrame;    // what we are transforming, or nil if get an image from the camera
 @property (nonatomic, strong)   InputSource *fileSource;
 @property (nonatomic, strong)   NSMutableArray *inputSources;
 @property (assign)              int cameraCount;
@@ -296,7 +296,7 @@ MainVC *mainVC = nil;
 @synthesize inputSources;
 @synthesize cameraSourceThumb;
 @synthesize currentTransformIndex;
-@synthesize currentSourceFrame;
+@synthesize fileSourceFrame;
 @synthesize live;
 @synthesize cameraCount;
 
@@ -330,7 +330,7 @@ MainVC *mainVC = nil;
         transforms = [[Transforms alloc] init];
         
         currentTransformIndex = NO_TRANSFORM;
-        currentSourceFrame = nil;
+        fileSourceFrame = nil;
         layout = nil;
         helpNavVC = nil;
         showControls = NO;
@@ -475,7 +475,6 @@ MainVC *mainVC = nil;
         thumbView.task = [thumbTasks createTaskForTargetImageView:imageView
                                                        named:transform.name];
         thumbView.task.enabled = YES;
-        thumbView.task.isThumbTask = YES;
         [thumbView.task appendTransformToTask:transform];
         [thumbView addGestureRecognizer:touch];
         UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
@@ -1028,8 +1027,8 @@ static NSString * const imageOrientationName[] = {
                     [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
                     [self liveOn:YES];
                 } else {    // source is a file, it is our source image
-                    currentSourceFrame = [[Frame alloc] init];
-                    [currentSourceFrame readImageFromPath: source.imagePath];
+                    fileSourceFrame = [[Frame alloc] init];
+                    [fileSourceFrame readImageFromPath: source.imagePath];
                     transformChainChanged = YES;
                 }
                 [self saveSourceIndex];
@@ -1330,8 +1329,8 @@ static NSString * const imageOrientationName[] = {
     
     [self updateExecuteView];
     [taskCtrl enableTasks];
-    if (currentSourceFrame)
-        [self doTransformsOnFrame:currentSourceFrame];
+    if (fileSourceFrame)
+        [self doTransformsOnFrame:fileSourceFrame];
     else {
         [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
@@ -1341,8 +1340,8 @@ static NSString * const imageOrientationName[] = {
 }
 
 - (void) tryAllThumbLayouts {
-    if (currentSourceFrame) { // file or captured image input
-        [self tryAllThumbsForSize:currentSourceFrame.pixBuf.size format:nil];
+    if (fileSourceFrame) {
+        [self tryAllThumbsForSize:fileSourceFrame.pixBuf.size format:nil];
     } else {
         assert(cameraController);
         assert(live);   // select camera setting for available area
@@ -1781,7 +1780,7 @@ static NSString * const imageOrientationName[] = {
 - (void) liveOn:(BOOL) on {
     live = on;
     if (live) {
-        currentSourceFrame = nil;
+        fileSourceFrame = nil;
         runningButton.selected = NO;
         [runningButton setNeedsDisplay];
 //        [taskCtrl idleTransforms];
@@ -1879,7 +1878,7 @@ static NSString * const imageOrientationName[] = {
     if (!lastTransform || !lastTransform.hasParameters) {
         return;
     }
-    NSLog(@"slider value %.1f", slider.value);
+//    NSLog(@"slider value %.1f", slider.value);
     [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
 //        [self doTransformsOn:previousSourceImage depth:rawDepthBuf];    // XXXXXX depth of source image
@@ -2149,10 +2148,7 @@ static NSString * const imageOrientationName[] = {
 // is present, has min and max values computed, but one or more depths may
 // be BAD_DEPTH.
 
-- (void) processCaptureFrame:(Frame *)capturedFrame {
-    assert(capturedFrame.pixBuf);       // we require an image
-    [capturedFrame.depthBuf verifyDepthRange];
-    currentSourceFrame = [capturedFrame copy];
+- (void) processCapturedFrame:(const Frame * _Nonnull) capturedFrame {
     if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
@@ -2160,8 +2156,13 @@ static NSString * const imageOrientationName[] = {
         return;
     }
     busy = YES;
-    [self doTransformsOnFrame:capturedFrame];
-    self->busy = NO;    // XXXXXX busy now wrong
+    assert(capturedFrame.pixBuf);       // we require an image
+    [capturedFrame.depthBuf verifyDepthRange];
+    [taskCtrl newFrameForTaskGroups:capturedFrame];
+    capturedFrame.writeLockCount = 0;
+    capturedFrame = nil;
+    [taskCtrl doPendingGroupTransforms];    // from the frame we just gave them
+    busy = NO;
 }
 
 #define IMAGE_DUMP_FILE @"ImageDump"
@@ -2219,7 +2220,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
     [self deselectAllThumbs];
-    [self doTransformsOnFrame:currentSourceFrame];
+    transformDisplayNeedsUpdate = YES;
 //    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -2286,7 +2287,7 @@ UIImageOrientation lastOrientation;
         ThumbView *thumbView = [self thumbForTransform:lastTransform];
         [thumbView adjustStatus:ThumbAvailable];
         [screenTask removeLastTransform];
-        [self doTransformsOnFrame:currentSourceFrame];
+        // XXXXXX transformDisplayNeedsUpdate [self doTransformsOnFrame:currentSourceFrame];
 //        [self updateOverlayView];
         [self updateExecuteView];
         [self adjustBarButtons];

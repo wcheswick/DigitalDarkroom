@@ -40,6 +40,9 @@ typedef enum {
 @property (assign)              CGSize sourceSize;
 @property (assign)              id mainVC;
 
+- (void) newFrameForTaskGroups:(const Frame * _Nonnull) newFrame;
+- (void) doPendingGroupTransforms;
+
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 - (void) idleFor:(LayoutStatus_t) newStatus;
 - (void) checkForIdle;  // are we ready to resume, after possible layout?

@@ -45,6 +45,7 @@ remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
 }
 
 - (void) verify {
+#ifdef VERIFY_REMAP_BUFFERS
     size_t bufferSize = size.width * size.height;
     for (int i=0; i<bufferSize; i++) {
         BufferIndex bi = rb[i];
@@ -53,6 +54,7 @@ remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
         else
             assert(bi < bufferSize);
     }
+#endif
 }
 
 @end

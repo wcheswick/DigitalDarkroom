@@ -33,7 +33,7 @@ typedef enum {
 } transform_t;
 
 
-typedef void (^ __nullable __unsafe_unretained inPlacePtFunc_t)(Frame *frame, int v);
+typedef void (^ __nullable __unsafe_unretained PtFunc_t)(Frame *srcFrame, Frame *dstFrame, int v);
 
 typedef void (^ __nullable __unsafe_unretained RemapImage_t)
             (RemapBuf *remapBuf, TransformInstance *instance);
@@ -52,22 +52,25 @@ typedef void (^ __nullable __unsafe_unretained
 
 typedef void (^ __nullable __unsafe_unretained
               areaFunction_t)(const Frame *srcFrame,
-                              PixBuf *dstPixBuf,
+                              Frame *dstFrame,
                               ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
               depthVis_t)(const Frame *srcFrame,
+                          Frame *dstFrame,
                           TransformInstance *instance);
 
 @interface Transform : NSObject {
     NSString *name, *description;
     NSString *helpPath;     // URL tags, slash-separated, general to specific
     BOOL broken;
+    BOOL needsDestFrame;   // if cannot work just by changing the source pixbuf
+    BOOL modifiesDepthBuf;
     long transformsArrayIndex;
     transform_t type;
     BOOL hasParameters;
-    inPlacePtFunc_t ipPointF;
+    PtFunc_t ipPointF;
     areaFunction_t areaF;
     depthVis_t depthVisF;
     int low, value, high;   // parameter range
@@ -80,8 +83,9 @@ typedef void (^ __nullable __unsafe_unretained
 
 @property (nonatomic, strong)   NSString *name, *description, *helpPath;
 @property (assign)              long transformsArrayIndex; 
-@property (assign)              inPlacePtFunc_t ipPointF;
+@property (assign)              PtFunc_t ipPointF;
 @property (assign)              BOOL broken;
+@property (assign)              BOOL needsDestFrame, modifiesDepthBuf;
 //@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
@@ -103,7 +107,7 @@ typedef void (^ __nullable __unsafe_unretained
 
 + (Transform *) colorTransform:(NSString *) n
                     description:(NSString *) d
-                    inPlacePtFunc:(inPlacePtFunc_t) f;
+                        ptFunc:(PtFunc_t) f;
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 areaFunction:(areaFunction_t) f;
@@ -114,8 +118,10 @@ typedef void (^ __nullable __unsafe_unretained
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 remapPolar:(RemapPolar_t) f;
 
+#ifdef NOTNOW
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                 remapSize:(RemapSize_t) f;
+#endif
 
 + (Transform *) depthVis:(NSString *) n description:(NSString *) d
                 depthVis:(depthVis_t) f;

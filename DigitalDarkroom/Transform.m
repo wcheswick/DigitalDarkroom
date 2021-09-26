@@ -25,6 +25,7 @@
 @synthesize paramName, lowValueFormat, highValueFormat;
 @synthesize newValue;
 @synthesize remapTable;
+@synthesize needsDestFrame, modifiesDepthBuf;
 
 
 - (id)init {
@@ -47,6 +48,7 @@
         remapTable = NULL;
         paramName = nil;
         lowValueFormat = highValueFormat = @"%d";
+        needsDestFrame = modifiesDepthBuf = NO;
     }
     return self;
 }
@@ -58,12 +60,13 @@
     t.description = d;
     t.type = DepthVis;
     t.depthVisF = f;
+    t.modifiesDepthBuf = YES;
     return t;
 }
 
 + (Transform *) colorTransform:(NSString *) n
                    description:(NSString *) d
-                 inPlacePtFunc:(inPlacePtFunc_t) f {
+                 ptFunc:(PtFunc_t) f {
     Transform *t = [[Transform alloc] init];
     t.name = n;
     t.description = d;
@@ -79,6 +82,7 @@
     t.description = d;
     t.type = AreaTrans;
     t.areaF = f;
+    t.needsDestFrame = YES;
     return t;
 }
 
@@ -102,6 +106,7 @@
     return t;
 }
 
+#ifdef NOTUSED
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                    remapSize:(RemapSize_t) f {
     Transform *t = [[Transform alloc] init];
@@ -111,6 +116,7 @@
     t.remapSizeF = f;
     return t;
 }
+#endif
 
 - (void) clearRemap {
     if (remapTable) {
@@ -141,6 +147,8 @@
     copy.value = value;
     copy.newValue = newValue;
     copy.hasParameters = hasParameters;
+    copy.needsDestFrame = needsDestFrame;
+    copy.modifiesDepthBuf = modifiesDepthBuf;
     copy.remapTable = NULL;
     return copy;
 }

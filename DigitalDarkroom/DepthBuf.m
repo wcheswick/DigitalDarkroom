@@ -7,6 +7,8 @@
 //
 
 #import "DepthBuf.h"
+#import "Stats.h"
+
 #import "Defines.h"
 
 @interface DepthBuf ()
@@ -21,11 +23,13 @@
 @synthesize minDepth, maxDepth;
 @synthesize size;
 @synthesize buffer;
+@synthesize readOnly;
 
 - (id)initWithSize:(CGSize) s {
     self = [super init];
     if (self) {
         self.size = s;
+        readOnly = NO;
         minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
         size_t rowSize = sizeof(Distance) * size.width;
         size_t arraySize = sizeof(Distance *) * size.height;
@@ -59,6 +63,7 @@
 // pointers and sizes make sense.
 
 - (void) verify {
+#ifdef VERIFY_DEPTH_BUFFERS
     //    NSLog(@"&pa[%3d] %p is %p", 0, &pa[0], pa[0]);
     //    NSLog(@"&pa[%3lu] %p is %p", w-1, &pa[w-1], pa[w-1]);
     //    NSLog(@"&pb[0]   = %p", &pb[0]);
@@ -111,6 +116,7 @@
             assert(*p1 == *p2);
         }
     }
+#endif
 }
 
 // moving averages to smooth out changes in minimum and maximum depths used
@@ -169,6 +175,7 @@ ma(ma_buff_t *b, float v) {
     assert(size.width == dest.size.width);
     assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
     memcpy(dest.db, db, (int)(size.width * size.height) * sizeof(Distance));
+    stats.depthCopies++;
     [self verify];
 }
 
@@ -178,6 +185,8 @@ ma(ma_buff_t *b, float v) {
     copy.maxDepth = self.maxDepth;
     copy.minDepth = self.minDepth;
     copy.size = self.size;
+    copy.readOnly = NO;
+    stats.depthCopies++;
     return copy;
 }
 
@@ -205,6 +214,7 @@ ma(ma_buff_t *b, float v) {
 }
 
 - (void) verifyDepthRange {
+#ifdef VERIFY_DEPTH_RANGES
     assert(minDepth > 0);
     assert(maxDepth > 0);
     assert(minDepth <= maxDepth);
@@ -216,6 +226,7 @@ ma(ma_buff_t *b, float v) {
         assert(d >= minDepth);
         assert(d <= maxDepth);
     }
+#endif
 }
 
 @end

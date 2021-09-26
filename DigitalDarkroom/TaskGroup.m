@@ -91,6 +91,36 @@
     }
 }
 
+// we have a new frame for the group to transform.  The group tasks all use the same scaled frame,
+// so scale the input frame once.  Each member of the group must not change the scaled
+// frame, since they all share it.  The supplied newFrame must not be changed, since
+// it is shared by all the groups.
+//
+// The targetSize that we are going to scale to must already be known.
+
+- (void) newFrameForTasks:(const Frame * _Nonnull) newFrame {
+    assert(targetSize.width > 0 && targetSize.height > 0);
+    
+    assert(!groupSrcFrame.writeLockCount);
+    assert(!groupSrcFrame.pixBuf.readOnly);
+    assert(!groupSrcFrame.depthBuf.readOnly);
+    // were we finished with this?
+    
+    [groupSrcFrame.pixBuf scaleFrom:newFrame.pixBuf];
+    [groupSrcFrame.depthBuf scaleFrom:newFrame.depthBuf];
+    groupSrcFrame.pixBuf.readOnly = YES;    // because it may be shared by many tasks
+    groupSrcFrame.depthBuf.readOnly = YES;
+    
+    // we set up the source frame, but don't start processing it until
+    // we release the original raw frame.
+}
+
+- (void) doPendingTransforms {
+    for (Task *task in tasks) {
+        [task executeTransformsFromFrame:groupSrcFrame];
+    }
+}
+
 // Create a task with a name that is internally useful.
 
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv

@@ -36,8 +36,8 @@ typedef enum {
 
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
-    BOOL isThumbTask;   // must have exactly one transform, which is always run
     BOOL enabled;   // if transform target is on-screen and needs update
+    BOOL needsDestFrame, modifiesDepthBuf;
 }
 
 @property (nonatomic, strong)   NSString *taskName;
@@ -47,7 +47,8 @@ typedef enum {
 @property (strong, nonatomic)   NSMutableArray *paramList;  // settings per transform step
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
-@property (assign)              BOOL enabled, isThumbTask;
+@property (assign)              BOOL enabled;
+@property (assign)              BOOL needsDestFrame, modifiesDepthBuf;
 
 - (id)initTaskNamed:(NSString *) n
             inGroup:(TaskGroup *) tg;

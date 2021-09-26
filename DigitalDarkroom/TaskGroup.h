@@ -50,7 +50,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureGroupForTargetSize:(CGSize)targetSize;
 - (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
                       dumpFile:(NSFileHandle *__nullable)imageFileHandle;
-//- (void) configureGroupWithNewDepthTransform:(Transform *__nullable) dt;
+- (void) newFrameForTasks:(const Frame * _Nonnull) newFrame;
+- (void) doPendingTransforms;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

@@ -33,7 +33,7 @@ typedef enum {
 } DisplayOptions;
 
 @protocol videoSampleProcessorDelegate
-- (void) processCaptureFrame:(Frame *)captureFrame;
+- (void) processCapturedFrame:(const Frame *)captureFrame;
 @end
 
 @interface MainVC : UIViewController
