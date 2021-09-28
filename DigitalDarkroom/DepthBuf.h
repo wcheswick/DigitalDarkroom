@@ -17,14 +17,12 @@ typedef float Distance;     // in meters
 typedef Distance *_Nullable *_Nonnull DepthArray_t;
 
 @interface DepthBuf : NSObject {
-    BOOL readOnly;
     CGSize size;
     Distance minDepth, maxDepth;
     DepthArray_t da;    // depth array, da[y][x]
     Distance *db;       // depth buffer, pointer to w*h contiguous depths in da
 }
 
-@property (assign)  BOOL readOnly;
 @property (assign)  Distance minDepth, maxDepth;    // some depth values are NAN, skip them and assume something
 @property (assign)  DepthArray_t da;
 @property (assign)  Distance *db;

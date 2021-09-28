@@ -14,10 +14,11 @@ Stats *stats = nil;
 
 @synthesize framesReceived, framesProcessed;
 @synthesize lastProcessed;
-@synthesize emptyFrames, framesIgnored, depthMissing, depthDropped;
+@synthesize emptyFrames, framesIgnoredLocking, depthMissing, depthDropped;
 @synthesize depthFrames, depthNaNs, depthZeros;
 @synthesize imageFrames, imagesDropped, noVideoPixelBuffer;
 @synthesize depthCopies, pixbufCopies;
+@synthesize status;
 
 - (id)init {
     self = [super init];
@@ -30,20 +31,22 @@ Stats *stats = nil;
 
 - (void) reset {
     framesReceived = framesProcessed = 0;
-    emptyFrames = framesIgnored = depthMissing = depthDropped = 0;
+    emptyFrames = framesIgnoredLocking = depthMissing = depthDropped = 0;
     depthFrames = imageFrames = noVideoPixelBuffer = 0;
     depthNaNs = depthZeros = 0;
     depthCopies = pixbufCopies = 0;
+    status = @"";
     lastProcessed = [NSDate now];
 }
 
 - (NSString *) report {
     NSDate *now = [NSDate now];
     NSTimeInterval t = [now timeIntervalSinceDate:lastProcessed];
-    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f",
+    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f  %@",
                         framesReceived, framesProcessed,
                         framesReceived/t, framesProcessed/t,
-                        depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed];
+                        depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed,
+                        status];
     [self reset];
     return report;
 }

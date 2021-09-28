@@ -2156,9 +2156,7 @@ static NSString * const imageOrientationName[] = {
     }
     busy = YES;
     assert(capturedFrame.pixBuf);       // we require an image
-    capturedFrame.pixBuf.readOnly = YES;
     assert(capturedFrame.depthBuf);
-    capturedFrame.depthBuf.readOnly = YES;
     [capturedFrame.depthBuf verifyDepthRange];
     [taskCtrl newFrameForTaskGroups:capturedFrame];
     capturedFrame = nil;

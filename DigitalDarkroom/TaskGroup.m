@@ -101,18 +101,7 @@
 - (void) newFrameForTasks:(const Frame * _Nonnull) newFrame {
     assert(targetSize.width > 0 && targetSize.height > 0);
     
-    @synchronized (groupSrcFrame) {
-        assert(!groupSrcFrame.locked);
-        assert(!groupSrcFrame.pixBuf.readOnly);
-        assert(!groupSrcFrame.depthBuf.readOnly);
-        // were we finished with this?
-        
-        [groupSrcFrame.pixBuf scaleFrom:newFrame.pixBuf];
-        groupSrcFrame.pixBuf.readOnly = YES;    // because it may be shared by many tasks
-        [groupSrcFrame.depthBuf scaleFrom:newFrame.depthBuf];
-        groupSrcFrame.depthBuf.readOnly = YES;
-    }
-    
+    [groupSrcFrame scaleFrom:newFrame];
     // we set up the source frame, but don't start processing it until
     // we release the original raw frame.
 }
@@ -120,9 +109,6 @@
 - (void) doPendingTransforms {
     for (Task *task in tasks) {
         [task executeTransformsFromFrame:groupSrcFrame];
-    }
-    @synchronized (groupSrcFrame) {
-        groupSrcFrame.pixBuf.readOnly = groupSrcFrame.depthBuf.readOnly = NO;
     }
 }
 
@@ -251,8 +237,6 @@
             }
         }
     }
-    
-//    BOOL hasDepth = scaledFrame.depthBuf != nil;
     
     for (Task *task in tasks) {
         if (task.taskStatus == Running)

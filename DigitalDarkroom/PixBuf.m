@@ -21,13 +21,11 @@
 @synthesize size;
 @synthesize pa, pb;
 @synthesize buffer;
-@synthesize readOnly;
 
 - (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
         self.size = s;
-        readOnly = NO;
         size_t rowSize = sizeof(Pixel) * size.width;
         size_t arraySize = sizeof(Pixel *) * size.height;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * size.height];
@@ -126,7 +124,6 @@
     assert(size.width == dest.size.width);
     assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
     memcpy(dest.pb, pb, size.width * size.height * sizeof(Pixel));
-    dest.readOnly = NO;
     [dest verify];
     stats.pixbufCopies++;
 }
@@ -141,26 +138,40 @@
     return self.pa[y][x];
 }
 
+#ifdef OLD
 // This should be cleverer than just picking pixels
+// XXX this is SLOW...noticably so
 - (void) scaleFrom:(PixBuf *) sourcePixBuf {
     double yScale = size.height/sourcePixBuf.size.height;
     double xScale = size.width/sourcePixBuf.size.width;
     for (int x=0; x<size.width; x++) {
         int sx = trunc(x/xScale);
-        assert(sx <= sourcePixBuf.size.width);
+//        assert(sx <= sourcePixBuf.size.width);
         for (int y=0; y<size.height; y++) {
             int sy = trunc(y/yScale);
-            assert(sy >= 0 && sy < sourcePixBuf.size.height);
-            pa[y][x] = sourcePixBuf.pa[sy][sx];;   // XXXXXX died here during reconfiguration
-// and again...
+//            assert(sy >= 0 && sy < sourcePixBuf.size.height);
+            pa[y][x] = sourcePixBuf.pa[sy][sx];
         }
     }
 }
+#else
+// this is about 16/15ths faster. Maybe not even that.
+- (void) scaleFrom:(PixBuf *) sourcePixBuf {
+    float xStride = sourcePixBuf.size.width/size.width;
+    float yStride = sourcePixBuf.size.height/size.height;
+    float sy = 0;
+    for (int y=0; y<size.height; y++, sy += yStride) {
+        float sx = 0;
+        for (int x=0; x<size.width; x++, sx += xStride) {
+            pa[y][x] = sourcePixBuf.pa[(int)sy][(int)sx];
+        }
+    }
+}
+#endif
 
 - (id)copyWithZone:(NSZone *)zone {
     PixBuf *copy = [[PixBuf alloc] initWithSize:size];
     memcpy(copy.pb, pb, size.width * size.height * sizeof(Pixel));
-    copy.readOnly = NO;
     [copy verify];
     stats.pixbufCopies++;
     return copy;

@@ -30,6 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) readImageFromPath:(NSString *) path;
 - (UIImage *) toUIImage;
 - (void) copyTo:(Frame *) dest;
+- (void) scaleFrom:(const Frame *)srcFrame;
 
 @end
 

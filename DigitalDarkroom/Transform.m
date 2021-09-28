@@ -103,6 +103,7 @@
     t.description = d;
     t.type = RemapPolar;
     t.remapPolarF = f;
+    t.needsDestFrame = YES;
     return t;
 }
 

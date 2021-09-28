@@ -12,18 +12,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface Stats : NSObject {
     int framesReceived, framesProcessed;
-    int emptyFrames, framesIgnored, depthMissing;
+    int emptyFrames, framesIgnoredLocking, depthMissing;
     int depthFrames, depthDropped, imageFrames, imagesDropped;
     int depthNaNs, depthZeros, noVideoPixelBuffer;
     int depthCopies, pixbufCopies;
+    NSString *status;
     NSDate *lastProcessed;
 }
 
 @property (assign)              int framesReceived, framesProcessed;
-@property (assign)              int emptyFrames, framesIgnored, depthMissing, depthDropped;
+@property (assign)              int emptyFrames, framesIgnoredLocking, depthMissing, depthDropped;
 @property (assign)              int depthFrames, depthNaNs, depthZeros;
 @property (assign)              int imageFrames, imagesDropped, noVideoPixelBuffer;
 @property (assign)              int depthCopies, pixbufCopies;
+@property (nonatomic, strong)   NSString *status;
 @property (nonatomic, strong)   NSDate *lastProcessed;
 
 - (NSString *) report;

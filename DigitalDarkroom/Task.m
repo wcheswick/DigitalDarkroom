@@ -325,13 +325,11 @@ static PixelIndex_t dPI(int x, int y) {
             break;     // was done in place
         case AreaTrans:
             transform.areaF(srcFrame, dstFrame, chBuf0, chBuf1, instance);
-//            memcpy(srcFrame.pixBuf.pb, dstPixBuf.pb,
-//                   srcFrame.pixBuf.size.height * srcFrame.pixBuf.size.width * sizeof(Pixel));
             break;
         case DepthVis:
             if (srcFrame.depthBuf)
                 transform.depthVisF(srcFrame, dstFrame, instance);
-            // result is in pixBuf, maybe with modified depthBuf
+            // result is in dstFrame, maybe with modified depthBuf
             break;
         case EtcTrans:
             NSLog(@"stub - etctrans");
@@ -345,8 +343,7 @@ static PixelIndex_t dPI(int x, int y) {
             assert(instance.remapBuf);
  //           [instance.remapBuf verify];
             BufferIndex *bip = instance.remapBuf.rb;
-            PixBuf *destPixBuf = [[PixBuf alloc] initWithSize:srcFrame.pixBuf.size];
-            Pixel *dp = destPixBuf.pb;
+            Pixel *dp = dstFrame.pixBuf.pb;
             for (int i=0; i<N; i++) {
                 Pixel p;
                 BufferIndex bi = *bip++;
@@ -381,7 +378,6 @@ static PixelIndex_t dPI(int x, int y) {
                 }
                 *dp++ = p;
             }
-            srcFrame.pixBuf = destPixBuf;   // swap in new bits
         }
     }
     return;

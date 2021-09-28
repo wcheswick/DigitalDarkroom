@@ -23,13 +23,11 @@
 @synthesize minDepth, maxDepth;
 @synthesize size;
 @synthesize buffer;
-@synthesize readOnly;
 
 - (id)initWithSize:(CGSize) s {
     self = [super init];
     if (self) {
         self.size = s;
-        readOnly = NO;
         minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
         size_t rowSize = sizeof(Distance) * size.width;
         size_t arraySize = sizeof(Distance *) * size.height;
@@ -185,7 +183,6 @@ ma(ma_buff_t *b, float v) {
     copy.maxDepth = self.maxDepth;
     copy.minDepth = self.minDepth;
     copy.size = self.size;
-    copy.readOnly = NO;
     stats.depthCopies++;
     return copy;
 }
@@ -193,9 +190,7 @@ ma(ma_buff_t *b, float v) {
 - (void) scaleFrom:(DepthBuf *) sourceDepthBuf {
     minDepth = sourceDepthBuf.minDepth; // preserve original range
     maxDepth = sourceDepthBuf.maxDepth;
-#ifdef DEBUG
-    [self verifyDepthRange];
-#endif
+//    [self verifyDepthRange];
     double yScale = size.height/sourceDepthBuf.size.height;
     double xScale = size.width/sourceDepthBuf.size.width;
     for (int y=0; y<size.height; y++) {
@@ -212,9 +207,7 @@ ma(ma_buff_t *b, float v) {
             da[y][x] = d;   // XXXXXX died here during reconfiguration
         }
     }
-#ifdef DEBUG
-    [self verifyDepthRange];
-#endif
+//    [self verifyDepthRange];
 }
 
 - (void) verifyDepthRange {

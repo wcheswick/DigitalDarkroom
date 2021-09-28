@@ -341,14 +341,16 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     }
     @synchronized (capturedFrame) {
         if (capturedFrame.locked) {
-            stats.framesIgnored++;
+            stats.framesIgnoredLocking++;
+            stats.status = @"locked";
             return;
         }
+        stats.status = @"";
     }
     
     @synchronized (capturedFrame) {
         capturedFrame.locked = YES;
-        // Only us can write this, and only now.  No updates until we are done with the frame.
+        // Only we can write this, and only now.  No updates until we are done with the frame.
     }
 
     AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
@@ -359,6 +361,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         if (!syncedDepthBufferData) {
             stats.depthMissing++;       // not so rare, maybe 5% in one test
             @synchronized (capturedFrame) {
+                stats.status = @"noD";
                 capturedFrame.locked = NO;
             }
             return;
@@ -366,6 +369,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         if(syncedDepthBufferData.depthDataWasDropped) {
             stats.depthDropped++; // this should be rare
             @synchronized (capturedFrame) {
+                stats.status = @"drD";
                 capturedFrame.locked = NO;
             }
             return;
@@ -420,7 +424,11 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     
     if(syncedSampleBufferData.sampleBufferWasDropped) {
         stats.imagesDropped++;
-        return;
+        @synchronized (capturedFrame) {
+            stats.status = @"imD";
+            capturedFrame.locked = NO;
+        }
+       return;
     } else {
         stats.imageFrames++;
         CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
@@ -429,6 +437,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         //                      videoDropped, depthDropped, depthMissing, notRespond);
         if (!videoPixelBufferRef) {
             stats.noVideoPixelBuffer++;
+            stats.status = @"drV";
             capturedFrame.locked = NO;
             return;
         }
@@ -455,7 +464,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     if (depthDataAvailable)
         assert(capturedFrame.depthBuf); // depth must be available at this point
     assert(capturedFrame.pixBuf);
-    
+    stats.status = @"ok";
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->capturedFrame];
         self->stats.framesProcessed++;
@@ -463,13 +473,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             self->capturedFrame.locked = NO;
         }
     });
-    
-#ifdef UNDEF
-    if (NO && (frameCount-1) % 500 == 0)
-        NSLog(@"frames: %5d  v: %5d  dp:%5d   vd:%3d  dd:%3d  dm:%d",
-              frameCount, videoFrames, depthFrames,
-              videoDropped, depthDropped, depthMissing);
-#endif
     return;
 }
 

@@ -1145,15 +1145,14 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             Distance d = srcFrame.depthBuf.db[i];
             if (isnan(d) || d == 0)
                 d = srcFrame.depthBuf.maxDepth;
-            if (d > backgroundDepth)
-                srcFrame.pixBuf.pb[i] = background;
-            else {
-                float fradFrac = FADE(d - srcFrame.depthBuf.minDepth)/maxFade;
-                srcFrame.pixBuf.pb[i] = CRGB(
-                                  (1.0 - fradFrac)*p.r + fradFrac*background.r,
-                                  (1.0 - fradFrac)*p.g + fradFrac*background.g,
-                                  (1.0 - fradFrac)*p.b + fradFrac*background.b);
-            }
+            else if (d > backgroundDepth)
+                d = backgroundDepth;
+            dstFrame.depthBuf.db[i] = d;
+            float fradFrac = FADE(d - srcFrame.depthBuf.minDepth)/maxFade;
+            srcFrame.pixBuf.pb[i] = CRGB(
+                                         (1.0 - fradFrac)*p.r + fradFrac*background.r,
+                                         (1.0 - fradFrac)*p.g + fradFrac*background.g,
+                                         (1.0 - fradFrac)*p.b + fradFrac*background.b);
         }
 #ifdef SHOW_GRID
         for (int x = 0; x<W; x += dpi) {

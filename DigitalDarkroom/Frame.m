@@ -76,6 +76,11 @@
     return copy;
 }
 
+- (void) scaleFrom:(const Frame *)srcFrame {
+    [pixBuf scaleFrom:srcFrame.pixBuf];
+    [depthBuf scaleFrom:srcFrame.depthBuf];
+}
+
 - (void) save {
     
 }

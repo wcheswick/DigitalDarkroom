@@ -19,13 +19,11 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
     CGSize size;    // always integer values here
     PixelArray_t pa;  // pixel array, pb[y][x] in our code
     Pixel *pb;      // pixel buffer, w*h contiguous pixels
-    BOOL readOnly;
 }
 
 @property (assign)  CGSize size;;
 @property (assign)  PixelArray_t pa;
 @property (assign)  Pixel *pb;
-@property (assign)  BOOL readOnly;
 
 - (id)initWithSize:(CGSize)s;
 - (void) copyPixelsTo:(PixBuf *) dest;
