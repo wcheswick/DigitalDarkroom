@@ -101,15 +101,17 @@
 - (void) newFrameForTasks:(const Frame * _Nonnull) newFrame {
     assert(targetSize.width > 0 && targetSize.height > 0);
     
-    assert(!groupSrcFrame.writeLockCount);
-    assert(!groupSrcFrame.pixBuf.readOnly);
-    assert(!groupSrcFrame.depthBuf.readOnly);
-    // were we finished with this?
-    
-    [groupSrcFrame.pixBuf scaleFrom:newFrame.pixBuf];
-    [groupSrcFrame.depthBuf scaleFrom:newFrame.depthBuf];
-    groupSrcFrame.pixBuf.readOnly = YES;    // because it may be shared by many tasks
-    groupSrcFrame.depthBuf.readOnly = YES;
+    @synchronized (groupSrcFrame) {
+        assert(!groupSrcFrame.locked);
+        assert(!groupSrcFrame.pixBuf.readOnly);
+        assert(!groupSrcFrame.depthBuf.readOnly);
+        // were we finished with this?
+        
+        [groupSrcFrame.pixBuf scaleFrom:newFrame.pixBuf];
+        groupSrcFrame.pixBuf.readOnly = YES;    // because it may be shared by many tasks
+        [groupSrcFrame.depthBuf scaleFrom:newFrame.depthBuf];
+        groupSrcFrame.depthBuf.readOnly = YES;
+    }
     
     // we set up the source frame, but don't start processing it until
     // we release the original raw frame.
@@ -118,6 +120,9 @@
 - (void) doPendingTransforms {
     for (Task *task in tasks) {
         [task executeTransformsFromFrame:groupSrcFrame];
+    }
+    @synchronized (groupSrcFrame) {
+        groupSrcFrame.pixBuf.readOnly = groupSrcFrame.depthBuf.readOnly = NO;
     }
 }
 

@@ -18,13 +18,13 @@ NS_ASSUME_NONNULL_BEGIN
     NSDate *creationTime;
     PixBuf *__nullable pixBuf;
     DepthBuf *__nullable depthBuf;
-    int writeLockCount;
+    BOOL locked;
 }
 
 @property (nonatomic, strong)   NSDate *creationTime;
 @property (nonatomic, strong)   PixBuf *__nullable pixBuf;
 @property (nonatomic, strong)   DepthBuf *__nullable depthBuf;
-@property (assign, atomic)      int writeLockCount;
+@property (assign, atomic)      BOOL locked;
 
 - (void) save;
 - (void) readImageFromPath:(NSString *) path;

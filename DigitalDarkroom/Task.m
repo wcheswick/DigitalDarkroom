@@ -138,27 +138,28 @@ static PixelIndex_t dPI(int x, int y) {
     
     needsDestFrame = NO;    // these notes help us prevent extra frame copies
     modifiesDepthBuf = NO;
-    frame0 = frame1 = nil;
-    frames = [[NSMutableArray alloc] init];
 
-    if (!transformList.count) { // no transforms in this task, just a copy
-        for (int i=0; i<transformList.count; i++) {
-            Transform *transform = [self configureTransformAtIndex:i];
-            needsDestFrame |= transform.needsDestFrame;
-            modifiesDepthBuf |= transform.modifiesDepthBuf;
-        }
-        frame0 = [[Frame alloc] init];
-        frame0.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
-        frame0.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
-        [frames addObject:frame0];
-        
-        if (needsDestFrame || modifiesDepthBuf) {
-            frame1 = [[Frame alloc] init];
-            frame1.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
-            frame1.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
-            [frames addObject:frame1];
-        }
-   }
+    // we
+    frames = [[NSMutableArray alloc] init];
+    frame0 = [[Frame alloc] init];
+    frame0.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
+    frame0.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
+    [frames addObject:frame0];
+
+    frame1 = nil;
+    
+    for (int i=0; i<transformList.count; i++) {
+        Transform *transform = [self configureTransformAtIndex:i];
+        needsDestFrame |= transform.needsDestFrame;
+        modifiesDepthBuf |= transform.modifiesDepthBuf;
+    }
+    
+    if (needsDestFrame || modifiesDepthBuf) {
+        frame1 = [[Frame alloc] init];
+        frame1.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
+        frame1.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
+        [frames addObject:frame1];
+    }
 }
 
 - (Transform *) configureTransformAtIndex:(size_t)index {
@@ -257,6 +258,8 @@ static PixelIndex_t dPI(int x, int y) {
         Transform *transform = transformList[i];
         TransformInstance *instance = paramList[i];
         
+        assert(frames);
+        assert(dstIndex < frames.count);
         [self performTransform:transform
                       instance:instance
                          srcFrame:srcFrame dstFrame:frames[dstIndex]];

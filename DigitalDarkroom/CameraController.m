@@ -338,13 +338,18 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     if (!capturedFrame) {
         capturedFrame = [[Frame alloc] init];
         NSLog(@"dataOutputSynchronizer    new frame");
-    } else {
-        if (capturedFrame.writeLockCount) {
+    }
+    @synchronized (capturedFrame) {
+        if (capturedFrame.locked) {
             stats.framesIgnored++;
             return;
         }
     }
-    capturedFrame.writeLockCount = 1;
+    
+    @synchronized (capturedFrame) {
+        capturedFrame.locked = YES;
+        // Only us can write this, and only now.  No updates until we are done with the frame.
+    }
 
     AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
                                                   synchronizedDataForCaptureOutput:depthDataOutput];
@@ -353,12 +358,16 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     if (depthDataAvailable) {
         if (!syncedDepthBufferData) {
             stats.depthMissing++;       // not so rare, maybe 5% in one test
-            capturedFrame.writeLockCount = 0;
+            @synchronized (capturedFrame) {
+                capturedFrame.locked = NO;
+            }
             return;
         }
         if(syncedDepthBufferData.depthDataWasDropped) {
             stats.depthDropped++; // this should be rare
-            capturedFrame.writeLockCount = 0;
+            @synchronized (capturedFrame) {
+                capturedFrame.locked = NO;
+            }
             return;
         }
         stats.depthFrames++;
@@ -411,18 +420,16 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     
     if(syncedSampleBufferData.sampleBufferWasDropped) {
         stats.imagesDropped++;
-        capturedFrame.writeLockCount = 0;
         return;
     } else {
         stats.imageFrames++;
-        capturedFrame.writeLockCount = 1;
         CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
         //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
         //                      frameCount, videoFrames, depthFrames,
         //                      videoDropped, depthDropped, depthMissing, notRespond);
         if (!videoPixelBufferRef) {
             stats.noVideoPixelBuffer++;
-            capturedFrame.writeLockCount = 0;
+            capturedFrame.locked = NO;
             return;
         }
         
@@ -452,7 +459,9 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     dispatch_async(dispatch_get_main_queue(), ^{
         [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->capturedFrame];
         self->stats.framesProcessed++;
-        self->capturedFrame.writeLockCount = 0;
+        @synchronized (self->capturedFrame) {
+            self->capturedFrame.locked = NO;
+        }
     });
     
 #ifdef UNDEF

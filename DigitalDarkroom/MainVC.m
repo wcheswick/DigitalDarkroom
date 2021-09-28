@@ -2152,14 +2152,15 @@ static NSString * const imageOrientationName[] = {
     if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
-        assert(capturedFrame.writeLockCount >= 0);
         return;
     }
     busy = YES;
     assert(capturedFrame.pixBuf);       // we require an image
+    capturedFrame.pixBuf.readOnly = YES;
+    assert(capturedFrame.depthBuf);
+    capturedFrame.depthBuf.readOnly = YES;
     [capturedFrame.depthBuf verifyDepthRange];
     [taskCtrl newFrameForTaskGroups:capturedFrame];
-    capturedFrame.writeLockCount = 0;
     capturedFrame = nil;
     [taskCtrl doPendingGroupTransforms];    // from the frame we just gave them
     busy = NO;
@@ -2220,7 +2221,7 @@ UIImageOrientation lastOrientation;
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
     [self deselectAllThumbs];
-    transformDisplayNeedsUpdate = YES;
+//    transformDisplayNeedsUpdate = YES;
 //    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];

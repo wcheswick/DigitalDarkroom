@@ -12,7 +12,7 @@
 
 @synthesize pixBuf, depthBuf;
 @synthesize creationTime;
-@synthesize writeLockCount;
+@synthesize locked;
 
 - (id)init {
     self = [super init];
@@ -20,7 +20,7 @@
         depthBuf = nil;
         pixBuf = nil;
         creationTime = [NSDate now];
-        writeLockCount = 0;
+        locked = NO;
     }
     return self;
 }
@@ -72,7 +72,7 @@
         copy.depthBuf = [depthBuf copy];
     else
         copy.depthBuf = nil;
-    copy.writeLockCount = 0;
+    copy.locked = NO;
     return copy;
 }
 
