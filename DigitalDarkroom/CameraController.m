@@ -492,6 +492,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
                         scaledFrame.depthBuf.da[y][x] = d;
                     }
                 }
+                [scaledFrame.depthBuf verify];
                 [scaledFrame.depthBuf verifyDepths];
             }
             CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
@@ -499,6 +500,14 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
     }
     stats.status = @"ok";
+    
+    for (NSString *groupName in rawFrames) { // fill the scaled drpthBufs
+        Frame *frame = [rawFrames objectForKey:groupName];
+        assert(frame.pixBuf);
+        assert(frame.depthBuf);
+        assert(frame.depthBuf.minDepth);
+        assert(frame.depthBuf.maxDepth);
+    }
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->rawFrames];

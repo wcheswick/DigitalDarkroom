@@ -73,7 +73,9 @@
     if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
         groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
     
-    [cameraController.rawFrames setObject:groupSrcFrame forKey:groupName];
+    @synchronized (cameraController.rawFrames) {
+        [cameraController.rawFrames setObject:groupSrcFrame forKey:groupName];
+    }
     
     // clear and recompute any remaps
     [remapCache removeAllObjects];
@@ -91,6 +93,12 @@
 // The targetSize that we are going to scale to must already be known.
 
 - (void) doGroupTransformsOnFrame:(const Frame * _Nonnull) scaledFrame {
+    for (int y=10; y<20; y++) {
+        for (int x=15; x<30; x++) {
+            scaledFrame.pixBuf.pa[y][x] = Green;
+            scaledFrame.depthBuf.da[y][y] = scaledFrame.depthBuf.maxDepth;
+        }
+    }
     for (Task *task in tasks) {
         [task executeTaskTransformsOnFrame:scaledFrame];
     }

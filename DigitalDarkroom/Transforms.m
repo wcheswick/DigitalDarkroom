@@ -1017,7 +1017,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 
 // Z ranges from 0.0 to 1.0, for farthest to nearest distance.
     
-    // SIDRS computation taken from
+    // SIRDS computation taken from
     // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
     //
     // Displaying 3D Images: Algorithms for Single Image Random Dot Stereograms
@@ -1155,7 +1155,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 d = backgroundDepth;
             dstFrame.depthBuf.db[i] = d;
             float fradFrac = FADE(d - srcFrame.depthBuf.minDepth)/maxFade;
-            srcFrame.pixBuf.pb[i] = CRGB(
+            dstFrame.pixBuf.pb[i] = CRGB(
                                          (1.0 - fradFrac)*p.r + fradFrac*background.r,
                                          (1.0 - fradFrac)*p.g + fradFrac*background.g,
                                          (1.0 - fradFrac)*p.b + fradFrac*background.b);
@@ -1163,7 +1163,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #ifdef SHOW_GRID
         for (int x = 0; x<W; x += dpi) {
             for (int y=0; y<40 && y < H; y++)
-                srcFrame.pixBuf.pa[y][x] = Red;
+                dstFrame.pixBuf.pa[y][x] = Red;
         }
 #endif
     }];
@@ -1196,7 +1196,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 p = Yellow;
             else
                 p = srcFrame.pixBuf.pb[i];
-            srcFrame.pixBuf.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
     lastTransform.hasParameters = YES;
@@ -1266,7 +1266,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 p.a = Z;    // alpha on, not used at the moment
             }
 #endif
-            srcFrame.pixBuf.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
     lastTransform.hasParameters = YES;
@@ -1275,7 +1275,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.value = 4000;
     lastTransform.high = 10000;
     [self addTransform:lastTransform];
-       
+
 #ifdef DEBUG_TRANSFORMS
 #define DIST(x,y)  [depthBuf distAtX:(x) Y:(y)]
 #else
@@ -1303,10 +1303,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             float frac = (v - logMin)/(logMax - logMin);
             channel c = trunc(Z - frac*Z);
             Pixel p = SETRGB(0,0,c);
-            srcFrame.pixBuf.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
-        srcFrame.depthBuf.minDepth = newMinDepth;
-        srcFrame.depthBuf.maxDepth = newMaxDepth;
+        dstFrame.depthBuf.minDepth = newMinDepth;
+        dstFrame.depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.broken = NO;
     [self addTransform:lastTransform];
@@ -1341,7 +1341,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 [color getRed:&r green:&g blue:&b alpha:&a];
                 p = SETRGB(r*Z,g*Z,b*Z);
             }
-            srcFrame.pixBuf.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
     }];
 //    lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
@@ -1383,10 +1383,10 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                     p = SETRGB(c,c,0);
                 }
             }
-            srcFrame.pixBuf.pb[i] = p;
+            dstFrame.pixBuf.pb[i] = p;
         }
-        srcFrame.depthBuf.minDepth = newMinDepth;
-        srcFrame.depthBuf.maxDepth = newMaxDepth;
+        dstFrame.depthBuf.minDepth = newMinDepth;
+        dstFrame.depthBuf.maxDepth = newMaxDepth;
     }];
     lastTransform.low = 1; lastTransform.value = 5; lastTransform.high = 20;
     lastTransform.hasParameters = YES;
@@ -1399,7 +1399,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define PDOT    0.2
     lastTransform = [Transform depthVis: @"Anaglyph"
                             description: @"Complementary color anaglyph"
-                               depthVis: ^(Frame *srcFrame, Frame *dstFrame, TransformInstance *instance) {
+                               depthVis: ^(const Frame *srcFrame, Frame *dstFrame, TransformInstance *instance) {
         int W = srcFrame.depthBuf.size.width;
         int H = srcFrame.depthBuf.size.height;
         float backgroundDepth = srcFrame.depthBuf.maxDepth;
@@ -1410,16 +1410,16 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         assert(D);
         for (int i=0; i<W*H; i++)
             if (srcFrame.depthBuf.db[i] > D)
-                srcFrame.pixBuf.pb[i] = White;
+                dstFrame.pixBuf.pb[i] = White;
             else
-                srcFrame.pixBuf.pb[i] = srcFrame.pixBuf.pb[i];     // was White;
+                dstFrame.pixBuf.pb[i] = srcFrame.pixBuf.pb[i];     // was White;
 
         for (int y=0; y<H; y++) {    // convert scan lines independently
             for (int x=0; x<W; x++) {
                 float z = srcFrame.depthBuf.da[y][x];
                 float r = (rand() % 100) / 100.0;
                 if (r > PDOT) {
-                    srcFrame.pixBuf.pa[y][x] = srcFrame.pixBuf.pa[y][x];
+                    dstFrame.pixBuf.pa[y][x] = srcFrame.pixBuf.pa[y][x];
                     continue;
                 }
                 
@@ -1428,8 +1428,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
                 int rightX = x + sep;
                 if (leftX < 0 || rightX >= W)
                     continue;
-                srcFrame.pixBuf.pa[y][leftX] = Cyan;
-                srcFrame.pixBuf.pa[y][rightX] = Red;
+                dstFrame.pixBuf.pa[y][leftX] = Cyan;
+                dstFrame.pixBuf.pa[y][rightX] = Red;
             }
         }
     }];
