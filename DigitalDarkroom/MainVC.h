@@ -33,7 +33,9 @@ typedef enum {
 } DisplayOptions;
 
 @protocol videoSampleProcessorDelegate
-- (void) processCapturedFrame:(const Frame *)captureFrame;
+
+- (void) processCapturedFrame:(NSMutableDictionary *) scaledFrames;
+
 @end
 
 @interface MainVC : UIViewController

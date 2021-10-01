@@ -21,6 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
         AVCaptureDataOutputSynchronizerDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
+    NSMutableDictionary  *rawFrames;
     NSMutableArray *formatList;     // from the device, edited to what we could use
     BOOL depthDataAvailable;
     Stats *stats;
@@ -31,6 +32,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)  volatile BOOL depthDataAvailable;
 @property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
 @property (nonatomic, strong)   Stats *stats;
+@property (nonatomic, strong)   NSMutableDictionary *rawFrames;
 
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
@@ -47,6 +49,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL) depthFormat:(AVCaptureDeviceFormat *)depthFormat
        isSuitableFor:(AVCaptureDeviceFormat *)format;
 - (NSString *) dumpFormatType:(OSType) t;
+
+extern  CameraController *cameraController;
 
 @end
 

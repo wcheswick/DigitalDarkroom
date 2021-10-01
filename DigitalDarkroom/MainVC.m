@@ -1329,9 +1329,12 @@ static NSString * const imageOrientationName[] = {
     
     [self updateExecuteView];
     [taskCtrl enableTasks];
-    if (fileSourceFrame)
+    if (fileSourceFrame) {
+#ifdef OLD
         [self doTransformsOnFrame:fileSourceFrame];
-    else {
+#endif
+        ;
+    } else {
         [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
         //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -1516,7 +1519,9 @@ static NSString * const imageOrientationName[] = {
         [screenTask configureTaskForSize];
     }
     transformChainChanged = YES;
+#ifdef OLD
     [self doTransformsOnFrame:lastDisplayedFrame];
+#endif
 //    [self updateOverlayView];
     [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
@@ -2148,22 +2153,18 @@ static NSString * const imageOrientationName[] = {
 // is present, has min and max values computed, but one or more depths may
 // be BAD_DEPTH.
 
-- (void) processCapturedFrame:(const Frame * _Nonnull) capturedFrame {
+- (void) processCapturedFrame:(NSMutableDictionary *) scaledFrames {
     if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
         return;
     }
     busy = YES;
-    assert(capturedFrame.pixBuf);       // we require an image
-    assert(capturedFrame.depthBuf);
-    [capturedFrame.depthBuf verifyDepthRange];
-    [taskCtrl newFrameForTaskGroups:capturedFrame];
-    capturedFrame = nil;
-    [taskCtrl doPendingGroupTransforms];    // from the frame we just gave them
+    [taskCtrl doTransformsOnFrames: scaledFrames];
     busy = NO;
 }
 
+#ifdef OLD
 #define IMAGE_DUMP_FILE @"ImageDump"
 
 - (void) doTransformsOnFrame:(Frame *)frame {
@@ -2186,7 +2187,7 @@ static NSString * const imageOrientationName[] = {
     }
     
     // update the screen with transforms on the incoming image
-    [frame.depthBuf verifyDepthRange];
+    [frame.depthBuf verifyDepths];
     Frame *displayedFrame = [screenTasks executeTasksWithFrame:frame dumpFile:nil];
     if (displayedFrame) {
         lastDisplayedFrame = displayedFrame;
@@ -2203,6 +2204,7 @@ static NSString * const imageOrientationName[] = {
         [cameraSourceThumb setNeedsDisplay];
     }
 }
+#endif
 
 #ifdef DEBUG_TASK_CONFIGURATION
 BOOL haveOrientation = NO;

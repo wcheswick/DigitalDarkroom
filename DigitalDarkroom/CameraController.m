@@ -11,6 +11,8 @@
 #import "InputSource.h"
 #import "Defines.h"
 
+CameraController *cameraController = nil;
+
 @interface CameraController ()
 
 @property (strong, nonatomic)   AVCaptureDevice *captureDevice;
@@ -22,15 +24,14 @@
 @property (nonatomic, strong)   AVCaptureDepthDataOutput *depthDataOutput;
 @property (nonatomic, strong)   AVCaptureDataOutputSynchronizer *outputSynchronizer;
 
-@property (nonatomic, strong)   Frame *capturedFrame;
-@property (assign)              BOOL depthCaptureEnabled;
+@property (assign)              BOOL busy;
 
 @end
 
 @implementation CameraController
 
 @synthesize videoDataOutput, depthDataOutput, outputSynchronizer;
-
+@synthesize rawFrames;
 @synthesize captureSession;
 @synthesize videoProcessor;
 
@@ -41,8 +42,8 @@
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
 @synthesize formatList;
-@synthesize capturedFrame;
 @synthesize stats;
+@synthesize busy;
 
 - (id)init {
     self = [super init];
@@ -50,9 +51,11 @@
         captureVideoPreviewLayer = nil;
         captureDevice = nil;
         captureSession = nil;
-        capturedFrame = nil;
         videoOrientation = -1;  // not initialized
         formatList = [[NSMutableArray alloc] init];
+        cameraController = self;
+        rawFrames = [[NSMutableDictionary alloc] init];
+        busy = NO;
     }
     return self;
 }
@@ -261,6 +264,12 @@
     videoDataOutput.automaticallyConfiguresOutputBufferDimensions = YES;
     videoDataOutput.videoSettings = @{
         (NSString *)kCVPixelBufferPixelFormatTypeKey : @(kCVPixelFormatType_32BGRA),
+#ifdef notdef
+        kCVPixelFormatType_32ARGB   // broken
+        kCVPixelFormatType_32BGRA   // mostly blue
+        kCVPixelFormatType_32ABGR  // broken
+        kCVPixelFormatType_32RGBA   // broken
+#endif
     };
 //  videoDataOutput.alwaysDiscardsLateVideoFrames = YES;
     [videoDataOutput setSampleBufferDelegate:self queue:outputQueue];
@@ -335,42 +344,106 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         stats.emptyFrames++;
         return;
     }
-    if (!capturedFrame) {
-        capturedFrame = [[Frame alloc] init];
-        NSLog(@"dataOutputSynchronizer    new frame");
-    }
-    @synchronized (capturedFrame) {
-        if (capturedFrame.locked) {
+    @synchronized (rawFrames) {
+        if (busy) {
             stats.framesIgnoredLocking++;
             stats.status = @"locked";
             return;
         }
         stats.status = @"";
     }
-    
-    @synchronized (capturedFrame) {
-        capturedFrame.locked = YES;
-        // Only we can write this, and only now.  No updates until we are done with the frame.
-    }
 
+    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
+                                                synchronizedDataForCaptureOutput:self.videoDataOutput];
+    AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
+    
+    if(syncedSampleBufferData.sampleBufferWasDropped) {
+        stats.imagesDropped++;
+        @synchronized (rawFrames) {
+            stats.status = @"imD";
+        }
+        return;
+    }
+    
     AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
                                                   synchronizedDataForCaptureOutput:depthDataOutput];
     AVCaptureSynchronizedDepthData *syncedDepthBufferData = (AVCaptureSynchronizedDepthData *)syncedDepthData;
     
+    stats.imageFrames++;
+    CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
+    //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
+    //                      frameCount, videoFrames, depthFrames,
+    //                      videoDropped, depthDropped, depthMissing, notRespond);
+    if (!videoPixelBufferRef) {
+        stats.noVideoPixelBuffer++;
+        stats.status = @"drV";
+        return;
+    }
+    
+    if (!rawFrames.count)
+        return;     // nothing to scale, nothing to report about
+    
+    @synchronized (rawFrames) {
+        busy = YES;
+        // Only we can write this, and only now.  No updates until we are done with the frame.
+    }
+    
+    CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
+    size_t rawWidth = CVPixelBufferGetWidth(videoPixelBufferRef);
+    size_t rawHeight = CVPixelBufferGetHeight(videoPixelBufferRef);
+//    CGSize rawImageSize = CGSizeMake(rawWidth, rawHeight);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
+//    OSType type = CVPixelBufferGetPixelFormatType(videoPixelBufferRef);
+    
+    void *baseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(baseAddress, rawWidth, rawHeight, 8,
+                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
+    assert(context);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    
+    for (NSString *groupName in rawFrames) {
+        Frame *scaledFrame = [rawFrames objectForKey:groupName];
+        CGRect r;
+        r.origin = CGPointZero;
+        r.size = scaledFrame.pixBuf.size;
+        float scale = r.size.width/rawWidth;
+
+        UIImage *scaledImage = [[UIImage alloc] initWithCGImage:quartzImage
+                                                          scale:scale
+                                                    orientation:UIImageOrientationUp];
+        CGImageRef scaledCGImage = scaledImage.CGImage;
+        CGContextRef cgContext = CGBitmapContextCreate((char *)scaledFrame.pixBuf.pb, r.size.width, r.size.height, 8,
+                                                       r.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
+        CGContextDrawImage(cgContext, r, scaledCGImage);
+        CGContextRelease(cgContext);
+#ifdef NOTDEF
+        if ([groupName isEqual:@"Screen"]) {
+            Pixel p = Blue;
+            for (int i=0; i<scaledFrame.pixBuf.size.width*scaledFrame.pixBuf.size.height; i++)
+                scaledFrame.pixBuf.pb[i] = p;
+        }
+#endif
+    }
+    CGImageRelease(quartzImage);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
+    
     if (depthDataAvailable) {
         if (!syncedDepthBufferData) {
             stats.depthMissing++;       // not so rare, maybe 5% in one test
-            @synchronized (capturedFrame) {
+            @synchronized (rawFrames) {
                 stats.status = @"noD";
-                capturedFrame.locked = NO;
+                busy = NO;
             }
             return;
         }
-        if(syncedDepthBufferData.depthDataWasDropped) {
+        if (syncedDepthBufferData.depthDataWasDropped) {
             stats.depthDropped++; // this should be rare
-            @synchronized (capturedFrame) {
+            @synchronized (rawFrames) {
                 stats.status = @"drD";
-                capturedFrame.locked = NO;
+                busy = NO;
             }
             return;
         }
@@ -380,97 +453,58 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             CVPixelBufferLockBaseAddress(depthPixelBufferRef,  kCVPixelBufferLock_ReadOnly);
             // copy the given depth data to our capture.  It seems to change under us, so
             // save most processing until after the depths are firmed up
-            size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
-            size_t height = CVPixelBufferGetHeight(depthPixelBufferRef);
-            CGSize ds = CGSizeMake(width, height);
-            // reuse the previous depthbuf, if it exists and is the right size
-            if (!capturedFrame.depthBuf || !SAME_SIZE(capturedFrame.depthBuf.size, ds)) {
-                capturedFrame.depthBuf = [[DepthBuf alloc] initWithSize:ds];
-                NSLog(@"dataOutputSynchronizer    new depth     %.0f X %.0f",
-                      capturedFrame.depthBuf.size.width,
-                      capturedFrame.depthBuf.size.height);
-            }
             assert(sizeof(Distance) == sizeof(float));
-            float *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
-            capturedFrame.depthBuf.minDepth = MAXFLOAT;
-            capturedFrame.depthBuf.maxDepth = -1.0;
-            for (size_t i=0; i < width*height; i++) {
-                float d = capturedDepthBuffer[i];
-                if (isnan(d)) {
-                    stats.depthNaNs++;
-                    d = BAD_DEPTH;
-                } else if (d == 0.0) {
-                    stats.depthZeros++;
-                    d = BAD_DEPTH;
-                } else {
-                    if (d < capturedFrame.depthBuf.minDepth)
-                        capturedFrame.depthBuf.minDepth = d;
-                    if (d > capturedFrame.depthBuf.maxDepth)
-                        capturedFrame.depthBuf.maxDepth = d;
+            Distance *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
+            assert(capturedDepthBuffer);
+            
+#define RAWDB(x,y)  capturedDepthBuffer[(int)(y*srcYStride) + (int)((x)*srcXStride)]
+            
+            for (NSString *groupName in rawFrames) { // fill the scaled drpthBufs
+                Frame *scaledFrame = [rawFrames objectForKey:groupName];
+                scaledFrame.depthBuf.minDepth = MAXFLOAT;
+                scaledFrame.depthBuf.maxDepth = -1.0;
+                float srcXStride = rawWidth/scaledFrame.depthBuf.size.width;
+                float srcYStride = rawHeight/scaledFrame.depthBuf.size.height;
+                for (int y=0; y<scaledFrame.depthBuf.size.height; y++) {
+                    int srcY = y*srcYStride;
+                    assert(srcY < rawHeight);
+//                    Distance *row = &capturedDepthBuffer[srcY * bytesPerRow];
+                    for (int x=0; x<rawWidth/scaledFrame.depthBuf.size.width; x++) {
+                        int srcX = x*srcXStride;
+                        assert(srcX < rawWidth);
+//                        assert(dp >= capturedDepthBuffer);
+//                        assert(dp < capturedDepthBuffer + rawWidth*sizeof(Distance) * rawHeight);
+                        Distance d = RAWDB(srcX,srcY);
+                        if (isnan(d)) {
+                            stats.depthNaNs++;
+                            scaledFrame.depthBuf.badDepths++;
+                            d = BAD_DEPTH;
+                        } else if (d == 0.0) {
+                            stats.depthZeros++;
+                            scaledFrame.depthBuf.badDepths++;
+                            d = BAD_DEPTH;
+                        } else {
+                            if (d < scaledFrame.depthBuf.minDepth)
+                                scaledFrame.depthBuf.minDepth = d;
+                            if (d > scaledFrame.depthBuf.maxDepth)
+                                scaledFrame.depthBuf.maxDepth = d;
+                        }
+                        scaledFrame.depthBuf.da[y][x] = d;
+                    }
                 }
-                capturedFrame.depthBuf.db[i] = d;
+                [scaledFrame.depthBuf verifyDepths];
             }
             CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
-            assert(capturedFrame.depthBuf.minDepth > 0);
-            assert(capturedFrame.depthBuf.maxDepth > 0 || capturedFrame.depthBuf.maxDepth < MAXFLOAT);
-            assert(capturedFrame.depthBuf.minDepth <= capturedFrame.depthBuf.maxDepth);
             // NB: the depth data is dirty, with BAD_DEPTH values
         }
     }
-    
-    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
-                                                synchronizedDataForCaptureOutput:self.videoDataOutput];
-    AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
-    
-    if(syncedSampleBufferData.sampleBufferWasDropped) {
-        stats.imagesDropped++;
-        @synchronized (capturedFrame) {
-            stats.status = @"imD";
-            capturedFrame.locked = NO;
-        }
-       return;
-    } else {
-        stats.imageFrames++;
-        CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
-        //                NSLog(@"FR: %5d  v: %4d  dp:%4d   vd:%3d  dd:%3d  dm:%d  nr:%d",
-        //                      frameCount, videoFrames, depthFrames,
-        //                      videoDropped, depthDropped, depthMissing, notRespond);
-        if (!videoPixelBufferRef) {
-            stats.noVideoPixelBuffer++;
-            stats.status = @"drV";
-            capturedFrame.locked = NO;
-            return;
-        }
-        
-        CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
-        size_t width = CVPixelBufferGetWidth(videoPixelBufferRef);
-        size_t height = CVPixelBufferGetHeight(videoPixelBufferRef);
-        CGSize imageSize = CGSizeMake(width, height);
-        
-        // reuse the pixbuf, if it exists and is the same size
-        if (!capturedFrame.pixBuf || !SAME_SIZE(capturedFrame.pixBuf.size, imageSize)) {
-            capturedFrame.pixBuf = [[PixBuf alloc] initWithSize:imageSize];
-            NSLog(@"dataOutputSynchronizer    new pixBuf  %.0f X %.0f",
-                  capturedFrame.pixBuf.size.width,
-                  capturedFrame.pixBuf.size.height);
-        }
-        
-        void *baseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
-        size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
-        assert(bytesPerRow == width*sizeof(Pixel));
-        memcpy(capturedFrame.pixBuf.pb, baseAddress, bytesPerRow * height);
-        CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
-    }
-    if (depthDataAvailable)
-        assert(capturedFrame.depthBuf); // depth must be available at this point
-    assert(capturedFrame.pixBuf);
     stats.status = @"ok";
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->capturedFrame];
+        [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:self->rawFrames];
         self->stats.framesProcessed++;
-        @synchronized (self->capturedFrame) {
-            self->capturedFrame.locked = NO;
+        @synchronized (self->rawFrames) {
+            self->busy = NO;
         }
     });
     return;

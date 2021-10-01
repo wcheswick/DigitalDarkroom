@@ -72,16 +72,17 @@
 // into what it needs.  Then we can release the input frame,
 // and go compute the transforms.
 
-- (void) newFrameForTaskGroups:(const Frame * _Nonnull) newFrame {
+- (void) doTransformsOnFrames:(NSMutableDictionary *)scaledFrames {
     if (state != LayoutOK)
         return; // never mind
-    for (TaskGroup *group in taskGroups)
-        [group newFrameForTasks:newFrame];
-}
-
-- (void) doPendingGroupTransforms {
-    for (TaskGroup *group in taskGroups)
-        [group doPendingTransforms];
+    for (TaskGroup *group in taskGroups) {
+        if ([group.groupName isEqual:@"Screen"])
+            continue;
+        Frame *scaledFrame = [scaledFrames objectForKey:group.groupName];
+        if (!scaledFrame)
+            continue;
+        [group doGroupTransformsOnFrame:scaledFrame];
+    }
 }
 
 #ifdef GONE

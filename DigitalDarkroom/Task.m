@@ -227,18 +227,18 @@ static PixelIndex_t dPI(int x, int y) {
 
 // transform starting with the general group sourceFrame, which must not be changed.
 //
-- (const Frame * __nullable) executeTransformsFromFrame:(const Frame *)sourceFrame {
+- (const Frame * __nullable) executeTaskTransformsOnFrame:(const Frame *)sourceFrame {
     if (taskStatus == Stopped || !enabled)
-        return sourceFrame;     // not now
+        return nil;     // not now
     if (taskGroup.taskCtrl.state != LayoutOK) {
         taskStatus = Stopped;
-        return sourceFrame;
+        return nil;
     }
 
     if (transformList.count == 0) { // just display the input
         UIImage *unmodifiedSourceImage = [sourceFrame toUIImage];
         [self updateTargetWith:unmodifiedSourceImage];
-        return sourceFrame;
+        return nil;
     }
     
     taskStatus = Running;
@@ -251,6 +251,7 @@ static PixelIndex_t dPI(int x, int y) {
     // At this point, frames[0] and (if needed) frames[1] are configured for the correct sizes.
     
     Frame *srcFrame = (Frame *)sourceFrame;
+
     size_t dstIndex = 0;
     NSDate *startTime = [NSDate now];
 
@@ -276,10 +277,10 @@ static PixelIndex_t dPI(int x, int y) {
     
     assert(srcFrame);
     if (srcFrame.depthBuf)
-        [srcFrame.depthBuf verifyDepthRange];
+        [srcFrame.depthBuf verifyDepths];
     [self updateTargetWith:[srcFrame toUIImage]];
     taskStatus = Idle;
-    return srcFrame;
+    return nil;
 }
 
 #ifdef UNUSED_IS_IN_FRAME_NOW

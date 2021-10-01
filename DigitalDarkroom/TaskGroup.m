@@ -7,6 +7,7 @@
 //
 
 #import <AVFoundation/AVFoundation.h>
+#import "CameraController.h"
 #import "TaskCtrl.h"
 #import "TaskGroup.h"
 #import "MainVC.h"
@@ -54,34 +55,25 @@
 // has the source image size.  We deal with depth data as we need to.
 
 - (void) configureGroupForTargetSize:(CGSize) ts {
-    targetSize = ts;
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@" GG  %@: configureGroupForTargetSize %.0f x %.0f",
           targetSize.width, targetSize.height);
 #endif
+    targetSize = ts;
     assert(busyCount == 0);
     assert(taskCtrl.sourceSize.width > 0 && taskCtrl.sourceSize.height > 0);
     assert(targetSize.width > 0 && targetSize.height > 0);
-    if (!groupSrcFrame || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize)) {
-        if (!groupSrcFrame) {
-            groupSrcFrame = [[Frame alloc] init];
-        }
-        groupSrcFrame.pixBuf.size = targetSize;
-        if (!groupSrcFrame.pixBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
-            groupSrcFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
-        if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
-            groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
+    
+    if (!groupSrcFrame) {
+        groupSrcFrame = [[Frame alloc] init];
     }
-    
-    // source size must be scaled to targetsize.
-    
-    if (!groupSrcFrame.pixBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize)) {
+    groupSrcFrame.pixBuf.size = targetSize;
+    if (!groupSrcFrame.pixBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
         groupSrcFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
-    }
-    
-    if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.depthBuf.size, targetSize)) {
+    if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
         groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
-    }
+    
+    [cameraController.rawFrames setObject:groupSrcFrame forKey:groupName];
     
     // clear and recompute any remaps
     [remapCache removeAllObjects];
@@ -98,17 +90,9 @@
 //
 // The targetSize that we are going to scale to must already be known.
 
-- (void) newFrameForTasks:(const Frame * _Nonnull) newFrame {
-    assert(targetSize.width > 0 && targetSize.height > 0);
-    
-    [groupSrcFrame scaleFrom:newFrame];
-    // we set up the source frame, but don't start processing it until
-    // we release the original raw frame.
-}
-
-- (void) doPendingTransforms {
+- (void) doGroupTransformsOnFrame:(const Frame * _Nonnull) scaledFrame {
     for (Task *task in tasks) {
-        [task executeTransformsFromFrame:groupSrcFrame];
+        [task executeTaskTransformsOnFrame:scaledFrame];
     }
 }
 
@@ -152,6 +136,7 @@
     }
 }
 
+#ifdef OLD
 // transform the image.
 // return the frame of the image finally displayed by the last task.
 
@@ -193,7 +178,7 @@
     Frame * __nullable lastFrame = nil;
     
     if (frame.depthBuf) {
-        [frame.depthBuf verifyDepthRange];
+        [frame.depthBuf verifyDepths];
         [groupSrcFrame.depthBuf scaleFrom:frame.depthBuf];
     }
 
@@ -243,13 +228,14 @@
             continue;
         busyCount++;
         // [task check];
-        lastFrame = (Frame *)[task executeTransformsFromFrame:groupSrcFrame];
+        lastFrame = (Frame *)[task executeTaskTransformsOnFrame:frame];
         busyCount--;
         assert(busyCount >= 0);
     }
     
     return lastFrame;
 }
+#endif
 
 // This is called back from task for transforms that remap pixels.  The remapping is based
 // on the pixel array size, and maybe parameter settings.  We only compute the transform/parameter

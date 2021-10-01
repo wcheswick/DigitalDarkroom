@@ -21,7 +21,7 @@
 
 @synthesize da, db;
 @synthesize minDepth, maxDepth;
-@synthesize size;
+@synthesize size, badDepths;
 @synthesize buffer;
 
 - (id)initWithSize:(CGSize) s {
@@ -29,6 +29,7 @@
     if (self) {
         self.size = s;
         minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
+        badDepths = 0;
         size_t rowSize = sizeof(Distance) * size.width;
         size_t arraySize = sizeof(Distance *) * size.height;
         buffer = [[NSMutableData alloc] initWithLength:arraySize + rowSize * size.height];
@@ -73,7 +74,7 @@
     assert((void *)db >= buffer.bytes);
     assert((void *)db < buffer.bytes + bufferLen);
 
-    // is our pixel buffer addressable?
+    // is our depth buffer addressable?
     for (int i=0; i<(int)(size.width * size.height); i++) {
         assert((void *)&db[i] < bufferEnd);
         Distance p = db[i];
@@ -165,7 +166,7 @@ ma(ma_buff_t *b, float v) {
         maxDepth = ma(&max_dist_buf, maxDepth);
     }
     assert(minDepth <= maxDepth);
-    [self verifyDepthRange];
+    [self verifyDepths];
 }
 
 // NOTUSED at the moment
@@ -173,6 +174,7 @@ ma(ma_buff_t *b, float v) {
     assert(size.width == dest.size.width);
     assert(size.height == dest.size.height);    // the PixelArray pointers in the destination will do
     memcpy(dest.db, db, (int)(size.width * size.height) * sizeof(Distance));
+    dest.badDepths = self.badDepths;
     stats.depthCopies++;
     [self verify];
 }
@@ -183,6 +185,7 @@ ma(ma_buff_t *b, float v) {
     copy.maxDepth = self.maxDepth;
     copy.minDepth = self.minDepth;
     copy.size = self.size;
+    copy.badDepths = self.badDepths;
     stats.depthCopies++;
     return copy;
 }
@@ -210,19 +213,22 @@ ma(ma_buff_t *b, float v) {
 //    [self verifyDepthRange];
 }
 
-- (void) verifyDepthRange {
-#ifdef VERIFY_DEPTH_RANGES
+- (void) verifyDepths {
+#ifdef VERIFY_DEPTHS
     assert(minDepth > 0);
     assert(maxDepth > 0);
     assert(minDepth <= maxDepth);
+    int zeroDepths = 0;
     for (int i=0; i<size.width*size.height; i++) {
-        float d = db[i];
-        if (d == BAD_DEPTH)
+        Distance d = db[i];
+        if (d == 0) {
+            zeroDepths++;
             continue;
-        assert(d);
+        }
         assert(d >= minDepth);
         assert(d <= maxDepth);
     }
+    NSLog(@"verifyDepths: zeros, bads  %d %d", zeroDepths, badDepths);
 #endif
 }
 

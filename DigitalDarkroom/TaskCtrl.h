@@ -40,8 +40,7 @@ typedef enum {
 @property (assign)              CGSize sourceSize;
 @property (assign)              id mainVC;
 
-- (void) newFrameForTaskGroups:(const Frame * _Nonnull) newFrame;
-- (void) doPendingGroupTransforms;
+- (void) doTransformsOnFrames: (NSMutableDictionary *)scaledFrames;
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 - (void) idleFor:(LayoutStatus_t) newStatus;

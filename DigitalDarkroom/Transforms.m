@@ -1044,7 +1044,13 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
             }
             
             for (int x=0; x < W; x++ ) {
-                float z = 1.0 - (srcFrame.depthBuf.da[y][x] - srcFrame.depthBuf.minDepth)/depthRange;
+                Distance d = srcFrame.depthBuf.da[y][x];
+                if (d == 0) {   // bad depth
+//                    NSLog(@"bad depth at %d,%d  of %d", x, y, srcFrame.depthBuf.badDepths);
+                    d = srcFrame.depthBuf.maxDepth;
+                }
+                assert(d);
+                float z = 1.0 - (d - srcFrame.depthBuf.minDepth)/depthRange;
                 // z = 0 is max depth, 1.0 is vision plane.
                 assert(z >= 0 && z <= 1.0);
                 stereoSepX = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));

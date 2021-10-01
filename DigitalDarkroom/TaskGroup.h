@@ -48,10 +48,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
 - (void) configureGroupForTargetSize:(CGSize)targetSize;
-- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
-                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
-- (void) newFrameForTasks:(const Frame * _Nonnull) newFrame;
-- (void) doPendingTransforms;
+//- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
+//                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
+- (void) doGroupTransformsOnFrame:(const Frame * _Nonnull) scaledFrame;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

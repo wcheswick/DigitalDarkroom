@@ -14,7 +14,7 @@
 // Performance hit for all of these together on my iPad pro: 10 FPS -> 5 FPS
 #define VERIFY_DEPTH_BUFFERS    1
 #define VERIFY_REMAP_BUFFERS    1
-#define VERIFY_DEPTH_RANGES     1
+#define VERIFY_DEPTHS           1
 #endif
 
 // #define DEBUG_LAYOUT    1
