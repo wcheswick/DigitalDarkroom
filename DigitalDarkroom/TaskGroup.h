@@ -25,18 +25,21 @@ NS_ASSUME_NONNULL_BEGIN
     TaskCtrl *taskCtrl;
     Transform * __nullable incomingSizeTransform;   // adjust incoming size to needed size
     NSMutableArray *tasks;
-    volatile int busyCount;
+    volatile BOOL groupBusy;
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
     size_t bytesInImage;
     size_t bitsPerComponent;
     NSString *groupName;        // for debug display purposes
     CGSize targetSize;
+    Frame *groupSrcFrame;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   Transform * __nullable incomingSizeTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
-@property (assign, atomic)      volatile int busyCount;
+@property (nonatomic, strong)   Frame *groupSrcFrame;
+
+@property (assign, atomic)      volatile BOOL groupBusy;
 @property (assign)              size_t bytesPerRow, pixelsInImage, pixelsPerRow;
 @property (assign)              size_t bitsPerComponent;
 @property (assign)              size_t bytesInImage;

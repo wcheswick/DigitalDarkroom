@@ -57,7 +57,7 @@
     if (state == LayoutOK)
         return;
     for (TaskGroup *taskGroup in taskGroups) {
-        if (taskGroup.busyCount)
+        if (taskGroup.groupBusy)
             return;
     }
     [mainVC tasksReadyFor:state];

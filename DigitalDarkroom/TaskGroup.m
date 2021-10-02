@@ -15,7 +15,6 @@
 
 @interface TaskGroup ()
 
-@property (nonatomic, strong)   Frame *groupSrcFrame;
 // remapping for every transform of current size, plus parameter
 @property (nonatomic, strong)   NSMutableDictionary *remapCache;
 
@@ -33,7 +32,7 @@
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
 @synthesize groupName;
-@synthesize busyCount;
+@synthesize groupBusy;
 @synthesize targetSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
@@ -45,7 +44,7 @@
         remapCache = [[NSMutableDictionary alloc] init];
         groupSrcFrame = nil;
         bytesPerRow = 0;    // no current configuration
-        busyCount = 0;
+        groupBusy = NO;
         targetSize = CGSizeZero;
     }
     return self;
@@ -59,8 +58,9 @@
     NSLog(@" GG  %@: configureGroupForTargetSize %.0f x %.0f",
           targetSize.width, targetSize.height);
 #endif
+    assert(!groupBusy);
+    groupBusy = YES;
     targetSize = ts;
-    assert(busyCount == 0);
     assert(taskCtrl.sourceSize.width > 0 && taskCtrl.sourceSize.height > 0);
     assert(targetSize.width > 0 && targetSize.height > 0);
     
@@ -73,16 +73,13 @@
     if (!groupSrcFrame.depthBuf || !SAME_SIZE(groupSrcFrame.pixBuf.size, targetSize))
         groupSrcFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
     
-    @synchronized (cameraController.rawFrames) {
-        [cameraController.rawFrames setObject:groupSrcFrame forKey:groupName];
-    }
-    
     // clear and recompute any remaps
     [remapCache removeAllObjects];
     
     for (Task *task in tasks) {
         [task configureTaskForSize];
     }
+    groupBusy = NO;
 }
 
 // we have a new frame for the group to transform.  The group tasks all use the same scaled frame,
@@ -93,15 +90,12 @@
 // The targetSize that we are going to scale to must already be known.
 
 - (void) doGroupTransformsOnFrame:(const Frame * _Nonnull) scaledFrame {
-    for (int y=10; y<20; y++) {
-        for (int x=15; x<30; x++) {
-            scaledFrame.pixBuf.pa[y][x] = Green;
-            scaledFrame.depthBuf.da[y][y] = scaledFrame.depthBuf.maxDepth;
-        }
-    }
+    assert(!groupBusy);
+    groupBusy = YES;
     for (Task *task in tasks) {
         [task executeTaskTransformsOnFrame:scaledFrame];
     }
+    groupBusy = NO;
 }
 
 // Create a task with a name that is internally useful.

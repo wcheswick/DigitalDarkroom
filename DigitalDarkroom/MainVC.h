@@ -34,7 +34,8 @@ typedef enum {
 
 @protocol videoSampleProcessorDelegate
 
-- (void) processCapturedFrame:(NSMutableDictionary *) scaledFrames;
+- (void) processCapturedFrame:(Frame *) scaledFrame
+                  inTaskgroup:(TaskGroup *) taskGroup;
 
 @end
 

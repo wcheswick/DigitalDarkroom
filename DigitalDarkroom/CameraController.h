@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
+#import "TaskGroup.h"
 #import "Stats.h"
 
 #import "MainVC.h"
@@ -21,10 +22,10 @@ NS_ASSUME_NONNULL_BEGIN
         AVCaptureDataOutputSynchronizerDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
-    NSMutableDictionary  *rawFrames;
     NSMutableArray *formatList;     // from the device, edited to what we could use
     BOOL depthDataAvailable;
     Stats *stats;
+    NSMutableDictionary *activeTaskgroups;  // Managed by MainVC
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
@@ -32,16 +33,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)  volatile BOOL depthDataAvailable;
 @property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
 @property (nonatomic, strong)   Stats *stats;
-@property (nonatomic, strong)   NSMutableDictionary *rawFrames;
-
-- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
+@property (nonatomic, strong)   NSMutableDictionary *activeTaskgroups;
 
 - (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
                           depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat;
 - (BOOL) selectCameraOnSide:(BOOL)front;
+- (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;
-
 - (void) startCamera;
 - (void) stopCamera;
 

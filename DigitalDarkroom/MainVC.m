@@ -365,6 +365,9 @@ MainVC *mainVC = nil;
         cameraController = [[CameraController alloc] init];
         cameraController.videoProcessor = self;
         cameraController.stats = self.stats;
+        
+        [cameraController.activeTaskgroups setObject:screenTasks forKey:screenTasks.groupName];
+        [cameraController.activeTaskgroups setObject:thumbTasks forKey:thumbTasks.groupName];
 #endif
 
         inputSources = [[NSMutableArray alloc] init];
@@ -2153,14 +2156,14 @@ static NSString * const imageOrientationName[] = {
 // is present, has min and max values computed, but one or more depths may
 // be BAD_DEPTH.
 
-- (void) processCapturedFrame:(NSMutableDictionary *) scaledFrames {
+- (void) processCapturedFrame:(Frame *) scaledFrame
+                  inTaskgroup:(TaskGroup *) taskGroup {
     if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
         return;
     }
-    busy = YES;
-    [taskCtrl doTransformsOnFrames: scaledFrames];
+    [taskGroup doGroupTransformsOnFrame:scaledFrame];
     busy = NO;
 }
 

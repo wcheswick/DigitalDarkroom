@@ -1904,14 +1904,14 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
     // this destroys src
     lastTransform = [Transform areaTransform: @"Old AT&T logo"
                                  description: @"Tom Duff's logo transform"
-                                areaFunction:^(Frame *srcFrame, Frame *dstFrame,
+                                areaFunction:^(const Frame *srcFrame, Frame *dstFrame,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         size_t h = srcFrame.pixBuf.size.height;
         size_t w = srcFrame.pixBuf.size.width;
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
                 channel c = LUM(srcFrame.pixBuf.pa[y][x]);
-                srcFrame.pixBuf.pa[y][x] = SETRGB(c,c,c);
+                dstFrame.pixBuf.pa[y][x] = SETRGB(c,c,c);
             }
         }
         
@@ -1926,17 +1926,17 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
             for (int x=0; x < w; x++) {
                 c=0;
                 for(y0=0; y0<hgt; y0++)
-                c += srcFrame.pixBuf.pa[y+y0][x].r;
+                    c += dstFrame.pixBuf.pa[y+y0][x].r;
                 y0 = y+(hgt-1)/2;
                 y1 = y+(hgt-1-(hgt-1)/2);
                 for (; y0 >= y; --y0, ++y1)
-                c = stripe(srcFrame.pixBuf.pa, x, y0, y1, c);
+                    c = stripe(dstFrame.pixBuf.pa, x, y0, y1, c);
             }
         }
         
         for (int y=0; y<h; y++) {
             for (int x=0; x<w; x++) {
-                channel c = srcFrame.pixBuf.pa[y][x].r;
+                channel c = dstFrame.pixBuf.pa[y][x].r;
                 dstFrame.pixBuf.pa[y][x] = SETRGB(c, c, c);
             }
         }
