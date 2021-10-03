@@ -329,7 +329,7 @@
 		FBF5B39E232E973E00DDFC4E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1210;
+				LastUpgradeCheck = 1300;
 				ORGANIZATIONNAME = Cheswick.com;
 				TargetAttributes = {
 					FBF5B3A5232E973F00DDFC4E = {
@@ -477,7 +477,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = NO;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

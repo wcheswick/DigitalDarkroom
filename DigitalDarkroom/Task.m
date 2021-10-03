@@ -226,7 +226,7 @@ static PixelIndex_t dPI(int x, int y) {
 // source.  Return the frame displayed.
 
 // transform starting with the general group sourceFrame, which must not be changed.
-//
+
 - (const Frame * __nullable) executeTaskTransformsOnFrame:(const Frame *)sourceFrame {
     if (taskStatus == Stopped || !enabled)
         return nil;     // not now

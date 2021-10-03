@@ -54,16 +54,6 @@
 #define SOURCE_IPHONE_SCALE 0.75
 #define SOURCE_THUMB_FONT_H 20
 
-#ifdef OLD
-#define SOURCE_THUMB_H  SOURCE_THUMB_W
-#define SOURCE_BUTTON_FONT_SIZE 20
-#define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
-
-#define SOURCE_CELL_W   SOURCE_THUMB_W
-#define SOURCE_CELL_H   (SOURCE_THUMB_H + SOURCE_LABEL_H)
-#define SOURCE_CELL_IPHONE_SCALE    0.75
-#endif
-
 #define TRANS_INSET 2
 #define TRANS_BUTTON_FONT_SIZE 12
 //#define SOURCE_LABEL_H  (2*TABLE_ENTRY_H)
@@ -132,10 +122,10 @@ struct camera_t {
     BOOL front, threeD;
     NSString *name;
 } possibleCameras[] = {
-    {YES, NO, @"Front"},
-    {YES, YES, @"Front 3D"},
-    {NO, NO, @"Rear"},
-    {NO, YES, @"Rear 3D"},
+    {YES, NO, @"Front camera"},
+    {YES, YES, @"Front 3D camera"},
+    {NO, NO, @"Rear camera"},
+    {NO, YES, @"Rear 3D camera"},
 };
 #define N_POSS_CAM   (sizeof(possibleCameras)/sizeof(struct camera_t))
 
@@ -143,8 +133,6 @@ struct camera_t {
 #define IS_FRONT_CAMERA(s)  (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].front)
 #define IS_3D_CAMERA(s)     (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].threeD)
 
-#define IS_PLUS_ON      (plusMode == PlusOne)
-#define IS_PLUS_LOCKED  (plusMode == PlusMany)
 
 typedef enum {
     TransformTable,
@@ -230,6 +218,8 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
+@property (nonatomic, strong)   UIBarButtonItem *plusBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *doublePlusBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
 
@@ -303,6 +293,7 @@ MainVC *mainVC = nil;
 @synthesize cameraController;
 @synthesize layout;
 
+@synthesize plusBarButton, doublePlusBarButton;
 @synthesize undoBarButton, shareBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -617,19 +608,6 @@ CGFloat topOfNonDepthArray = 0;
     [inputSources addObject:source];
 }
 
-#ifdef NOTUSED
-static NSString * const imageOrientationName[] = {
-    @"default",            // default orientation
-    @"rotate 180",
-    @"rotate 90 CCW",
-    @"rotate 90 CW",
-    @"Up Mirrored",
-    @"Down Mirrored",
-    @"Left Mirrored",
-    @"Right Mirrored"
-};
-#endif
-
 - (void) viewDidLoad {
     [super viewDidLoad];
 
@@ -682,6 +660,18 @@ static NSString * const imageOrientationName[] = {
                      target:self
                       action:@selector(doShare:)];
     
+    plusBarButton = [[UIBarButtonItem alloc]
+                     initWithImage:[UIImage systemImageNamed:@"plus.rectangle"]
+                     style:UIBarButtonItemStylePlain
+                                      target:self
+                     action:@selector(doPlusButton:)];
+    
+    doublePlusBarButton = [[UIBarButtonItem alloc]
+                     initWithImage:[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"]
+                     style:UIBarButtonItemStylePlain
+                                      target:self
+                           action:@selector(doDoublePlusButton:)];
+
     undoBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
                      style:UIBarButtonItemStylePlain
@@ -697,31 +687,6 @@ static NSString * const imageOrientationName[] = {
 
 #define NAVBAR_H   self.navigationController.navigationBar.frame.size.height
     
-#ifdef SWIFTONLY
-    UIMenu *plusMenu = [[UIMenu alloc] init];
-    plusMenu.
-    UIBarButtonItem *plusButton = [[UIBarButtonItem alloc]
-                                   initWithImage:
-                                   menu:<#(nullable UIMenu *)#>]
-    navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Menu", image: nil, primaryAction: nil, menu: demoMenu)
-    
-    cameraBarButtonItem = [[UIBarButtonItem alloc] initWithImage:nil
-                                                         style:UIBarButtonItemStylePlain
-                                                        target:self
-                                                        action:@selector(doCamera:)];
-    UIImage *newImage = [UIImage systemImageNamed:@"star"];
-    assert(newImage);
-    cameraBarButtonItem.image = newImage;
-    cameraBarButtonItem.enabled = (cameraCount > 0);
-
-#endif
-    
-    plusBarButtonItem = [[UIBarButtonItem alloc] initWithImage:nil
-                                                         style:UIBarButtonItemStylePlain
-                                                        target:self
-                                                        action:@selector(doPlus:)];
-    [self adjustPlusTo:NoPlus];
-        
     depthBarButton = [[UIBarButtonItem alloc] initWithImage:nil
                                                       style:UIBarButtonItemStylePlain
                                                      target:self
@@ -731,17 +696,28 @@ static NSString * const imageOrientationName[] = {
                                               sourceBarButton,
 //                                              depthBarButton,
                                               flipBarButton,
-                                              plusBarButtonItem,
                                               nil];
     
+    UIBarButtonItem *fixedSpace = [[UIBarButtonItem alloc]
+                                          initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                                   target:nil action:nil];
+    fixedSpace.width = 10;
+    
+#ifdef NOTUSED
+    UIBarButtonItem *flexiableItem = [[UIBarButtonItem alloc]
+                                      initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                      target:self
+                                      action:nil];
+#endif
+    
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               docBarButton,
-//                                               fixedSpace,
-                                               shareBarButton,
-//                                               fixedSpace,
+                                               plusBarButton,
+                                               doublePlusBarButton,
                                                undoBarButton,
-//                                               fixedSpace,
                                                trashBarButton,
+                                               fixedSpace,
+                                               shareBarButton,
+                                               docBarButton,
                                                nil];
 
     containerView = [[UIView alloc] init];
@@ -1488,21 +1464,23 @@ static NSString * const imageOrientationName[] = {
         lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
     }
     
-    if (IS_PLUS_LOCKED || IS_PLUS_ON) {  // add new transform
+    if (plusMode == PlusOne || plusMode == PlusMany) {  // add new transform
         [screenTask appendTransformToTask:tappedTransform];
         [screenTask configureTaskForSize];
         [tappedThumb adjustStatus:ThumbActive];
-//        if (!IS_PLUS_LOCKED)
-//            [self adjustPlusTo:NoPlus];
-    } else {    // not plus mode
+        if (plusMode == PlusOne) {
+            plusMode = NoPlus;
+            [self adjustPlus];
+        }
+    } else {    // not plus mode, change or delete last transform
 #ifdef NEW
         if (screenTasks.tasks.count > 0) {  // clear everything
             [self deselectAllThumbs];
             [self transformChainAdjusted];
         }
 #endif
-        // XXX in minus mode, selecting a selected transform should simply remove it
         if (lastTransform) {
+            // remove the last transform, and add the selected one, if different from the old
             BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
             [screenTask removeLastTransform];
             ThumbView *oldThumb = [self thumbForTransform:lastTransform];
@@ -1513,7 +1491,6 @@ static NSString * const imageOrientationName[] = {
                 [self adjustBarButtons];
                 tappedTransform = nil;
             }
-
         }
         if (tappedTransform) {
             [screenTask appendTransformToTask:tappedTransform];
@@ -1553,43 +1530,53 @@ static NSString * const imageOrientationName[] = {
     }
 }
 
-- (IBAction) doPlus:(UIBarButtonItem *)caller {
-    PopoverMenuVC *popMenuVC = [[PopoverMenuVC alloc]
-                                initWithFrame: CGRectMake(0, 0, PLUS_W, LATER)
-                                entries:PLUS_MODE_COUNT
-                                title:@"Stacking"
-                                target:self
-                                formatCell:^(UITableViewCell * _Nonnull cell, long menuRow) {
-                                    [self formatPlusPopoverCell:cell forRow:menuRow];
-                                }
-                                selectRow:^(long rowSelected) {
-                                    [self adjustPlusTo:(int)rowSelected];
-                                }];
-
-    UINavigationController *popNavVC = [popMenuVC prepareMenuUnder:caller];
-    [self presentViewController:popNavVC animated:YES completion:nil];
-}
-
-- (void) formatPlusPopoverCell:(UITableViewCell *)cell forRow:(long)row {
-    cell.textLabel.text = plusNames[row];
-    cell.highlighted = (row == self->plusMode);
-    //    cell.textLabel.font = [UIFont systemFontOfSize:PLUS_ROW_H];
-    UIImage *image = [UIImage systemImageNamed:plusImageNames[row]];
-    if (!image) {
-        NSLog(@"menu image missing: %@", plusImageNames[row]);
-        assert(image);
+- (IBAction) doPlusButton:(UIBarButtonItem *)caller {
+    switch (plusMode) {
+        case NoPlus:
+            plusMode = PlusOne;
+            break;
+        case PlusOne:
+            plusMode = NoPlus;
+            break;
+        case PlusMany:
+            plusMode = NoPlus;
+            break;
     }
-    cell.accessoryView = [[UIImageView alloc] initWithImage:image];
+    [self adjustPlus];
 }
 
-- (void) adjustPlusTo:(PlusMode) newPlusMode {
-    if (newPlusMode == POPMENU_ABORTED)
-        return;
-    UIImage *newImage = [UIImage systemImageNamed:plusImageNames[newPlusMode]];
-    assert(newImage);
-    plusBarButtonItem.image = newImage;
-    plusMode = newPlusMode;
+- (IBAction) doDoublePlusButton:(UIBarButtonItem *)caller {
+    switch (plusMode) {
+        case NoPlus:
+            plusMode = PlusMany;
+            break;
+        case PlusOne:
+            plusMode = PlusMany;
+            break;
+        case PlusMany:
+            plusMode = NoPlus;
+            break;
+    }
+    [self adjustPlus];
 }
+
+- (void) adjustPlus {
+    switch (plusMode) { // adjust buttons
+        case NoPlus:
+            plusBarButton.style = UIBarButtonItemStyleDone;
+            doublePlusBarButton.style = UIBarButtonItemStyleDone;
+            break;
+        case PlusOne:
+            plusBarButton.style = UIBarButtonItemStyleDone;
+            doublePlusBarButton.style = UIBarButtonItemStyleDone;
+            break;
+        case PlusMany:
+            plusBarButton.style = UIBarButtonItemStyleDone;
+            doublePlusBarButton.style = UIBarButtonItemStyleDone;
+            break;
+    }
+}
+
 
 // If the camera is off, turn it on, to the first possible setting,
 // almost certainly the front camera, 2d.  Otherwise, change the depth.
@@ -1614,114 +1601,6 @@ static NSString * const imageOrientationName[] = {
     [taskCtrl idleFor:NeedsNewLayout];
 }
 
-#ifdef OLD
-- (IBAction) doCamera:(UIBarButtonItem *)caller {
-    PopoverMenuVC *popMenuVC = [[PopoverMenuVC alloc]
-                                initWithFrame: CGRectMake(0, 0, PLUS_W, LATER)
-                                entries:cameraCount
-                                title:@"Cameras"
-                                target:self
-                                formatCell:^(UITableViewCell * _Nonnull cell, long menuRow) {
-                                    [self formatCameraPopoverCell:cell forRow:menuRow];
-                                }
-                                selectRow:^(long rowSelected) {
-                                    [self selectCamera:rowSelected];
-                                }];
-
-    UINavigationController *popNavVC = [popMenuVC prepareMenuUnder:caller];
-    [self presentViewController:popNavVC animated:YES completion:nil];
-}
-
-- (void) formatCameraPopoverCell:(UITableViewCell *)cell forRow:(long)row {
-    InputSource *cameraSource = [inputSources objectAtIndex:row];
-    long cameraIndex = cameraSource.cameraIndex;
-    cell.textLabel.text = possibleCameras[cameraIndex].name;
-    if (currentSourceIndex == row) {
-        cell.accessoryType = UITableViewCellAccessoryCheckmark;
-        cell.highlighted = YES;
-    } else {
-        cell.accessoryType = UITableViewCellAccessoryNone;
-        cell.highlighted = NO;
-    }
-    //    cell.textLabel.font = [UIFont systemFontOfSize:PLUS_ROW_H];
-    cell.imageView.image = [self cameraImageForCamera:row height:cell.frame.size.height];
-#ifdef MAYBENOT
-    UIImageView *accessImageView = [[UIImageView alloc] initWithImage:[self cameraImageForCamera:row]];
-    accessImageView.contentMode = UIViewContentModeScaleAspectFit;
-    accessImageView.frame = CGRectMake(0, 0, cell.frame.size.height, cell.frame.size.width);
-    cell.accessoryView = accessImageView;
-#endif
-}
-
-- (UIImage *) cameraImageForCamera:(long) cameraIndex height:(CGFloat) h {
-    NSString *imageName = possibleCameras[cameraIndex].imageName;
-    UIImage *image = [UIImage systemImageNamed:imageName];
-    if (!image) { // not an SF image, try local bundle image
-        NSString *imagePath = [[NSBundle mainBundle]
-                               pathForResource:[@"images"
-                                                stringByAppendingPathComponent:imageName]
-                               ofType:@"png"];
-        image = [UIImage imageNamed:imagePath];
-    }
-    if (!image) {
-        NSLog(@"menu image missing: %@", imageName);
-        assert(image);
-    }
-    return image;
-}
-#endif
-
-#ifdef NOTDEF
-
-- (IBAction) selectSource:(UIBarButtonItem *)button {
-    float scale = isiPhone ? SOURCE_IPHONE_SCALE : 1.0;
-    sourceCellImageSize = CGSizeMake(SOURCE_THUMB_W*scale,
-                                     SOURCE_THUMB_W*scale/layout.aspectRatio);
-    sourceFontSize = SOURCE_THUMB_FONT_H*scale;
-    sourceLabelH = 2*(sourceFontSize + 2);
-    sourceCellSize = CGSizeMake(sourceCellImageSize.width,
-                                sourceCellImageSize.height + sourceLabelH);
-    
-    UICollectionViewFlowLayout *flowLayout = [[UICollectionViewFlowLayout alloc] init];
-    flowLayout.sectionInset = UIEdgeInsetsMake(2*INSET, 2*INSET, INSET, 2*INSET);
-    flowLayout.itemSize = sourceCellSize;
-    flowLayout.scrollDirection = UICollectionViewScrollDirectionVertical;
-    //flowLayout.sectionInset = UIEdgeInsetsMake(16, 16, 16, 16);
-    //flowLayout.minimumInteritemSpacing = 16;
-    //flowLayout.minimumLineSpacing = 16;
-    flowLayout.headerReferenceSize = CGSizeMake(0, COLLECTION_HEADER_H);
-    
-    UICollectionView *collectionView = [[UICollectionView alloc]
-                                        initWithFrame:containerView.frame
-                                        collectionViewLayout:flowLayout];
-    collectionView.dataSource = self;
-    collectionView.delegate = self;
-    collectionView.tag = sourceCollection;
-    [collectionView registerClass:[UICollectionViewCell class]
-       forCellWithReuseIdentifier:SELECTION_CELL_ID];
-    collectionView.backgroundColor = [UIColor whiteColor];
-    
-    [collectionView registerClass:[CollectionHeaderView class]
-       forSupplementaryViewOfKind:UICollectionElementKindSectionHeader
-              withReuseIdentifier:SELECTION_HEADER_CELL_ID];
-    
-    UIViewController __block *cVC = [[UIViewController alloc] init];
-    cVC.view = collectionView;
-    cVC.modalPresentationStyle = UIModalPresentationPopover;
-    
-    sourcesNavVC = [[UINavigationController alloc]
-                    initWithRootViewController:cVC];
-    cVC.title = @"Select source";
-    cVC.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
-                                                initWithTitle:@"Dismiss"
-                                                style:UIBarButtonItemStylePlain
-                                                target:self
-                                                action:@selector(dismissSourceVC:)];
-
-    [self presentViewController:sourcesNavVC animated:YES completion:nil];
-}
-#endif
-
 - (void) updateStats: (float) fps
          depthPerSec:(float) depthps
        droppedPerSec:(float)dps
@@ -1737,47 +1616,6 @@ static NSString * const imageOrientationName[] = {
         [self->allStatsLabel setNeedsDisplay];
     });
 }
-
-#ifdef OLD
-#define DEBUG_FONT_SIZE 16
-
--(void) updateOverlayView: (OverlayState) newState {
-    // start fresh
-    [overlayView.subviews makeObjectsPerformSelector: @selector(removeFromSuperview)];
-    UILabel *overlayDebug = nil;
-    
-    overlayState = newState;
-    switch (overlayState) {
-        case overlayClear:
-            //[self.navigationController setNavigationBarHidden:YES animated:YES];
-            break;
-        case overlayShowingDebug:
-            overlayDebug = [[UILabel alloc] init];
-            overlayDebug.text = overlayDebugStatus;
-            overlayDebug.textColor = [UIColor whiteColor];
-            overlayDebug.opaque = NO;
-            overlayDebug.numberOfLines = 0;
-            overlayDebug.lineBreakMode = NSLineBreakByWordWrapping;
-            overlayDebug.font = [UIFont boldSystemFontOfSize:DEBUG_FONT_SIZE];
-            overlayDebug.backgroundColor = [UIColor colorWithWhite:0.4 alpha:0.2];
-            [overlayView addSubview:overlayDebug];
-            // FALLTHROUGH
-        case overlayShowing: {
-            //[self.navigationController setNavigationBarHidden:NO animated:YES];
-            if (overlayDebug) {
-                CGRect f;
-                f.size = overlayView.frame.size;
-                f.origin = CGPointMake(5, 5);
-                overlayDebug.frame = f;
-                [overlayDebug sizeToFit];
-                [overlayView bringSubviewToFront:overlayDebug];
-            }
-            break;
-        }
-    }
-    [overlayView setNeedsDisplay];
-}
-#endif
 
 // pause/unpause video
 - (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
@@ -1965,24 +1803,6 @@ static NSString * const imageOrientationName[] = {
         popController.barButtonItem = (UIBarButtonItem *)caller;
     }
     [self presentViewController:helpNavVC animated:YES completion:nil];
-    
-#ifdef OLD
-    popController.sourceRect = CGRectMake(100, 100, 100, 100);
-    popController.sourceView = helpNavVC.view;
-    if ([caller isKindOfClass:[UIBarButtonItem class]]) {
-        popController.barButtonItem = (UIBarButtonItem *)caller;
-    } else if ([caller isKindOfClass:[UIView class]]) {
-        popController.sourceView = caller;
-    } else {
-        NSLog(@"*** unexpected button class: %@ ***", [caller class]);
-    }
-    
-    [self presentViewController:helpNavVC animated:YES completion:^{
-        //        [helpNavVC.view removeFromSuperview];
-        helpNavVC = nil;
-        return;  //???
-    }];
-#endif
 }
 
 - (IBAction) doShare:(UIBarButtonItem *)shareButton {
@@ -2038,30 +1858,6 @@ static NSString * const imageOrientationName[] = {
         }
     };
 }
-
-#ifdef OLD
-    UIImageWriteToSavedPhotosAlbum(transformView.image, nil, nil, nil);
-    [self flash];
-
-    // UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
-    UIWindow* keyWindow = nil;
-    if (@available(iOS 13.0, *)) {
-        for (UIWindowScene* wScene in [UIApplication sharedApplication].connectedScenes) {
-            if (wScene.activationState == UISceneActivationStateForegroundActive) {
-                keyWindow = wScene.windows.firstObject;
-                break;
-            }
-        }
-    }
-    CGRect rect = [keyWindow bounds];
-    UIGraphicsBeginImageContextWithOptions(rect.size,YES,0.0f);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    [keyWindow.layer renderInContext:context];
-    UIImage *capturedScreen = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();    //UIImageWriteToSavedPhotosAlbum([UIScreen.image, nil, nil, nil);
-    UIImageWriteToSavedPhotosAlbum(capturedScreen, nil, nil, nil);
-}
-#endif
 
 #ifdef NOTDEF
 - (IBAction) didLongPressScreen:(UILongPressGestureRecognizer *)recognizer {
@@ -2347,7 +2143,7 @@ UIImageOrientation lastOrientation;
             t = [NSString stringWithFormat:@"%@   (%@)", t, transform.description];
     }
     
-    if (IS_PLUS_ON || screenTask.transformList.count == 0)
+    if (plusMode != NoPlus || screenTask.transformList.count == 0)
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     
