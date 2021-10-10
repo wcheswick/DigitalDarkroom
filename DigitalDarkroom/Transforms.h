@@ -38,7 +38,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface Transforms : NSObject {
     NSMutableArray *transforms;     // the depth transforms are first in the list
-    size_t depthTransformCount;
     BOOL debugTransforms;
     
     size_t bytesPerRow;
@@ -48,7 +47,6 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 @property (nonatomic, strong)   NSMutableArray *transforms;
-@property (assign)              size_t depthTransformCount;
 
 //@property (assign)              size_t bytesPerRow;
 //@property (nonatomic, strong)   NSArray *updatedTransformList;

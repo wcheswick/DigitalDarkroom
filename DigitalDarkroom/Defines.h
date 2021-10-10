@@ -9,7 +9,7 @@
 #ifndef Defines_h
 #define Defines_h
 
-#define VERIFY_PIXBUF_BUFFERS   1
+//#define VERIFY_PIXBUF_BUFFERS   1
 #ifdef NOTDEF
 // Performance hit for all of these together on my iPad pro: 10 FPS -> 5 FPS
 #define VERIFY_DEPTH_BUFFERS    1
@@ -18,8 +18,9 @@
 #endif
 
 // #define DEBUG_LAYOUT    1
+#define MEMLEAK_AIDS 1
 
-//#define DEBUG_ORIENTATION 1
+//#define DEBUG_ORIENTATION
 
 //#define DEBUG_CAMERA  1
 //#define DEBUG_TASK_BUSY 1

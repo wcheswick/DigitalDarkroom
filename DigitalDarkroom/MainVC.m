@@ -100,9 +100,9 @@
 #define SOURCE_INDEX_IS_3D(si)   (possibleCameras[SOURCE(si).cameraIndex].threeD)
 
 typedef enum {
-    NoPlus,
-    PlusOne,
-    PlusMany,
+    NoPlus = -1,    // values correspond to plus segment index
+    PlusOne = 0,
+    PlusMany = 1,
 } PlusMode;
 #define PLUS_MODE_COUNT    3
 
@@ -218,12 +218,14 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *hiresButton;
-@property (nonatomic, strong)   UIBarButtonItem *plusBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *doublePlusBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
 
-@property (nonatomic, strong)   UIBarButtonItem *plusBarButtonItem;
+@property (nonatomic, strong)   UISegmentedControl *plusBar;
+@property (nonatomic, strong)   UIButton *plusButton;
+@property (nonatomic, strong)   UIButton *doublePlusButton;
+
+@property (nonatomic, strong)   UIButton *plusBarButtonItem;
 @property (nonatomic, strong)   UIBarButtonItem *cameraBarButtonItem;
 
 @property (assign)              PlusMode plusMode;
@@ -293,7 +295,7 @@ MainVC *mainVC = nil;
 @synthesize cameraController;
 @synthesize layout;
 
-@synthesize plusBarButton, doublePlusBarButton;
+@synthesize plusBar, plusButton, doublePlusButton;
 @synthesize undoBarButton, shareBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -336,8 +338,10 @@ MainVC *mainVC = nil;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        //externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
-        
+        thumbTasks.groupEnabled = NO;   // debug XXXXXX
+        externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
+        externalTasks.groupEnabled = NO;    // not implemented
+
         transformTotalElapsed = 0;
         transformCount = 0;
         rawDepthBuf = nil;
@@ -660,17 +664,16 @@ CGFloat topOfNonDepthArray = 0;
                      target:self
                       action:@selector(doShare:)];
     
-    plusBarButton = [[UIBarButtonItem alloc]
-                     initWithImage:[UIImage systemImageNamed:@"plus.rectangle"]
-                     style:UIBarButtonItemStylePlain
-                                      target:self
-                     action:@selector(doPlusButton:)];
+    plusBar = [[UISegmentedControl alloc]
+                                   initWithItems:@[[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"],
+                                                   [UIImage systemImageNamed:@"plus.rectangle"]]];
+    [plusBar addTarget:self
+                action:@selector(doPlus:)
+      forControlEvents:UIControlEventValueChanged];
+    [self adjustPlus];
     
-    doublePlusBarButton = [[UIBarButtonItem alloc]
-                     initWithImage:[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"]
-                     style:UIBarButtonItemStylePlain
-                                      target:self
-                           action:@selector(doDoublePlusButton:)];
+    UIBarButtonItem *plusBarSelectionButton = [[UIBarButtonItem alloc]
+                                               initWithCustomView:plusBar];
 
     undoBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
@@ -711,8 +714,7 @@ CGFloat topOfNonDepthArray = 0;
 #endif
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               plusBarButton,
-                                               doublePlusBarButton,
+                                               plusBarSelectionButton,
                                                undoBarButton,
                                                trashBarButton,
                                                fixedSpace,
@@ -1530,37 +1532,15 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (IBAction) doPlusButton:(UIBarButtonItem *)caller {
-    switch (plusMode) {
-        case NoPlus:
-            plusMode = PlusOne;
-            break;
-        case PlusOne:
-            plusMode = NoPlus;
-            break;
-        case PlusMany:
-            plusMode = NoPlus;
-            break;
-    }
-    [self adjustPlus];
-}
-
-- (IBAction) doDoublePlusButton:(UIBarButtonItem *)caller {
-    switch (plusMode) {
-        case NoPlus:
-            plusMode = PlusMany;
-            break;
-        case PlusOne:
-            plusMode = PlusMany;
-            break;
-        case PlusMany:
-            plusMode = NoPlus;
-            break;
-    }
+- (IBAction) doPlus:(UISegmentedControl *)caller {
+    NSInteger newMode = caller.selectedSegmentIndex;
+    assert(newMode != NoPlus); // cannot be selected
+    plusMode = (int)newMode;
     [self adjustPlus];
 }
 
 - (void) adjustPlus {
+#ifdef BROKEN
     switch (plusMode) { // adjust buttons
         case NoPlus:
             plusBarButton.style = UIBarButtonItemStyleDone;
@@ -1575,7 +1555,25 @@ CGFloat topOfNonDepthArray = 0;
             doublePlusBarButton.style = UIBarButtonItemStyleDone;
             break;
     }
+#endif
 }
+
+#ifdef OLD
+- (IBAction) doDoublePlusButton:(UIBarButtonItem *)caller {
+    switch (plusMode) {
+        case NoPlus:
+            plusMode = PlusMany;
+            break;
+        case PlusOne:
+            plusMode = PlusMany;
+            break;
+        case PlusMany:
+            plusMode = NoPlus;
+            break;
+    }
+    [self adjustPlus];
+}
+#endif
 
 
 // If the camera is off, turn it on, to the first possible setting,
@@ -1952,14 +1950,13 @@ CGFloat topOfNonDepthArray = 0;
 // is present, has min and max values computed, but one or more depths may
 // be BAD_DEPTH.
 
-- (void) processCapturedFrame:(Frame *) scaledFrame
-                  inTaskgroup:(TaskGroup *) taskGroup {
+- (void) processScaledIncomingFrameinTaskgroup:(TaskGroup *) taskGroup {
     if (!live || taskCtrl.state != LayoutOK || busy) {
         if (busy)
             busyCount++;
         return;
     }
-    [taskGroup doGroupTransformsOnFrame:scaledFrame];
+    [taskGroup doGroupTransformsOnIncomingFrame];
     busy = NO;
 }
 

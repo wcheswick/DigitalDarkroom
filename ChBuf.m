@@ -23,6 +23,9 @@
 - (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
+#ifdef MEMLEAK_AIDS
+        NSLog(@"+ ChBuf     %4.0f x %4.0f", s.width, s.height);
+#endif
         self.w = s.width;
         self.h = s.height;
         // end row on an integer word boundary...

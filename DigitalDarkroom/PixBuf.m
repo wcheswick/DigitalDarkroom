@@ -25,6 +25,9 @@
 - (id)initWithSize:(CGSize)s {
     self = [super init];
     if (self) {
+#ifdef MEMLEAK_AIDS
+        NSLog(@"+ PixBuf    %4.0f x %4.0f", s.width, s.height);
+#endif
         self.size = s;
         size_t rowSize = sizeof(Pixel) * size.width;
         size_t arraySize = sizeof(Pixel *) * size.height;
@@ -175,6 +178,31 @@
     [copy verify];
     stats.pixbufCopies++;
     return copy;
+}
+
+- (void) loadPixelsFromImage:(UIImage *) image {
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef cgContext = CGBitmapContextCreate((char *)self.pb, self.size.width, self.size.height, 8,
+                                                   self.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
+    CGContextDrawImage(cgContext, CGRectMake(0,0,size.width,size.height), image.CGImage);
+    CGContextRelease(cgContext);
+    CGColorSpaceRelease(colorSpace);
+}
+
+- (UIImage *) toImage {
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    size_t bytesPerRow = sizeof(Pixel) * size.width;  // XXX assumes no slop at the end
+    CGContextRef context = CGBitmapContextCreate((void *)pb, size.width, size.height, 8,
+                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
+    assert(context);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    UIImage *image = [UIImage imageWithCGImage:quartzImage
+                                         scale:(CGFloat)1.0
+                                   orientation:UIImageOrientationUp];
+    CGImageRelease(quartzImage);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    return image;
 }
 
 @end

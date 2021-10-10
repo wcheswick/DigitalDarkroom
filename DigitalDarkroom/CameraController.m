@@ -378,15 +378,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
 //    OSType type = CVPixelBufferGetPixelFormatType(videoPixelBufferRef);
     
-    void *videoBaseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawWidth,
-                                                 rawHeight, 8,
-                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
-    assert(context);
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    
-    CVPixelBufferRef depthPixelBufferRef = nil;
     if (depthDataAvailable) {
         if (!syncedDepthBufferData) {
             stats.depthMissing++;       // not so rare, maybe 5% in one test
@@ -401,35 +392,53 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             return;
         }
         stats.depthFrames++;
+    }
+    
+    void *videoBaseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawWidth,
+                                                 rawHeight, 8,
+                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
+    assert(context);
+    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+    
+    CVPixelBufferRef depthPixelBufferRef = nil;
+    if (depthDataAvailable) {
         depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
-        CVPixelBufferLockBaseAddress(depthPixelBufferRef,  kCVPixelBufferLock_ReadOnly);
+        CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
+        assert(depthPixelBufferRef);
     }
 
     for (NSString *groupName in activeTaskgroups) {
         TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
         if (taskGroup.groupBusy)
             continue;
-        Frame *scaledFrame = taskGroup.groupSrcFrame;
+        Frame *scaledFrame = taskGroup.scaledIncomingFrame;
+        //        Frame *scaledFrame = [taskGroup.groupSrcFrame copy];    // I don't think we need this
         CGRect r;
         r.origin = CGPointZero;
         r.size = scaledFrame.pixBuf.size;
         float scale = r.size.width/rawWidth;
         
         // fetch and scale image for group
-        UIImage *scaledImage = [[UIImage alloc] initWithCGImage:quartzImage
+        scaledFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
                                                           scale:scale
                                                     orientation:UIImageOrientationUp];
+        scaledFrame.pixBufNeedsUpdate = YES;
+#ifdef NO__TESTING
         CGImageRef scaledCGImage = scaledImage.CGImage;
         CGContextRef cgContext = CGBitmapContextCreate((char *)scaledFrame.pixBuf.pb, r.size.width, r.size.height, 8,
                                                        r.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
         CGContextDrawImage(cgContext, r, scaledCGImage);
         CGContextRelease(cgContext);
+#endif
         
         // fetch and preprocess depth data for group
         if (depthPixelBufferRef) {
             // copy the given depth data to our capture.  It seems to change under us, so
             // save most processing until after the depths are firmed up
             assert(sizeof(Distance) == sizeof(float));
+            assert(depthDataAvailable); // for now, depth always available XXXXXX
             Distance *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
             assert(capturedDepthBuffer);
             
@@ -471,13 +480,9 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
         // NB: the depth data is dirty, with BAD_DEPTH values
         // go process this image in this taskgroup
-        assert(scaledFrame.pixBuf);
-        assert(scaledFrame.depthBuf);
-        assert(scaledFrame.depthBuf.minDepth);
-        assert(scaledFrame.depthBuf.maxDepth);
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            [(id<videoSampleProcessorDelegate>)self->videoProcessor processCapturedFrame:scaledFrame inTaskgroup:taskGroup];
+            [(id<videoSampleProcessorDelegate>)self->videoProcessor processScaledIncomingFrameinTaskgroup:taskGroup];
         });
     }
     CGImageRelease(quartzImage);

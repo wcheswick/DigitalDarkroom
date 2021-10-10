@@ -36,10 +36,8 @@ static PixelIndex_t dPI(int x, int y) {
 
 @interface Task ()
 
-@property (nonatomic, strong)   PixBuf *dstPixBuf;
-@property (nonatomic, strong)   ChBuf *chBuf0, *chBuf1;
-@property (nonatomic, strong)   Frame *frame0, *frame1;
-@property (nonatomic, strong)   NSMutableArray<Frame *> *frames;
+@property (nonatomic, strong)   ChBuf *chBuf0, *chBuf1; // scratch channel buffers
+@property (nonatomic, strong)   NSMutableArray<Frame *> *frames;    // two scratch frames of the right size
 
 @end
 
@@ -49,9 +47,8 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize transformList;
 @synthesize paramList;
 @synthesize targetImageView;
-@synthesize dstPixBuf;
 @synthesize chBuf0, chBuf1;
-@synthesize frames, frame0, frame1;
+@synthesize frames;
 @synthesize taskGroup;
 @synthesize taskIndex;
 @synthesize taskStatus;
@@ -130,7 +127,6 @@ static PixelIndex_t dPI(int x, int y) {
           taskGroup.transformSize.width, taskGroup.transformSize.height);
 #endif
     
-    dstPixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
     chBuf0 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
     assert(chBuf0);
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
@@ -139,26 +135,19 @@ static PixelIndex_t dPI(int x, int y) {
     needsDestFrame = NO;    // these notes help us prevent extra frame copies
     modifiesDepthBuf = NO;
 
-    // we
+    // processing space in frames
     frames = [[NSMutableArray alloc] init];
-    frame0 = [[Frame alloc] init];
-    frame0.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
-    frame0.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
-    [frames addObject:frame0];
+    for (int i=0; i<2; i++) {
+        Frame *frame = [[Frame alloc] init];
+        frame.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
+        frame.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
+        [frames addObject:frame];
+    }
 
-    frame1 = nil;
-    
     for (int i=0; i<transformList.count; i++) {
         Transform *transform = [self configureTransformAtIndex:i];
         needsDestFrame |= transform.needsDestFrame;
         modifiesDepthBuf |= transform.modifiesDepthBuf;
-    }
-    
-    if (needsDestFrame || modifiesDepthBuf) {
-        frame1 = [[Frame alloc] init];
-        frame1.pixBuf = [[PixBuf alloc] initWithSize:taskGroup.targetSize];
-        frame1.depthBuf = [[DepthBuf alloc] initWithSize:taskGroup.targetSize];
-        [frames addObject:frame1];
     }
 }
 
@@ -227,7 +216,18 @@ static PixelIndex_t dPI(int x, int y) {
 
 // transform starting with the general group sourceFrame, which must not be changed.
 
-- (const Frame * __nullable) executeTaskTransformsOnFrame:(const Frame *)sourceFrame {
+// the incoming frame for this task is shared with the rest of the group.  We are free to
+// read it, but not change it.   We have two frames preallocated that are writable, stored
+// in frames[0..1].  We pass frames or pixBufs to the transform. This can be frame index -1 (for
+// the unwritable incoming frame) or 0 or 1.  Transforms tend to copy their work from input to output,
+// so input can be the incoming frame.  Then we jump between the working frames.
+//
+// Most of these transforms have nothing to do with the depth data, so we avoid copying it unless
+// we change it.
+
+// The frames are allocated to the correct size. The buffers may be overwritten or swapped.
+
+- (const Frame * __nullable) executeTaskTransformsOnIncomingFrame {
     if (taskStatus == Stopped || !enabled)
         return nil;     // not now
     if (taskGroup.taskCtrl.state != LayoutOK) {
@@ -235,37 +235,117 @@ static PixelIndex_t dPI(int x, int y) {
         return nil;
     }
 
+    Frame *readOnlyIncomingFrame = taskGroup.scaledIncomingFrame;
     if (transformList.count == 0) { // just display the input
-        UIImage *unmodifiedSourceImage = [sourceFrame toUIImage];
-        [self updateTargetWith:unmodifiedSourceImage];
+        targetImageView.image = readOnlyIncomingFrame.image;
         return nil;
     }
-    
+
+    assert(frames.count == 2);
+    int dstIndex;
+    Frame *srcFrame;
+    if (readOnlyIncomingFrame.pixBufNeedsUpdate) {
+        srcFrame = frames[0];
+        [srcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
+        srcFrame.pixBufNeedsUpdate = NO;
+        dstIndex = 1;
+    } else {
+        srcFrame = readOnlyIncomingFrame;
+        dstIndex = 0;
+    }
+
     taskStatus = Running;
-    // starting frame is the source frame, which must not be changed. The first transform writes
-    // into frames[0], sourceFrameIndex in "frames".  Transforms that keep modifying the input frame
-    // just overwrite frame0 in place. Those that change depth, or who need to write a frame from
-    // scratch, go to frame[1], destFrameIndex.  Then sourceFrameIndex and destFrameIndex are swapped.
-    // The idea is to let transforms copy to new buffers as they work, if needed, and suppress extra
-    // copying.
-    // At this point, frames[0] and (if needed) frames[1] are configured for the correct sizes.
-    
-    Frame *srcFrame = (Frame *)sourceFrame;
-
-    size_t dstIndex = 0;
+    int depthIndex = -1;    // in readOnlyIncomingFrame, unless we need it
+    DepthBuf *srcDepthBuf = readOnlyIncomingFrame.depthBuf;
     NSDate *startTime = [NSDate now];
-
+    
     for (int i=0; i<transformList.count; i++) {
         Transform *transform = transformList[i];
         TransformInstance *instance = paramList[i];
-        
-        assert(frames);
-        assert(dstIndex < frames.count);
-        [self performTransform:transform
-                      instance:instance
-                         srcFrame:srcFrame dstFrame:frames[dstIndex]];
-        srcFrame = frames[dstIndex];
-        dstIndex = 1 - dstIndex;
+        Frame *dstFrame = frames[dstIndex];
+        switch (transform.type) {
+            case NullTrans:
+                assert(NO); // should never try a null, it is a placeholder for inactive stuff
+            case ColorTrans:
+                transform.ipPointF(srcFrame.pixBuf, dstFrame.pixBuf, instance.value);
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+                break;
+            case AreaTrans:
+                // compute transform of pixel data only to a destination pixbuf
+                transform.areaF(srcFrame.pixBuf, dstFrame.pixBuf, chBuf0, chBuf1, instance);
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+                break;
+            case DepthVis:
+                assert(srcDepthBuf);
+                    transform.depthVisF(srcFrame.pixBuf, srcDepthBuf, dstFrame.pixBuf, instance);
+                // result is in dstFrame, maybe with modified depthBuf
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+                break;
+            case DepthTrans:
+                assert(srcDepthBuf);
+                transform.depthVisF(srcFrame.pixBuf, srcDepthBuf, dstFrame.pixBuf, instance);
+                depthIndex = dstIndex;
+                srcDepthBuf = dstFrame.depthBuf;
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+                break;
+            case EtcTrans:
+                NSLog(@"stub - etctrans");
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+                break;
+            case RemapSize:
+                assert(NO); // RemapSize not currently used
+            case GeometricTrans:
+            case RemapPolar:
+            case RemapImage: {
+                assert(instance);
+                assert(instance.remapBuf);
+     //           [instance.remapBuf verify];
+                BufferIndex *bip = instance.remapBuf.rb;
+                Pixel *dp = dstFrame.pixBuf.pb;
+                int N = instance.remapBuf.size.width * instance.remapBuf.size.height;
+                for (int i=0; i<N; i++) {
+                    Pixel p;
+                    BufferIndex bi = *bip++;
+                    switch (bi) {
+                        case Remap_White:
+                            p = White;
+                            break;
+                        case Remap_Red:
+                            p = Red;
+                            break;
+                        case Remap_Green:
+                            p = Green;
+                            break;
+                        case Remap_Blue:
+                            p = Blue;
+                            break;
+                        case Remap_Black:
+                            p = Black;
+                            break;
+                        case Remap_Yellow:
+                            p = Yellow;
+                            break;
+                        case Remap_OutOfRange:
+                            p = Magenta;
+                            break;
+                        case Remap_Unset:
+                            p = UnsetColor;
+                            break;
+                        default:
+                            assert(bi >= 0 && bi < N);
+                            p = srcFrame.pixBuf.pb[bi];
+                    }
+                    *dp++ = p;
+                }
+                srcFrame = dstFrame;
+                dstIndex = 1 - dstIndex;
+            }
+        }
         
         NSDate *transformEnd = [NSDate now];
         instance.elapsedProcessingTime += [transformEnd timeIntervalSinceDate:startTime];
@@ -273,12 +353,11 @@ static PixelIndex_t dPI(int x, int y) {
         startTime = transformEnd;
     }
     
-    // srcFrame has our answer
-    
     assert(srcFrame);
     if (srcFrame.depthBuf)
         [srcFrame.depthBuf verifyDepths];
-    [self updateTargetWith:[srcFrame toUIImage]];
+    targetImageView.image = [srcFrame.pixBuf toImage];
+    [targetImageView setNeedsDisplay];
     taskStatus = Idle;
     return nil;
 }
@@ -304,84 +383,5 @@ static PixelIndex_t dPI(int x, int y) {
 }
 #endif
 
-- (void) updateTargetWith:(UIImage *)image {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        self->targetImageView.image = image;
-        [self->targetImageView setNeedsDisplay];
-        self->taskStatus = Idle;
-     });
-}
-
-- (void) performTransform:(Transform *)transform
-                 instance:(TransformInstance *)instance
-                 srcFrame:(Frame *)srcFrame
-                 dstFrame:(Frame *)dstFrame {
-    int N = srcFrame.pixBuf.size.width*srcFrame.pixBuf.size.height;
-    
-    switch (transform.type) {
-        case NullTrans:
-            assert(NO); // should never try a null, it is a placeholder for inactive stuff
-        case ColorTrans:
-            transform.ipPointF(srcFrame, dstFrame, instance.value);
-            break;     // was done in place
-        case AreaTrans:
-            transform.areaF(srcFrame, dstFrame, chBuf0, chBuf1, instance);
-            break;
-        case DepthVis:
-            if (srcFrame.depthBuf)
-                transform.depthVisF(srcFrame, dstFrame, instance);
-            // result is in dstFrame, maybe with modified depthBuf
-            break;
-        case EtcTrans:
-            NSLog(@"stub - etctrans");
-            break;
-        case RemapSize:
-            assert(NO); // RemapSize not currently used
-        case GeometricTrans:
-        case RemapPolar:
-        case RemapImage: {
-            assert(instance);
-            assert(instance.remapBuf);
- //           [instance.remapBuf verify];
-            BufferIndex *bip = instance.remapBuf.rb;
-            Pixel *dp = dstFrame.pixBuf.pb;
-            for (int i=0; i<N; i++) {
-                Pixel p;
-                BufferIndex bi = *bip++;
-                switch (bi) {
-                    case Remap_White:
-                        p = White;
-                        break;
-                    case Remap_Red:
-                        p = Red;
-                        break;
-                    case Remap_Green:
-                        p = Green;
-                        break;
-                    case Remap_Blue:
-                        p = Blue;
-                        break;
-                    case Remap_Black:
-                        p = Black;
-                        break;
-                    case Remap_Yellow:
-                        p = Yellow;
-                        break;
-                    case Remap_OutOfRange:
-                        p = Magenta;
-                        break;
-                    case Remap_Unset:
-                        p = UnsetColor;
-                        break;
-                    default:
-                        assert(bi >= 0 && bi < N);
-                        p = srcFrame.pixBuf.pb[bi];
-                }
-                *dp++ = p;
-            }
-        }
-    }
-    return;
-}
 
 @end

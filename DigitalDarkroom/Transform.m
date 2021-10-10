@@ -17,7 +17,7 @@
 @synthesize hasParameters;
 @synthesize ipPointF;
 @synthesize areaF;
-@synthesize depthVisF;
+@synthesize depthVisF, depthTransF;
 @synthesize remapImageF;
 @synthesize remapPolarF;
 @synthesize remapSizeF;
@@ -42,6 +42,7 @@
         remapPolarF = nil;
         remapSizeF = nil;
         depthVisF = nil;
+        depthTransF = nil;
         low = high = 0;
         newValue = NO;
         hasParameters = NO;
@@ -53,6 +54,7 @@
     return self;
 }
 
+// From a frame with incoming depth and pixbuf, and outgoing pixbuf
 + (Transform *) depthVis:(NSString *) n description:(NSString *) d
                 depthVis:(depthVis_t) f {
     Transform *t = [[Transform alloc] init];
@@ -60,6 +62,19 @@
     t.description = d;
     t.type = DepthVis;
     t.depthVisF = f;
+    t.modifiesDepthBuf = YES;
+    return t;
+}
+
+// From a frame with incoming depth and pixbuf, and outgoing depth and frame
+// must output a modified or copied depthBuf.
++ (Transform *) depthTrans:(NSString *) n description:(NSString *) d
+                depthTrans:(depthTrans_t) f {
+    Transform *t = [[Transform alloc] init];
+    t.name = n;
+    t.description = d;
+    t.type = DepthVis;
+    t.depthTransF = f;
     t.modifiesDepthBuf = YES;
     return t;
 }
@@ -95,6 +110,8 @@
     t.remapImageF = f;
     return t;
 }
+
+// sets up pixel remap from pixbuf to another pixbuf, using polar coordinates
 
 + (Transform *) areaTransform:(NSString *) n description:(NSString *) d
                    remapPolar:(RemapPolar_t) f {

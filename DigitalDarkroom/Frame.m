@@ -10,17 +10,22 @@
 
 @implementation Frame
 
-@synthesize pixBuf, depthBuf;
+@synthesize pixBuf, depthBuf, image;
 @synthesize creationTime;
-@synthesize locked;
+@synthesize locked, pixBufNeedsUpdate;
 
 - (id)init {
     self = [super init];
     if (self) {
+#ifdef MEMLEAK_AIDS
+        NSLog(@"+ Frame     ");
+#endif
         depthBuf = nil;
         pixBuf = nil;
+        image = nil;
         creationTime = [NSDate now];
         locked = NO;
+        pixBufNeedsUpdate = YES;
     }
     return self;
 }

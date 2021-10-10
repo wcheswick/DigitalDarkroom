@@ -28,6 +28,9 @@
     self = [super init];
     if (self) {
         self.size = s;
+#ifdef MEMLEAK_AIDS
+        NSLog(@"+ DepthBuf  %4.0f x %4.0f", s.width, s.height);
+#endif
         minDepth = maxDepth = 0.0;   // this is computed and updated each time through an image
         badDepths = 0;
         size_t rowSize = sizeof(Distance) * size.width;

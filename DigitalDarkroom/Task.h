@@ -63,7 +63,7 @@ typedef enum {
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
 
-- (const Frame * __nullable) executeTaskTransformsOnFrame:(const Frame *)sourceFrame;
+- (const Frame * __nullable) executeTaskTransformsOnIncomingFrame;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
 
 @end

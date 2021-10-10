@@ -34,7 +34,10 @@ remapTo(RemapBuf *remapBuf, long tx, long ty, long sx, long sy) {
     self = [super init];
     if (self) {
         self.size = s;
-        size_t bufferSize = size.width * sizeof(BufferIndex) * size.height;
+#ifdef MEMLEAK_AIDS
+        NSLog(@"+ RemapBuf  %4.0f x %4.0f", s.width, s.height);
+#endif
+       size_t bufferSize = size.width * sizeof(BufferIndex) * size.height;
         buffer = [[NSMutableData alloc] initWithLength:bufferSize];
         assert(buffer);
         assert(buffer.length >= bufferSize);

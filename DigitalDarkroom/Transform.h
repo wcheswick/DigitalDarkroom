@@ -28,12 +28,13 @@ typedef enum {
     RemapSize,
     AreaTrans,
     DepthVis,
+    DepthTrans,
     EtcTrans,
     NullTrans,
 } transform_t;
 
 
-typedef void (^ __nullable __unsafe_unretained PtFunc_t)(Frame *srcFrame, Frame *dstFrame, int v);
+typedef void (^ __nullable __unsafe_unretained PtFunc_t)(const PixBuf *srcPixBuf, PixBuf *dstPixBuf, int v);
 
 typedef void (^ __nullable __unsafe_unretained RemapImage_t)
             (RemapBuf *remapBuf, TransformInstance *instance);
@@ -51,15 +52,19 @@ typedef void (^ __nullable __unsafe_unretained
 #endif
 
 typedef void (^ __nullable __unsafe_unretained
-              areaFunction_t)(const Frame *srcFrame,
-                              Frame *dstFrame,
+              areaFunction_t)(const PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                               ChBuf *chBuf0, ChBuf *chBuf1,
                               TransformInstance *instance);
 
 typedef void (^ __nullable __unsafe_unretained
-              depthVis_t)(const Frame *srcFrame,
-                          Frame *dstFrame,
+              depthVis_t)(const PixBuf *srcPixBufe, DepthBuf *depthBuf,
+                          PixBuf *dstPixBuf,
                           TransformInstance *instance);
+
+typedef void (^ __nullable __unsafe_unretained
+              depthTrans_t)(const PixBuf *srcPixBufe, DepthBuf *srcDepthBuf,
+                            Frame *dstFrame,
+                            TransformInstance *instance);
 
 @interface Transform : NSObject {
     NSString *name, *description;
@@ -73,6 +78,7 @@ typedef void (^ __nullable __unsafe_unretained
     PtFunc_t ipPointF;
     areaFunction_t areaF;
     depthVis_t depthVisF;
+    depthTrans_t depthTransF;
     int low, value, high;   // parameter range
     NSString *paramName;
     NSString *lowValueFormat, *highValueFormat;
@@ -89,6 +95,8 @@ typedef void (^ __nullable __unsafe_unretained
 //@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
+@property (assign)              depthTrans_t depthTransF;
+
 @property (unsafe_unretained)   RemapImage_t remapImageF;
 @property (unsafe_unretained)   RemapPolar_t remapPolarF;
 @property (unsafe_unretained)   RemapSize_t remapSizeF;

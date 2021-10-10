@@ -31,13 +31,14 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bitsPerComponent;
     NSString *groupName;        // for debug display purposes
     CGSize targetSize;
-    Frame *groupSrcFrame;
+    Frame *scaledIncomingFrame;
+    BOOL groupEnabled;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   Transform * __nullable incomingSizeTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
-@property (nonatomic, strong)   Frame *groupSrcFrame;
+@property (nonatomic, strong)   Frame *scaledIncomingFrame;
 
 @property (assign, atomic)      volatile BOOL groupBusy;
 @property (assign)              size_t bytesPerRow, pixelsInImage, pixelsPerRow;
@@ -45,6 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
 @property (assign)              CGSize targetSize;
+@property (assign)              BOOL groupEnabled;
 
 
 - (id)initWithController:(TaskCtrl *) caller;
@@ -53,7 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureGroupForTargetSize:(CGSize)targetSize;
 //- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
 //                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
-- (void) doGroupTransformsOnFrame:(const Frame * _Nonnull) scaledFrame;
+- (void) doGroupTransformsOnIncomingFrame;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

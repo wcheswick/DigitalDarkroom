@@ -8,6 +8,8 @@
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
+#import <UIKit/UIKit.h>
+
 #import "Defines.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -32,6 +34,9 @@ typedef Pixel *_Nullable *_Nonnull PixelArray_t;
 - (void) assertPaInrange: (int) y x:(int)x;
 - (Pixel) check_get_Pa:(int) y X:(int)x;
 - (void) scaleFrom:(PixBuf *) sourcePixBuf;
+
+- (void) loadPixelsFromImage:(UIImage *) image;
+- (UIImage *) toImage;
 
 @end
 

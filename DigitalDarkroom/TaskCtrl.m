@@ -57,6 +57,8 @@
     if (state == LayoutOK)
         return;
     for (TaskGroup *taskGroup in taskGroups) {
+        if (!taskGroup.groupEnabled)
+            continue;
         if (taskGroup.groupBusy)
             return;
     }
@@ -65,9 +67,11 @@
 
 - (void) enableTasks {
     for (TaskGroup *taskGroup in taskGroups)
-        [taskGroup enable];
+        if (taskGroup.groupEnabled)
+            [taskGroup enable];
 }
 
+#ifdef GONE
 // Each task group needs to rescale this raw input frame
 // into what it needs.  Then we can release the input frame,
 // and go compute the transforms.
@@ -76,6 +80,8 @@
     if (state != LayoutOK)
         return; // never mind
     for (TaskGroup *group in taskGroups) {
+        if (!group.groupEnabled)
+            continue;
         if ([group.groupName isEqual:@"Screen"])
             continue;
         Frame *scaledFrame = [scaledFrames objectForKey:group.groupName];
@@ -85,7 +91,6 @@
     }
 }
 
-#ifdef GONE
 - (PixelIndex_t *) computeMappingFor:(Transform *) transform {
     assert(bytesPerRow);
     assert(transform.type == RemapTrans);
