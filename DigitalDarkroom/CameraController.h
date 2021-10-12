@@ -26,6 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
     BOOL depthDataAvailable;
     Stats *stats;
     NSMutableDictionary *activeTaskgroups;  // Managed by MainVC
+    Frame *lastRawFrame;
 }
 
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
@@ -34,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
 @property (nonatomic, strong)   Stats *stats;
 @property (nonatomic, strong)   NSMutableDictionary *activeTaskgroups;
+@property (nonatomic, strong)   Frame *lastRawFrame;
 
 - (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
                           depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat;

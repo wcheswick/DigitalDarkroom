@@ -40,6 +40,8 @@ typedef enum {
 @property (nonatomic, strong)   Transform *transform;
 @property (nonatomic, strong)   Task *task;
 
+- (id)initWith3dAvailable:(BOOL) have3D;
+
 - (void) configureForTransform:(Transform *) transform;
 - (void) configureSectionThumbNamed:(NSString *)sectionName;
 - (void) adjustStatus:(thumbStatus_t) newStatus;

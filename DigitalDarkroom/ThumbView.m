@@ -23,7 +23,7 @@
 @synthesize brokenThumbImage, depthUnavailableThumbImage;
 @synthesize transform, task;;
 
-- (id)init {
+- (id)initWith3dAvailable:(BOOL) have3D {
     self = [super init];
     if (self) {
         self.frame = CGRectMake(0, LATER, LATER, LATER);
@@ -37,7 +37,10 @@
         depthUnavailableThumbImage = [UIImage imageNamed:[[NSBundle mainBundle]
                                                          pathForResource:@"images/no3Dcamera.png"
                                                          ofType:@""]];
-        [self adjustStatus:ThumbUnAvailable];
+        if (have3D)
+            [self adjustStatus:ThumbAvailable];
+        else
+            [self adjustStatus:ThumbUnAvailable];
     }
     return self;
 }

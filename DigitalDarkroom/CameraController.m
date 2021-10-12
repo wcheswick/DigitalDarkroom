@@ -44,6 +44,7 @@ CameraController *cameraController = nil;
 @synthesize formatList;
 @synthesize stats;
 @synthesize busy;
+@synthesize lastRawFrame;
 
 - (id)init {
     self = [super init];
@@ -51,6 +52,7 @@ CameraController *cameraController = nil;
         captureVideoPreviewLayer = nil;
         captureDevice = nil;
         captureSession = nil;
+        lastRawFrame = nil;
         videoOrientation = -1;  // not initialized
         formatList = [[NSMutableArray alloc] init];
         cameraController = self;
@@ -346,16 +348,15 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
                                                 synchronizedDataForCaptureOutput:self.videoDataOutput];
     AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
-    
+    AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
+                                                  synchronizedDataForCaptureOutput:depthDataOutput];
+    AVCaptureSynchronizedDepthData *syncedDepthBufferData = (AVCaptureSynchronizedDepthData *)syncedDepthData;
+
     if(syncedSampleBufferData.sampleBufferWasDropped) {
         stats.imagesDropped++;
             stats.status = @"imD";
         return;
     }
-    
-    AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
-                                                  synchronizedDataForCaptureOutput:depthDataOutput];
-    AVCaptureSynchronizedDepthData *syncedDepthBufferData = (AVCaptureSynchronizedDepthData *)syncedDepthData;
     
     stats.imageFrames++;
     CVPixelBufferRef videoPixelBufferRef = CMSampleBufferGetImageBuffer(syncedSampleBufferData.sampleBuffer);
@@ -369,12 +370,11 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     }
     
     if (!activeTaskgroups)
-        return;     // nothing to scale, nothing to report about
+        return;     // nothing to do
     
     CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
-    size_t rawWidth = CVPixelBufferGetWidth(videoPixelBufferRef);
-    size_t rawHeight = CVPixelBufferGetHeight(videoPixelBufferRef);
-//    CGSize rawImageSize = CGSizeMake(rawWidth, rawHeight);
+    CGSize rawImageSize = CGSizeMake(CVPixelBufferGetWidth(videoPixelBufferRef),
+                                CVPixelBufferGetHeight(videoPixelBufferRef));
     size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
 //    OSType type = CVPixelBufferGetPixelFormatType(videoPixelBufferRef);
     
@@ -396,17 +396,45 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     
     void *videoBaseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawWidth,
-                                                 rawHeight, 8,
-                                                 bytesPerRow, colorSpace, BITMAP_OPTS);
+    CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawImageSize.width, rawImageSize.height,
+                                                 8, bytesPerRow, colorSpace, BITMAP_OPTS);
     assert(context);
     CGImageRef quartzImage = CGBitmapContextCreateImage(context);
     
-    CVPixelBufferRef depthPixelBufferRef = nil;
-    if (depthDataAvailable) {
-        depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
-        CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
-        assert(depthPixelBufferRef);
+    if (!lastRawFrame || !lastRawFrame.pixBuf ||
+            !SAME_SIZE(lastRawFrame.pixBuf.size, rawImageSize)) {
+        lastRawFrame = [[Frame alloc] init];
+    }
+    
+    @synchronized (lastRawFrame) {
+        lastRawFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
+                                                        scale:1.0
+                                                  orientation:UIImageOrientationUp];
+        if (!lastRawFrame.pixBuf ||
+            !SAME_SIZE(lastRawFrame.pixBuf.size, rawImageSize)) {
+            lastRawFrame.pixBuf = [[PixBuf alloc] initWithSize:rawImageSize];
+        }
+        memcpy(lastRawFrame.pixBuf.pb, (Pixel *)videoBaseAddress,
+               rawImageSize.width * rawImageSize.height*sizeof(Pixel));
+        
+        CVPixelBufferRef depthPixelBufferRef = nil;
+        CGSize rawDepthSize = CGSizeZero;
+        if (depthDataAvailable) {
+            depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
+            assert(depthPixelBufferRef);
+            rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
+                                      CVPixelBufferGetHeight(depthPixelBufferRef));
+            CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
+            
+            if (!lastRawFrame.depthBuf ||
+                !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
+                lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+            }
+            //        assert(sizeof(Distance) == sizeof(AVDepthData));
+            memcpy(lastRawFrame.depthBuf.db, (Distance *)depthPixelBufferRef,
+                   rawDepthSize.width * rawDepthSize.height*sizeof(Distance));
+            lastRawFrame.depthBuf.valid = YES;
+        }
     }
 
     for (NSString *groupName in activeTaskgroups) {
@@ -418,7 +446,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         CGRect r;
         r.origin = CGPointZero;
         r.size = scaledFrame.pixBuf.size;
-        float scale = r.size.width/rawWidth;
+        float scale = r.size.width/rawImageSize.width;
         
         // fetch and scale image for group
         scaledFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
@@ -433,8 +461,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         CGContextRelease(cgContext);
 #endif
         
-        // fetch and preprocess depth data for group
-        if (depthPixelBufferRef) {
+        scaledFrame.depthBuf.valid = lastRawFrame.depthBuf.valid;
+        if (lastRawFrame.depthBuf.valid) {
             // copy the given depth data to our capture.  It seems to change under us, so
             // save most processing until after the depths are firmed up
             assert(sizeof(Distance) == sizeof(float));
@@ -446,15 +474,15 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             
             scaledFrame.depthBuf.minDepth = MAXFLOAT;
             scaledFrame.depthBuf.maxDepth = -1.0;
-            float srcXStride = rawWidth/scaledFrame.depthBuf.size.width;
-            float srcYStride = rawHeight/scaledFrame.depthBuf.size.height;
+            float srcXStride = rawDepthSize.width/scaledFrame.depthBuf.size.width;
+            float srcYStride = rawDepthSize.width/scaledFrame.depthBuf.size.height;
             for (int y=0; y<scaledFrame.depthBuf.size.height; y++) {
                 int srcY = y*srcYStride;
-                assert(srcY < rawHeight);
+                assert(srcY < rawDepthSize.width);
                 //                    Distance *row = &capturedDepthBuffer[srcY * bytesPerRow];
-                for (int x=0; x<rawWidth/scaledFrame.depthBuf.size.width; x++) {
+                for (int x=0; x<rawImageSize.width/scaledFrame.depthBuf.size.width; x++) {
                     int srcX = x*srcXStride;
-                    assert(srcX < rawWidth);
+                    assert(srcX < rawDepthSize.width);
                     //                        assert(dp >= capturedDepthBuffer);
                     //                        assert(dp < capturedDepthBuffer + rawWidth*sizeof(Distance) * rawHeight);
                     Distance d = RAWDB(srcX,srcY);
@@ -475,6 +503,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
                     scaledFrame.depthBuf.da[y][x] = d;
                 }
             }
+            scaledFrame.depthBuf.valid = YES;
             [scaledFrame.depthBuf verify];
             [scaledFrame.depthBuf verifyDepths];
         }

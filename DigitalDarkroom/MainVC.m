@@ -444,7 +444,7 @@ MainVC *mainVC = nil;
 
     for (size_t ti=0; ti<transforms.transforms.count; ti++) {
         Transform *transform = [transforms.transforms objectAtIndex:ti];
-        ThumbView *thumbView = [[ThumbView alloc] init];
+        ThumbView *thumbView = [[ThumbView alloc] initWith3dAvailable:cameraController.depthDataAvailable];
 
         NSString *section = [transform.helpPath pathComponents][0];
         if (!lastSection || ![lastSection isEqualToString:section]) {   // new section.
@@ -522,13 +522,6 @@ CGFloat topOfNonDepthArray = 0;
     CGRect sectionNameRect = CGRectMake(THUMB_LABEL_SEP, SEP,
                                         nextButtonFrame.size.width - 2*THUMB_LABEL_SEP,
                                         nextButtonFrame.size.height - 2*SEP);
-    
-    UIImage *noDepthImage = nil;
-    if (![cameraController depthDataAvailable]) {
-        NSString *noDepthPath = [[NSBundle mainBundle]
-                                pathForResource:@"images/no3Dcamera.png" ofType:@""];
-        noDepthImage = [UIImage imageNamed:noDepthPath];
-    }
 
     // Run through all the transform and section thumbs, computing the corresponding thumb sizes and
     // positions for the current situation. These thumbs come in section, each of which has
@@ -570,9 +563,8 @@ CGFloat topOfNonDepthArray = 0;
             UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             thumbImage.frame = layout.thumbImageRect;
             if (thumbView.transform.type == DepthVis) {
-                [thumbView adjustStatus: (lastDisplayedFrame.depthBuf != nil) ? ThumbAvailable : ThumbUnAvailable];
-            } else {
-                thumbImage.image = noDepthImage;
+                [thumbView adjustStatus: (lastDisplayedFrame.depthBuf.valid) ?
+                        ThumbAvailable : ThumbUnAvailable];
             }
             thumbView.task.targetImageView = thumbImage;
             

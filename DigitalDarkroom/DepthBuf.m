@@ -19,6 +19,7 @@
 
 @implementation DepthBuf
 
+@synthesize valid;
 @synthesize da, db;
 @synthesize minDepth, maxDepth;
 @synthesize size, badDepths;
@@ -28,6 +29,7 @@
     self = [super init];
     if (self) {
         self.size = s;
+        valid = NO;
 #ifdef MEMLEAK_AIDS
         NSLog(@"+ DepthBuf  %4.0f x %4.0f", s.width, s.height);
 #endif
