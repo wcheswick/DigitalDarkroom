@@ -11,7 +11,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define BAD_DEPTH   0    // NaN or zero
+#define NAN_DEPTH   -2    // NaN or soemthing
+#define ZERO_DEPTH  -1
+#define BAD_DEPTH(d)    (d < 0)
+
 
 typedef float Distance;     // in meters
 typedef Distance *_Nullable *_Nonnull DepthArray_t;
@@ -35,10 +38,11 @@ typedef Distance *_Nullable *_Nonnull DepthArray_t;
 - (id)initWithSize:(CGSize) s;
 //- (Distance) distAtX:(int)x Y:(int)y;
 - (void) copyDepthsTo:(DepthBuf *) dest;
-- (void) verify;
 - (void) findDepthRange;
 - (void) scaleFrom:(DepthBuf *) sourceDepthBuf;
+- (void) verifyDatastructure;
 - (void) verifyDepths;
+- (void) stats;
 
 NS_ASSUME_NONNULL_END
 

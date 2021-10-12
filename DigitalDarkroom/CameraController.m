@@ -422,20 +422,29 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         if (depthDataAvailable) {
             depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
             assert(depthPixelBufferRef);
+            CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
+            Distance *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
+            assert(capturedDepthBuffer);
             rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
                                       CVPixelBufferGetHeight(depthPixelBufferRef));
-            CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
-            
+            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+            assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
+
             if (!lastRawFrame.depthBuf ||
                 !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
                 lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
             }
             //        assert(sizeof(Distance) == sizeof(AVDepthData));
-            memcpy(lastRawFrame.depthBuf.db, (Distance *)depthPixelBufferRef,
+            memcpy(lastRawFrame.depthBuf.db, capturedDepthBuffer,
                    rawDepthSize.width * rawDepthSize.height*sizeof(Distance));
+            CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
+//            [lastRawFrame.depthBuf stats];
             lastRawFrame.depthBuf.valid = YES;
         }
     }
+    
+#define RAWDB(x,y)  capturedDepthBuffer[(int)(y*srcYStride) + (int)((x)*srcXStride)]
+    
 
     for (NSString *groupName in activeTaskgroups) {
         TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
@@ -463,38 +472,34 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         
         scaledFrame.depthBuf.valid = lastRawFrame.depthBuf.valid;
         if (lastRawFrame.depthBuf.valid) {
-            // copy the given depth data to our capture.  It seems to change under us, so
-            // save most processing until after the depths are firmed up
-            assert(sizeof(Distance) == sizeof(float));
-            assert(depthDataAvailable); // for now, depth always available XXXXXX
-            Distance *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
-            assert(capturedDepthBuffer);
-            
-#define RAWDB(x,y)  capturedDepthBuffer[(int)(y*srcYStride) + (int)((x)*srcXStride)]
+            // the rawFrame has raw depth data, including bad stuff.  leave it there (for display
+            // and possible debug purposes, but don't propagate unexpected bad data to the vis
+            // routine.
             
             scaledFrame.depthBuf.minDepth = MAXFLOAT;
             scaledFrame.depthBuf.maxDepth = -1.0;
-            float srcXStride = rawDepthSize.width/scaledFrame.depthBuf.size.width;
-            float srcYStride = rawDepthSize.width/scaledFrame.depthBuf.size.height;
+            float srcXStride = lastRawFrame.depthBuf.size.width/scaledFrame.depthBuf.size.width;
+            float srcYStride = lastRawFrame.depthBuf.size.height/scaledFrame.depthBuf.size.height;
             for (int y=0; y<scaledFrame.depthBuf.size.height; y++) {
                 int srcY = y*srcYStride;
-                assert(srcY < rawDepthSize.width);
+                assert(srcY < lastRawFrame.depthBuf.size.height);
                 //                    Distance *row = &capturedDepthBuffer[srcY * bytesPerRow];
-                for (int x=0; x<rawImageSize.width/scaledFrame.depthBuf.size.width; x++) {
+                for (int x=0; x<scaledFrame.depthBuf.size.width; x++) {
                     int srcX = x*srcXStride;
-                    assert(srcX < rawDepthSize.width);
+                    assert(srcX < lastRawFrame.depthBuf.size.width);
                     //                        assert(dp >= capturedDepthBuffer);
                     //                        assert(dp < capturedDepthBuffer + rawWidth*sizeof(Distance) * rawHeight);
-                    Distance d = RAWDB(srcX,srcY);
+                    Distance d = lastRawFrame.depthBuf.da[srcY][srcX];
                     if (isnan(d)) {
                         stats.depthNaNs++;
                         scaledFrame.depthBuf.badDepths++;
-                        d = BAD_DEPTH;
+                        d = NAN_DEPTH;
                     } else if (d == 0.0) {
                         stats.depthZeros++;
                         scaledFrame.depthBuf.badDepths++;
-                        d = BAD_DEPTH;
+                        d = ZERO_DEPTH;
                     } else {
+                        assert(d > 0);
                         if (d < scaledFrame.depthBuf.minDepth)
                             scaledFrame.depthBuf.minDepth = d;
                         if (d > scaledFrame.depthBuf.maxDepth)
@@ -504,8 +509,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
                 }
             }
             scaledFrame.depthBuf.valid = YES;
-            [scaledFrame.depthBuf verify];
-            [scaledFrame.depthBuf verifyDepths];
         }
         // NB: the depth data is dirty, with BAD_DEPTH values
         // go process this image in this taskgroup
@@ -518,8 +521,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
     CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
-    if (depthPixelBufferRef)
-        CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
 
     self->stats.framesProcessed++;
     stats.status = @"ok";

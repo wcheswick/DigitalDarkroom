@@ -56,7 +56,7 @@
         assert(rowPtr == (void *)db + w * h * sizeof(Distance));
 #endif
 #ifdef DEBUG
-        [self verify];
+        [self verifyDatastructure];
 #endif
     }
     return self;
@@ -66,7 +66,7 @@
 // which are particularly hard to figure out in iOS.  Make sure our
 // pointers and sizes make sense.
 
-- (void) verify {
+- (void) verifyDatastructure {
 #ifdef VERIFY_DEPTH_BUFFERS
     //    NSLog(@"&pa[%3d] %p is %p", 0, &pa[0], pa[0]);
     //    NSLog(@"&pa[%3lu] %p is %p", w-1, &pa[w-1], pa[w-1]);
@@ -181,7 +181,7 @@ ma(ma_buff_t *b, float v) {
     memcpy(dest.db, db, (int)(size.width * size.height) * sizeof(Distance));
     dest.badDepths = self.badDepths;
     stats.depthCopies++;
-    [self verify];
+    [self verifyDatastructure];
 }
 
 - (id)copyWithZone:(NSZone *)zone {
@@ -208,7 +208,7 @@ ma(ma_buff_t *b, float v) {
             int sx = trunc(x/xScale);
             assert(sx < sourceDepthBuf.size.width);
             Distance d = sourceDepthBuf.da[sy][sx];
-            if (d == BAD_DEPTH)
+            if (BAD_DEPTH(d))
                 d = maxDepth;
             assert(d >= minDepth);
             assert(d <= maxDepth);
@@ -224,10 +224,15 @@ ma(ma_buff_t *b, float v) {
     assert(maxDepth > 0);
     assert(minDepth <= maxDepth);
     int zeroDepths = 0;
+    int badDepths = 0;
     for (int i=0; i<size.width*size.height; i++) {
         Distance d = db[i];
-        if (d == 0) {
+        if (d == ZERO_DEPTH) {
             zeroDepths++;
+            continue;
+        } else if (d == NAN_DEPTH) {
+            [self stats];
+            badDepths++;
             continue;
         }
         assert(d >= minDepth);
@@ -235,6 +240,40 @@ ma(ma_buff_t *b, float v) {
     }
     NSLog(@"verifyDepths: zeros, bads  %d %d", zeroDepths, badDepths);
 #endif
+}
+
+- (void) stats {
+    NSLog(@"depthBuf stats, %4.0f x %4.0f", size.width, size.height);
+    size_t zeros = 0;
+    size_t nans = 0;
+    size_t negs = 0;
+    size_t bigs = 0;
+    size_t ok = 0;
+    for (int i=0; i<size.width*size.height; i++) {
+        Distance d = db[i];
+        if (d == 0) {
+            zeros++;
+            continue;
+        }
+        if (isnan(d)) {
+            nans++;
+            continue;
+        }
+        if (d < 0) {
+            negs++;
+            continue;
+        }
+        if (d > 100.0) {
+            bigs++;
+            continue;
+        }
+        ok++;
+    }
+    NSLog(@"   zeros: %zu", zeros);
+    NSLog(@"    nans: %zu   %4.1%%", nans, nans/(size.width*size.height));
+    NSLog(@"    negs: %zu", negs);
+    NSLog(@"    bigs: %zu", bigs);
+    NSLog(@"      ok: %zu", ok);
 }
 
 @end

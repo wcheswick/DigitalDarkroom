@@ -153,6 +153,7 @@
             else
                 self.layer.borderWidth = 1.0;
             label.highlighted = NO;
+            imageView.image = nil;
             break;
         case ThumbActive:
             label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];

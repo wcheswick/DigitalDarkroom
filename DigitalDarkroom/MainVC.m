@@ -338,7 +338,7 @@ MainVC *mainVC = nil;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        thumbTasks.groupEnabled = NO;   // debug XXXXXX
+//        thumbTasks.groupEnabled = NO;   // debug XXXXXX
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
 
@@ -1313,6 +1313,7 @@ CGFloat topOfNonDepthArray = 0;
         //cameraController.captureVideoPreviewLayer = previewLayer;
         [cameraController startCamera];
     }
+    [self updateThumbAvailability];
 }
 
 - (void) tryAllThumbLayouts {
@@ -2472,7 +2473,13 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // update the thumbs to show which are available for the end of the new transform chain
 // displayedFrame has the source frame.  if nil?
 - (void) updateThumbAvailability {
-    BOOL depthAvailable = (lastDisplayedFrame.depthBuf != nil); // cameraController.depthDataAvailable;
+//    BOOL depthAvailable = (cameraController.lastRawFrame.depthBuf &&
+//                           cameraController.lastRawFrame.depthBuf.valid);
+    BOOL depthAvailable = cameraController.depthDataAvailable;
+#ifdef DEBUG_LAYOUT
+    NSLog(@"updateThumbAvailability. depth available: %@, %@", depthAvailable ? @"yes" : @"no",
+          cameraController.depthDataAvailable ? @"yes" : @"no");
+#endif
     for (ThumbView *thumbView in thumbViewsArray) {
         Transform *transform = thumbView.transform;
         if (transform.type != DepthVis)

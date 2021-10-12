@@ -354,8 +354,6 @@ static PixelIndex_t dPI(int x, int y) {
     }
     
     assert(srcFrame);
-    if (srcFrame.depthBuf)
-        [srcFrame.depthBuf verifyDepths];
     targetImageView.image = [srcFrame.pixBuf toImage];
     [targetImageView setNeedsDisplay];
     taskStatus = Idle;

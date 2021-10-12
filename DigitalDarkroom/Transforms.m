@@ -1150,7 +1150,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
         Pixel background = LightGrey;
         for (int i=0; i<W*H; i++) {
             Distance d = depthBuf.db[i];
-            if (d == BAD_DEPTH || d > backgroundDepth)
+            if (BAD_DEPTH(d) || d > backgroundDepth)
                 d = backgroundDepth;
             float fadeFrac = FADE(d - depthBuf.minDepth)/maxFade;
             Pixel p = srcPixBuf.pb[i];
