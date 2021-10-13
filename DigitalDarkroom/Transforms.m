@@ -453,6 +453,43 @@ mostCommonColorInHist(Hist_t *hists) {
 }
 
 - (void) addTestTransforms {
+    
+    lastTransform = [Transform depthVis: @"Depth errors"
+                            description: @""
+                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
+                                           TransformInstance *instance) {
+        assert(SAME_SIZE(srcPixBuf.size, depthBuf.size));
+        assert(SAME_SIZE(srcPixBuf.size, dstPixBuf.size));
+        int W = depthBuf.size.width;
+        int H = depthBuf.size.height;
+        for (int i=0; i<W * H; i++) {
+            Distance z = depthBuf.db[i];
+            Pixel p;
+            if (z == NAN_DEPTH)
+                p = Red;
+            else if (z == ZERO_DEPTH)
+                p = Orange;
+            else if (z == 0.0)
+                p = Yellow;
+            else if (z > depthBuf.maxDepth)
+                p = Magenta;
+            else if (z < depthBuf.minDepth)
+                p = Cyan;
+            else if (z == depthBuf.maxDepth)
+                p = Black;
+            else if (z == depthBuf.minDepth)
+                p = White;
+            else {
+                float frac = z/depthBuf.maxDepth;
+                float h = 0.3333 + 0.333*frac;
+                p = HSVtoRGB((HSVPixel){h,1.0,0.5});
+            }
+            dstPixBuf.pb[i] = p;
+        }
+    }];
+    lastTransform.hasParameters = NO;
+    [self addTransform:lastTransform];
+
 #ifdef DEBUG
     lastTransform = [Transform areaTransform: @"Flat polar test"
                                  description: @""

@@ -12,7 +12,8 @@
 
 @synthesize pixBuf, depthBuf, image;
 @synthesize creationTime;
-@synthesize locked, pixBufNeedsUpdate;
+@synthesize pixBufNeedsUpdate;
+@synthesize useCount;
 
 - (id)init {
     self = [super init];
@@ -24,8 +25,8 @@
         pixBuf = nil;
         image = nil;
         creationTime = [NSDate now];
-        locked = NO;
         pixBufNeedsUpdate = YES;
+        useCount = 0;
     }
     return self;
 }
@@ -69,6 +70,7 @@
 - (id)copyWithZone:(NSZone *)zone {
     Frame *copy = [[Frame alloc] init];
     copy.creationTime = creationTime;
+    copy.useCount = 0;
     if (pixBuf)
         copy.pixBuf = [pixBuf copy];
     else
@@ -77,7 +79,6 @@
         copy.depthBuf = [depthBuf copy];
     else
         copy.depthBuf = nil;
-    copy.locked = NO;
     return copy;
 }
 

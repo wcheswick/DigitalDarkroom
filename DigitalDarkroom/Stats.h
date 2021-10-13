@@ -15,7 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
     int emptyFrames, framesIgnoredLocking, depthMissing;
     int depthFrames, depthDropped, imageFrames, imagesDropped;
     int depthNaNs, depthZeros, noVideoPixelBuffer;
-    int depthCopies, pixbufCopies;
+    int depthCopies, pixbufCopies, transformsBusy;
     NSString *status;
     NSDate *lastProcessed;
 }
@@ -24,7 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              int emptyFrames, framesIgnoredLocking, depthMissing, depthDropped;
 @property (assign)              int depthFrames, depthNaNs, depthZeros;
 @property (assign)              int imageFrames, imagesDropped, noVideoPixelBuffer;
-@property (assign)              int depthCopies, pixbufCopies;
+@property (assign)              int depthCopies, pixbufCopies, transformsBusy;
 @property (nonatomic, strong)   NSString *status;
 @property (nonatomic, strong)   NSDate *lastProcessed;
 

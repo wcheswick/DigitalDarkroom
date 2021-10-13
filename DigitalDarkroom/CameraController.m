@@ -372,6 +372,11 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     if (!activeTaskgroups)
         return;     // nothing to do
     
+    if (lastRawFrame && lastRawFrame.useCount) {
+        stats.transformsBusy++;
+        return;
+    }
+    
     CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
     CGSize rawImageSize = CGSizeMake(CVPixelBufferGetWidth(videoPixelBufferRef),
                                 CVPixelBufferGetHeight(videoPixelBufferRef));
@@ -407,6 +412,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     }
     
     @synchronized (lastRawFrame) {
+        lastRawFrame.useCount++;
         lastRawFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
                                                         scale:1.0
                                                   orientation:UIImageOrientationUp];
@@ -442,9 +448,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             lastRawFrame.depthBuf.valid = YES;
         }
     }
-    
-#define RAWDB(x,y)  capturedDepthBuffer[(int)(y*srcYStride) + (int)((x)*srcXStride)]
-    
 
     for (NSString *groupName in activeTaskgroups) {
         TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
@@ -514,7 +517,9 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         // go process this image in this taskgroup
         
         dispatch_async(dispatch_get_main_queue(), ^{
+            self->lastRawFrame.useCount++;
             [(id<videoSampleProcessorDelegate>)self->videoProcessor processScaledIncomingFrameinTaskgroup:taskGroup];
+            self->lastRawFrame.useCount--;
         });
     }
     CGImageRelease(quartzImage);
@@ -522,6 +527,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     CGColorSpaceRelease(colorSpace);
     CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
 
+    lastRawFrame.useCount--;    // decremented by this routine:
+    assert(lastRawFrame.useCount >= 0);
     self->stats.framesProcessed++;
     stats.status = @"ok";
     return;

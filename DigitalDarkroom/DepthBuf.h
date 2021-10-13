@@ -11,8 +11,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-#define NAN_DEPTH   -2    // NaN or soemthing
-#define ZERO_DEPTH  -1
+#define NAN_DEPTH   -2.0    // NaN or soemthing
+#define ZERO_DEPTH  -1.0
 #define BAD_DEPTH(d)    (d < 0)
 
 

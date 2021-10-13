@@ -270,7 +270,7 @@ ma(ma_buff_t *b, float v) {
         ok++;
     }
     NSLog(@"   zeros: %zu", zeros);
-    NSLog(@"    nans: %zu   %4.1%%", nans, nans/(size.width*size.height));
+    NSLog(@"    nans: %zu   %4.1f%%", nans, nans/(size.width*size.height));
     NSLog(@"    negs: %zu", negs);
     NSLog(@"    bigs: %zu", bigs);
     NSLog(@"      ok: %zu", ok);

@@ -26,6 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define LightGrey       SETRGB(2*Z/3,2*Z/3,2*Z/3)
 #define White           SETRGB(Z,Z,Z)
 #define Red             SETRGB(Z,0,0)
+#define Orange          SETRGB(Z,165,0)
 #define Green           SETRGB(0,Z,0)
 #define Blue            SETRGB(0,0,Z)
 #define Yellow          SETRGB(Z,Z,0)

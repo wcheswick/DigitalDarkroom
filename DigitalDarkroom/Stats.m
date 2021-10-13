@@ -35,6 +35,7 @@ Stats *stats = nil;
     depthFrames = imageFrames = noVideoPixelBuffer = 0;
     depthNaNs = depthZeros = 0;
     depthCopies = pixbufCopies = 0;
+    transformsBusy = 0;
     status = @"";
     lastProcessed = [NSDate now];
 }
@@ -42,10 +43,11 @@ Stats *stats = nil;
 - (NSString *) report {
     NSDate *now = [NSDate now];
     NSTimeInterval t = [now timeIntervalSinceDate:lastProcessed];
-    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f  %@",
+    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f  busy: %d  %@",
                         framesReceived, framesProcessed,
                         framesReceived/t, framesProcessed/t,
                         depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed,
+                        transformsBusy,
                         status];
     [self reset];
     return report;
