@@ -96,6 +96,7 @@ static PixelIndex_t dPI(int x, int y) {
                                    initFromTransform:(Transform *)transform];
     [transformList addObject:transform];
     [paramList addObject:instance];
+    [taskGroup updateGroupDepthNeeds];
     return transformList.count - 1;
 }
 
@@ -103,12 +104,14 @@ static PixelIndex_t dPI(int x, int y) {
     assert(transformList.count > 0);
     [transformList removeLastObject];
     [paramList removeLastObject];
+    [taskGroup updateGroupDepthNeeds];
     return transformList.count;
 }
 
 - (void) removeAllTransforms {
     [transformList removeAllObjects];
     [paramList removeAllObjects];
+    [taskGroup updateGroupDepthNeeds];
 }
 
 - (NSString *) infoForScreenTransformAtIndex:(long) index {
@@ -149,6 +152,14 @@ static PixelIndex_t dPI(int x, int y) {
         needsDestFrame |= transform.needsDestFrame;
         modifiesDepthBuf |= transform.modifiesDepthBuf;
     }
+}
+
+- (BOOL) needsDepth {
+    for (Transform *transform in transformList) {
+        if (transform.type == DepthVis || transform.type == DepthTrans)
+            return YES;
+    }
+    return NO;
 }
 
 - (Transform *) configureTransformAtIndex:(size_t)index {
@@ -241,22 +252,22 @@ static PixelIndex_t dPI(int x, int y) {
         return nil;
     }
 
-    assert(frames.count == 2);
     int dstIndex;
-    Frame *srcFrame;
+    Frame *scaledSrcFrame;
     if (readOnlyIncomingFrame.pixBufNeedsUpdate) {
-        srcFrame = frames[0];
-        [srcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
-        srcFrame.pixBufNeedsUpdate = NO;
+        scaledSrcFrame = frames[0];
+        [scaledSrcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
+        scaledSrcFrame.depthBuf = readOnlyIncomingFrame.depthBuf;
+        scaledSrcFrame.pixBufNeedsUpdate = NO;
         dstIndex = 1;
     } else {
-        srcFrame = readOnlyIncomingFrame;
+        scaledSrcFrame = readOnlyIncomingFrame;
         dstIndex = 0;
     }
 
     taskStatus = Running;
     int depthIndex = -1;    // in readOnlyIncomingFrame, unless we need it
-    DepthBuf *srcDepthBuf = readOnlyIncomingFrame.depthBuf;
+    DepthBuf *scaledSrcDepthBuf = readOnlyIncomingFrame.depthBuf;
     NSDate *startTime = [NSDate now];
     
     for (int i=0; i<transformList.count; i++) {
@@ -267,34 +278,34 @@ static PixelIndex_t dPI(int x, int y) {
             case NullTrans:
                 assert(NO); // should never try a null, it is a placeholder for inactive stuff
             case ColorTrans:
-                transform.ipPointF(srcFrame.pixBuf, dstFrame.pixBuf, instance.value);
-                srcFrame = dstFrame;
+                transform.ipPointF(scaledSrcFrame.pixBuf, dstFrame.pixBuf, instance.value);
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
                 break;
             case AreaTrans:
                 // compute transform of pixel data only to a destination pixbuf
-                transform.areaF(srcFrame.pixBuf, dstFrame.pixBuf, chBuf0, chBuf1, instance);
-                srcFrame = dstFrame;
+                transform.areaF(scaledSrcFrame.pixBuf, dstFrame.pixBuf, chBuf0, chBuf1, instance);
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
                 break;
             case DepthVis:
-                assert(srcDepthBuf);
-                    transform.depthVisF(srcFrame.pixBuf, srcDepthBuf, dstFrame.pixBuf, instance);
+                assert(scaledSrcDepthBuf);
+                transform.depthVisF(scaledSrcFrame.pixBuf, scaledSrcDepthBuf, dstFrame.pixBuf, instance);
                 // result is in dstFrame, maybe with modified depthBuf
-                srcFrame = dstFrame;
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
                 break;
             case DepthTrans:
-                assert(srcDepthBuf);
-                transform.depthVisF(srcFrame.pixBuf, srcDepthBuf, dstFrame.pixBuf, instance);
+                assert(scaledSrcDepthBuf);
+                transform.depthVisF(scaledSrcFrame.pixBuf, scaledSrcDepthBuf, dstFrame.pixBuf, instance);
                 depthIndex = dstIndex;
-                srcDepthBuf = dstFrame.depthBuf;
-                srcFrame = dstFrame;
+                scaledSrcDepthBuf = dstFrame.depthBuf;
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
                 break;
             case EtcTrans:
                 NSLog(@"stub - etctrans");
-                srcFrame = dstFrame;
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
                 break;
             case RemapSize:
@@ -338,11 +349,11 @@ static PixelIndex_t dPI(int x, int y) {
                             break;
                         default:
                             assert(bi >= 0 && bi < N);
-                            p = srcFrame.pixBuf.pb[bi];
+                            p = scaledSrcFrame.pixBuf.pb[bi];
                     }
                     *dp++ = p;
                 }
-                srcFrame = dstFrame;
+                scaledSrcFrame = dstFrame;
                 dstIndex = 1 - dstIndex;
             }
         }
@@ -353,8 +364,8 @@ static PixelIndex_t dPI(int x, int y) {
         startTime = transformEnd;
     }
     
-    assert(srcFrame);
-    targetImageView.image = [srcFrame.pixBuf toImage];
+    assert(scaledSrcFrame);
+    targetImageView.image = [scaledSrcFrame.pixBuf toImage];
     [targetImageView setNeedsDisplay];
     taskStatus = Idle;
     return nil;

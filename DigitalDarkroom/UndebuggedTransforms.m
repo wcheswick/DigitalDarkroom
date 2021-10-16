@@ -214,38 +214,6 @@ fs(int depth, int buf[W][H]) {
         }
     }
 }
-
-// not very blurry
-
-
-// this should be a general kernel convolution
-lastTransform = [Transform areaTransform: @"Old blur"
-                              description: @"non-general"
-                            areaFunction: ^(PixelArray_t src, PixelArray_t dest,
-                                            size_t w, size_t h, TransformInstance *instance) {
-    for (int y=1; y<h-1; y++) {
-        for (int x=1; x<w-1; x++) {
-            Pixel p = {0,0,0,Z};
-            p.r = (src[y][x].r +
-                   src[y][x+1].r +
-                   src[y][x-1].r +
-                   src[y-1][x].r +
-                   src[y+1][x].r)/5;
-            p.g = (src[y][x].g +
-                   src[y][x+1].g +
-                   src[y][x-1].g +
-                   src[y-1][x].g +
-                   src[y+1][x].g)/5;
-            p.b = (src[y][x].b +
-                   src[y][x+1].b +
-                   src[y][x-1].b +
-                   src[y-1][x].b +
-                   src[y+1][x].b)/5;
-            dest[y][x] = p;
-        }
-    }
-}];
-[self addTransform:lastTransform];
     
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @"oil paint"

@@ -218,6 +218,51 @@ ma(ma_buff_t *b, float v) {
 //    [self verifyDepthRange];
 }
 
+#ifdef MAYBE_BETTTER
+scaledFrame.depthBuf.valid = lastRawFrame.depthBuf.valid;
+if (lastRawFrame.depthBuf.valid) {
+    // the rawFrame has raw depth data, including bad stuff.  leave it there (for display
+    // and possible debug purposes, but don't propagate unexpected bad data to the vis
+    // routine.
+    
+    scaledFrame.depthBuf.minDepth = MAXFLOAT;
+    scaledFrame.depthBuf.maxDepth = -1.0;
+    float srcXStride = lastRawFrame.depthBuf.size.width/scaledFrame.depthBuf.size.width;
+    float srcYStride = lastRawFrame.depthBuf.size.height/scaledFrame.depthBuf.size.height;
+    for (int y=0; y<scaledFrame.depthBuf.size.height; y++) {
+        int srcY = y*srcYStride;
+        assert(srcY < lastRawFrame.depthBuf.size.height);
+        //                    Distance *row = &capturedDepthBuffer[srcY * bytesPerRow];
+        for (int x=0; x<scaledFrame.depthBuf.size.width; x++) {
+            int srcX = x*srcXStride;
+            assert(srcX < lastRawFrame.depthBuf.size.width);
+            //                        assert(dp >= capturedDepthBuffer);
+            //                        assert(dp < capturedDepthBuffer + rawWidth*sizeof(Distance) * rawHeight);
+            Distance d = lastRawFrame.depthBuf.da[srcY][srcX];
+            if (isnan(d)) {
+                stats.depthNaNs++;
+                scaledFrame.depthBuf.badDepths++;
+                d = NAN_DEPTH;
+            } else if (d == 0.0) {
+                stats.depthZeros++;
+                scaledFrame.depthBuf.badDepths++;
+                d = ZERO_DEPTH;
+            } else {
+                assert(d > 0);
+                if (d < scaledFrame.depthBuf.minDepth)
+                    scaledFrame.depthBuf.minDepth = d;
+                if (d > scaledFrame.depthBuf.maxDepth)
+                    scaledFrame.depthBuf.maxDepth = d;
+            }
+            scaledFrame.depthBuf.da[y][x] = d;
+        }
+    }
+    scaledFrame.depthBuf.valid = YES;
+}
+// NB: the depth data is dirty, with BAD_DEPTH values
+// go process this image in this taskgroup
+#endif
+
 - (void) verifyDepths {
 #ifdef VERIFY_DEPTHS
     assert(minDepth > 0);

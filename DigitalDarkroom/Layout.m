@@ -39,6 +39,12 @@ NSString * __nullable displayOptionNames[] = {
     @"F",
 };
 
+@interface Layout ()
+
+@property (assign)  CGSize imageSourceSize;
+
+@end
+
 @implementation Layout
 
 @synthesize format, depthFormat;

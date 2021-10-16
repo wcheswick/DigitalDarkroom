@@ -30,9 +30,10 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bytesInImage;
     size_t bitsPerComponent;
     NSString *groupName;        // for debug display purposes
+    CGSize rawImageSize, rawDepthSize;
     CGSize targetSize;
     Frame *scaledIncomingFrame;
-    BOOL groupEnabled;
+    BOOL groupEnabled, needsDepth;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
@@ -46,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
 @property (assign)              CGSize targetSize;
-@property (assign)              BOOL groupEnabled;
+@property (assign)              BOOL groupEnabled, needsDepth;
 
 
 - (id)initWithController:(TaskCtrl *) caller;
@@ -62,8 +63,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) removeAllTransforms;
 - (void) removeLastTransform;
-// XXX need - (void) removeTransformAtIndex:(long) index;
 
+- (void) updateGroupDepthNeeds;
 - (void) enable;
 
 @end

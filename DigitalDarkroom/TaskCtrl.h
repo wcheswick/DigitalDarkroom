@@ -31,20 +31,20 @@ typedef enum {
     LayoutStatus_t state;
     Transforms *transforms;
     NSMutableArray *taskGroups;
-    CGSize sourceSize;
+    CGSize rawImageSourceSize, rawDepthSourceSize;
 }
 
 @property (nonatomic, strong)   NSMutableArray *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign)              LayoutStatus_t state;
-@property (assign)              CGSize sourceSize;
+@property (assign)              CGSize rawImageSourceSize, rawDepthSourceSize;
 @property (assign)              id mainVC;
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
 - (void) idleFor:(LayoutStatus_t) newStatus;
 - (void) checkForIdle;  // are we ready to resume, after possible layout?
-
 - (void) enableTasks;
+- (void) updateRawSourceSizes;
 
 @end
 

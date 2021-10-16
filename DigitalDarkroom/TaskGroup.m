@@ -32,7 +32,7 @@
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
 @synthesize groupName;
-@synthesize groupBusy, groupEnabled;
+@synthesize groupBusy, groupEnabled, needsDepth;
 @synthesize targetSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
@@ -47,6 +47,7 @@
         groupBusy = NO;
         targetSize = CGSizeZero;
         groupEnabled = YES;
+        needsDepth = NO;
     }
     return self;
 }
@@ -64,7 +65,7 @@
     assert(!groupBusy);
     groupBusy = YES;
     targetSize = ts;
-    assert(taskCtrl.sourceSize.width > 0 && taskCtrl.sourceSize.height > 0);
+    assert(taskCtrl.rawImageSourceSize.width > 0 && taskCtrl.rawImageSourceSize.height > 0);
     assert(targetSize.width > 0 && targetSize.height > 0);
     
     if (!scaledIncomingFrame) {
@@ -73,8 +74,8 @@
     scaledIncomingFrame.pixBuf.size = targetSize;
     if (!scaledIncomingFrame.pixBuf || !SAME_SIZE(scaledIncomingFrame.pixBuf.size, targetSize))
         scaledIncomingFrame.pixBuf = [[PixBuf alloc] initWithSize:targetSize];
-    if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.pixBuf.size, targetSize))
-        scaledIncomingFrame.depthBuf = [[DepthBuf alloc] initWithSize:targetSize];
+
+    // camera controller will allocate and fill in the depthBuf if it is needed
     
     // clear and recompute any remaps
     [remapCache removeAllObjects];
@@ -85,6 +86,16 @@
     groupBusy = NO;
 }
 
+- (void) updateGroupDepthNeeds {
+    for (Task *task in tasks) {
+        if ([task needsDepth]) {
+            needsDepth = YES;
+            return;
+        }
+    }
+    needsDepth = NO;
+}
+            
 // we have a new frame for the group to transform.  The group tasks all use the same scaled frame,
 // so scale the input frame once.  Each member of the group must not change the scaled
 // frame, since they all share it.  The supplied newFrame must not be changed, since
@@ -130,11 +141,13 @@
 - (void) removeAllTransforms {
     for (Task *task in tasks)
         [task removeAllTransforms];
+    needsDepth = NO;
 }
 
 - (void) removeLastTransform {
     for (Task *task in tasks)
         [task removeLastTransform];
+    [self updateGroupDepthNeeds];
 }
 
 - (void) enable {

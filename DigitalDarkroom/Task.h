@@ -65,6 +65,7 @@ typedef enum {
 
 - (const Frame * __nullable) executeTaskTransformsOnIncomingFrame;
 - (NSString *) infoForScreenTransformAtIndex:(long) index;
+- (BOOL) needsDepth;
 
 @end
 

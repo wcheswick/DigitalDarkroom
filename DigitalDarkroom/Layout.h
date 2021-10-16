@@ -22,7 +22,6 @@ NS_ASSUME_NONNULL_BEGIN
     AVCaptureDeviceFormat * __nullable depthFormat;
     DisplayOptions displayOption;
     ThumbsPosition thumbsPosition;
-    CGSize imageSourceSize;
 
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
     float aspectRatio;      // of the input source
@@ -48,7 +47,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable depthFormat;
 @property (assign)              DisplayOptions displayOption;
 @property (assign)              ThumbsPosition thumbsPosition;
-@property (assign)              CGSize imageSourceSize;
 @property (assign)              float score, thumbScore, displayScore, scaleScore;
 @property (assign)              float displayFrac, thumbFrac;
 

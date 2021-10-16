@@ -182,7 +182,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UILabel *layoutValuesView;
 @property (nonatomic, strong)   UILabel *mainStatsView;
 
-@property (assign)              BOOL showControls, live;
+@property (assign)              BOOL showControls, showStats, live;
 @property (assign)              BOOL transformChainChanged;
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
 
@@ -246,8 +246,6 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UISegmentedControl *uiSelection;
 @property (nonatomic, strong)   UIScrollView *thumbScrollView;
 
-@property (assign)              BOOL imageDumpRequested;
-
 @end
 
 @implementation MainVC
@@ -269,7 +267,7 @@ MainVC *mainVC = nil;
 @synthesize mainStatsView;
 
 @synthesize paramView, paramLabel, paramSlider;
-@synthesize showControls, flashView;
+@synthesize showControls, showStats, flashView;
 @synthesize paramLow, paramName, paramHigh, paramValue;
 
 @synthesize executeView;
@@ -311,7 +309,6 @@ MainVC *mainVC = nil;
 @synthesize sourceSelectionView;
 @synthesize uiSelection;
 @synthesize thumbScrollView;
-@synthesize imageDumpRequested;
 @synthesize lastDisplayedFrame;
 @synthesize stats;
 
@@ -329,16 +326,20 @@ MainVC *mainVC = nil;
         showControls = NO;
         transformChainChanged = NO;
         plusMode = NoPlus;
-        imageDumpRequested = NO;
         lastDisplayedFrame = nil;
         layouts = [[NSMutableArray alloc] init];
         taskCtrl = [[TaskCtrl alloc] init];
         deviceOrientation = UIDeviceOrientationUnknown;
         stats = [[Stats alloc] init];
+#ifdef DEBUG
+        showStats = YES;
+#else
+        showStats = NO;
+#endif
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        thumbTasks.groupEnabled = NO;   // debug XXXXXX
+        thumbTasks.groupEnabled = NO;   // debug
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
 
@@ -1244,7 +1245,12 @@ CGFloat topOfNonDepthArray = 0;
     // layout.transformSize is what the tasks get to run.  They
     // then display (possibly scaled) onto transformView.
     
-    taskCtrl.sourceSize = layout.imageSourceSize;
+    if (!fileSourceFrame) { // camera input: set format and get raw sizes
+        [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
+        //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
+        //cameraController.captureVideoPreviewLayer = previewLayer;
+        [taskCtrl updateRawSourceSizes];
+    }
     [screenTasks configureGroupForTargetSize:layout.transformSize];
     [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
 //    [externalTask configureGroupForTargetSize:processingSize];
@@ -1308,9 +1314,6 @@ CGFloat topOfNonDepthArray = 0;
 #endif
         ;
     } else {
-        [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
-        //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
-        //cameraController.captureVideoPreviewLayer = previewLayer;
         [cameraController startCamera];
     }
     [self updateThumbAvailability];
@@ -1318,7 +1321,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) tryAllThumbLayouts {
     if (fileSourceFrame) {
-        [self tryAllThumbsForSize:fileSourceFrame.pixBuf.size format:nil];
+        [self tryAllThumbsForRawSize:fileSourceFrame.pixBuf.size format:nil];
     } else {
         assert(cameraController);
         assert(live);   // select camera setting for available area
@@ -1333,12 +1336,12 @@ CGFloat topOfNonDepthArray = 0;
                     continue;   // we want depth, if available
             }
             CGSize formatSize = [cameraController sizeForFormat:format];
-            [self tryAllThumbsForSize:formatSize format:format];
+            [self tryAllThumbsForRawSize:formatSize format:format];
        }
     }
 }
 
-- (void) tryAllThumbsForSize:(CGSize) size
+- (void) tryAllThumbsForRawSize:(CGSize) size
                       format:(AVCaptureDeviceFormat *)format {
     // first, layout full-screen version
     Layout *trialLayout = [[Layout alloc] init];
@@ -1649,7 +1652,9 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) didLongPressTransformView:(UIGestureRecognizer *)recognizer {
     if (recognizer.state != UIGestureRecognizerStateEnded)
         return;
-    imageDumpRequested = YES;
+    showStats = !showStats;
+    mainStatsView.hidden = !showStats;
+    [mainStatsView setNeedsDisplay];
 //    layoutValuesView.hidden = !layoutValuesView.hidden;
 //    [self didTapTransformView:recognizer];
 }
@@ -2137,11 +2142,9 @@ UIImageOrientation lastOrientation;
         t = [t stringByAppendingString:@"  +"];
     executeView.text = t;
     
-#ifdef EXECUTERECT
     if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
     }
-#endif
    
 #ifdef notdef
 //    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);

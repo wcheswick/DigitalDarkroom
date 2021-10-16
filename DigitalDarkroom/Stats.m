@@ -17,7 +17,8 @@ Stats *stats = nil;
 @synthesize emptyFrames, framesIgnoredLocking, depthMissing, depthDropped;
 @synthesize depthFrames, depthNaNs, depthZeros;
 @synthesize imageFrames, imagesDropped, noVideoPixelBuffer;
-@synthesize depthCopies, pixbufCopies;
+@synthesize depthCopies, pixbufCopies, tooBusyForAFrame;
+@synthesize incomingFrameMissing;
 @synthesize status;
 
 - (id)init {
@@ -35,7 +36,8 @@ Stats *stats = nil;
     depthFrames = imageFrames = noVideoPixelBuffer = 0;
     depthNaNs = depthZeros = 0;
     depthCopies = pixbufCopies = 0;
-    transformsBusy = 0;
+    tooBusyForAFrame = 0;
+    incomingFrameMissing = 0;
     status = @"";
     lastProcessed = [NSDate now];
 }
@@ -47,7 +49,7 @@ Stats *stats = nil;
                         framesReceived, framesProcessed,
                         framesReceived/t, framesProcessed/t,
                         depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed,
-                        transformsBusy,
+                        tooBusyForAFrame,
                         status];
     [self reset];
     return report;

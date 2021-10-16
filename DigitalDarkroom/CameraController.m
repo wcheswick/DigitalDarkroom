@@ -326,6 +326,23 @@ CameraController *cameraController = nil;
     return;
 }
 
+// if depth date not available, return size zero
+- (void) currentRawSizes:(CGSize *)rawImageSize
+            rawDepthSize:(CGSize *) rawDepthSize {
+    assert(captureDevice.activeFormat);
+    CMFormatDescriptionRef ref = captureDevice.activeFormat.formatDescription;
+    CMVideoDimensions size = CMVideoFormatDescriptionGetDimensions(ref);
+    *rawImageSize = CGSizeMake(size.width, size.height);
+    if (!depthDataAvailable)
+        *rawDepthSize = CGSizeZero;
+    else {
+        AVCaptureDeviceFormat *depthFormat = captureDevice.activeDepthDataFormat;
+        CMFormatDescriptionRef ref = depthFormat.formatDescription;
+        CMVideoDimensions size = CMVideoFormatDescriptionGetDimensions(ref);
+        *rawDepthSize = CGSizeMake(size.width, size.height);
+    }
+}
+
 #pragma mark - AVCaptureDataOutputSynchronizer (Video + Depth)
 
 // From:
@@ -336,12 +353,26 @@ CameraController *cameraController = nil;
 - (void)dataOutputSynchronizer:(AVCaptureDataOutputSynchronizer *)synchronizer
 didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synchronizedDataCollection {
     stats.framesReceived++;
-    
+
     //    NSLog(@"synchronizedDataCollection: %@", synchronizedDataCollection);
     //    NSLog(@"           depthDataOutput: %@", depthDataOutput);
     if (synchronizedDataCollection.count == 0) {
         // no data, I wonder why
         stats.emptyFrames++;
+        return;
+    }
+
+    BOOL needAFrame = NO;
+    for (NSString *groupName in activeTaskgroups) {
+        TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
+        if (taskGroup.groupBusy)
+            continue;
+        needAFrame = YES;
+        break;
+    }
+    
+    if (!needAFrame) {
+        stats.tooBusyForAFrame++;
         return;
     }
 
@@ -351,10 +382,10 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
                                                   synchronizedDataForCaptureOutput:depthDataOutput];
     AVCaptureSynchronizedDepthData *syncedDepthBufferData = (AVCaptureSynchronizedDepthData *)syncedDepthData;
-
+    
     if(syncedSampleBufferData.sampleBufferWasDropped) {
         stats.imagesDropped++;
-            stats.status = @"imD";
+        stats.status = @"imD";
         return;
     }
     
@@ -366,14 +397,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     if (!videoPixelBufferRef) {
         stats.noVideoPixelBuffer++;
         stats.status = @"drV";
-        return;
-    }
-    
-    if (!activeTaskgroups)
-        return;     // nothing to do
-    
-    if (lastRawFrame && lastRawFrame.useCount) {
-        stats.transformsBusy++;
         return;
     }
     
@@ -410,7 +433,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             !SAME_SIZE(lastRawFrame.pixBuf.size, rawImageSize)) {
         lastRawFrame = [[Frame alloc] init];
     }
-    
     @synchronized (lastRawFrame) {
         lastRawFrame.useCount++;
         lastRawFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
@@ -422,39 +444,33 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
         memcpy(lastRawFrame.pixBuf.pb, (Pixel *)videoBaseAddress,
                rawImageSize.width * rawImageSize.height*sizeof(Pixel));
-        
-        CVPixelBufferRef depthPixelBufferRef = nil;
-        CGSize rawDepthSize = CGSizeZero;
-        if (depthDataAvailable) {
-            depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
-            assert(depthPixelBufferRef);
-            CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
-            Distance *capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
-            assert(capturedDepthBuffer);
-            rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
-                                      CVPixelBufferGetHeight(depthPixelBufferRef));
-            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
-            assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
-
-            if (!lastRawFrame.depthBuf ||
-                !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
-                lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
-            }
-            //        assert(sizeof(Distance) == sizeof(AVDepthData));
-            memcpy(lastRawFrame.depthBuf.db, capturedDepthBuffer,
-                   rawDepthSize.width * rawDepthSize.height*sizeof(Distance));
-            CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
-//            [lastRawFrame.depthBuf stats];
-            lastRawFrame.depthBuf.valid = YES;
-        }
+    }
+    
+    CGSize rawDepthSize = CGSizeZero;
+    Distance *capturedDepthBuffer = nil;
+    CVPixelBufferRef depthPixelBufferRef = nil;
+    if (depthDataAvailable) {
+        depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
+        assert(depthPixelBufferRef);
+        CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
+        capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
+        assert(capturedDepthBuffer);
+        rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
+                                  CVPixelBufferGetHeight(depthPixelBufferRef));
+        size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+        assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
     }
 
     for (NSString *groupName in activeTaskgroups) {
         TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
         if (taskGroup.groupBusy)
             continue;
+        if (!taskGroup.scaledIncomingFrame) {
+            stats.incomingFrameMissing++;
+            continue;
+        }
         Frame *scaledFrame = taskGroup.scaledIncomingFrame;
-        //        Frame *scaledFrame = [taskGroup.groupSrcFrame copy];    // I don't think we need this
+        assert(scaledFrame);
         CGRect r;
         r.origin = CGPointZero;
         r.size = scaledFrame.pixBuf.size;
@@ -473,62 +489,38 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         CGContextRelease(cgContext);
 #endif
         
-        scaledFrame.depthBuf.valid = lastRawFrame.depthBuf.valid;
-        if (lastRawFrame.depthBuf.valid) {
-            // the rawFrame has raw depth data, including bad stuff.  leave it there (for display
-            // and possible debug purposes, but don't propagate unexpected bad data to the vis
-            // routine.
-            
-            scaledFrame.depthBuf.minDepth = MAXFLOAT;
-            scaledFrame.depthBuf.maxDepth = -1.0;
-            float srcXStride = lastRawFrame.depthBuf.size.width/scaledFrame.depthBuf.size.width;
-            float srcYStride = lastRawFrame.depthBuf.size.height/scaledFrame.depthBuf.size.height;
-            for (int y=0; y<scaledFrame.depthBuf.size.height; y++) {
-                int srcY = y*srcYStride;
-                assert(srcY < lastRawFrame.depthBuf.size.height);
-                //                    Distance *row = &capturedDepthBuffer[srcY * bytesPerRow];
-                for (int x=0; x<scaledFrame.depthBuf.size.width; x++) {
-                    int srcX = x*srcXStride;
-                    assert(srcX < lastRawFrame.depthBuf.size.width);
-                    //                        assert(dp >= capturedDepthBuffer);
-                    //                        assert(dp < capturedDepthBuffer + rawWidth*sizeof(Distance) * rawHeight);
-                    Distance d = lastRawFrame.depthBuf.da[srcY][srcX];
-                    if (isnan(d)) {
-                        stats.depthNaNs++;
-                        scaledFrame.depthBuf.badDepths++;
-                        d = NAN_DEPTH;
-                    } else if (d == 0.0) {
-                        stats.depthZeros++;
-                        scaledFrame.depthBuf.badDepths++;
-                        d = ZERO_DEPTH;
-                    } else {
-                        assert(d > 0);
-                        if (d < scaledFrame.depthBuf.minDepth)
-                            scaledFrame.depthBuf.minDepth = d;
-                        if (d > scaledFrame.depthBuf.maxDepth)
-                            scaledFrame.depthBuf.maxDepth = d;
-                    }
-                    scaledFrame.depthBuf.da[y][x] = d;
-                }
+        if (taskGroup.needsDepth) {
+            if (!scaledFrame.depthBuf || !SAME_SIZE(scaledFrame.depthBuf.size, rawDepthSize)) {
+                scaledFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
             }
-            scaledFrame.depthBuf.valid = YES;
+            memcpy(scaledFrame.depthBuf.db, capturedDepthBuffer,
+                       rawDepthSize.width * rawDepthSize.height*sizeof(Distance));
+//            [lastRawFrame.depthBuf stats];
+            scaledFrame.depthBuf.valid = YES;   // XXX used?
         }
-        // NB: the depth data is dirty, with BAD_DEPTH values
-        // go process this image in this taskgroup
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            self->lastRawFrame.useCount++;
+            @synchronized (self->lastRawFrame) {
+                self->lastRawFrame.useCount++;
+            }
             [(id<videoSampleProcessorDelegate>)self->videoProcessor processScaledIncomingFrameinTaskgroup:taskGroup];
-            self->lastRawFrame.useCount--;
+            @synchronized (self->lastRawFrame) {
+                self->lastRawFrame.useCount--;
+            }
         });
     }
     CGImageRelease(quartzImage);
     CGContextRelease(context);
     CGColorSpaceRelease(colorSpace);
     CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
-
-    lastRawFrame.useCount--;    // decremented by this routine:
-    assert(lastRawFrame.useCount >= 0);
+    if (depthPixelBufferRef) {
+        CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
+    }
+    
+    @synchronized (lastRawFrame) {
+        lastRawFrame.useCount--;    // decremented by this routine:
+        assert(lastRawFrame.useCount >= 0);
+    }
     self->stats.framesProcessed++;
     stats.status = @"ok";
     return;

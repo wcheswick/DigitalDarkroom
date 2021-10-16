@@ -24,7 +24,7 @@
 @synthesize taskGroups;
 @synthesize state;
 @synthesize layingOut;
-@synthesize sourceSize;     // size of incoming images.  Depth may be difference
+@synthesize rawImageSourceSize, rawDepthSourceSize;
 
 - (id)init {
     self = [super init];
@@ -33,9 +33,15 @@
         assert(taskGroups);
         state = NeedsNewLayout;
         layingOut = NO;
-        sourceSize = CGSizeZero;
+        rawImageSourceSize = CGSizeZero;
+        rawDepthSourceSize = CGSizeZero;
     }
     return self;
+}
+
+- (void) updateRawSourceSizes {
+    [cameraController currentRawSizes:&rawImageSourceSize
+                         rawDepthSize:&rawDepthSourceSize];
 }
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name {
