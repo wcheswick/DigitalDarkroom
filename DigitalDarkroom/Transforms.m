@@ -310,16 +310,29 @@ channelConvolution(ChBuf *in, ChBuf *out,
     }
 }
 
+#define KERNEL_SIZE(kernel)   (sizeof(kernel)/sizeof(float))
+
 // kernel is a kn x kn matrix
 void
 pixelConvolution(PixBuf *in, PixBuf *out,
-                 const float *kernel, const int kn, const BOOL normalize) {
+                 const float *kernel, const int kernel_size, const BOOL normalize) {
+    int kn = round(sqrt(kernel_size));
     long W = in.size.width;
     long H = in.size.height;
     assert(kn % 2 == 1);    // kernels must have an odd number of rows and columns
     assert(W > kn && H > kn);   // width must be larger than the kernel
     const int khalf = kn / 2;
     
+    int normalizer; // if normalized, the sum of the kernel entries, for consistent brightness
+    if (normalize) {
+        normalizer = 0;
+        for (int i=0; i<kn*kn; i++)
+            normalizer += kernel[i];
+        assert(normalizer); // no divide by zero
+    } else
+        normalizer = 1;
+    
+#ifdef WRONG
     float min = FLT_MAX, max = -FLT_MAX;
     
     if (normalize) {
@@ -346,61 +359,6 @@ pixelConvolution(PixBuf *in, PixBuf *out,
            }
         }
     }
-    
-    for (int x = khalf; x < W - khalf; x++) {
-        for (int y = khalf; y < H - khalf; y++) {
-            float rchan = 0.0;
-            float gchan = 0.0;
-            float bchan = 0.0;
-            size_t kernelIndex = 0;
-            for (int j = -khalf; j <= khalf; j++)
-                for (int i = -khalf; i <= khalf; i++) {
-                    rchan += in.pa[y+j][x+i].r * kernel[kernelIndex];
-                    gchan += in.pa[y+j][x+i].g * kernel[kernelIndex];
-                    bchan += in.pa[y+j][x+i].b * kernel[kernelIndex];
-                    kernelIndex++;
-                }
-            if (normalize) {
-                rchan = Z * (rchan - min) / (max - min);
-                gchan = Z * (gchan - min) / (max - min);
-                bchan = Z * (bchan - min) / (max - min);
-            }
-            out.pa[y][x] = SETRGB(rchan/kn, gchan/kn, bchan/kn);
-        }
-    }
-}
-
-// kernel is a kn x kn matrix
-void
-buggyPixelConvolution(PixBuf *in, PixBuf *out,
-                 const float *kernel, const int kn, const BOOL normalize) {
-    long W = in.size.width;
-    long H = in.size.height;
-    assert(kn % 2 == 1);    // kernels must have an odd number of rows and columns
-    assert(W > kn && H > kn);   // width must be larger than the kernel
-    const int khalf = kn / 2;
-    
-#ifdef DISABLED
-    float min = FLT_MAX, max = -FLT_MAX;
-    
-    if (normalize) {
-        for (int x = khalf; x < W - khalf; x++) {
-            for (int y = khalf; y < H - khalf; y++) {
-                float chan = 0.0;
-                size_t c = 0;
-                for (int j = -khalf; j <= khalf; j++) {
-                    for (int i = -khalf; i <= khalf; i++) {
-                        chan += in.ca[y-j][x-i] * kernel[c];
-                        c++;
-                    }
-                }
-                if (chan < min)
-                    min = chan;
-                if (chan > max)
-                    max = chan;
-            }
-        }
-    }
 #endif
     
     for (int x = khalf; x < W - khalf; x++) {
@@ -411,14 +369,17 @@ buggyPixelConvolution(PixBuf *in, PixBuf *out,
             size_t kernelIndex = 0;
             for (int j = -khalf; j <= khalf; j++)
                 for (int i = -khalf; i <= khalf; i++) {
-                    rchan += in.pa[y-j][x-i].r * kernel[kernelIndex];
-                    gchan += in.pa[y-j][x-i].g * kernel[kernelIndex];
-                    bchan += in.pa[y-j][x-i].b * kernel[kernelIndex];
+                    rchan += in.pa[y+j][x+i].r * kernel[kernelIndex]/normalizer;
+                    gchan += in.pa[y+j][x+i].g * kernel[kernelIndex]/normalizer;
+                    bchan += in.pa[y+j][x+i].b * kernel[kernelIndex]/normalizer;
                     kernelIndex++;
                 }
-#ifdef DISABLED
-            if (normalize)
-                chan = Z * (chan - min) / (max - min);
+#ifdef WRONG
+            if (normalize) {
+                rchan = Z * (rchan - min) / (max - min);
+                gchan = Z * (gchan - min) / (max - min);
+                bchan = Z * (bchan - min) / (max - min);
+            }
 #endif
             out.pa[y][x] = SETRGB(rchan, gchan, bchan);
         }
@@ -633,88 +594,204 @@ mostCommonColorInHist(Hist_t *hists) {
     [self addTransform:lastTransform];
 #endif
 
-    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"Box blur"
-                                description: @""
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
-            1, 1, 1,
-            1, 1, 1,
-            1, 1, 1
-        };
-        pixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 3, YES);
-    }];
-    [self addTransform:lastTransform];
-
     
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
     lastTransform = [Transform areaTransform: @"trival conv. 1x1"
                                 description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
+        const float kernel[] = {
             1,
         };
-        pixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 1, NO);
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
     }];
     [self addTransform:lastTransform];
     
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"trival conv. 3x3"
+    lastTransform = [Transform areaTransform: @"3x3 identity conv"
                                 description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
+        const float kernel[] = {
             0, 0, 0,
-            0, 9, 0,
+            0, 1, 0,
             0, 0, 0,
         };
-        pixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 3, NO);
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
     }];
     [self addTransform:lastTransform];
 
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"Gausian blur 3x3"
+    lastTransform = [Transform areaTransform: @"3x3 sharpen"
                                 description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
-            1, 2, 1,
-            2, 4, 4,
-            1, 2, 1,
+        const float kernel[] = {
+            0, -1, 0,
+            -1, 5, -1,
+            0, -1, 0,
         };
-        pixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 3, NO);
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
     }];
     [self addTransform:lastTransform];
 
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"Gausian blur 5x5"
+    lastTransform = [Transform areaTransform: @"3x3 Gausian blur"
                                 description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
+        const float kernel[] = {
+            1, 2, 1,
+            2, 4, 2,
+            1, 2, 1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+
+    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
+    lastTransform = [Transform areaTransform: @"5x5 Gausian blur"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
             1, 4, 6, 4, 1,
             4, 16,24, 16, 4,
             6, 24, 36, 24, 6,
             4, 16,24, 16, 4,
             1, 4, 6, 4, 1,
         };
-        pixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 5, NO);
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
     }];
     [self addTransform:lastTransform];
 
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"Conv blur bug"
-                                description: @"Edge detection"
+    lastTransform = [Transform areaTransform: @"7x7 Gausian blur"
+                                description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float BoxBlurKernel[] = {
+        const float kernel[] = {
+            0, 0, 0, 5, 0, 0, 0,
+            0, 5, 18, 32, 18, 5, 0,
+            0, 18, 64, 100, 64, 18, 0,
+            5, 32, 100, 100, 100, 32, 5,
+            0, 18, 64, 100, 64, 18, 0,
+            0, 5, 18, 32, 18, 5, 0,
+            0, 0, 0, 5, 0, 0, 0,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+
+    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
+    lastTransform = [Transform areaTransform: @"5x5 unsharp masking"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            1, 4, 6, 4, 1,
+            4, 16, 24, 16, 4,
+            6, 24, -476, 24, 6,
+            4, 16, 24, 16, 4,
+            1, 4, 6, 4, 1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"edge 1"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            1, 0, -1,
+            0, 0, 0,
+            -1, 0, 1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
+
+#ifdef BROKEN
+    lastTransform = [Transform areaTransform: @"edge 1 norm"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            1, 0, -1,
+            0, 0, 0,
+            -1, 0, 1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+#endif
+    
+    lastTransform = [Transform areaTransform: @"edge 2 needs norm"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            0, -1, 0,
+            -1, 4, -1,
+            0, 1, 0,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"edge 2 norm"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            0, -1, 0,
+            -1, 4, -1,
+            0, 1, 0,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"edge 3"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            -1, -1, -1,
+            -1, 8, -1,
+            -1, -1, -1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
+
+#ifdef BROKEN
+    lastTransform = [Transform areaTransform: @"edge 3 norm"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            -1, -1, -1,
+            -1, 8, -1,
+            -1, -1, -1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
+    }];
+    [self addTransform:lastTransform];
+#endif
+    
+    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
+    lastTransform = [Transform areaTransform: @"Box blur"   // needs norming
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {    // box blur
             1, 1, 1,
             1, 1, 1,
             1, 1, 1
         };
-        buggyPixelConvolution(srcPixBuf, dstPixBuf, BoxBlurKernel, 3, YES);
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), YES);
     }];
     [self addTransform:lastTransform];
 
@@ -726,7 +803,7 @@ mostCommonColorInHist(Hist_t *hists) {
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
         long N = srcPixBuf.size.width * srcPixBuf.size.height;
         // Box blur
-        const float BoxBlur[] = {
+        const float kernel[] = {
             1, 1, 1,
             1, 1, 1,
             1, 1, 1
