@@ -119,9 +119,12 @@ static PixelIndex_t dPI(int x, int y) {
     assert(index < paramList.count);
     Transform *transform = [transformList objectAtIndex:index];
     TransformInstance *instance = [paramList objectAtIndex:index];
+#ifdef OLD
     return [NSString stringWithFormat:@"%@;%@;%@",
             transform.name,
             [instance valueInfo], [instance timeInfo]];
+#endif
+    return [NSString stringWithFormat:@"   %@",[instance timeInfo]];
 }
 
 - (void) configureTaskForSize {

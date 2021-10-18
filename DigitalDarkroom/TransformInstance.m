@@ -41,7 +41,10 @@
 - (NSString *) timeInfo {
     if (timesCalled == 0 || elapsedProcessingTime == 0)
         return @"";
-    NSString *timing = [NSString stringWithFormat:@"%5.1f", 1000.0*elapsedProcessingTime/timesCalled];
+    float ms = 1000.0*elapsedProcessingTime/timesCalled;
+    int fps = round(1000.0/ms);
+    NSString *timing = [NSString stringWithFormat:@"%5.1fms  %2d f/s",
+                        ms, fps];
     timesCalled = 0;
     elapsedProcessingTime = 0;
     return timing;

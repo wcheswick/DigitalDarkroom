@@ -2040,9 +2040,10 @@ UIImageOrientation lastOrientation;
 //    [taskCtrl checkReadyForLayout];
     mainStatsView.text = [stats report];
     [mainStatsView setNeedsDisplay];
+    [self updateExecuteView];
     [taskCtrl checkForIdle];
 
-#ifdef NOTYET
+#ifdef OLD
     NSDate *now = [NSDate now];
     NSTimeInterval elapsed = [now timeIntervalSinceDate:lastTime];
     lastTime = now;
@@ -2074,6 +2075,7 @@ UIImageOrientation lastOrientation;
     frameCount = depthCount = droppedCount = busyCount = 0;
     transformCount = transformTotalElapsed = 0;
 #endif
+    
 }
 
 - (IBAction) doRemoveLastTransform {
@@ -2106,8 +2108,8 @@ UIImageOrientation lastOrientation;
     NSString *sep = onePerLine ? @"\n" : @" ";
     
     for (int i=0; i<displaySteps; i++, step++) {
-        Transform *transform = screenTask.transformList[step];
-         NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
+        Transform *transformInstance = screenTask.transformList[step];
+         NSString *name = [transformInstance.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
         if (!t)
             t = name;
         else {
@@ -2115,16 +2117,16 @@ UIImageOrientation lastOrientation;
         }
         
         // append string showing the parameter value, if one is specified
-        if (transform.hasParameters) {
+        if (transformInstance.hasParameters) {
             int value = [screenTask valueForStep:step];
             t = [NSString stringWithFormat:@"%@ %@%d%@",
                  t,
-                 value == transform.low ? @"[" : @"<",
+                 value == transformInstance.low ? @"[" : @"<",
                  value,
-                 value == transform.high ? @"]" : @">"];
+                 value == transformInstance.high ? @"]" : @">"];
             
             if (paramView) {
-                [self updateParamViewFor:transform];
+                [self updateParamViewFor:transformInstance];
 #ifdef OLD
                 paramLabel.text = [NSString stringWithFormat:@"%@  %d  %@",
                                   value == transform.low ? @"[" : @"<",
@@ -2134,8 +2136,11 @@ UIImageOrientation lastOrientation;
                 [paramView setNeedsDisplay];
             }
         }
-        if (onePerLine && ![transform.description isEqual:@""])
-            t = [NSString stringWithFormat:@"%@   (%@)", t, transform.description];
+        if (onePerLine && ![transformInstance.description isEqual:@""])
+            t = [NSString stringWithFormat:@"%@   (%@)", t, transformInstance.description];
+        if (onePerLine && showStats) {
+            t = [NSString stringWithFormat:@"%@   %@", t, [screenTask infoForScreenTransformAtIndex:i]];
+        }
     }
     
     if (plusMode != NoPlus || screenTask.transformList.count == 0)

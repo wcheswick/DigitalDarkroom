@@ -396,10 +396,8 @@ sobel(ChBuf *s, ChBuf *d) {
             int aa, bb;
             aa = s.ca[y-1][x-1] + s.ca[y][x-1]*2 + s.ca[y+1][x-1] -
                 s.ca[y-1][x+1] - s.ca[y][x+1]*2 - s.ca[y+1][x+1];
-            bb = s.ca[y-1][x-1] + s.ca[y-1][x]*2 +
-                s.ca[y-1][x+1] -
-                s.ca[y+1][x-1] - s.ca[y+1][x]*2 -
-                s.ca[y+1][x+1];
+            bb = s.ca[y-1][x-1] + s.ca[y-1][x]*2 + s.ca[y-1][x+1] -
+                s.ca[y+1][x-1] - s.ca[y+1][x]*2 - s.ca[y+1][x+1];
             int diff = sqrt(aa*aa + bb*bb);
             if (diff > Z)
                 d.ca[y][x] = Z;
