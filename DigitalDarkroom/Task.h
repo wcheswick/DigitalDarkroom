@@ -60,11 +60,15 @@ typedef enum {
 
 - (long) appendTransformToTask:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;
+- (void) changeTransformAtIndex:(long) index
+                    to:(Transform *) transform;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
 
 - (const Frame * __nullable) executeTaskTransformsOnIncomingFrame;
-- (NSString *) infoForScreenTransformAtIndex:(long) index;
+- (NSString *) displayInfoForStep:(long) step
+                        shortForm:(BOOL) shortForm
+                            stats:(BOOL) stats;
 - (BOOL) needsDepth;
 
 @end

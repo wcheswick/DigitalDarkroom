@@ -43,7 +43,7 @@
         return @"";
     float ms = 1000.0*elapsedProcessingTime/timesCalled;
     int fps = round(1000.0/ms);
-    NSString *timing = [NSString stringWithFormat:@"%5.1fms  %2d f/s",
+    NSString *timing = [NSString stringWithFormat:@"%5.1f (%2d)  ",
                         ms, fps];
     timesCalled = 0;
     elapsedProcessingTime = 0;

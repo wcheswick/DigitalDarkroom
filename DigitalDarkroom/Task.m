@@ -100,6 +100,15 @@ static PixelIndex_t dPI(int x, int y) {
     return transformList.count - 1;
 }
 
+- (void) changeTransformAtIndex:(long) index
+                    to:(Transform *) transform {
+    TransformInstance *instance = [[TransformInstance alloc]
+                                   initFromTransform:(Transform *)transform];
+    [transformList replaceObjectAtIndex:index withObject:transform];
+    [paramList replaceObjectAtIndex:index withObject:instance];
+    [taskGroup updateGroupDepthNeeds];
+}
+
 - (long) removeLastTransform {
     assert(transformList.count > 0);
     [transformList removeLastObject];
@@ -114,17 +123,31 @@ static PixelIndex_t dPI(int x, int y) {
     [taskGroup updateGroupDepthNeeds];
 }
 
-- (NSString *) infoForScreenTransformAtIndex:(long) index {
-    assert(index < transformList.count);
-    assert(index < paramList.count);
-    Transform *transform = [transformList objectAtIndex:index];
-    TransformInstance *instance = [paramList objectAtIndex:index];
-#ifdef OLD
-    return [NSString stringWithFormat:@"%@;%@;%@",
-            transform.name,
-            [instance valueInfo], [instance timeInfo]];
-#endif
-    return [NSString stringWithFormat:@"   %@",[instance timeInfo]];
+- (NSString *) displayInfoForStep:(long) step
+                        shortForm:(BOOL) shortForm
+                            stats:(BOOL) stats {
+    if (step >= transformList.count)
+        return @"";
+    Transform *transform = transformList[step];
+    TransformInstance *instance = paramList[step];
+    NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n"
+                                                               withString:@" "];
+    NSString *params = @"";
+    if (instance.hasParams) {
+        int value = instance.value;
+        params = [NSString stringWithFormat:@"  %@%d%@",
+             value == transform.low ? @"[" : @"<",
+             value,
+             value == transform.high ? @"]" : @">"];
+    }
+
+    NSString *desc = @"";
+    if (!shortForm && ![transform.description isEqual:@""])
+        desc = [NSString stringWithFormat:@"  %@", transform.description];
+
+    return [NSString stringWithFormat:@"%@%@%@%@",
+            stats ? [instance timeInfo] : @"",
+            name, params, desc];
 }
 
 - (void) configureTaskForSize {

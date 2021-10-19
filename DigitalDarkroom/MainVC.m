@@ -1453,55 +1453,47 @@ CGFloat topOfNonDepthArray = 0;
     atStartOfRow = YES;
 }
 
+- (size_t) nextTransformTapIndex {
+    if (plusMode == PlusOne || plusMode == PlusMany)
+        return screenTask.transformList.count;
+    if (screenTask.transformList.count > 0)
+        return screenTask.transformList.count - 1;
+    return 0;
+}
+
 - (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
 
-    Transform *lastTransform = nil;
-    if (screenTask.transformList.count) {
-        lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
+    size_t indexToChange = [self nextTransformTapIndex];
+    BOOL reTap = indexToChange == currentTransformIndex;
+    if (reTap && plusMode == NoPlus) {  // just remove current transform
+        [screenTask removeTransformAtIndex:indexToChange];
+        currentTransformIndex--;
+    } else {
+        if (indexToChange == screenTask.transformList.count) {  // append a transform
+            [screenTask appendTransformToTask:tappedTransform];
+            [screenTask configureTaskForSize];
+            currentTransformIndex = screenTask.transformList.count - 1;
+        } else {    // replace an existing transform
+            [screenTask changeTransformAtIndex:currentTransformIndex to:tappedTransform];
+            [screenTask configureTaskForSize];
+        }
     }
     
-    if (plusMode == PlusOne || plusMode == PlusMany) {  // add new transform
-        [screenTask appendTransformToTask:tappedTransform];
-        [screenTask configureTaskForSize];
-        [tappedThumb adjustStatus:ThumbActive];
-        if (plusMode == PlusOne) {
+    switch (plusMode) {
+        case PlusOne:
             plusMode = NoPlus;
             [self adjustPlus];
-        }
-    } else {    // not plus mode, change or delete last transform
-#ifdef NEW
-        if (screenTasks.tasks.count > 0) {  // clear everything
-            [self deselectAllThumbs];
-            [self transformChainAdjusted];
-        }
-#endif
-        if (lastTransform) {
-            // remove the last transform, and add the selected one, if different from the old
-            BOOL reTap = [tappedTransform.name isEqual:lastTransform.name];
-            [screenTask removeLastTransform];
-            ThumbView *oldThumb = [self thumbForTransform:lastTransform];
-            [oldThumb adjustStatus:ThumbAvailable];
-            if (reTap) {
-                // retapping a transform in not plus mode means just remove it, and we are done
-                [self updateExecuteView];
-                [self adjustBarButtons];
-                tappedTransform = nil;
-            }
-        }
-        if (tappedTransform) {
-            [screenTask appendTransformToTask:tappedTransform];
-            [tappedThumb adjustStatus:ThumbActive];
-        }
-        [screenTask configureTaskForSize];
+            break;
+        case PlusMany:
+            break;
+        case NoPlus:
+            break;
     }
     transformChainChanged = YES;
-#ifdef OLD
-    [self doTransformsOnFrame:lastDisplayedFrame];
-#endif
-//    [self updateOverlayView];
-    [self adjustParametersFrom:lastTransform to:tappedTransform];
+    [self updateThumbAvailability]; // XXXXXX right?
+//   [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
     [self adjustBarButtons];
 }
@@ -2099,53 +2091,26 @@ UIImageOrientation lastOrientation;
 // mode for small, tight screens or long lists of transforms (which should be rare.)
 
 - (void) updateExecuteView {
-    NSString *t = nil;
-    
     long step = 0;
     long displaySteps = screenTask.transformList.count;
     CGFloat bestH = EXECUTE_H_FOR(displaySteps);
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
     NSString *sep = onePerLine ? @"\n" : @" ";
+    NSString *text = @"";
     
-    for (int i=0; i<displaySteps; i++, step++) {
-        Transform *transformInstance = screenTask.transformList[step];
-         NSString *name = [transformInstance.name stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
-        if (!t)
-            t = name;
-        else {
-            t = [NSString stringWithFormat:@"%@  +%@%@", t, sep, name];
-        }
-        
-        // append string showing the parameter value, if one is specified
-        if (transformInstance.hasParameters) {
-            int value = [screenTask valueForStep:step];
-            t = [NSString stringWithFormat:@"%@ %@%d%@",
-                 t,
-                 value == transformInstance.low ? @"[" : @"<",
-                 value,
-                 value == transformInstance.high ? @"]" : @">"];
-            
-            if (paramView) {
-                [self updateParamViewFor:transformInstance];
-#ifdef OLD
-                paramLabel.text = [NSString stringWithFormat:@"%@  %d  %@",
-                                  value == transform.low ? @"[" : @"<",
-                                  value,
-                                  value == transform.high ? @"]" : @">"];
-#endif
-                [paramView setNeedsDisplay];
-            }
-        }
-        if (onePerLine && ![transformInstance.description isEqual:@""])
-            t = [NSString stringWithFormat:@"%@   (%@)", t, transformInstance.description];
-        if (onePerLine && showStats) {
-            t = [NSString stringWithFormat:@"%@   %@", t, [screenTask infoForScreenTransformAtIndex:i]];
-        }
+    // loop includes last line +1
+    for (int i=0; i<=displaySteps; i++, step++) {
+        NSString *line = [screenTask displayInfoForStep:i
+                                              shortForm:!onePerLine
+                                                  stats:showStats];
+        size_t plusIndex = [self nextTransformTapIndex];
+        text = [NSString stringWithFormat:@"%@%@%@%@",
+                text,
+                (plusIndex == i) ? @"+ " : @"  ",
+                line, sep];
     }
     
-    if (plusMode != NoPlus || screenTask.transformList.count == 0)
-        t = [t stringByAppendingString:@"  +"];
-    executeView.text = t;
+    executeView.text = text;
     
     if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
