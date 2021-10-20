@@ -196,9 +196,11 @@ ma(ma_buff_t *b, float v) {
 }
 
 - (void) scaleFrom:(DepthBuf *) sourceDepthBuf {
-    minDepth = sourceDepthBuf.minDepth; // preserve original range
-    maxDepth = sourceDepthBuf.maxDepth;
-//    [self verifyDepthRange];
+    assert(sourceDepthBuf);
+    if (maxDepth) {
+        minDepth = sourceDepthBuf.minDepth; // preserve original range
+        maxDepth = sourceDepthBuf.maxDepth;
+    }
     double yScale = size.height/sourceDepthBuf.size.height;
     double xScale = size.width/sourceDepthBuf.size.width;
     for (int y=0; y<size.height; y++) {
@@ -210,8 +212,12 @@ ma(ma_buff_t *b, float v) {
             Distance d = sourceDepthBuf.da[sy][sx];
             if (BAD_DEPTH(d))
                 d = maxDepth;
-            assert(d >= minDepth);
-            assert(d <= maxDepth);
+            else {
+                if (d > maxDepth)
+                    maxDepth = d;
+                if (d < minDepth)
+                    minDepth = d;
+            }
             da[y][x] = d;   // XXXXXX died here during reconfiguration
         }
     }

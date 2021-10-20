@@ -88,7 +88,7 @@
 
 - (void) updateGroupDepthNeeds {
     for (Task *task in tasks) {
-        if ([task needsDepth]) {
+        if (task.needsDepthBuf) {
             needsDepth = YES;
             return;
         }

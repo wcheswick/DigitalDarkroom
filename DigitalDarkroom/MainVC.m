@@ -339,7 +339,7 @@ MainVC *mainVC = nil;
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
-        thumbTasks.groupEnabled = NO;   // debug
+//        thumbTasks.groupEnabled = NO;   // debug
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
 

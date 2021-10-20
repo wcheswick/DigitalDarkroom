@@ -25,7 +25,7 @@
 @synthesize paramName, lowValueFormat, highValueFormat;
 @synthesize newValue;
 @synthesize remapTable;
-@synthesize needsDestFrame, modifiesDepthBuf;
+@synthesize needsScaledDepth, modifiesDepthBuf;
 
 
 - (id)init {
@@ -49,7 +49,7 @@
         remapTable = NULL;
         paramName = nil;
         lowValueFormat = highValueFormat = @"%d";
-        needsDestFrame = modifiesDepthBuf = NO;
+        needsScaledDepth = modifiesDepthBuf = NO;
     }
     return self;
 }
@@ -62,7 +62,7 @@
     t.description = d;
     t.type = DepthVis;
     t.depthVisF = f;
-    t.modifiesDepthBuf = YES;
+    t.needsScaledDepth = YES;
     return t;
 }
 
@@ -75,6 +75,7 @@
     t.description = d;
     t.type = DepthVis;
     t.depthTransF = f;
+    t.needsScaledDepth = YES;
     t.modifiesDepthBuf = YES;
     return t;
 }
@@ -97,7 +98,6 @@
     t.description = d;
     t.type = AreaTrans;
     t.areaF = f;
-    t.needsDestFrame = YES;
     return t;
 }
 
@@ -120,7 +120,6 @@
     t.description = d;
     t.type = RemapPolar;
     t.remapPolarF = f;
-    t.needsDestFrame = YES;
     return t;
 }
 
@@ -165,7 +164,7 @@
     copy.value = value;
     copy.newValue = newValue;
     copy.hasParameters = hasParameters;
-    copy.needsDestFrame = needsDestFrame;
+    copy.needsScaledDepth = needsScaledDepth;
     copy.modifiesDepthBuf = modifiesDepthBuf;
     copy.remapTable = NULL;
     return copy;

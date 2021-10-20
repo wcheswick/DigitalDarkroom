@@ -238,18 +238,21 @@ static int dpi;
     
     helpPath = @"Depth";
     [self addDepthVisualizations];
-    
-    helpPath = @"Geometric/polar";
-    [self addPolarTransforms];
 
-    helpPath = @"Geometric";
+    helpPath = @"Remap";
     [self addGeometricTransforms];
     
+    helpPath = @"Polar remap";
+    [self addPolarTransforms];
+
+    helpPath = @"Convolutions";
+    [self addConvolutions];
+
     helpPath = @"Area";
-    [self addAreaTransforms];   // manu unimplemented
+    [self addAreaTransforms];
 
     helpPath = @"Point";
-    [self addPointTransforms];  // working:
+    [self addPointTransforms];
     
     helpPath = @"Art";
     [self addArtTransforms];
@@ -526,10 +529,10 @@ mostCommonColorInHist(Hist_t *hists) {
 }
 
 - (void) addTestTransforms {
-    
     lastTransform = [Transform depthVis: @"Depth errors"
                             description: @""
-                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
+                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf,
+                                           PixBuf *dstPixBuf,
                                            TransformInstance *instance) {
         assert(SAME_SIZE(srcPixBuf.size, depthBuf.size));
         assert(SAME_SIZE(srcPixBuf.size, dstPixBuf.size));
@@ -563,7 +566,22 @@ mostCommonColorInHist(Hist_t *hists) {
     lastTransform.hasParameters = NO;
     [self addTransform:lastTransform];
 
-#ifdef DEBUG
+    lastTransform = [Transform depthVis: @"HSV test"
+                            description: @""
+                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
+                                           TransformInstance *instance) {
+        for (int i=0; i<srcPixBuf.size.width*srcPixBuf.size.height; i++) {
+            Pixel p = srcPixBuf.pb[i];
+            HSVPixel hsv = RGBtoHSV(p);
+//            Distance z = depthBuf.db[i];
+            dstPixBuf.pb[i] = HSVtoRGB(hsv);
+        }
+    }];
+    [self addTransform:lastTransform];
+}
+
+- (void) addPolarTransforms {
+#ifdef TEST
     lastTransform = [Transform areaTransform: @"Flat polar test"
                                  description: @""
                                   remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
@@ -577,48 +595,493 @@ mostCommonColorInHist(Hist_t *hists) {
             REMAP_COLOR(tX, tY, Remap_Yellow);
     }];
     [self addTransform:lastTransform];
+#endif
+    
+   lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double newa = a + DEGRAD((float)instance.value);
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
+        long sx = centerX + r*cos(newa);
+        long sy = centerY + r*sin(newa);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = -180;
+    lastTransform.value = 45;
+    lastTransform.high = 180;    // was 15
+    lastTransform.paramName = @"Angle";
+    lastTransform.hasParameters = YES;
+    [self addTransform:lastTransform];
 
-    lastTransform = [Transform depthVis: @"HSV test"
-                            description: @""
-                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
-                                           TransformInstance *instance) {
-        for (int i=0; i<srcPixBuf.size.width*srcPixBuf.size.height; i++) {
-            Pixel p = srcPixBuf.pb[i];
-            HSVPixel hsv = RGBtoHSV(p);
-//            Distance z = depthBuf.db[i];
-            dstPixBuf.pb[i] = HSVtoRGB(hsv);
+    lastTransform = [Transform areaTransform: @"Twist"        // old twist right
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        double newa = a + ((float)instance.value/50.0)*r*(M_PI/180.0);
+//        double newa = a + DEGRAD((float)instance.value/100.0)((float)instance.value/100.0)*r*(M_PI/180.0);
+        long centerX = remapBuf.size.width/2;
+        long centerY = remapBuf.size.height/2;
+        long sx = centerX + r*cos(newa);
+        long sy = centerY + r*sin(newa);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = -360;
+    lastTransform.value = 50;
+    lastTransform.high = 360;    // was 15
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle";
+    [self addTransform:lastTransform];
+    
+#ifdef BROKEN
+    // Now this one:  $1[x + (r*cos(a))/F, y + (r-sin(a)*sin(a))/F]
+    // (with F=10000)  is cool!  See attached.
+    
+    lastTransform = [Transform areaTransform: @"Daisy"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float F = 10000.0;
+        long sx = tX + (r*cos(a))/F;
+        long sy = tY + (r-sin(a)*sin(a))/F;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 10;
+    lastTransform.high = 90;    // was 15
+    lastTransform.paramName = @"Angle";
+    lastTransform.hasParameters = NO;
+    [self addTransform:lastTransform];
+#endif
+
+    lastTransform = [Transform areaTransform: @"Fish eye"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a,
+                                               TransformInstance *instance, int tX, int tY) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        double R = hypot(W, H);
+        float zoomFactor = instance.value/10.0; // XXXX this is broken, I think
+        double r1 = r*r/(R/zoomFactor);
+        int x = (int)W/2 + (int)(r1*cos(a));
+        int y = (int)H/2 + (int)(r1*sin(a));
+        REMAP_TO(tX, tY, x, y);
+    }];
+    lastTransform.low = 10; // XXXXXX these are bogus
+    lastTransform.value = 20;
+    lastTransform.high = 30;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Zoom in?";  // broken: zoom not so hot
+    [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Cone projection"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        float maxR = MIN(centerX, centerY);
+        double r1 = sqrt(r*maxR);
+        long sx = centerX + (int)(r1*cos(a));
+        long sy = centerY + (int)(r1*sin(a));
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
+                                 description: @""
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        float maxR = MIN(W-1, H-1)/2.0;
+        float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
+        float halfTheta = theta/2.0;
+        
+        // the incoming circle of pixels is divided into sectors. The original
+        // data is in the top half of the half sector at theta >= 0.  That live sector
+        // is mirrored on the half sector below theta = 0. Through the wonders of
+        // modular arithmetic, the original pixels are mapped, mirrored or not
+        // mirrored, to all the other pixels.
+        
+        // we fix out the remap ())or color) for each pixel
+        for (int yi=0; yi<H; yi++) {
+            // for computation, it is easier to thing of the top of the image
+            // as y > 0.
+            int y = ((int)H - yi) - 1;
+            for (int x=0; x<W; x++) {
+                float xc = x - centerX;
+                // we use standard cartesian angles, with y==0 on the bottom
+                float yc = y - centerY;
+                float r = hypot(xc, yc) / 2.0;
+                if (r > maxR || r == 0) {
+                    REMAP_COLOR(x, y, Remap_White);
+                    continue;
+                }
+#define RADEG(a)    ((a)* 180.0 / M_PI)     // for debugging
+                float a = atan2f(yc, xc);
+                a = fmod(a + 2.0*M_PI, 2*M_PI);     // 0 <= a <= 2*M_PI
+                //assert(a >= 0.0 && a < 2*M_PI);
+                float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
+                assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
+                float sourceTheta = fabs(sourceSectorTheta) - M_PI;
+//                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
+                int scx = r * cos(sourceTheta);
+                int scy = r * sin(sourceTheta);
+                long xs = centerX + scx;
+                long ys = centerY + scy;
+                UNSAFE_REMAP_TO(x, yi, xs, ys);
+            }
+        }
+        UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
+    }];
+    lastTransform.low = 1;
+    lastTransform.value = 5;
+    lastTransform.high = 12;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Mirror count";
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Skrunch"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        long sx = centerX + (r-(cos(a)/300.0)*sin(a));
+        long sy = centerY + r*sin(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    [self addTransform:lastTransform];
+
+    lastTransform = [Transform areaTransform: @"Andrew"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
+        int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_TO(tX, tY, centerX + r*cos(a), centerX + r*sin(a));
+    }];
+    [self addTransform:lastTransform];
+
+#ifdef BROKEN
+    lastTransform = [Transform areaTransform: @"Paul"
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        double x = r*cos(a);
+        double y = r*sin(a);
+        long sx = centerX + r*sin((y*x)/4.0+a);
+        long sy = centerY + r*cos(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+//    lastTransform.broken = YES;
+    [self addTransform:lastTransform];
+#endif
+    
+    lastTransform = [Transform areaTransform: @"Can"    // WTF?
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+        //
+        // or
+        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
+
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        float p = instance.value/10.0;
+        long sx = centerX + a*p;
+        long sy = centerY + r*p;
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 8;
+    lastTransform.high = 16;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle mult.";
+    [self addTransform:lastTransform];
+    
+#ifdef DEFINITELY_NOT
+    lastTransform = [Transform areaTransform: @"Can 2"    // WTF?
+                                 description: @""
+                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
+        // I am not sure this matches the original, or that the original didn't
+        // have a bug:
+        //    return frame[CENTER_Y+(short)(r*cos(a))]
+        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
+        //
+        // or
+        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
+
+        float p = instance.value/10.0;
+        float W = remapBuf.size.width;
+        float H = remapBuf.size.height;
+        long centerX = W/2;
+        long centerY = H/2;
+        long sx = centerX + ((r - sin(a))/300.0)*sin(a);
+        long sy = centerY + cos(a);
+        if (REMAPBUF_IN_RANGE(sx, sy))
+            UNSAFE_REMAP_TO(tX, tY, sx, sy);
+        else
+            REMAP_COLOR(tX, tY, Remap_White);
+    }];
+    lastTransform.low = 4;
+    lastTransform.value = 8;
+    lastTransform.high = 16;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Angle mult.";
+    [self addTransform:lastTransform];
+#endif
+    
+#ifdef NOTDEF
+    lastTransform = [Transform areaTransform: @"Null test"
+                                  description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = srcFrame.pixBuf.w;
+        long H = srcFrame.pixBuf.h;
+//        long N = W * H;
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                channel r = srcFrame.pixBuf.pa[y][x].r;
+                channel g = srcFrame.pixBuf.pa[y][x].g;
+                channel b = srcFrame.pixBuf.pa[y][x].b;
+                dest.pa[y][x].r = r;
+                dest.pa[y][x].g = g;
+                dest.pa[y][x].b = b;
+                dest.pa[y][x].a = Z;
+            }
         }
     }];
     [self addTransform:lastTransform];
 #endif
 
-    
-    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"trival conv. 1x1"
-                                description: @""
+}
+
+- (void) addConvolutions {
+    lastTransform = [Transform areaTransform: @"Sobel"
+                                 description: @"Edge detection"
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float kernel[] = {
-            1,
-        };
-        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+        for (int i=0; i<srcPixBuf.size.height*srcPixBuf.size.width; i++) {
+            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+        for (int y=0; y<srcPixBuf.size.height; y++) {
+            for (int x=0; x<srcPixBuf.size.width; x++) {
+                channel d = chBuf1.ca[y][x];
+                dstPixBuf.pa[y][x] = SETRGB(d,d,d);
+            }
+        }
     }];
     [self addTransform:lastTransform];
     
-    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
-    lastTransform = [Transform areaTransform: @"3x3 identity conv"
-                                description: @""
+    lastTransform = [Transform areaTransform: @"Neg. Sobel"
+                                 description: @"Edge detection"
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float kernel[] = {
-            0, 0, 0,
-            0, 1, 0,
-            0, 0, 0,
-        };
-        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+        for (int i=0; i<srcPixBuf.size.height*srcPixBuf.size.width; i++) {
+            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
+        }
+        // gerard's sobol, which is right
+        sobel(chBuf0, chBuf1);
+        for (int y=0; y<srcPixBuf.size.height; y++) {
+            for (int x=0; x<srcPixBuf.size.width; x++) {
+                channel d = Z - chBuf1.ca[y][x];
+                dstPixBuf.pa[y][x] = SETRGB(d,d,d);
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    // channel-based
+    lastTransform = [Transform areaTransform: @"Color\nSobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long N = srcPixBuf.size.width * srcPixBuf.size.height;
+        for (int i=0; i<N; i++) { // do the red channel
+            chBuf0.cb[i] = srcPixBuf.pb[i].r;
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) {
+            dstPixBuf.pb[i] = SETRGB(chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
+            chBuf0.cb[i] = srcPixBuf.pb[i].g;     // ... and get green
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dstPixBuf.pb[i].g = chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = srcPixBuf.pb[i].b;     // ... and get blue
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dstPixBuf.pb[i].b = chBuf1.cb[i];     // store blue
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+    // channel-based
+    lastTransform = [Transform areaTransform: @"Neg. Color Sobel"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long N = srcPixBuf.size.width * srcPixBuf.size.height;
+        for (int i=0; i<N; i++) { // do the red channel
+            chBuf0.cb[i] = srcPixBuf.pb[i].r;
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) {
+            dstPixBuf.pb[i] = SETRGB(Z - chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
+            chBuf0.cb[i] = srcPixBuf.pb[i].g;     // ... and get green
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dstPixBuf.pb[i].g = Z - chBuf1.cb[i];     // store green...
+            chBuf0.cb[i] = srcPixBuf.pb[i].b;     // ... and get blue
+        }
+        sobel(chBuf0, chBuf1);
+        for (int i=0; i<N; i++) { // do the red channel
+            dstPixBuf.pb[i].b = Z - chBuf1.cb[i];     // store blue
+        }
+    }];
+    [self addTransform:lastTransform];
+    
+#ifdef SLOW
+    lastTransform = [Transform areaTransform: @"conv. sobel filter "
+                                description: @"Edge detection"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long N = srcPixBuf.size.width * srcPixBuf.size.height;
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
+        }
+        const float Gx[] = {-1, 0, 1,
+                            -2, 0, 2,
+                            -1, 0, 1};
+        convolution(chBuf0, chBuf1, Gx, 3, NO);
+     
+        const float Gy[] = { 1, 2, 1,
+                             0, 0, 0,
+                            -1,-2,-1};
+        convolution(chBuf1, chBuf0, Gy, 3, NO);
+        
+        for (int i=0; i<N; i++) {
+            int c = chBuf0.cb[i];
+            dstPixBuf.pb[i] = SETRGB(c,c,c);
+        }
+    }];
+    [self addTransform:lastTransform];
+#endif
+
+    lastTransform = [Transform areaTransform: @"Focus"
+                                  description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        long W = srcPixBuf.size.width;
+        long H = srcPixBuf.size.height;
+        long N = W * H;
+        for (int i=0; i<N; i++) {           // red
+            chBuf0.cb[i] = srcPixBuf.pb[i].r;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstPixBuf.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
+            }
+        }
+        for (int i=0; i<N; i++) {           // green
+            chBuf0.cb[i] = srcPixBuf.pb[i].g;
+        }
+        focus(chBuf0, chBuf1);
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstPixBuf.pa[y][x].g = chBuf1.ca[y][x];
+            }
+        }
+        for (int i=0; i<N; i++) {
+            chBuf0.cb[i] = srcPixBuf.pb[i].b;
+        }
+        focus(chBuf0, chBuf1);              // blue
+        for (int y=0; y<H; y++) {
+            for (int x=0; x<W; x++) {
+                dstPixBuf.pa[y][x].b = chBuf1.ca[y][x];
+            }
+        }
     }];
     [self addTransform:lastTransform];
 
+    // not very blurry
+    // XX this should be a general kernel convolution
+    lastTransform = [Transform areaTransform: @"Blur"
+                                  description: @""
+                                areaFunction: ^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        for (int y=1; y<srcPixBuf.size.height-1; y++) {
+            for (int x=1; x<srcPixBuf.size.width-1; x++) {
+                Pixel p = {0,0,0,Z};
+                p.r = (srcPixBuf.pa[y][x].r +
+                       srcPixBuf.pa[y][x+1].r +
+                       srcPixBuf.pa[y][x-1].r +
+                       srcPixBuf.pa[y-1][x].r +
+                       srcPixBuf.pa[y+1][x].r)/5;
+                p.g = (srcPixBuf.pa[y][x].g +
+                       srcPixBuf.pa[y][x+1].g +
+                       srcPixBuf.pa[y][x-1].g +
+                       srcPixBuf.pa[y-1][x].g +
+                       srcPixBuf.pa[y+1][x].g)/5;
+                p.b = (srcPixBuf.pa[y][x].b +
+                       srcPixBuf.pa[y][x+1].b +
+                       srcPixBuf.pa[y][x-1].b +
+                       srcPixBuf.pa[y-1][x].b +
+                       srcPixBuf.pa[y+1][x].b)/5;
+                dstPixBuf.pa[y][x] = p;
+            }
+        }
+    }];
+    [self addTransform:lastTransform];
+    
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
     lastTransform = [Transform areaTransform: @"3x3 sharpen"
                                 description: @""
@@ -779,6 +1242,37 @@ mostCommonColorInHist(Hist_t *hists) {
     [self addTransform:lastTransform];
 #endif
     
+    lastTransform = [Transform areaTransform: @"Tin Type"
+                                 description: @"Edge detection"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        Pixel p = {0,0,0,Z};
+        size_t h = srcPixBuf.size.height;
+        size_t w = srcPixBuf.size.width;
+
+        for (int y=0; y<h; y++) {
+            int x;
+            for (x=0; x<w-2; x++) {
+                Pixel pin;
+                int r, g, b;
+                long xin = (x+2) >= w ? w - 1 : x+2;
+                long yin = (y+2) >= h ? h - 1 : y+2;
+                pin = srcPixBuf.pa[yin][xin];
+                r = srcPixBuf.pa[y][x].r + Z/2 - pin.r;
+                g = srcPixBuf.pa[y][x].g + Z/2 - pin.g;
+                b = srcPixBuf.pa[y][x].b + Z/2 - pin.b;
+                p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
+                dstPixBuf.pa[y][x] = p;
+            }
+            dstPixBuf.pa[y][x-3] = Grey;
+            dstPixBuf.pa[y][x-2] = Grey;
+            dstPixBuf.pa[y][x-1] = Grey;
+            dstPixBuf.pa[y][x  ] = Grey;
+            dstPixBuf.pa[y][x+1] = Grey;
+        }
+    }];
+    [self addTransform:lastTransform];
+
     // https://en.wikipedia.org/wiki/Kernel_(image_processing)
     lastTransform = [Transform areaTransform: @"Box blur"   // needs norming
                                 description: @""
@@ -827,57 +1321,52 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 #endif
-    
-#ifdef SLOW
-    lastTransform = [Transform areaTransform: @"conv. sobel filter "
-                                description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long N = srcPixBuf.size.width * srcPixBuf.size.height;
-        for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
-        }
-        const float Gx[] = {-1, 0, 1,
-                            -2, 0, 2,
-                            -1, 0, 1};
-        convolution(chBuf0, chBuf1, Gx, 3, NO);
-     
-        const float Gy[] = { 1, 2, 1,
-                             0, 0, 0,
-                            -1,-2,-1};
-        convolution(chBuf1, chBuf0, Gy, 3, NO);
-        
-        for (int i=0; i<N; i++) {
-            int c = chBuf0.cb[i];
-            dstPixBuf.pb[i] = SETRGB(c,c,c);
-        }
-    }];
-    [self addTransform:lastTransform];
-#endif
 
-#ifdef NOTDEF
-    lastTransform = [Transform areaTransform: @"Null test"
+    lastTransform = [Transform areaTransform: @"Cylinder"
                                   description: @""
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = srcFrame.pixBuf.w;
-        long H = srcFrame.pixBuf.h;
-//        long N = W * H;
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                channel r = srcFrame.pixBuf.pa[y][x].r;
-                channel g = srcFrame.pixBuf.pa[y][x].g;
-                channel b = srcFrame.pixBuf.pa[y][x].b;
-                dest.pa[y][x].r = r;
-                dest.pa[y][x].g = g;
-                dest.pa[y][x].b = b;
-                dest.pa[y][x].a = Z;
+                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
+        long centerX = remapBuf.size.width/2;
+        for (int y=0; y<remapBuf.size.height; y++) {
+            for (int x=0; x<=centerX; x++) {
+                int fromX = centerX*sin((M_PI/2.0)*x/centerX);
+                assert(fromX >= 0 && fromX < remapBuf.size.width);
+                REMAP_TO(x,y, fromX, y);
+                REMAP_TO(remapBuf.size.width-1-x,y, remapBuf.size.width-1-fromX, y);
             }
         }
     }];
     [self addTransform:lastTransform];
+
+#ifdef TEST
+    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
+    lastTransform = [Transform areaTransform: @"trival conv. 1x1"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            1,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
+    
+    // https://en.wikipedia.org/wiki/Kernel_(image_processing)
+    lastTransform = [Transform areaTransform: @"3x3 identity conv"
+                                description: @""
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            0, 0, 0,
+            0, 1, 0,
+            0, 0, 0,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
 #endif
+
 }
+
 
 // For Tom's logo algorithm
 
@@ -901,288 +1390,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     return 0;
 }
 
-- (void) addPolarTransforms {
-   lastTransform = [Transform areaTransform: @"Rotate"        // old twist right
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        double newa = a + DEGRAD((float)instance.value);
-        long centerX = remapBuf.size.width/2;
-        long centerY = remapBuf.size.height/2;
-        long sx = centerX + r*cos(newa);
-        long sy = centerY + r*sin(newa);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = -180;
-    lastTransform.value = 45;
-    lastTransform.high = 180;    // was 15
-    lastTransform.paramName = @"Angle";
-    lastTransform.hasParameters = YES;
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Twist"        // old twist right
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        double newa = a + ((float)instance.value/50.0)*r*(M_PI/180.0);
-//        double newa = a + DEGRAD((float)instance.value/100.0)((float)instance.value/100.0)*r*(M_PI/180.0);
-        long centerX = remapBuf.size.width/2;
-        long centerY = remapBuf.size.height/2;
-        long sx = centerX + r*cos(newa);
-        long sy = centerY + r*sin(newa);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = -360;
-    lastTransform.value = 50;
-    lastTransform.high = 360;    // was 15
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Angle";
-    [self addTransform:lastTransform];
-    
-#ifdef BROKEN
-    // Now this one:  $1[x + (r*cos(a))/F, y + (r-sin(a)*sin(a))/F]
-    // (with F=10000)  is cool!  See attached.
-    
-    lastTransform = [Transform areaTransform: @"Daisy"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        float F = 10000.0;
-        long sx = tX + (r*cos(a))/F;
-        long sy = tY + (r-sin(a)*sin(a))/F;
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = 1;
-    lastTransform.value = 10;
-    lastTransform.high = 90;    // was 15
-    lastTransform.paramName = @"Angle";
-    lastTransform.hasParameters = NO;
-    [self addTransform:lastTransform];
-#endif
-
-    lastTransform = [Transform areaTransform: @"Fish eye"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a,
-                                               TransformInstance *instance, int tX, int tY) {
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        double R = hypot(W, H);
-        float zoomFactor = instance.value/10.0; // XXXX this is broken, I think
-        double r1 = r*r/(R/zoomFactor);
-        int x = (int)W/2 + (int)(r1*cos(a));
-        int y = (int)H/2 + (int)(r1*sin(a));
-        REMAP_TO(tX, tY, x, y);
-    }];
-    lastTransform.low = 10; // XXXXXX these are bogus
-    lastTransform.value = 20;
-    lastTransform.high = 30;
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Zoom in?";  // broken: zoom not so hot
-    [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Cone projection"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        float maxR = MIN(centerX, centerY);
-        double r1 = sqrt(r*maxR);
-        long sx = centerX + (int)(r1*cos(a));
-        long sy = centerY + (int)(r1*sin(a));
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: [self hyphenate:@"Kaleido--scope"]
-                                 description: @""
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        float maxR = MIN(W-1, H-1)/2.0;
-        float theta = 2.0*M_PI/(float)instance.value; // angle of one sector
-        float halfTheta = theta/2.0;
-        
-        // the incoming circle of pixels is divided into sectors. The original
-        // data is in the top half of the half sector at theta >= 0.  That live sector
-        // is mirrored on the half sector below theta = 0. Through the wonders of
-        // modular arithmetic, the original pixels are mapped, mirrored or not
-        // mirrored, to all the other pixels.
-        
-        // we fix out the remap ())or color) for each pixel
-        for (int yi=0; yi<H; yi++) {
-            // for computation, it is easier to thing of the top of the image
-            // as y > 0.
-            int y = ((int)H - yi) - 1;
-            for (int x=0; x<W; x++) {
-                float xc = x - centerX;
-                // we use standard cartesian angles, with y==0 on the bottom
-                float yc = y - centerY;
-                float r = hypot(xc, yc) / 2.0;
-                if (r > maxR || r == 0) {
-                    REMAP_COLOR(x, y, Remap_White);
-                    continue;
-                }
-#define RADEG(a)    ((a)* 180.0 / M_PI)     // for debugging
-                float a = atan2f(yc, xc);
-                a = fmod(a + 2.0*M_PI, 2*M_PI);     // 0 <= a <= 2*M_PI
-                //assert(a >= 0.0 && a < 2*M_PI);
-                float sourceSectorTheta = fmod((a + halfTheta), theta) - halfTheta;
-                assert(sourceSectorTheta <= halfTheta && sourceSectorTheta >= -halfTheta);
-                float sourceTheta = fabs(sourceSectorTheta) - M_PI;
-//                assert(sourceTheta >= 0.0 && sourceTheta <= halfTheta);
-                int scx = r * cos(sourceTheta);
-                int scy = r * sin(sourceTheta);
-                long xs = centerX + scx;
-                long ys = centerY + scy;
-                UNSAFE_REMAP_TO(x, yi, xs, ys);
-            }
-        }
-        UNSAFE_REMAP_TO(centerX, centerY, centerX, centerY);    // fix the center
-    }];
-    lastTransform.low = 1;
-    lastTransform.value = 5;
-    lastTransform.high = 12;
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Mirror count";
-    [self addTransform:lastTransform];
-
-
-    lastTransform = [Transform areaTransform: @"Skrunch"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        // I am not sure this matches the original, or that the original didn't
-        // have a bug:
-        //    return frame[CENTER_Y+(short)(r*cos(a))]
-        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        long sx = centerX + (r-(cos(a)/300.0)*sin(a));
-        long sy = centerY + r*sin(a);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Andrew"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        int sx = centerX + 0.6*((r - sin(a)*100 + 50) * cos(a));
-        int sy = centerY + 0.6*r*sin(a); // - (CENTER_Y/4);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_TO(tX, tY, centerX + r*cos(a), centerX + r*sin(a));
-    }];
-    [self addTransform:lastTransform];
-
-#ifdef BROKEN
-    lastTransform = [Transform areaTransform: @"Paul"
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        double x = r*cos(a);
-        double y = r*sin(a);
-        long sx = centerX + r*sin((y*x)/4.0+a);
-        long sy = centerY + r*cos(a);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-//    lastTransform.broken = YES;
-    [self addTransform:lastTransform];
-#endif
-    
-    lastTransform = [Transform areaTransform: @"Can"    // WTF?
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        // I am not sure this matches the original, or that the original didn't
-        // have a bug:
-        //    return frame[CENTER_Y+(short)(r*cos(a))]
-        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-        //
-        // or
-        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
-
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        float p = instance.value/10.0;
-        long sx = centerX + a*p;
-        long sy = centerY + r*p;
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 8;
-    lastTransform.high = 16;
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Angle mult.";
-    [self addTransform:lastTransform];
-    
-#ifdef DEFINITELY_NOT
-    lastTransform = [Transform areaTransform: @"Can 2"    // WTF?
-                                 description: @""
-                                  remapPolar:^(RemapBuf *remapBuf, float r, float a, TransformInstance *instance, int tX, int tY) {
-        // I am not sure this matches the original, or that the original didn't
-        // have a bug:
-        //    return frame[CENTER_Y+(short)(r*cos(a))]
-        //            [CENTER_X+(short)((r-(sin(a))/300)*sin(a))];
-        //
-        // or
-        //          return frame[CENTER_Y+(short)(r*5/2)][CENTER_X+(short)(a*5/2)];
-
-        float p = instance.value/10.0;
-        float W = remapBuf.size.width;
-        float H = remapBuf.size.height;
-        long centerX = W/2;
-        long centerY = H/2;
-        long sx = centerX + ((r - sin(a))/300.0)*sin(a);
-        long sy = centerY + cos(a);
-        if (REMAPBUF_IN_RANGE(sx, sy))
-            UNSAFE_REMAP_TO(tX, tY, sx, sy);
-        else
-            REMAP_COLOR(tX, tY, Remap_White);
-    }];
-    lastTransform.low = 4;
-    lastTransform.value = 8;
-    lastTransform.high = 16;
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Angle mult.";
-    [self addTransform:lastTransform];
-#endif
-}
 
 - (void) addAreaTransforms {
-
     lastTransform = [Transform areaTransform: @"Floyd Steinberg"
                                  description: @""
                                 areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
@@ -1220,6 +1429,50 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #endif
     }];
     [self addTransform:lastTransform];
+    
+    lastTransform = [Transform areaTransform: @"Old AT&T logo"
+                                 description: @"Tom Duff's logo transform"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        size_t h = srcPixBuf.size.height;
+        size_t w = srcPixBuf.size.width;
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = LUM(srcPixBuf.pa[y][x]);
+                dstPixBuf.pa[y][x] = SETRGB(c,c,c);
+            }
+        }
+        
+        int hgt = instance.value;
+        assert(hgt > 0);
+        int c;
+        int y0, y1;
+        
+        for (int y=0; y<h; y+= hgt) {
+            if (y+hgt>h)
+                hgt = (int)h-(int)y;
+            for (int x=0; x < w; x++) {
+                c=0;
+                for(y0=0; y0<hgt; y0++)
+                    c += dstPixBuf.pa[y+y0][x].r;
+                y0 = y+(hgt-1)/2;
+                y1 = y+(hgt-1-(hgt-1)/2);
+                for (; y0 >= y; --y0, ++y1)
+                    c = stripe(dstPixBuf.pa, x, y0, y1, c);
+            }
+        }
+        
+        for (int y=0; y<h; y++) {
+            for (int x=0; x<w; x++) {
+                channel c = dstPixBuf.pa[y][x].r;
+                dstPixBuf.pa[y][x] = SETRGB(c, c, c);
+            }
+        }
+    }];
+    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Band thickness";
+    [self addTransform:lastTransform];
 }
 
 #define RGB_SPACE   ((float)((1<<24) - 1))
@@ -1229,127 +1482,6 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     // we have depthVis and depthTrans types.  DepthVis generates a PixMap based
     // on the supplied depth data, which is not changed.
     // depthTrans does what depthVis does, plus generates a (possibly-modified) depthBuf.
-    
-#define MM_PER_IN   25.4
-#define CHES_EYESEP_MM  62
-#define EYESEP_PIX ((int)(CHES_EYESEP_MM*dpi/MM_PER_IN))
-#define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
-//#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
-//#define FARAWAY separation(0)
-#define Z_TO_SEP_X(z)   round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z))
-
-// Z ranges from 0.0 to 1.0, for farthest to nearest distance.
-    
-    // SIRDS computation taken from
-    // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
-    //
-    // Displaying 3D Images: Algorithms for Single Image Random Dot Stereograms
-    //  Thimbleby, Inglis, and Witten.
-    
-    lastTransform = [Transform depthVis: @"SIRDS"
-                            description: @"Random dot stereogram"
-                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
-                                           TransformInstance *instance) {
-        int W = depthBuf.size.width;
-        int H = depthBuf.size.height;
-        
-        float mu = (float)instance.value/100.0;
-        float depthRange = depthBuf.maxDepth - depthBuf.minDepth;
-        assert(depthRange);
-        BOOL darkPixel[W];
-        int same[W];
-        
-        for (int y=0; y<H; y++) {    // convert scan lines independently
-            int stereoSepX;
-            int left, right;    // x values for left and right eyes
-            
-            for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
-                same[x] = x;
-            }
-            
-            for (int x=0; x < W; x++ ) {
-                Distance d = depthBuf.da[y][x];
-                if (d == 0) {   // bad depth
-//                    NSLog(@"bad depth at %d,%d  of %d", x, y, srcFrame.depthBuf.badDepths);
-                    d = depthBuf.maxDepth;
-                }
-                assert(d);
-                float z = 1.0 - (d - depthBuf.minDepth)/depthRange;
-                // z = 0 is max depth, 1.0 is vision plane.
-                assert(z >= 0 && z <= 1.0);
-                stereoSepX = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
-                if (W > 100) {
-                    NSLog(@"mu, z, EYESEP_PIX: %.3f %.3f  %d", mu, z, EYESEP_PIX);
-                    NSLog(@"   sep X = %d", stereoSepX);
-                    NSLog(@"sepx range: %.2f,  %.2f,  %.f2", Z_TO_SEP_X(0.0), Z_TO_SEP_X(z), Z_TO_SEP_X(1.0));
-                }
-//                stereoSepX = Z_TO_SEP_X(z);
-                //stereoSep = separation(zd);
-                assert(stereoSepX >= 0);
-                left = x - stereoSepX/2;
-                right = left + stereoSepX;   // pixels at left and right must be the same
-                if (left >= 0 && right < W) {
-                    int visible;    // first, perform hidden surface removal
-                    int t = 1;      // We will check the points (x-t,y) and (x+t,y)
-                    float zt;       //  Z-coord of ray at these two points
-                    do {
-                        zt = ZD(depthBuf.da[y][x]) + 2*(2 - mu*ZD(depthBuf.da[y][x]))*t/(mu*EYESEP_PIX);
-                        BOOL inRange = (x-t >= 0) && (x+t < W);
-                        visible = inRange && ZD(depthBuf.da[y][x-t]) < zt &&
-                            ZD(depthBuf.da[y][x+t]) < zt;  // false if obscured
-                        t++;
-                    } while (visible && zt < 1);    // end of hidden surface removal
-                    if (visible) {  // record that pixels at l and r are the same
-                        assert(left >= 0 && left < W);
-                        int l = same[left];
-                        assert(l >= 0 && l < W);
-                        while (l != left && l != right) {
-                            if (l < right) {    // first, jiggle the pointers...
-                                left = l;       // until either same[left] == left
-                                assert(left >= 0 && left < depthBuf.size.width);
-                                l = same[left]; // .. or same[left == right
-                                assert(l >= 0 && l < depthBuf.size.width);
-                            } else {
-                                assert(left >= 0 && left < W);
-                                same[left] = right;
-                                left = right;
-                                l = same[left];
-                                assert(l >= 0 && l < W);
-                                right = l;
-                            }
-                        }
-                        same[left] = right; // actually recorded here
-                    }
-                }
-            }
-            for (long x=W-1; x>=0; x--)    { // set the pixels in the scan line
-                if (same[x] == x)
-                    darkPixel[x] = random()&1;  // free choice, do it randomly
-                else
-                    darkPixel[x] = darkPixel[same[x]];  // constrained choice, obey constraint
-                dstPixBuf.pa[y][x] = darkPixel[x] ? Black : White;
-            }
-        }
-        
-#ifdef notdef
-#define NW      10
-#define BOTTOM_Y   (5)
-        int lx = W/2 - FARAWAY/2 - NW/2;
-        int rx = W/2 + FARAWAY/2 - NW/2;
-        for (int dy=0; dy<6; dy++) {
-            for (int dx=0; dx<NW; dx++) {
-                dstPixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
-                dstPixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
-            }
-        }
-#endif
-    }];
-    lastTransform.low = 0;
-    lastTransform.high = 100;
-    lastTransform.value = 100/3;    // recommended value, non-crosseyed
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Depth of field";
-// XXXXXX debug    [self addTransform:lastTransform];
     
     lastTransform = [Transform depthVis: @"Fog"
                             description: @""
@@ -1511,6 +1643,7 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
 #define DIST(x,y)  depthBuf.da[y][x]
 #endif
     
+#ifdef BROKEN   // sometimes mindepth == 0
     lastTransform = [Transform depthVis: @"Mono log dist"
                             description: @""
                                depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
@@ -1540,7 +1673,8 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     }];
     lastTransform.broken = NO;
     [self addTransform:lastTransform];
-
+#endif
+    
     lastTransform = [Transform depthVis: @"Near depth"
                             description: @""
                                depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
@@ -1627,6 +1761,127 @@ stripe(PixelArray_t buf, int x, int p0, int p1, int c){
     lastTransform.broken = YES;
     lastTransform.paramName = @"Color scale?";
     [self addTransform:lastTransform];
+    
+#define MM_PER_IN   25.4
+#define CHES_EYESEP_MM  62
+#define EYESEP_PIX ((int)(CHES_EYESEP_MM*dpi/MM_PER_IN))
+#define ZD(d)    (depthRange - ((d) - depthBuf.minDepth)/depthRange)
+//#define separation(zd) round((1.0-mu*zd)*EYESEP/(2.0-mu*zd))
+//#define FARAWAY separation(0)
+#define Z_TO_SEP_X(z)   round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z))
+
+// Z ranges from 0.0 to 1.0, for farthest to nearest distance.
+    
+    // SIRDS computation taken from
+    // https://courses.cs.washington.edu/courses/csep557/13wi/projects/trace/extra/SIRDS-paper.pdf
+    //
+    // Displaying 3D Images: Algorithms for Single Image Random Dot Stereograms
+    //  Thimbleby, Inglis, and Witten.
+    
+    lastTransform = [Transform depthVis: @"SIRDS"
+                            description: @"Random dot stereogram"
+                               depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf, PixBuf *dstPixBuf,
+                                           TransformInstance *instance) {
+        int W = depthBuf.size.width;
+        int H = depthBuf.size.height;
+        
+        float mu = (float)instance.value/100.0;
+        float depthRange = depthBuf.maxDepth - depthBuf.minDepth;
+        assert(depthRange);
+        BOOL darkPixel[W];
+        int same[W];
+        
+        for (int y=0; y<H; y++) {    // convert scan lines independently
+            int stereoSepX;
+            int left, right;    // x values for left and right eyes
+            
+            for (int x=0; x < W; x++ ) {  // link initial pixels with themselves
+                same[x] = x;
+            }
+            
+            for (int x=0; x < W; x++ ) {
+                Distance d = depthBuf.da[y][x];
+                if (d == 0) {   // bad depth
+//                    NSLog(@"bad depth at %d,%d  of %d", x, y, srcFrame.depthBuf.badDepths);
+                    d = depthBuf.maxDepth;
+                }
+                assert(d);
+                float z = 1.0 - (d - depthBuf.minDepth)/depthRange;
+                // z = 0 is max depth, 1.0 is vision plane.
+                assert(z >= 0 && z <= 1.0);
+                stereoSepX = round((1.0-mu*z)*EYESEP_PIX/(2.0-mu*z));
+                if (W > 100) {
+                    NSLog(@"mu, z, EYESEP_PIX: %.3f %.3f  %d", mu, z, EYESEP_PIX);
+                    NSLog(@"   sep X = %d", stereoSepX);
+                    NSLog(@"sepx range: %.2f,  %.2f,  %.f2", Z_TO_SEP_X(0.0), Z_TO_SEP_X(z), Z_TO_SEP_X(1.0));
+                }
+//                stereoSepX = Z_TO_SEP_X(z);
+                //stereoSep = separation(zd);
+                assert(stereoSepX >= 0);
+                left = x - stereoSepX/2;
+                right = left + stereoSepX;   // pixels at left and right must be the same
+                if (left >= 0 && right < W) {
+                    int visible;    // first, perform hidden surface removal
+                    int t = 1;      // We will check the points (x-t,y) and (x+t,y)
+                    float zt;       //  Z-coord of ray at these two points
+                    do {
+                        zt = ZD(depthBuf.da[y][x]) + 2*(2 - mu*ZD(depthBuf.da[y][x]))*t/(mu*EYESEP_PIX);
+                        BOOL inRange = (x-t >= 0) && (x+t < W);
+                        visible = inRange && ZD(depthBuf.da[y][x-t]) < zt &&
+                            ZD(depthBuf.da[y][x+t]) < zt;  // false if obscured
+                        t++;
+                    } while (visible && zt < 1);    // end of hidden surface removal
+                    if (visible) {  // record that pixels at l and r are the same
+                        assert(left >= 0 && left < W);
+                        int l = same[left];
+                        assert(l >= 0 && l < W);
+                        while (l != left && l != right) {
+                            if (l < right) {    // first, jiggle the pointers...
+                                left = l;       // until either same[left] == left
+                                assert(left >= 0 && left < depthBuf.size.width);
+                                l = same[left]; // .. or same[left == right
+                                assert(l >= 0 && l < depthBuf.size.width);
+                            } else {
+                                assert(left >= 0 && left < W);
+                                same[left] = right;
+                                left = right;
+                                l = same[left];
+                                assert(l >= 0 && l < W);
+                                right = l;
+                            }
+                        }
+                        same[left] = right; // actually recorded here
+                    }
+                }
+            }
+            for (long x=W-1; x>=0; x--)    { // set the pixels in the scan line
+                if (same[x] == x)
+                    darkPixel[x] = random()&1;  // free choice, do it randomly
+                else
+                    darkPixel[x] = darkPixel[same[x]];  // constrained choice, obey constraint
+                dstPixBuf.pa[y][x] = darkPixel[x] ? Black : White;
+            }
+        }
+        
+#ifdef notdef
+#define NW      10
+#define BOTTOM_Y   (5)
+        int lx = W/2 - FARAWAY/2 - NW/2;
+        int rx = W/2 + FARAWAY/2 - NW/2;
+        for (int dy=0; dy<6; dy++) {
+            for (int dx=0; dx<NW; dx++) {
+                dstPixBuf.pa[BOTTOM_Y+dy][lx+dx] = Yellow;
+                dstPixBuf.pa[BOTTOM_Y+dy][rx+dx] = Yellow;
+            }
+        }
+#endif
+    }];
+    lastTransform.low = 0;
+    lastTransform.high = 100;
+    lastTransform.value = 100/3;    // recommended value, non-crosseyed
+    lastTransform.hasParameters = YES;
+    lastTransform.paramName = @"Depth of field";
+// XXXXXX debug    [self addTransform:lastTransform];
 
     // https://en.wikipedia.org/wiki/Anaglyph_3D#Stereo_conversion_(single_2D_image_to_3D)
 #define EYE_SEP 62  // mm
@@ -1898,7 +2153,6 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
 }
 
 - (void) addGeometricTransforms {
-    
     lastTransform = [Transform areaTransform: @"Mirror"
                                   description: @"Reflect the image"
                                   remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
@@ -2080,259 +2334,9 @@ channel bl[31] = {Z,Z,Z,Z,Z,25,15,10,5,0,    0,0,0,0,0,5,10,15,20,25,    5,10,15
                 REMAP_COLOR(centerX+x,y, Remap_White);
                 REMAP_COLOR(centerX-x,y, Remap_White);
              }
-//            NSLog(@" kite %d done", y);
         }
-//        NSLog(@" kite verifying");
         [remapBuf verify];
-//        NSLog(@" kite Z");
     }];
-    [self addTransform:lastTransform];
-//    NSLog(@" post kite");
-
-    lastTransform = [Transform areaTransform: @"Cylinder"
-                                  description: @""
-                                  remapImage:^(RemapBuf *remapBuf, TransformInstance *instance) {
-        long centerX = remapBuf.size.width/2;
-        for (int y=0; y<remapBuf.size.height; y++) {
-            for (int x=0; x<=centerX; x++) {
-                int fromX = centerX*sin((M_PI/2.0)*x/centerX);
-                assert(fromX >= 0 && fromX < remapBuf.size.width);
-                REMAP_TO(x,y, fromX, y);
-                REMAP_TO(remapBuf.size.width-1-x,y, remapBuf.size.width-1-fromX, y);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
-    lastTransform = [Transform areaTransform: @"Tin Type"
-                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        Pixel p = {0,0,0,Z};
-        size_t h = srcPixBuf.size.height;
-        size_t w = srcPixBuf.size.width;
-
-        for (int y=0; y<h; y++) {
-            int x;
-            for (x=0; x<w-2; x++) {
-                Pixel pin;
-                int r, g, b;
-                long xin = (x+2) >= w ? w - 1 : x+2;
-                long yin = (y+2) >= h ? h - 1 : y+2;
-                pin = srcPixBuf.pa[yin][xin];
-                r = srcPixBuf.pa[y][x].r + Z/2 - pin.r;
-                g = srcPixBuf.pa[y][x].g + Z/2 - pin.g;
-                b = srcPixBuf.pa[y][x].b + Z/2 - pin.b;
-                p.r = CLIP(r);  p.g = CLIP(g);  p.b = CLIP(b);
-                dstPixBuf.pa[y][x] = p;
-            }
-            dstPixBuf.pa[y][x-3] = Grey;
-            dstPixBuf.pa[y][x-2] = Grey;
-            dstPixBuf.pa[y][x-1] = Grey;
-            dstPixBuf.pa[y][x  ] = Grey;
-            dstPixBuf.pa[y][x+1] = Grey;
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Sobel"
-                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        for (int i=0; i<srcPixBuf.size.height*srcPixBuf.size.width; i++) {
-            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
-        }
-        // gerard's sobol, which is right
-        sobel(chBuf0, chBuf1);
-        for (int y=0; y<srcPixBuf.size.height; y++) {
-            for (int x=0; x<srcPixBuf.size.width; x++) {
-                channel d = chBuf1.ca[y][x];
-                dstPixBuf.pa[y][x] = SETRGB(d,d,d);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Neg. Sobel"
-                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        for (int i=0; i<srcPixBuf.size.height*srcPixBuf.size.width; i++) {
-            chBuf0.cb[i] = LUM(srcPixBuf.pb[i]);
-        }
-        // gerard's sobol, which is right
-        sobel(chBuf0, chBuf1);
-        for (int y=0; y<srcPixBuf.size.height; y++) {
-            for (int x=0; x<srcPixBuf.size.width; x++) {
-                channel d = Z - chBuf1.ca[y][x];
-                dstPixBuf.pa[y][x] = SETRGB(d,d,d);
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    // channel-based
-    lastTransform = [Transform areaTransform: @"Color\nSobel"
-                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long N = srcPixBuf.size.width * srcPixBuf.size.height;
-        for (int i=0; i<N; i++) { // do the red channel
-            chBuf0.cb[i] = srcPixBuf.pb[i].r;
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) {
-            dstPixBuf.pb[i] = SETRGB(chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
-            chBuf0.cb[i] = srcPixBuf.pb[i].g;     // ... and get green
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) { // do the red channel
-            dstPixBuf.pb[i].g = chBuf1.cb[i];     // store green...
-            chBuf0.cb[i] = srcPixBuf.pb[i].b;     // ... and get blue
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) { // do the red channel
-            dstPixBuf.pb[i].b = chBuf1.cb[i];     // store blue
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    // channel-based
-    lastTransform = [Transform areaTransform: @"Neg. Color Sobel"
-                                 description: @"Edge detection"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long N = srcPixBuf.size.width * srcPixBuf.size.height;
-        for (int i=0; i<N; i++) { // do the red channel
-            chBuf0.cb[i] = srcPixBuf.pb[i].r;
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) {
-            dstPixBuf.pb[i] = SETRGB(Z - chBuf1.cb[i], 0, 0);    // init target, including 'a' channel
-            chBuf0.cb[i] = srcPixBuf.pb[i].g;     // ... and get green
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) { // do the red channel
-            dstPixBuf.pb[i].g = Z - chBuf1.cb[i];     // store green...
-            chBuf0.cb[i] = srcPixBuf.pb[i].b;     // ... and get blue
-        }
-        sobel(chBuf0, chBuf1);
-        for (int i=0; i<N; i++) { // do the red channel
-            dstPixBuf.pb[i].b = Z - chBuf1.cb[i];     // store blue
-        }
-    }];
-    [self addTransform:lastTransform];
-    
-    lastTransform = [Transform areaTransform: @"Focus"
-                                  description: @""
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        long W = srcPixBuf.size.width;
-        long H = srcPixBuf.size.height;
-        long N = W * H;
-        for (int i=0; i<N; i++) {           // red
-            chBuf0.cb[i] = srcPixBuf.pb[i].r;
-        }
-        focus(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstPixBuf.pa[y][x] = SETRGB(chBuf1.ca[y][x], 0, 0);    // init target, including 'a' channel
-            }
-        }
-        for (int i=0; i<N; i++) {           // green
-            chBuf0.cb[i] = srcPixBuf.pb[i].g;
-        }
-        focus(chBuf0, chBuf1);
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstPixBuf.pa[y][x].g = chBuf1.ca[y][x];
-            }
-        }
-        for (int i=0; i<N; i++) {
-            chBuf0.cb[i] = srcPixBuf.pb[i].b;
-        }
-        focus(chBuf0, chBuf1);              // blue
-        for (int y=0; y<H; y++) {
-            for (int x=0; x<W; x++) {
-                dstPixBuf.pa[y][x].b = chBuf1.ca[y][x];
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
-    // not very blurry
-    // XX this should be a general kernel convolution
-    lastTransform = [Transform areaTransform: @"Blur"
-                                  description: @""
-                                areaFunction: ^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                                ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        for (int y=1; y<srcPixBuf.size.height-1; y++) {
-            for (int x=1; x<srcPixBuf.size.width-1; x++) {
-                Pixel p = {0,0,0,Z};
-                p.r = (srcPixBuf.pa[y][x].r +
-                       srcPixBuf.pa[y][x+1].r +
-                       srcPixBuf.pa[y][x-1].r +
-                       srcPixBuf.pa[y-1][x].r +
-                       srcPixBuf.pa[y+1][x].r)/5;
-                p.g = (srcPixBuf.pa[y][x].g +
-                       srcPixBuf.pa[y][x+1].g +
-                       srcPixBuf.pa[y][x-1].g +
-                       srcPixBuf.pa[y-1][x].g +
-                       srcPixBuf.pa[y+1][x].g)/5;
-                p.b = (srcPixBuf.pa[y][x].b +
-                       srcPixBuf.pa[y][x+1].b +
-                       srcPixBuf.pa[y][x-1].b +
-                       srcPixBuf.pa[y-1][x].b +
-                       srcPixBuf.pa[y+1][x].b)/5;
-                dstPixBuf.pa[y][x] = p;
-            }
-        }
-    }];
-    [self addTransform:lastTransform];
-
-    // this destroys src
-    lastTransform = [Transform areaTransform: @"Old AT&T logo"
-                                 description: @"Tom Duff's logo transform"
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        size_t h = srcPixBuf.size.height;
-        size_t w = srcPixBuf.size.width;
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = LUM(srcPixBuf.pa[y][x]);
-                dstPixBuf.pa[y][x] = SETRGB(c,c,c);
-            }
-        }
-        
-        int hgt = instance.value;
-        assert(hgt > 0);
-        int c;
-        int y0, y1;
-        
-        for (int y=0; y<h; y+= hgt) {
-            if (y+hgt>h)
-                hgt = (int)h-(int)y;
-            for (int x=0; x < w; x++) {
-                c=0;
-                for(y0=0; y0<hgt; y0++)
-                    c += dstPixBuf.pa[y+y0][x].r;
-                y0 = y+(hgt-1)/2;
-                y1 = y+(hgt-1-(hgt-1)/2);
-                for (; y0 >= y; --y0, ++y1)
-                    c = stripe(dstPixBuf.pa, x, y0, y1, c);
-            }
-        }
-        
-        for (int y=0; y<h; y++) {
-            for (int x=0; x<w; x++) {
-                channel c = dstPixBuf.pa[y][x].r;
-                dstPixBuf.pa[y][x] = SETRGB(c, c, c);
-            }
-        }
-    }];
-    lastTransform.value = 12; lastTransform.low = 4; lastTransform.high = 50;
-    lastTransform.hasParameters = YES;
-    lastTransform.paramName = @"Band thickness";
     [self addTransform:lastTransform];
 }
 

@@ -37,7 +37,7 @@ typedef enum {
     UIImageView *targetImageView;
     long taskIndex;  // or UNASSIGNED_TASK
     BOOL enabled;   // if transform target is on-screen and needs update
-    BOOL needsDestFrame, modifiesDepthBuf;
+    BOOL needsDepthBuf, modifiesDepthBuf;
 }
 
 @property (nonatomic, strong)   NSString *taskName;
@@ -48,14 +48,12 @@ typedef enum {
 @property (assign)              long taskIndex;
 @property (strong, nonatomic)   TaskGroup *taskGroup;
 @property (assign)              BOOL enabled;
-@property (assign)              BOOL needsDestFrame, modifiesDepthBuf;
+@property (assign)              BOOL needsDepthBuf, modifiesDepthBuf;
 
 - (id)initTaskNamed:(NSString *) n
             inGroup:(TaskGroup *) tg;
 - (void) configureTaskForSize;
 - (BOOL) updateParamOfLastTransformTo:(int) newParam;
-- (int) valueForStep:(size_t) step;
-- (long) lastStep;
 - (void) enable;    // task must be stopped when calling this
 
 - (long) appendTransformToTask:(Transform *) transform;
@@ -69,7 +67,6 @@ typedef enum {
 - (NSString *) displayInfoForStep:(long) step
                         shortForm:(BOOL) shortForm
                             stats:(BOOL) stats;
-- (BOOL) needsDepth;
 
 @end
 

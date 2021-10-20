@@ -39,7 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   Transform * __nullable incomingSizeTransform;
 @property (nonatomic, strong)   NSMutableArray *tasks;
-@property (nonatomic, strong)   Frame *scaledIncomingFrame;
+@property (nonatomic, strong)   Frame *scaledIncomingFrame; // depthbuf not scaled
 
 @property (assign, atomic)      volatile BOOL groupBusy;
 @property (assign)              size_t bytesPerRow, pixelsInImage, pixelsPerRow;

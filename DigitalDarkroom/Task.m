@@ -53,7 +53,7 @@ static PixelIndex_t dPI(int x, int y) {
 @synthesize taskIndex;
 @synthesize taskStatus;
 @synthesize enabled;
-@synthesize needsDestFrame, modifiesDepthBuf;
+@synthesize needsDepthBuf, modifiesDepthBuf;
 
 - (id)initTaskNamed:(NSString *) n inGroup:(TaskGroup *)tg {
     self = [super init];
@@ -77,26 +77,12 @@ static PixelIndex_t dPI(int x, int y) {
     taskStatus = Idle;
 }
 
-#ifdef OLD
-- (void) useDepthTransform:(Transform *__nullable) transform {
-    depthTransform = transform;
-    if (!depthTransform) {
-        depthInstance = nil;
-    } else {
-        depthInstance = [[TransformInstance alloc]
-                                       initFromTransform:(Transform *)transform];
-        assert(depthInstance);
-    }
-//    NSLog(@" task '%@' using depth transform '%@'", taskName, depthTransform.name);
-}
-#endif
-
 - (long) appendTransformToTask:(Transform *) transform {
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
     [transformList addObject:transform];
     [paramList addObject:instance];
-    [taskGroup updateGroupDepthNeeds];
+    [self updateDepthNeeds];
     return transformList.count - 1;
 }
 
@@ -106,20 +92,31 @@ static PixelIndex_t dPI(int x, int y) {
                                    initFromTransform:(Transform *)transform];
     [transformList replaceObjectAtIndex:index withObject:transform];
     [paramList replaceObjectAtIndex:index withObject:instance];
-    [taskGroup updateGroupDepthNeeds];
+    [self updateDepthNeeds];
 }
 
 - (long) removeLastTransform {
     assert(transformList.count > 0);
     [transformList removeLastObject];
     [paramList removeLastObject];
-    [taskGroup updateGroupDepthNeeds];
+    [self updateDepthNeeds];
     return transformList.count;
 }
 
 - (void) removeAllTransforms {
     [transformList removeAllObjects];
     [paramList removeAllObjects];
+    [self updateDepthNeeds];
+}
+
+- (void) updateDepthNeeds {
+    BOOL needsDepth = NO;
+    for (Transform *transform in transformList)
+        if (transform.needsScaledDepth) {
+            needsDepth = YES;
+            break;
+        }
+    needsDepthBuf = needsDepth;
     [taskGroup updateGroupDepthNeeds];
 }
 
@@ -161,7 +158,7 @@ static PixelIndex_t dPI(int x, int y) {
     chBuf1 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
     assert(chBuf1);
     
-    needsDestFrame = NO;    // these notes help us prevent extra frame copies
+    needsDepthBuf = NO;    // these notes help us prevent extra frame copies
     modifiesDepthBuf = NO;
 
     // processing space in frames
@@ -175,17 +172,9 @@ static PixelIndex_t dPI(int x, int y) {
 
     for (int i=0; i<transformList.count; i++) {
         Transform *transform = [self configureTransformAtIndex:i];
-        needsDestFrame |= transform.needsDestFrame;
+        needsDepthBuf |= transform.needsScaledDepth;
         modifiesDepthBuf |= transform.modifiesDepthBuf;
     }
-}
-
-- (BOOL) needsDepth {
-    for (Transform *transform in transformList) {
-        if (transform.type == DepthVis || transform.type == DepthTrans)
-            return YES;
-    }
-    return NO;
 }
 
 - (Transform *) configureTransformAtIndex:(size_t)index {
@@ -193,16 +182,6 @@ static PixelIndex_t dPI(int x, int y) {
     TransformInstance *instance = paramList[index];
     [self configureTransform:transform andInstance:instance];
     return transform;
-}
-
-// step -1 is the depth step
-- (int) valueForStep:(size_t) step {
-    TransformInstance *instance = paramList[step];
-    return instance.value;
-}
-
-- (long) lastStep {
-    return paramList.count - 1;
 }
 
 - (BOOL) updateParamOfLastTransformTo:(int) newParam {
@@ -280,20 +259,22 @@ static PixelIndex_t dPI(int x, int y) {
 
     int dstIndex;
     Frame *scaledSrcFrame;
-    if (readOnlyIncomingFrame.pixBufNeedsUpdate) {
+    DepthBuf *scaledSrcDepthBuf = readOnlyIncomingFrame.depthBuf;
+    if (readOnlyIncomingFrame.pixBufNeedsUpdate || needsDepthBuf) {
         scaledSrcFrame = frames[0];
         [scaledSrcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
-        scaledSrcFrame.depthBuf = readOnlyIncomingFrame.depthBuf;
+        [scaledSrcFrame.depthBuf scaleFrom:readOnlyIncomingFrame.depthBuf];
+        scaledSrcDepthBuf = scaledSrcFrame.depthBuf;
         scaledSrcFrame.pixBufNeedsUpdate = NO;
         dstIndex = 1;
     } else {
         scaledSrcFrame = readOnlyIncomingFrame;
+        assert(!needsDepthBuf);
         dstIndex = 0;
     }
 
     taskStatus = Running;
     int depthIndex = -1;    // in readOnlyIncomingFrame, unless we need it
-    DepthBuf *scaledSrcDepthBuf = readOnlyIncomingFrame.depthBuf;
     NSDate *startTime = [NSDate now];
     
     for (int i=0; i<transformList.count; i++) {

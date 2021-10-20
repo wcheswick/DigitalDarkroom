@@ -70,7 +70,7 @@ typedef void (^ __nullable __unsafe_unretained
     NSString *name, *description;
     NSString *helpPath;     // URL tags, slash-separated, general to specific
     BOOL broken;
-    BOOL needsDestFrame;   // if cannot work just by changing the source pixbuf
+    BOOL needsScaledDepth;   // if cannot work just by changing the source pixbuf
     BOOL modifiesDepthBuf;
     long transformsArrayIndex;
     transform_t type;
@@ -91,7 +91,7 @@ typedef void (^ __nullable __unsafe_unretained
 @property (assign)              long transformsArrayIndex; 
 @property (assign)              PtFunc_t ipPointF;
 @property (assign)              BOOL broken;
-@property (assign)              BOOL needsDestFrame, modifiesDepthBuf;
+@property (assign)              BOOL needsScaledDepth, modifiesDepthBuf;
 //@property (assign)              pointFunction_t pointF;
 @property (assign)              areaFunction_t areaF;
 @property (assign)              depthVis_t depthVisF;
