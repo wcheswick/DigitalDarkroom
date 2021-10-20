@@ -183,15 +183,17 @@ static int dpi;
         // iPhone 12 Pro - 6.1-inch, 2532 x 1170 OLED Display, 460 ppi.
         // iPhone 12 Pro Max - 6.7-inch, 2778 x 1284 OLED Display, 458 ppi.
         
+        // see https://everyi.com/by-identifier/ipod-iphone-ipad-specs-by-model-identifier.html
+        
         int ppi;
         if ([platform isEqual:@"iPad8,7"]) // ipad pro 12.9 in 3rd gen
             ppi = 264;
         else if ([model isEqual:@"iPad5,4"]) // ipad air 2
             ppi = 264;
+        else if ([model isEqual:@"iPad7,3"]) // ipad pro 10.5 inch
+            ppi = 264;
         else if ([model hasPrefix:@"iPad8"]) // generic ipad
             ppi = 265;
-       else if ([model hasPrefix:@"iPad"]) // generic ipad
-            ppi = 266;
         else if ([platform isEqual:@"iPhone13,4"]) // iphone pro max
             ppi = 458;
         else if ([platform isEqual:@"iPhone10,6"]) // iphone X
@@ -204,6 +206,8 @@ static int dpi;
             ppi = 459;
         else if ([model hasPrefix:@"iPad"]) // generic ipad
             ppi = 240*nativeScale;
+        else if ([model hasPrefix:@"iPad"]) // generic ipad
+             ppi = 266;
         else    // generic iPhone
             ppi = 240*nativeScale;
 
