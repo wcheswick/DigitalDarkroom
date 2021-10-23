@@ -25,23 +25,45 @@
 @synthesize state;
 @synthesize layingOut;
 @synthesize rawImageSourceSize, rawDepthSourceSize;
+@synthesize activeGroups;
+@synthesize lastFrame;
 
 - (id)init {
     self = [super init];
     if (self) {
         taskGroups = [[NSMutableArray alloc] init];
-        assert(taskGroups);
+        activeGroups = [[NSMutableDictionary alloc] init];
         state = NeedsNewLayout;
         layingOut = NO;
         rawImageSourceSize = CGSizeZero;
         rawDepthSourceSize = CGSizeZero;
+        lastFrame = nil;
     }
     return self;
 }
 
-- (void) updateRawSourceSizes {
-    [cameraController currentRawSizes:&rawImageSourceSize
-                         rawDepthSize:&rawDepthSourceSize];
+- (void) updateRawSourceSizes:(CGSize) imageSize depthSize:(CGSize) depthSize {
+    rawImageSourceSize = imageSize;
+    rawDepthSourceSize = depthSize;
+}
+
+- (void) processNewFrame:(Frame *) frame {
+    lastFrame = frame;
+    for (NSString *groupName in activeGroups) {
+        TaskGroup *taskGroup = [activeGroups objectForKey:groupName];
+        if (taskGroup.groupBusy)
+            continue;
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @synchronized (frame) {
+                frame.useCount++;
+            }
+            [taskGroup newFrameForGroup:frame];
+            @synchronized (frame) {
+                frame.useCount--;
+            }
+       });
+    }
 }
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name {

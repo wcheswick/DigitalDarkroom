@@ -38,7 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 #define UnsetColor      SETRGBA(Z,Z/2,Z,Z-1)
 
 @interface Transforms : NSObject {
-    NSMutableArray *transforms;     // the depth transforms are first in the list
+    NSMutableArray<Transform *> *transforms;     // the depth transforms are first in the list
     BOOL debugTransforms;
     
     size_t bytesPerRow;
@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 //    CGSize volatile transformSize;
 }
 
-@property (nonatomic, strong)   NSMutableArray *transforms;
+@property (nonatomic, strong)   NSMutableArray<Transform *> *transforms;
 
 //@property (assign)              size_t bytesPerRow;
 //@property (nonatomic, strong)   NSArray *updatedTransformList;

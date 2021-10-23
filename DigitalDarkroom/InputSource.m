@@ -19,6 +19,7 @@
 @synthesize label;
 @synthesize cameraIndex;
 @synthesize imagePath;
+//@synthesize image;
 @synthesize thumbImageCache;
 
 - (id)init {
@@ -38,7 +39,7 @@
     thumbImageCache = nil;
 }
 
-- (void) setUpImageAt:(NSString *)path {
+- (void) loadImage:(NSString *)path {
     imagePath = path;
     label = [[path lastPathComponent] stringByDeletingPathExtension];
     UIImage *image = [UIImage imageWithContentsOfFile:imagePath];

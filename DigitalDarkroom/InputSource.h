@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface InputSource : NSObject {
     NSString *label;
     long cameraIndex;
+//    UIImage *__nullable image;      // loaded copy of the image
     NSString *__nullable imagePath; // where a file image is
     UIImage *__nullable thumbImageCache;
 }
@@ -27,9 +28,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *__nullable imagePath;
 @property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
+//@property (nonatomic, strong)   UIImage *__nullable image;
 
 - (void) makeCameraSource:(NSString *)name cameraIndex:(int) ci;
-- (void) setUpImageAt:(NSString *)path;
+- (void) loadImage:(NSString *)path;
 
 @end
 

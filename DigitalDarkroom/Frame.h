@@ -35,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (UIImage *) toUIImage;
 - (void) copyTo:(Frame *) dest;
 - (void) scaleFrom:(const Frame *)srcFrame;
+- (CGSize) imageSize;
 
 @end
 

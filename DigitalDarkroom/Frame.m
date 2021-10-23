@@ -32,7 +32,17 @@
 }
 
 - (void) readImageFromPath:(NSString *) path {
-//    UIImage *image = [UIImage imageNamed:path];
+    image = [UIImage imageNamed:path];
+    assert(image);
+}
+
+- (CGSize) imageSize {
+    if (image)
+        return image.size;
+    else if (pixBuf)
+        return pixBuf.size;
+    else
+        assert(NO); // has to be one of them
 }
 
 - (UIImage *) toUIImage {

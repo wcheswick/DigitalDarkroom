@@ -32,7 +32,7 @@
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
 @synthesize groupName;
-@synthesize groupBusy, groupEnabled, needsDepth;
+@synthesize groupBusy, groupEnabled, groupNeedsDepth;
 @synthesize targetSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
@@ -47,7 +47,7 @@
         groupBusy = NO;
         targetSize = CGSizeZero;
         groupEnabled = YES;
-        needsDepth = NO;
+        groupNeedsDepth = NO;
     }
     return self;
 }
@@ -89,25 +89,60 @@
 - (void) updateGroupDepthNeeds {
     for (Task *task in tasks) {
         if (task.needsDepthBuf) {
-            needsDepth = YES;
+            groupNeedsDepth = YES;
             return;
         }
     }
-    needsDepth = NO;
+    groupNeedsDepth = NO;
 }
             
 // we have a new frame for the group to transform.  The group tasks all use the same scaled frame,
 // so scale the input frame once.  Each member of the group must not change the scaled
-// frame, since they all share it.  The supplied newFrame must not be changed, since
-// it is shared by all the groups.
-//
-// The targetSize that we are going to scale to must already be known.
+// frame, since they all share it.  If the depth data is available, it needs scaling too.
 
-- (void) doGroupTransformsOnIncomingFrame {
+// new video frame data and perhaps depth data from the cameracontroller.
+// This is a copy of the incoming frame, and further incoming frames will be
+// ignored until this routine is done.  At this point, the depth data, if it
+// is present, has min and max values computed, but one or more depths may
+// be BAD_DEPTH.
+
+- (void) newFrameForGroup:(Frame *) frame {
     if (!groupEnabled)
         return;
-    assert(!groupBusy);
+    if (groupBusy)
+        return;
     groupBusy = YES;
+    
+    
+    if (frame.image) {
+        float scale = scaledIncomingFrame.pixBuf.size.width/frame.image.size.width;
+        scaledIncomingFrame.image = [[UIImage alloc] initWithCGImage:frame.image.CGImage
+                                                               scale:scale
+                                                         orientation:UIImageOrientationUp];
+        scaledIncomingFrame.pixBufNeedsUpdate = YES;
+    } else {
+        assert(frame.pixBuf);   // we need one of these
+        assert(NO); //stub
+#ifdef NOT_TESTED
+        CGImageRef scaledCGImage = scaledImage.CGImage;
+        CGContextRef cgContext = CGBitmapContextCreate((char *)scaledFrame.pixBuf.pb, r.size.width, r.size.height, 8,
+                                                       r.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
+        CGContextDrawImage(cgContext, r, scaledCGImage);
+        CGContextRelease(cgContext);
+#endif
+    }
+
+    if (groupNeedsDepth) {
+        if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.depthBuf.size, rawDepthSize)) {
+            scaledIncomingFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+        }
+        memcpy(scaledIncomingFrame.depthBuf.db, frame.depthBuf.db,
+               frame.depthBuf.size.width * frame.depthBuf.size.height*sizeof(Distance));
+//            [lastRawFrame.depthBuf stats];
+        scaledIncomingFrame.depthBuf.valid = YES;   // XXX used?
+    }
+
+    //  XXXXXXX depth?
     for (Task *task in tasks) {
         [task executeTaskTransformsOnIncomingFrame];
     }
@@ -141,7 +176,7 @@
 - (void) removeAllTransforms {
     for (Task *task in tasks)
         [task removeAllTransforms];
-    needsDepth = NO;
+    groupNeedsDepth = NO;
 }
 
 - (void) removeLastTransform {

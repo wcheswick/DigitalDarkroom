@@ -191,7 +191,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
 @property (nonatomic, strong)   UITextView *executeView;    // active transform list
-@property (nonatomic, strong)   NSMutableArray *layouts;    // approved list of current layouts
+@property (nonatomic, strong)   NSMutableArray<Layout *> *layouts;    // approved list of current layouts
 @property (assign)              long layoutIndex;           // index into layouts
 
 @property (nonatomic, strong)   UINavigationController *helpNavVC;
@@ -202,7 +202,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIImageView *cameraSourceThumb; // non-nil if selecting source
 @property (nonatomic, strong)   Frame *fileSourceFrame;    // what we are transforming, or nil if get an image from the camera
 @property (nonatomic, strong)   InputSource *fileSource;
-@property (nonatomic, strong)   NSMutableArray *inputSources;
+@property (nonatomic, strong)   NSMutableArray<InputSource *> *inputSources;
 @property (assign)              int cameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
@@ -338,8 +338,12 @@ MainVC *mainVC = nil;
 #endif
         
         screenTasks = [taskCtrl newTaskGroupNamed:@"Screen"];
+        [taskCtrl.activeGroups setObject:screenTasks forKey:screenTasks.groupName];
+
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
+        [taskCtrl.activeGroups setObject:thumbTasks forKey:thumbTasks.groupName];
 //        thumbTasks.groupEnabled = NO;   // debug
+        
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
 
@@ -361,12 +365,11 @@ MainVC *mainVC = nil;
         cameraController = [[CameraController alloc] init];
         cameraController.videoProcessor = self;
         cameraController.stats = self.stats;
-        
-        [cameraController.activeTaskgroups setObject:screenTasks forKey:screenTasks.groupName];
-        [cameraController.activeTaskgroups setObject:thumbTasks forKey:thumbTasks.groupName];
+        cameraController.taskCtrl = taskCtrl;
 #endif
 
         inputSources = [[NSMutableArray alloc] init];
+        currentSourceIndex = NO_SOURCE;
         cameraSourceThumb = nil;
         cameraCount = 0;
         
@@ -402,8 +405,8 @@ MainVC *mainVC = nil;
         [self addFileSource:@"rainbow.gif" label:@"Rainbow"];
         [self addFileSource:@"hsvrainbow.jpeg" label:@"HSV Rainbow"];
         
-        currentSourceIndex = [[NSUserDefaults standardUserDefaults]
-                              integerForKey: LAST_SOURCE_KEY];
+//        currentSourceIndex = [[NSUserDefaults standardUserDefaults]
+//                              integerForKey: LAST_SOURCE_KEY];
 //        NSLog(@"III loading source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
         
         if (currentSourceIndex == NO_SOURCE) {  // select default source
@@ -415,7 +418,6 @@ MainVC *mainVC = nil;
                     }
                 } else {
                     if (!IS_CAMERA(CURRENT_SOURCE)) {
-                        NSLog(@"first source is file '%@'", CURRENT_SOURCE.label);
                         break;
                     }
                 }
@@ -424,7 +426,6 @@ MainVC *mainVC = nil;
         }
         nextSourceIndex = currentSourceIndex;
         currentSourceIndex = NO_SOURCE;
-        nextSourceIndex = 0;    // XXXXXX DEBUG
     }
     return self;
 }
@@ -601,7 +602,7 @@ CGFloat topOfNonDepthArray = 0;
         NSLog(@"**** Image not found: %@", fn);
         return;
     }
-    [source setUpImageAt:imagePath];
+    [source loadImage:imagePath];
     [inputSources addObject:source];
 }
 
@@ -995,7 +996,6 @@ CGFloat topOfNonDepthArray = 0;
                 
                 if (!isiPhone)
                     self.title = source.label;
-                
                 if (IS_CAMERA(source)) {
                     [cameraController updateOrientationTo:deviceOrientation];
                     [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
@@ -1007,12 +1007,12 @@ CGFloat topOfNonDepthArray = 0;
                 }
                 [self saveSourceIndex];
             }
-            
             [self doLayout];
             taskCtrl.state = ApplyLayout;
             // FALLTHROUGH
         case ApplyLayout:
             [self applyScreenLayout: layoutIndex];     // top one is best
+            [self refreshScreen];
     }
     taskCtrl.state = LayoutOK;
 }
@@ -1076,7 +1076,7 @@ CGFloat topOfNonDepthArray = 0;
     // run down through the layouts, from largest display to smallest, removing
     // ones that are essentially duplicates.
     
-    NSMutableArray *editedLayouts = [[NSMutableArray alloc] init];
+    NSMutableArray<Layout *> *editedLayouts = [[NSMutableArray alloc] init];
     
     float topScore = -1;;
     Layout *previousLayout = nil;
@@ -1245,12 +1245,18 @@ CGFloat topOfNonDepthArray = 0;
     // layout.transformSize is what the tasks get to run.  They
     // then display (possibly scaled) onto transformView.
     
+    CGSize imageSize, depthSize;
     if (!fileSourceFrame) { // camera input: set format and get raw sizes
         [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
         //cameraController.captureVideoPreviewLayer = previewLayer;
-        [taskCtrl updateRawSourceSizes];
+        [cameraController currentRawSizes:&imageSize
+                             rawDepthSize:&depthSize];
+    } else {
+        imageSize = [fileSourceFrame imageSize];
+        depthSize = CGSizeZero;
     }
+    [taskCtrl updateRawSourceSizes:imageSize depthSize:depthSize];
     [screenTasks configureGroupForTargetSize:layout.transformSize];
     [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
 //    [externalTask configureGroupForTargetSize:processingSize];
@@ -1321,7 +1327,8 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) tryAllThumbLayouts {
     if (fileSourceFrame) {
-        [self tryAllThumbsForRawSize:fileSourceFrame.pixBuf.size format:nil];
+        assert(fileSourceFrame);
+        [self tryAllThumbsForRawSize:[fileSourceFrame imageSize] format:nil];
     } else {
         assert(cameraController);
         assert(live);   // select camera setting for available area
@@ -1337,7 +1344,7 @@ CGFloat topOfNonDepthArray = 0;
             }
             CGSize formatSize = [cameraController sizeForFormat:format];
             [self tryAllThumbsForRawSize:formatSize format:format];
-       }
+        }
     }
 }
 
@@ -1496,6 +1503,15 @@ CGFloat topOfNonDepthArray = 0;
 //   [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
     [self adjustBarButtons];
+    [self refreshScreen];
+}
+
+- (void) refreshScreen {
+    if (IS_CAMERA(CURRENT_SOURCE) && live)
+        return; // updates when the camera is ready
+    Frame *frame = [[Frame alloc] init];
+    [frame readImageFromPath:CURRENT_SOURCE.imagePath];
+    [taskCtrl processNewFrame:frame];
 }
 
 - (void) adjustParametersFrom:(Transform *)oldTransform to:(Transform *)newTransform {
@@ -1609,8 +1625,8 @@ CGFloat topOfNonDepthArray = 0;
     [self liveOn:!live];
 }
 
-- (void) liveOn:(BOOL) on {
-    live = on;
+- (void) liveOn:(BOOL) state {
+    live = state;
     if (live) {
         fileSourceFrame = nil;
         runningButton.selected = NO;
@@ -1625,7 +1641,7 @@ CGFloat topOfNonDepthArray = 0;
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
-
+        [taskCtrl processNewFrame:taskCtrl.lastFrame];
     }
     [runningButton setNeedsDisplay];
     [self adjustControls];
@@ -1637,6 +1653,7 @@ CGFloat topOfNonDepthArray = 0;
         return;
     showControls = !showControls;
     [self adjustControls];
+    [self refreshScreen];
 }
 
 // debug: create a pnm file from current live image, and email it
@@ -1932,22 +1949,6 @@ CGFloat topOfNonDepthArray = 0;
     //NSLog(@"new image size: %.0fx%.0f", newImage.size.width, newImage.size.height);
     UIGraphicsEndImageContext();
     return newImage;
-}
-
-// new video frame data and perhaps depth data from the cameracontroller.
-// This is a copy of the incoming frame, and further incoming frames will be
-// ignored until this routine is done.  At this point, the depth data, if it
-// is present, has min and max values computed, but one or more depths may
-// be BAD_DEPTH.
-
-- (void) processScaledIncomingFrameinTaskgroup:(TaskGroup *) taskGroup {
-    if (!live || taskCtrl.state != LayoutOK || busy) {
-        if (busy)
-            busyCount++;
-        return;
-    }
-    [taskGroup doGroupTransformsOnIncomingFrame];
-    busy = NO;
 }
 
 #ifdef OLD

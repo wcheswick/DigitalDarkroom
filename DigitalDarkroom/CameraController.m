@@ -8,6 +8,7 @@
 
 #import "MainVC.h"
 #import "CameraController.h"
+
 #import "InputSource.h"
 #import "Defines.h"
 
@@ -31,7 +32,6 @@ CameraController *cameraController = nil;
 @implementation CameraController
 
 @synthesize videoDataOutput, depthDataOutput, outputSynchronizer;
-@synthesize activeTaskgroups;
 @synthesize captureSession;
 @synthesize videoProcessor;
 
@@ -45,6 +45,7 @@ CameraController *cameraController = nil;
 @synthesize stats;
 @synthesize busy;
 @synthesize lastRawFrame;
+@synthesize taskCtrl;
 
 - (id)init {
     self = [super init];
@@ -56,7 +57,6 @@ CameraController *cameraController = nil;
         videoOrientation = -1;  // not initialized
         formatList = [[NSMutableArray alloc] init];
         cameraController = self;
-        activeTaskgroups = [[NSMutableDictionary alloc] init];
        busy = NO;
     }
     return self;
@@ -363,8 +363,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
     }
 
     BOOL needAFrame = NO;
-    for (NSString *groupName in activeTaskgroups) {
-        TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
+    for (NSString *groupName in taskCtrl.activeGroups) {
+        TaskGroup *taskGroup = [taskCtrl.activeGroups objectForKey:groupName];
         if (taskGroup.groupBusy)
             continue;
         needAFrame = YES;
@@ -400,12 +400,6 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         return;
     }
     
-    CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
-    CGSize rawImageSize = CGSizeMake(CVPixelBufferGetWidth(videoPixelBufferRef),
-                                CVPixelBufferGetHeight(videoPixelBufferRef));
-    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
-//    OSType type = CVPixelBufferGetPixelFormatType(videoPixelBufferRef);
-    
     if (depthDataAvailable) {
         if (!syncedDepthBufferData) {
             stats.depthMissing++;       // not so rare, maybe 5% in one test
@@ -421,20 +415,26 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
         stats.depthFrames++;
     }
-    
-    void *videoBaseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-    CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawImageSize.width, rawImageSize.height,
-                                                 8, bytesPerRow, colorSpace, BITMAP_OPTS);
-    assert(context);
-    CGImageRef quartzImage = CGBitmapContextCreateImage(context);
-    
-    if (!lastRawFrame || !lastRawFrame.pixBuf ||
-            !SAME_SIZE(lastRawFrame.pixBuf.size, rawImageSize)) {
+    if (!lastRawFrame) {
         lastRawFrame = [[Frame alloc] init];
     }
+
     @synchronized (lastRawFrame) {
         lastRawFrame.useCount++;
+        
+        CVPixelBufferLockBaseAddress(videoPixelBufferRef, 0);
+        CGSize rawImageSize = CGSizeMake(CVPixelBufferGetWidth(videoPixelBufferRef),
+                                         CVPixelBufferGetHeight(videoPixelBufferRef));
+        size_t bytesPerRow = CVPixelBufferGetBytesPerRow(videoPixelBufferRef);
+        //    OSType type = CVPixelBufferGetPixelFormatType(videoPixelBufferRef);
+        
+        void *videoBaseAddress = CVPixelBufferGetBaseAddress(videoPixelBufferRef);
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+        CGContextRef context = CGBitmapContextCreate(videoBaseAddress, rawImageSize.width, rawImageSize.height,
+                                                     8, bytesPerRow, colorSpace, BITMAP_OPTS);
+        assert(context);
+        CGImageRef quartzImage = CGBitmapContextCreateImage(context);
+        
         lastRawFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
                                                         scale:1.0
                                                   orientation:UIImageOrientationUp];
@@ -444,80 +444,37 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         }
         memcpy(lastRawFrame.pixBuf.pb, (Pixel *)videoBaseAddress,
                rawImageSize.width * rawImageSize.height*sizeof(Pixel));
-    }
-    
-    CGSize rawDepthSize = CGSizeZero;
-    Distance *capturedDepthBuffer = nil;
-    CVPixelBufferRef depthPixelBufferRef = nil;
-    if (depthDataAvailable) {
-        depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
-        assert(depthPixelBufferRef);
-        CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
-        capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
-        assert(capturedDepthBuffer);
-        rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
-                                  CVPixelBufferGetHeight(depthPixelBufferRef));
-        size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
-        assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
-    }
-
-    for (NSString *groupName in activeTaskgroups) {
-        TaskGroup *taskGroup = [activeTaskgroups objectForKey:groupName];
-        if (taskGroup.groupBusy)
-            continue;
-        if (!taskGroup.scaledIncomingFrame) {
-            stats.incomingFrameMissing++;
-            continue;
-        }
-        Frame *scaledFrame = taskGroup.scaledIncomingFrame;
-        assert(scaledFrame);
-        CGRect r;
-        r.origin = CGPointZero;
-        r.size = scaledFrame.pixBuf.size;
-        float scale = r.size.width/rawImageSize.width;
+        CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
+        CGImageRelease(quartzImage);
+        CGContextRelease(context);
+        CGColorSpaceRelease(colorSpace);
         
-        // fetch and scale image for group
-        scaledFrame.image = [[UIImage alloc] initWithCGImage:quartzImage
-                                                          scale:scale
-                                                    orientation:UIImageOrientationUp];
-        scaledFrame.pixBufNeedsUpdate = YES;
-#ifdef NO__TESTING
-        CGImageRef scaledCGImage = scaledImage.CGImage;
-        CGContextRef cgContext = CGBitmapContextCreate((char *)scaledFrame.pixBuf.pb, r.size.width, r.size.height, 8,
-                                                       r.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
-        CGContextDrawImage(cgContext, r, scaledCGImage);
-        CGContextRelease(cgContext);
-#endif
-        
-        if (taskGroup.needsDepth) {
-            if (!scaledFrame.depthBuf || !SAME_SIZE(scaledFrame.depthBuf.size, rawDepthSize)) {
-                scaledFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+        Distance *capturedDepthBuffer = nil;
+        if (!depthDataAvailable) {
+            if (lastRawFrame.depthBuf)
+                lastRawFrame.depthBuf = nil;
+        } else {
+            CVPixelBufferRef depthPixelBufferRef = [syncedDepthBufferData.depthData depthDataMap];
+            assert(depthPixelBufferRef);
+            CVPixelBufferLockBaseAddress(depthPixelBufferRef, 0);
+            
+            CGSize rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
+                                             CVPixelBufferGetHeight(depthPixelBufferRef));
+            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+            assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
+            if (!lastRawFrame.depthBuf || !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
+                lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
             }
-            memcpy(scaledFrame.depthBuf.db, capturedDepthBuffer,
-                       rawDepthSize.width * rawDepthSize.height*sizeof(Distance));
-//            [lastRawFrame.depthBuf stats];
-            scaledFrame.depthBuf.valid = YES;   // XXX used?
+            capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
+            assert(capturedDepthBuffer);
+            memcpy(lastRawFrame.depthBuf.db, capturedDepthBuffer,
+                   bytesPerRow * rawDepthSize.height);
+            //            [lastRawFrame.depthBuf stats];
+            lastRawFrame.depthBuf.valid = YES;   // XXX used?
+            CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
         }
         
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @synchronized (self->lastRawFrame) {
-                self->lastRawFrame.useCount++;
-            }
-            [(id<videoSampleProcessorDelegate>)self->videoProcessor processScaledIncomingFrameinTaskgroup:taskGroup];
-            @synchronized (self->lastRawFrame) {
-                self->lastRawFrame.useCount--;
-            }
-        });
-    }
-    CGImageRelease(quartzImage);
-    CGContextRelease(context);
-    CGColorSpaceRelease(colorSpace);
-    CVPixelBufferUnlockBaseAddress(videoPixelBufferRef,0);
-    if (depthPixelBufferRef) {
-        CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
-    }
-    
-    @synchronized (lastRawFrame) {
+        [taskCtrl processNewFrame: lastRawFrame];
         lastRawFrame.useCount--;    // decremented by this routine:
         assert(lastRawFrame.useCount >= 0);
     }

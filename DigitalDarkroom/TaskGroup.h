@@ -24,7 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TaskGroup : NSObject {
     TaskCtrl *taskCtrl;
     Transform * __nullable incomingSizeTransform;   // adjust incoming size to needed size
-    NSMutableArray *tasks;
+    NSMutableArray<Task *> *tasks;
     volatile BOOL groupBusy;
     size_t bytesPerRow, pixelsInImage, pixelsPerRow;
     size_t bytesInImage;
@@ -33,12 +33,12 @@ NS_ASSUME_NONNULL_BEGIN
     CGSize rawImageSize, rawDepthSize;
     CGSize targetSize;
     Frame *scaledIncomingFrame;
-    BOOL groupEnabled, needsDepth;
+    BOOL groupEnabled, groupNeedsDepth;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   Transform * __nullable incomingSizeTransform;
-@property (nonatomic, strong)   NSMutableArray *tasks;
+@property (nonatomic, strong)   NSMutableArray<Task *> *tasks;
 @property (nonatomic, strong)   Frame *scaledIncomingFrame; // depthbuf not scaled
 
 @property (assign, atomic)      volatile BOOL groupBusy;
@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
 @property (assign)              CGSize targetSize;
-@property (assign)              BOOL groupEnabled, needsDepth;
+@property (assign)              BOOL groupEnabled, groupNeedsDepth;
 
 
 - (id)initWithController:(TaskCtrl *) caller;
@@ -56,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void) configureGroupForTargetSize:(CGSize)targetSize;
 //- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
 //                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
-- (void) doGroupTransformsOnIncomingFrame;
+- (void) newFrameForGroup:(Frame *) frame;
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance;

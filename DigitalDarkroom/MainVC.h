@@ -32,30 +32,23 @@ typedef enum {
     FullScreenDisplay,    // only the display
 } DisplayOptions;
 
-@protocol videoSampleProcessorDelegate
-
-- (void) processScaledIncomingFrameinTaskgroup:(TaskGroup *) taskGroup;
-
-@end
-
 @interface MainVC : UIViewController
         <UICollectionViewDelegate,
         UICollectionViewDataSource,
 //        UICollectionViewDelegateFlowLayout,
 //        UIScrollViewDelegate,
-        videoSampleProcessorDelegate,
         MFMailComposeViewControllerDelegate,
         UIPopoverPresentationControllerDelegate> {
     // layout looks at these:
     BOOL isPortrait, isiPhone;
     UIView *containerView;
-    NSMutableArray *thumbViewsArray;
+    NSMutableArray<ThumbView *> *thumbViewsArray;
     Stats *stats;
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
 @property (nonatomic, strong)   UIView *containerView;  // Layout uses this
-@property (nonatomic, strong)   NSMutableArray *thumbViewsArray; // views that go into thumbsView
+@property (nonatomic, strong)   NSMutableArray<ThumbView *> *thumbViewsArray; // views that go into thumbsView
 @property (nonatomic, strong)   Stats *stats;
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;

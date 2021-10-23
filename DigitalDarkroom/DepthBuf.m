@@ -195,6 +195,8 @@ ma(ma_buff_t *b, float v) {
     return copy;
 }
 
+// poot
+
 - (void) scaleFrom:(DepthBuf *) sourceDepthBuf {
     assert(sourceDepthBuf);
     if (maxDepth) {
