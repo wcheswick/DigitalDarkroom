@@ -458,6 +458,7 @@ MainVC *mainVC = nil;
             lastSection = section;
         }
         [thumbView configureForTransform:transform];
+        transform.thumbView = thumbView;
         thumbView.tag = ti + TRANSFORM_BASE_TAG;
         UIImageView *imageView = [[UIImageView alloc] init];
         imageView.tag = THUMB_IMAGE_TAG;
@@ -565,7 +566,7 @@ CGFloat topOfNonDepthArray = 0;
             UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
             thumbImage.frame = layout.thumbImageRect;
             if (thumbView.transform.type == DepthVis) {
-                [thumbView adjustStatus: (lastDisplayedFrame.depthBuf.valid) ?
+                [thumbView adjustStatus: (lastDisplayedFrame.depthBuf) ?
                         ThumbAvailable : ThumbUnAvailable];
             }
             thumbView.task.targetImageView = thumbImage;
@@ -996,11 +997,7 @@ CGFloat topOfNonDepthArray = 0;
                 
                 if (!isiPhone)
                     self.title = source.label;
-                if (IS_CAMERA(source)) {
-                    [cameraController updateOrientationTo:deviceOrientation];
-                    [cameraController selectCameraOnSide:IS_FRONT_CAMERA(source)];
-                    [self liveOn:YES];
-                } else {    // source is a file, it is our source image
+                if (!IS_CAMERA(CURRENT_SOURCE)) {
                     fileSourceFrame = [[Frame alloc] init];
                     [fileSourceFrame readImageFromPath: source.imagePath];
                     transformChainChanged = YES;
@@ -1012,6 +1009,11 @@ CGFloat topOfNonDepthArray = 0;
             // FALLTHROUGH
         case ApplyLayout:
             [self applyScreenLayout: layoutIndex];     // top one is best
+            if (IS_CAMERA(CURRENT_SOURCE)) {
+                [cameraController updateOrientationTo:deviceOrientation];
+                [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
+                [self liveOn:YES];
+            }
             [self refreshScreen];
     }
     taskCtrl.state = LayoutOK;
@@ -1331,12 +1333,9 @@ CGFloat topOfNonDepthArray = 0;
         [self tryAllThumbsForRawSize:[fileSourceFrame imageSize] format:nil];
     } else {
         assert(cameraController);
-        assert(live);   // select camera setting for available area
-#ifdef XXXXXX
         [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)
-                                      threeD:IS_3D_CAMERA(CURRENT_SOURCE)];
-#endif
+        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
+        // XXXXXXX        assert(live);   // select camera setting for available area
         for (AVCaptureDeviceFormat *format in cameraController.formatList) {
             if (cameraController.depthDataAvailable) {
                 if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
@@ -1472,30 +1471,47 @@ CGFloat topOfNonDepthArray = 0;
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
 
-    size_t indexToChange = [self nextTransformTapIndex];
-    BOOL reTap = indexToChange == currentTransformIndex;
-    if (reTap && plusMode == NoPlus) {  // just remove current transform
-        [screenTask removeTransformAtIndex:indexToChange];
-        currentTransformIndex--;
-    } else {
-        if (indexToChange == screenTask.transformList.count) {  // append a transform
+//    size_t indexToChange = [self nextTransformTapIndex];
+    switch (plusMode) {
+        case NoPlus: {
+            if (currentTransformIndex == NO_TRANSFORM ||
+                currentTransformIndex == screenTask.transformList.count) {
+                // plus beyond the end, add the transform
+                [screenTask appendTransformToTask:tappedTransform];
+                [screenTask configureTaskForSize];
+                currentTransformIndex = screenTask.transformList.count - 1;
+                [tappedThumb adjustStatus:ThumbActive];
+                break;
+            }
+            if (tappedThumb.status == ThumbActive) {    // deselect tapped thumb
+                [tappedThumb adjustStatus:ThumbAvailable];
+                [screenTask removeTransformAtIndex:currentTransformIndex];
+                [screenTask configureTaskForSize];
+                break;
+            }
+            // turn off the old thumb and add the new one
+            Transform *oldTransform = screenTask.transformList[currentTransformIndex];
+            ThumbView *oldThumb = oldTransform.thumbView;
+            [oldThumb adjustStatus:ThumbAvailable];
+            [tappedThumb adjustStatus:ThumbActive];
+            [screenTask changeTransformAtIndex:currentTransformIndex to:tappedTransform];
+            [screenTask configureTaskForSize];
+            break;
+        }
+        case PlusOne:
             [screenTask appendTransformToTask:tappedTransform];
             [screenTask configureTaskForSize];
             currentTransformIndex = screenTask.transformList.count - 1;
-        } else {    // replace an existing transform
-            [screenTask changeTransformAtIndex:currentTransformIndex to:tappedTransform];
-            [screenTask configureTaskForSize];
-        }
-    }
-    
-    switch (plusMode) {
-        case PlusOne:
+            [tappedThumb adjustStatus:ThumbActive];
+            currentTransformIndex = screenTask.transformList.count - 1;
             plusMode = NoPlus;
-            [self adjustPlus];
             break;
         case PlusMany:
-            break;
-        case NoPlus:
+            [screenTask appendTransformToTask:tappedTransform];
+            [screenTask configureTaskForSize];
+            currentTransformIndex = screenTask.transformList.count - 1;
+            [tappedThumb adjustStatus:ThumbActive];
+            currentTransformIndex = screenTask.transformList.count - 1;
             break;
     }
     transformChainChanged = YES;
@@ -2448,7 +2464,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // displayedFrame has the source frame.  if nil?
 - (void) updateThumbAvailability {
 //    BOOL depthAvailable = (cameraController.lastRawFrame.depthBuf &&
-//                           cameraController.lastRawFrame.depthBuf.valid);
+//                           cameraController.lastRawFrame.depthBuf);
     BOOL depthAvailable = cameraController.depthDataAvailable;
 #ifdef DEBUG_LAYOUT
     NSLog(@"updateThumbAvailability. depth available: %@, %@", depthAvailable ? @"yes" : @"no",

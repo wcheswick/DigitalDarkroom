@@ -469,8 +469,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             assert(capturedDepthBuffer);
             memcpy(lastRawFrame.depthBuf.db, capturedDepthBuffer,
                    bytesPerRow * rawDepthSize.height);
+            lastRawFrame.depthBuf.size = rawDepthSize;
             //            [lastRawFrame.depthBuf stats];
-            lastRawFrame.depthBuf.valid = YES;   // XXX used?
             CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
         }
         

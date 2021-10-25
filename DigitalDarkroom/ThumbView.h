@@ -29,12 +29,14 @@ typedef enum {
 } thumbStatus_t;
 
 @interface ThumbView : UIView {
+    int useCount;
     thumbStatus_t status;
     NSString *sectionName;  // nil if thumb, else section header
     Transform *transform;
     Task *task;             // for updating thumbnail
 }
 
+@property (assign)              int useCount;
 @property (assign)              thumbStatus_t status;;
 @property (nonatomic, strong)   NSString *sectionName;
 @property (nonatomic, strong)   Transform *transform;

@@ -182,8 +182,9 @@
 
 - (void) loadPixelsFromImage:(UIImage *) image {
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    size_t bytesPerRow = self.size.width * sizeof(Pixel);
     CGContextRef cgContext = CGBitmapContextCreate((char *)self.pb, self.size.width, self.size.height, 8,
-                                                   self.size.width * sizeof(Pixel), colorSpace, BITMAP_OPTS);
+                                                   bytesPerRow, colorSpace, BITMAP_OPTS);
     CGContextDrawImage(cgContext, CGRectMake(0,0,size.width,size.height), image.CGImage);
     CGContextRelease(cgContext);
     CGColorSpaceRelease(colorSpace);

@@ -12,7 +12,7 @@
 
 @synthesize name, description, helpPath;
 @synthesize broken;
-@synthesize transformsArrayIndex;
+@synthesize transformsArrayIndex, thumbView;
 @synthesize type;
 @synthesize hasParameters;
 @synthesize ipPointF;

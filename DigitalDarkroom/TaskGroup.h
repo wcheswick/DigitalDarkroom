@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
     CGSize rawImageSize, rawDepthSize;
     CGSize targetSize;
     Frame *scaledIncomingFrame;
-    BOOL groupEnabled, groupNeedsDepth;
+    BOOL groupEnabled, groupWantsDepth;
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
 @property (assign)              CGSize targetSize;
-@property (assign)              BOOL groupEnabled, groupNeedsDepth;
+@property (assign)              BOOL groupEnabled, groupWantsDepth;
 
 
 - (id)initWithController:(TaskCtrl *) caller;

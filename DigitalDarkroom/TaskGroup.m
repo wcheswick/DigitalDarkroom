@@ -32,7 +32,7 @@
 @synthesize bitsPerComponent;
 @synthesize bytesInImage;
 @synthesize groupName;
-@synthesize groupBusy, groupEnabled, groupNeedsDepth;
+@synthesize groupBusy, groupEnabled, groupWantsDepth;
 @synthesize targetSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
@@ -47,7 +47,7 @@
         groupBusy = NO;
         targetSize = CGSizeZero;
         groupEnabled = YES;
-        groupNeedsDepth = NO;
+        groupWantsDepth = NO;
     }
     return self;
 }
@@ -89,11 +89,11 @@
 - (void) updateGroupDepthNeeds {
     for (Task *task in tasks) {
         if (task.needsDepthBuf) {
-            groupNeedsDepth = YES;
+            groupWantsDepth = YES;
             return;
         }
     }
-    groupNeedsDepth = NO;
+    groupWantsDepth = NO;
 }
             
 // we have a new frame for the group to transform.  The group tasks all use the same scaled frame,
@@ -113,7 +113,6 @@
         return;
     groupBusy = YES;
     
-    
     if (frame.image) {
         float scale = scaledIncomingFrame.pixBuf.size.width/frame.image.size.width;
         scaledIncomingFrame.image = [[UIImage alloc] initWithCGImage:frame.image.CGImage
@@ -131,15 +130,19 @@
         CGContextRelease(cgContext);
 #endif
     }
-
-    if (groupNeedsDepth) {
-        if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.depthBuf.size, rawDepthSize)) {
-            scaledIncomingFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+    
+    if (groupWantsDepth) {
+        if (!frame.depthBuf)
+            scaledIncomingFrame.depthBuf = nil;
+        else {
+            if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.depthBuf.size, rawDepthSize)) {
+                scaledIncomingFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+            }
+            assert(frame.depthBuf.db);
+            memcpy(scaledIncomingFrame.depthBuf.db, frame.depthBuf.db,
+                   frame.depthBuf.size.width * frame.depthBuf.size.height*sizeof(Distance));
+            //            [lastRawFrame.depthBuf stats];
         }
-        memcpy(scaledIncomingFrame.depthBuf.db, frame.depthBuf.db,
-               frame.depthBuf.size.width * frame.depthBuf.size.height*sizeof(Distance));
-//            [lastRawFrame.depthBuf stats];
-        scaledIncomingFrame.depthBuf.valid = YES;   // XXX used?
     }
 
     //  XXXXXXX depth?
@@ -176,7 +179,7 @@
 - (void) removeAllTransforms {
     for (Task *task in tasks)
         [task removeAllTransforms];
-    groupNeedsDepth = NO;
+    groupWantsDepth = NO;
 }
 
 - (void) removeLastTransform {

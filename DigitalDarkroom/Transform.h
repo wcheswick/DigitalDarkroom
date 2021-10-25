@@ -17,8 +17,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class TransformInstance;
-
+@class TransformInstance, ThumbView;
 
 typedef enum {
     ColorTrans,
@@ -73,6 +72,8 @@ typedef void (^ __nullable __unsafe_unretained
     BOOL needsScaledDepth;   // if cannot work just by changing the source pixbuf
     BOOL modifiesDepthBuf;
     long transformsArrayIndex;
+    ThumbView *thumbView;
+    long thumbIndex;
     transform_t type;
     BOOL hasParameters;
     PtFunc_t ipPointF;
@@ -88,7 +89,8 @@ typedef void (^ __nullable __unsafe_unretained
 }
 
 @property (nonatomic, strong)   NSString *name, *description, *helpPath;
-@property (assign)              long transformsArrayIndex; 
+@property (assign)              long transformsArrayIndex;
+@property (nonatomic, strong)   ThumbView *thumbView;
 @property (assign)              PtFunc_t ipPointF;
 @property (assign)              BOOL broken;
 @property (assign)              BOOL needsScaledDepth, modifiesDepthBuf;

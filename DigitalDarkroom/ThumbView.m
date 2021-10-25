@@ -11,8 +11,6 @@
 
 @interface ThumbView ()
 
-@property (nonatomic, strong)   UIImage *brokenThumbImage;
-@property (nonatomic, strong)   UIImage *depthUnavailableThumbImage;
 
 @end
 
@@ -20,8 +18,8 @@
 
 @synthesize status;
 @synthesize sectionName;
-@synthesize brokenThumbImage, depthUnavailableThumbImage;
-@synthesize transform, task;;
+@synthesize transform, task;
+@synthesize useCount;
 
 - (id)initWith3dAvailable:(BOOL) have3D {
     self = [super init];
@@ -30,13 +28,7 @@
         sectionName = nil;
         transform = nil;
         task = nil;
-        
-        brokenThumbImage = [UIImage imageNamed:[[NSBundle mainBundle]
-                                                         pathForResource:@"images/brokenTransform.png"
-                                                         ofType:@""]];
-        depthUnavailableThumbImage = [UIImage imageNamed:[[NSBundle mainBundle]
-                                                         pathForResource:@"images/no3Dcamera.png"
-                                                         ofType:@""]];
+        useCount = 0;
         if (have3D)
             [self adjustStatus:ThumbAvailable];
         else
@@ -154,18 +146,24 @@
                 self.layer.borderWidth = 1.0;
             label.highlighted = NO;
             imageView.image = nil;
+            label.layer.borderWidth = 0.0;
             break;
         case ThumbActive:
             label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
-            self.layer.borderWidth = 5.0;
+//            self.layer.borderWidth = useCount > 1 ? 10.0 : 5.0;
             label.highlighted = YES;    // this doesn't seem to do anything
+            label.layer.borderWidth = 2.0;
             break;
         case ThumbTransformBroken:
-            imageView.image = brokenThumbImage;
+            imageView.image = [UIImage imageNamed:[[NSBundle mainBundle]
+                                                   pathForResource:@"images/brokenTransform.png"
+                                                   ofType:@""]];;
             [imageView setNeedsDisplay];
             break;
         case ThumbUnAvailable:
-            imageView.image = depthUnavailableThumbImage;
+            imageView.image = [UIImage imageNamed:[[NSBundle mainBundle]
+                                                   pathForResource:@"images/no3Dcamera.png"
+                                                   ofType:@""]];
             [imageView setNeedsDisplay];
             break;
         case SectionHeader:
