@@ -538,7 +538,8 @@ mostCommonColorInHist(Hist_t *hists) {
                                depthVis: ^(PixBuf *srcPixBuf, DepthBuf *depthBuf,
                                            PixBuf *dstPixBuf,
                                            TransformInstance *instance) {
-        assert(SAME_SIZE(srcPixBuf.size, depthBuf.size));
+        // not: the depthbuf may be a different size
+        //assert(SAME_SIZE(srcPixBuf.size, depthBuf.size));
         assert(SAME_SIZE(srcPixBuf.size, dstPixBuf.size));
         int W = depthBuf.size.width;
         int H = depthBuf.size.height;

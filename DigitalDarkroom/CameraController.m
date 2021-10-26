@@ -474,7 +474,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
         }
         
-        [taskCtrl processNewFrame: lastRawFrame];
+        [taskCtrl processFrame: lastRawFrame];
         lastRawFrame.useCount--;    // decremented by this routine:
         assert(lastRawFrame.useCount >= 0);
     }

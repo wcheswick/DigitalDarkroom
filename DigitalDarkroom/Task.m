@@ -150,7 +150,7 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) configureTaskForSize {
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"   TTT %@  configureTaskForSize: %.0f x %.0f", taskName,
-          taskGroup.transformSize.width, taskGroup.transformSize.height);
+          taskGroup.targetSize.width, taskGroup.targetSize.height);
 #endif
     
     chBuf0 = [[ChBuf alloc] initWithSize:taskGroup.targetSize];
@@ -211,7 +211,9 @@ static PixelIndex_t dPI(int x, int y) {
             instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
             //    assert(taskStatus == Stopped);
 #ifdef DEBUG_TASK_CONFIGURATION
-            NSLog(@"    TT  %-15@   %2zu remap size %.0f x %.0f", taskName, index, s.width, s.height);
+            NSLog(@"    TT  %-15@   remap size %.0f x %.0f",
+                  taskName,
+                  s.width, s.height);
 #endif
             break;
         default:

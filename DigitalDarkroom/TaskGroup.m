@@ -33,7 +33,7 @@
 @synthesize bytesInImage;
 @synthesize groupName;
 @synthesize groupBusy, groupEnabled, groupWantsDepth;
-@synthesize targetSize;
+@synthesize rawImageSize, targetSize, rawDepthSize;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -46,27 +46,38 @@
         bytesPerRow = 0;    // no current configuration
         groupBusy = NO;
         targetSize = CGSizeZero;
+        rawImageSize = rawDepthSize = CGSizeZero;
         groupEnabled = YES;
         groupWantsDepth = NO;
     }
     return self;
 }
 
+// new source size/depth combo. Reconfigure transforms.
+
+- (void) configureGroupForSrcFrame:(const Frame *) srcFrame {
+    rawImageSize = [srcFrame size];
+    rawDepthSize = srcFrame.depthBuf ? srcFrame.depthBuf.size : CGSizeZero;
+    [self newGroupScaling:targetSize];
+}
+
 // Configure all tasks for possibly a new target image size. The task controller
 // has the source image size.  We deal with depth data as we need to.
 
-- (void) configureGroupForTargetSize:(CGSize) ts {
+- (void) newGroupScaling:(CGSize) ts {
+    targetSize = ts;
+    NSLog(@"newTargetSize: %4.0f x %4.0f   %@",
+          targetSize.width, targetSize.height, groupName);
+    if (SAME_SIZE(rawImageSize, CGSizeZero)) {
+        NSLog(@"  (raw size not configured yet)");
+        return;
+    }
     if (!groupEnabled)
         return;
-#ifdef DEBUG_TASK_CONFIGURATION
-    NSLog(@" GG  %@: configureGroupForTargetSize %.0f x %.0f",
-          targetSize.width, targetSize.height);
-#endif
+    
     assert(!groupBusy);
     groupBusy = YES;
     targetSize = ts;
-    assert(taskCtrl.rawImageSourceSize.width > 0 && taskCtrl.rawImageSourceSize.height > 0);
-    assert(targetSize.width > 0 && targetSize.height > 0);
     
     if (!scaledIncomingFrame) {
         scaledIncomingFrame = [[Frame alloc] init];
@@ -136,11 +147,13 @@
             scaledIncomingFrame.depthBuf = nil;
         else {
             if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.depthBuf.size, rawDepthSize)) {
-                scaledIncomingFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
+                scaledIncomingFrame.depthBuf = [[DepthBuf alloc]
+                                                initWithSize:[scaledIncomingFrame.pixBuf size]];
             }
             assert(frame.depthBuf.db);
-            memcpy(scaledIncomingFrame.depthBuf.db, frame.depthBuf.db,
-                   frame.depthBuf.size.width * frame.depthBuf.size.height*sizeof(Distance));
+            [scaledIncomingFrame.depthBuf scaleFrom:frame.depthBuf];
+//            memcpy(scaledIncomingFrame.depthBuf.db, frame.depthBuf.db,
+//                    frame.depthBuf.size.width * frame.depthBuf.size.height*sizeof(Distance));
             //            [lastRawFrame.depthBuf stats];
         }
     }
@@ -209,13 +222,13 @@
     if (remapBuf) {
 #ifdef DEBUG_TASK_CONFIGURATION
         NSLog(@"    GG cached remap %@   size %.0f x %.0f",
-              groupName, transformSize.width, transformSize.height);
+              groupName, remapBuf.size.width, remapBuf.size.height);
 #endif
         return remapBuf;
     }
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"    GG new remap %@   size %.0f x %.0f",
-          groupName, transformSize.width, transformSize.height);
+          groupName, remapBuf.size.width, remapBuf.size.height);
 #endif
     remapBuf = [[RemapBuf alloc] initWithSize:targetSize];
     if (transform.type == RemapImage) {

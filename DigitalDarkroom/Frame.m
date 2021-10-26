@@ -31,6 +31,16 @@
     return self;
 }
 
+- (CGSize) size {
+    if (image) {
+        assert(!pixBuf || SAME_SIZE(pixBuf.size, image.size));
+        return image.size;
+    }
+    assert(pixBuf);
+    assert(!SAME_SIZE(pixBuf.size, CGSizeZero));
+    return pixBuf.size;
+}
+
 - (void) readImageFromPath:(NSString *) path {
     image = [UIImage imageNamed:path];
     assert(image);

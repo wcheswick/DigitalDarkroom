@@ -30,8 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
     size_t bytesInImage;
     size_t bitsPerComponent;
     NSString *groupName;        // for debug display purposes
-    CGSize rawImageSize, rawDepthSize;
-    CGSize targetSize;
+    CGSize rawImageSize, rawDepthSize, targetSize;
     Frame *scaledIncomingFrame;
     BOOL groupEnabled, groupWantsDepth;
 }
@@ -46,14 +45,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign)              size_t bitsPerComponent;
 @property (assign)              size_t bytesInImage;
 @property (nonatomic, strong)   NSString *groupName;
-@property (assign)              CGSize targetSize;
+@property (assign)              CGSize rawImageSize, rawDepthSize, targetSize;
 @property (assign)              BOOL groupEnabled, groupWantsDepth;
 
 
 - (id)initWithController:(TaskCtrl *) caller;
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
-- (void) configureGroupForTargetSize:(CGSize)targetSize;
+- (void) configureGroupForSrcFrame:(const Frame *) srcFrame;
+- (void) newGroupScaling:(CGSize)targetSize;
 //- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
 //                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
 - (void) newFrameForGroup:(Frame *) frame;

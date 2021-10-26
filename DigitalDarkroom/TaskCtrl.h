@@ -31,8 +31,6 @@ typedef enum {
     LayoutStatus_t state;
     Transforms *transforms;
     NSMutableArray<TaskGroup *> *taskGroups;
-    CGSize rawImageSourceSize;
-    CGSize rawDepthSourceSize;  // may be 0,0
     NSMutableDictionary *activeGroups;
     Frame *lastFrame;
 }
@@ -40,7 +38,6 @@ typedef enum {
 @property (nonatomic, strong)   NSMutableArray<TaskGroup *> *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
 @property (assign)              LayoutStatus_t state;
-@property (assign)              CGSize rawImageSourceSize, rawDepthSourceSize;
 @property (assign)              id mainVC;
 @property (nonatomic, strong)   NSMutableDictionary *activeGroups;
 @property (nonatomic, strong)   Frame *lastFrame;
@@ -50,8 +47,7 @@ typedef enum {
 - (void) idleFor:(LayoutStatus_t) newStatus;
 - (void) checkForIdle;  // are we ready to resume, after possible layout?
 - (void) enableTasks;
-- (void) updateRawSourceSizes:(CGSize) imageSize depthSize:(CGSize) depthSize;
-- (void) processNewFrame:(Frame *) frame;
+- (void) processFrame:(Frame *) frame;
 
 @end
 

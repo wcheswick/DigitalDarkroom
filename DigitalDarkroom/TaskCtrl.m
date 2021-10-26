@@ -24,7 +24,6 @@
 @synthesize taskGroups;
 @synthesize state;
 @synthesize layingOut;
-@synthesize rawImageSourceSize, rawDepthSourceSize;
 @synthesize activeGroups;
 @synthesize lastFrame;
 
@@ -35,32 +34,41 @@
         activeGroups = [[NSMutableDictionary alloc] init];
         state = NeedsNewLayout;
         layingOut = NO;
-        rawImageSourceSize = CGSizeZero;
-        rawDepthSourceSize = CGSizeZero;
         lastFrame = nil;
     }
     return self;
 }
 
-- (void) updateRawSourceSizes:(CGSize) imageSize depthSize:(CGSize) depthSize {
-    rawImageSourceSize = imageSize;
-    rawDepthSourceSize = depthSize;
-}
+- (void) processFrame:(Frame *) srcFrame {
+    CGSize incomingSize = [srcFrame size];
+    BOOL rawFrameChanged = !lastFrame || !SAME_SIZE(incomingSize, [lastFrame size]);
+    lastFrame = srcFrame;
 
-- (void) processNewFrame:(Frame *) frame {
-    lastFrame = frame;
+#ifdef DEBUG_CONCURRENCY
+    if (rawFrameChanged) {
+        NSLog(@"taskCtrl processFrame src new size: %4.0f x %4.0f",
+              incomingSize.width, incomingSize.height);
+        if (srcFrame.depthBuf)
+        NSLog(@"                        depth size: %4.0f x %4.0f",
+                  srcFrame.depthBuf.size.width, srcFrame.depthBuf.size.height);
+    }
+#endif
+    
     for (NSString *groupName in activeGroups) {
         TaskGroup *taskGroup = [activeGroups objectForKey:groupName];
         if (taskGroup.groupBusy)
             continue;
         
         dispatch_async(dispatch_get_main_queue(), ^{
-            @synchronized (frame) {
-                frame.useCount++;
+            @synchronized (srcFrame) {
+                srcFrame.useCount++;
             }
-            [taskGroup newFrameForGroup:frame];
-            @synchronized (frame) {
-                frame.useCount--;
+            if (rawFrameChanged)
+                [taskGroup configureGroupForSrcFrame:srcFrame];
+            
+            [taskGroup newFrameForGroup:srcFrame];
+            @synchronized (srcFrame) {
+                srcFrame.useCount--;
             }
        });
     }

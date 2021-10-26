@@ -342,7 +342,9 @@ MainVC *mainVC = nil;
 
         thumbTasks = [taskCtrl newTaskGroupNamed:@"Thumbs"];
         [taskCtrl.activeGroups setObject:thumbTasks forKey:thumbTasks.groupName];
-//        thumbTasks.groupEnabled = NO;   // debug
+#ifdef DEBUG_OMIT_THUMBS
+        thumbTasks.groupEnabled = NO;
+#endif
         
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
@@ -1258,10 +1260,10 @@ CGFloat topOfNonDepthArray = 0;
         imageSize = [fileSourceFrame imageSize];
         depthSize = CGSizeZero;
     }
-    [taskCtrl updateRawSourceSizes:imageSize depthSize:depthSize];
-    [screenTasks configureGroupForTargetSize:layout.transformSize];
-    [thumbTasks configureGroupForTargetSize:layout.thumbImageRect.size];
-//    [externalTask configureGroupForTargetSize:processingSize];
+//    [taskCtrl updateRawSourceSizes:imageSize depthSize:depthSize];
+    [screenTasks newGroupScaling:layout.transformSize];
+    [thumbTasks newGroupScaling:layout.thumbImageRect.size];
+//    [externalTask newTargetSize:processingSize];
 
 // no longer?    [layout positionExecuteRect];
     executeView.frame = layout.executeRect;
@@ -1527,7 +1529,7 @@ CGFloat topOfNonDepthArray = 0;
         return; // updates when the camera is ready
     Frame *frame = [[Frame alloc] init];
     [frame readImageFromPath:CURRENT_SOURCE.imagePath];
-    [taskCtrl processNewFrame:frame];
+    [taskCtrl processFrame:frame];
 }
 
 - (void) adjustParametersFrom:(Transform *)oldTransform to:(Transform *)newTransform {
@@ -1657,7 +1659,7 @@ CGFloat topOfNonDepthArray = 0;
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
-        [taskCtrl processNewFrame:taskCtrl.lastFrame];
+        [taskCtrl processFrame:taskCtrl.lastFrame];
     }
     [runningButton setNeedsDisplay];
     [self adjustControls];
