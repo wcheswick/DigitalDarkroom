@@ -295,8 +295,8 @@ NSString * __nullable displayOptionNames[] = {
     assert(same_aspect(imageSourceSize, displayRect.size));
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
     assert(RIGHT(thumbArrayRect) <= mainVC.containerView.frame.size.width);
-    assert(BELOW(executeRect) <= mainVC.containerView.frame.size.height);
-    assert(RIGHT(executeRect) <= mainVC.containerView.frame.size.width);
+    assert(BELOW(executeRect) < mainVC.containerView.frame.size.height);
+    assert(RIGHT(executeRect) < mainVC.containerView.frame.size.width);
 
     return YES;
 }
@@ -352,9 +352,10 @@ NSString * __nullable displayOptionNames[] = {
 }
 
 - (void) placeExecuteRectWithSqueeze:(BOOL) squeeze {
-    executeRect.size.width = displayRect.size.width;
+    executeRect.size.width = displayRect.size.width - 1;
     executeRect.origin.x = displayRect.origin.x;
-    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height - BELOW(displayRect) - SEP;
+    CGFloat spaceBelowDisplay = mainVC.containerView.frame.size.height -
+        BELOW(displayRect) - SEP - 1;
     if (squeeze || spaceBelowDisplay < EXECUTE_FULL_H) {
         executeRect.origin.y = BELOW(displayRect);
         executeRect.size.height = EXECUTE_MIN_H;

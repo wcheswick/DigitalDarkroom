@@ -260,6 +260,9 @@ static int dpi;
     
     helpPath = @"Art";
     [self addArtTransforms];
+    
+    helpPath = @"Bugs";
+    [self addBugTransforms];
 }
 
 // transform at given index, or nil if NO_TRANSFORM
@@ -1192,19 +1195,6 @@ mostCommonColorInHist(Hist_t *hists) {
     }];
     [self addTransform:lastTransform];
 #endif
-    
-    lastTransform = [Transform areaTransform: @"edge 2 needs norm"
-                                description: @""
-                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
-                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
-        const float kernel[] = {
-            0, -1, 0,
-            -1, 4, -1,
-            0, 1, 0,
-        };
-        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
-    }];
-    [self addTransform:lastTransform];
 
     lastTransform = [Transform areaTransform: @"edge 2 norm"
                                 description: @""
@@ -2691,6 +2681,20 @@ irand(int i) {
     }];
     [self addTransform:lastTransform];
 
+}
+- (void) addBugTransforms {
+    lastTransform = [Transform areaTransform: @"Pretty bug"
+                                description: @"edge 2 needs norm"
+                                areaFunction:^(PixBuf *srcPixBuf, PixBuf *dstPixBuf,
+                                               ChBuf *chBuf0, ChBuf *chBuf1, TransformInstance *instance) {
+        const float kernel[] = {
+            0, -1, 0,
+            -1, 4, -1,
+            0, 1, 0,
+        };
+        pixelConvolution(srcPixBuf, dstPixBuf, kernel, KERNEL_SIZE(kernel), NO);
+    }];
+    [self addTransform:lastTransform];
 }
 
 @end

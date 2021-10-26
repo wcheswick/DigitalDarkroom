@@ -90,7 +90,7 @@
     imageView.opaque = YES;
     [self addSubview:imageView];   // empty placeholder at the moment
     self.layer.borderColor = [UIColor blueColor].CGColor;
-    self.layer.borderWidth = 1.0;
+    self.layer.borderWidth = 0.5;
 }
 
 - (void) configureSectionThumbNamed:(NSString *)sn {
@@ -146,13 +146,12 @@
                 self.layer.borderWidth = 1.0;
             label.highlighted = NO;
             imageView.image = nil;
-            label.layer.borderWidth = 0.0;
             break;
         case ThumbActive:
             label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
 //            self.layer.borderWidth = useCount > 1 ? 10.0 : 5.0;
             label.highlighted = YES;    // this doesn't seem to do anything
-            label.layer.borderWidth = 2.0;
+            self.layer.borderWidth = 3.0;
             break;
         case ThumbTransformBroken:
             imageView.image = [UIImage imageNamed:[[NSBundle mainBundle]
@@ -167,6 +166,7 @@
             [imageView setNeedsDisplay];
             break;
         case SectionHeader:
+            self.layer.borderWidth = 0;
             break;
     }
     status = newStatus;

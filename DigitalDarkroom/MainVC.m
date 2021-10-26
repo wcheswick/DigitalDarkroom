@@ -732,6 +732,10 @@ CGFloat topOfNonDepthArray = 0;
     transformView.backgroundColor = NAVY_BLUE;
     transformView.clipsToBounds = YES;
     transformView.userInteractionEnabled = YES;
+#ifdef DEBUG_BORDERS
+    transformView.layer.borderColor = [UIColor redColor].CGColor;
+    transformView.layer.borderWidth = 3.0;
+#endif
 
     flashView = [[UIView alloc] init];  // used to show a flash on the screen
     flashView.opaque = NO;
@@ -766,6 +770,10 @@ CGFloat topOfNonDepthArray = 0;
     layoutValuesView.opaque = NO;
     layoutValuesView.numberOfLines = 0;
     layoutValuesView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.5];
+#ifdef DEBUG_BORDERS
+    layoutValuesView.layer.borderColor = [UIColor orangeColor].CGColor;
+    layoutValuesView.layer.borderWidth = 3.0;
+#endif
     [containerView addSubview:layoutValuesView];
 
 //#define FIT_TO_BUTTON(si)   [self fitImage:[UIImage systemImageNamed:si] \
@@ -805,6 +813,10 @@ CGFloat topOfNonDepthArray = 0;
     paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.8];
     paramView.layer.cornerRadius = 6.0;
     paramView.clipsToBounds = YES;
+#ifdef DEBUG_BORDERS
+    paramView.layer.borderColor = [UIColor yellowColor].CGColor;
+    paramView.layer.borderWidth = 3.0;
+#endif
     [transformView addSubview:paramView];
 
     paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_LABEL_H)];
@@ -829,6 +841,10 @@ CGFloat topOfNonDepthArray = 0;
     executeView.textColor = [UIColor blackColor];
     executeView.text = @"";
     executeView.opaque = YES;
+#ifdef DEBUG_BORDERS
+    executeView.layer.borderColor = [UIColor greenColor].CGColor;
+    executeView.layer.borderWidth = 3.0;
+#endif
 
     // select overlaied stuff
     UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
@@ -1041,18 +1057,19 @@ CGFloat topOfNonDepthArray = 0;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
-#ifdef DEBUG_LAYOUT
+    CGRect f = self.view.frame;
+#ifdef DEBUG_BORDERS
     CGFloat topPadding = window.safeAreaInsets.top;
     NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f",
           leftPadding, rightPadding, topPadding);
-#endif
-    
-    CGRect f = self.view.frame;
-#ifdef DEBUG_LAYOUT
     NSLog(@"                in: %.0f,%.0f  %.0fx%.0f (%4.2f)",
           f.origin.x, f.origin.y, f.size.width, f.size.height,
           f.size.width/f.size.height);
+    
+    containerView.layer.borderColor = [UIColor magentaColor].CGColor;
+    containerView.layer.borderWidth = 3.0;
 #endif
+
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height -= f.origin.y;
@@ -1200,8 +1217,10 @@ CGFloat topOfNonDepthArray = 0;
     transformView.frame = layout.displayRect;
     [self positionControls];
     thumbScrollView.frame = layout.thumbArrayRect;
+#ifdef DEBUG_BORDERS
     thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
     thumbScrollView.layer.borderWidth = 3.0;
+#endif
     
     CGFloat below = BELOW(thumbScrollView.frame);
     assert(below <= BELOW(containerView.frame));
