@@ -238,7 +238,7 @@ static int dpi;
 
 - (void) buildTransformList {
     helpPath = @"Test";
-    [self addTestTransforms];
+//    [self addTestTransforms];
     
     helpPath = @"Depth";
     [self addDepthVisualizations];

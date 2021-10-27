@@ -42,14 +42,16 @@ Stats *stats = nil;
     lastProcessed = [NSDate now];
 }
 
-- (NSString *) report {
+- (NSString *) report:(NSString *)groupStats {
     NSDate *now = [NSDate now];
     NSTimeInterval t = [now timeIntervalSinceDate:lastProcessed];
-    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.1f/%5.1f  cpt: %5.1f/%5.1f  busy: %d  %@",
+    
+    NSString *report = [NSString stringWithFormat:@"%3d %3d  %5.0f/%5.0f  busy: %d %@ %@",
                         framesReceived, framesProcessed,
                         framesReceived/t, framesProcessed/t,
-                        depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed,
+//                        depthCopies/(float)framesProcessed, pixbufCopies/(float)framesProcessed,
                         tooBusyForAFrame,
+                        groupStats,
                         status];
     [self reset];
     return report;

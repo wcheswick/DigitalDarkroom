@@ -23,7 +23,7 @@
 
 #define DEBUG_CONCURRENCY   1
 #define DEBUG_TASK_CONFIGURATION  1
-#define DEBUG_OMIT_THUMBS 1
+//#define DEBUG_OMIT_THUMBS 1
 //#define DEBUG_BORDERS 1
 //#define DEBUG_CAMERA  1
 //#define DEBUG_TASK_BUSY 1
@@ -35,6 +35,7 @@
 //#define ONLY_RED    1   // process pure red input only
 
 #define MAX_FPS  30
+#define MAX_THUMBS_UPDATE_MS 200   // ms
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars
@@ -97,7 +98,7 @@ typedef long PixelIndex_t;
 #define MIN_IPHONE_THUMB_ROWS  2
 
 #define THUMB_W         80
-#define TIGHT_THUMB_W   60
+//#define TIGHT_THUMB_W   60
 
 #define PAUSE_FONT_SIZE 18
 #define PAUSE_W         (PAUSE_FONT_SIZE*12)

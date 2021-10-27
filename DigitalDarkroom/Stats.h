@@ -30,7 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *status;
 @property (nonatomic, strong)   NSDate *lastProcessed;
 
-- (NSString *) report;
+- (NSString *) report:(NSString *)groupStats;
 
 extern Stats *stats;
 

@@ -58,7 +58,7 @@
         TaskGroup *taskGroup = [activeGroups objectForKey:groupName];
         if (taskGroup.groupBusy)
             continue;
-        
+
         dispatch_async(dispatch_get_main_queue(), ^{
             @synchronized (srcFrame) {
                 srcFrame.useCount++;
@@ -231,4 +231,20 @@
         }
     }
 #endif
+
+- (NSString *) stats {
+    NSString *stats = @"";
+    for (TaskGroup *group in taskGroups) {
+        if (!group.timesCalled)
+            continue;
+        float mspf = 1000.0*group.elapsedProcessingTime/group.timesCalled;
+        float fps = 1000.0/mspf;
+        stats = [stats stringByAppendingFormat:@"%@:%3.0f ms/%2.0f  ",
+                 group.groupName, mspf, fps];
+        group.elapsedProcessingTime = 0;
+        group.timesCalled = 0;
+    }
+    return stats;
+}
+
 @end

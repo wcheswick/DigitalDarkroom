@@ -48,6 +48,7 @@ typedef enum {
 - (void) checkForIdle;  // are we ready to resume, after possible layout?
 - (void) enableTasks;
 - (void) processFrame:(Frame *) frame;
+- (NSString *) stats;
 
 @end
 

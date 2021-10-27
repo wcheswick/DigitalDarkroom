@@ -2068,7 +2068,8 @@ UIImageOrientation lastOrientation;
 
 - (void) doTick:(NSTimer *)sender {
 //    [taskCtrl checkReadyForLayout];
-    mainStatsView.text = [stats report];
+    NSString *taskStats = [taskCtrl stats];
+    mainStatsView.text = [stats report:taskStats];
     [mainStatsView setNeedsDisplay];
     [self updateExecuteView];
     [taskCtrl checkForIdle];

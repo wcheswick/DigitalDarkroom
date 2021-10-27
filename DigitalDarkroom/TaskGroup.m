@@ -34,6 +34,8 @@
 @synthesize groupName;
 @synthesize groupBusy, groupEnabled, groupWantsDepth;
 @synthesize rawImageSize, targetSize, rawDepthSize;
+@synthesize timesCalled, elapsedProcessingTime;
+@synthesize startTaskIndex;
 
 - (id)initWithController:(TaskCtrl *) caller {
     self = [super init];
@@ -49,6 +51,7 @@
         rawImageSize = rawDepthSize = CGSizeZero;
         groupEnabled = YES;
         groupWantsDepth = NO;
+        startTaskIndex = 0;
     }
     return self;
 }
@@ -94,10 +97,12 @@
     for (Task *task in tasks) {
         [task configureTaskForSize];
     }
+    startTaskIndex = 0;
     groupBusy = NO;
 }
 
 - (void) updateGroupDepthNeeds {
+    startTaskIndex = 0;
     for (Task *task in tasks) {
         if (task.needsDepthBuf) {
             groupWantsDepth = YES;
@@ -159,9 +164,21 @@
     }
 
     //  XXXXXXX depth?
-    for (Task *task in tasks) {
+    
+    NSDate *startTime = [NSDate now];
+    NSTimeInterval elapsed = 0;
+    for (int i=0; i<tasks.count; i++) {
+        Task *task = tasks[startTaskIndex++];
+        startTaskIndex %= tasks.count;
         [task executeTaskTransformsOnIncomingFrame];
+        if (tasks.count > 1) {
+            elapsed = [[NSDate now] timeIntervalSinceDate:startTime];
+            if (elapsed*1000.0 > MAX_THUMBS_UPDATE_MS)
+                break;
+        }
     }
+    elapsedProcessingTime += elapsed;
+    timesCalled++;
     groupBusy = NO;
 }
 
@@ -175,6 +192,8 @@
     newTask.taskIndex = tasks.count;
     newTask.targetImageView = tiv;
     [tasks addObject:newTask];
+    startTaskIndex = 0;
+
     return newTask;   // XXX not sure we are going to use this
 }
 
@@ -192,12 +211,14 @@
 - (void) removeAllTransforms {
     for (Task *task in tasks)
         [task removeAllTransforms];
+    startTaskIndex = 0;
     groupWantsDepth = NO;
 }
 
 - (void) removeLastTransform {
     for (Task *task in tasks)
         [task removeLastTransform];
+    startTaskIndex = 0;
     [self updateGroupDepthNeeds];
 }
 
@@ -207,6 +228,7 @@
     for (Task *task in tasks) {
         [task enable];
     }
+    startTaskIndex = 0;
 }
 
 // This is called back from task for transforms that remap pixels.  The remapping is based

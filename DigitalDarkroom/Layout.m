@@ -132,7 +132,7 @@ NSString * __nullable displayOptionNames[] = {
     scale = SCALE_UNINITIALIZED;
     
     firstThumbRect = thumbImageRect = CGRectZero;
-    thumbImageRect.size.width = mainVC.isiPhone  ? TIGHT_THUMB_W : THUMB_W;
+    thumbImageRect.size.width = THUMB_W;
     thumbImageRect.size.height = round(thumbImageRect.size.width / aspectRatio);
     firstThumbRect = thumbImageRect;
     firstThumbRect.size.height += THUMB_LABEL_H;

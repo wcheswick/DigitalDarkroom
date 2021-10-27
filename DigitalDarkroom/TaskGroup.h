@@ -33,6 +33,9 @@ NS_ASSUME_NONNULL_BEGIN
     CGSize rawImageSize, rawDepthSize, targetSize;
     Frame *scaledIncomingFrame;
     BOOL groupEnabled, groupWantsDepth;
+    NSTimeInterval elapsedProcessingTime;
+    size_t timesCalled;
+    size_t startTaskIndex;  // to round-robin task updates
 }
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
@@ -47,6 +50,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *groupName;
 @property (assign)              CGSize rawImageSize, rawDepthSize, targetSize;
 @property (assign)              BOOL groupEnabled, groupWantsDepth;
+@property (assign)              NSTimeInterval elapsedProcessingTime;
+@property (assign)              size_t timesCalled, startTaskIndex;
 
 
 - (id)initWithController:(TaskCtrl *) caller;
