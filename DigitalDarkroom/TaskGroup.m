@@ -162,8 +162,6 @@
             //            [lastRawFrame.depthBuf stats];
         }
     }
-
-    //  XXXXXXX depth?
     
     NSDate *startTime = [NSDate now];
     NSTimeInterval elapsed = 0;

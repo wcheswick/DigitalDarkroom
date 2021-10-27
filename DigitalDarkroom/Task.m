@@ -246,8 +246,16 @@ static PixelIndex_t dPI(int x, int y) {
 // The frames are allocated to the correct size. The buffers may be overwritten or swapped.
 
 - (const Frame * __nullable) executeTaskTransformsOnIncomingFrame {
-    if (taskStatus == Stopped || !enabled)
-        return nil;     // not now
+    if (!enabled)
+        return nil;
+    switch (taskStatus) {
+        case Stopped:
+        case Running:
+            return nil;
+        case Idle:
+            ;
+    }
+
     if (taskGroup.taskCtrl.state != LayoutOK) {
         taskStatus = Stopped;
         return nil;
@@ -255,7 +263,11 @@ static PixelIndex_t dPI(int x, int y) {
 
     Frame *readOnlyIncomingFrame = taskGroup.scaledIncomingFrame;
     if (transformList.count == 0) { // just display the input
-        targetImageView.image = readOnlyIncomingFrame.image;
+        dispatch_async(dispatch_get_main_queue(), ^(void){
+            self->targetImageView.image = readOnlyIncomingFrame.image;
+            [self->targetImageView setNeedsDisplay];
+            self->taskStatus = Idle;
+        });
         return nil;
     }
 
@@ -378,9 +390,11 @@ static PixelIndex_t dPI(int x, int y) {
     }
     
     assert(scaledSrcFrame);
-    targetImageView.image = [scaledSrcFrame.pixBuf toImage];
-    [targetImageView setNeedsDisplay];
-    taskStatus = Idle;
+    dispatch_async(dispatch_get_main_queue(), ^(void){
+        self->targetImageView.image = [scaledSrcFrame.pixBuf toImage];
+        [self->targetImageView setNeedsDisplay];
+        self->taskStatus = Idle;
+    });
     return nil;
 }
 

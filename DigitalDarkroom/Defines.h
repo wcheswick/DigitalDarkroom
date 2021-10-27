@@ -35,7 +35,7 @@
 //#define ONLY_RED    1   // process pure red input only
 
 #define MAX_FPS  30
-#define MAX_THUMBS_UPDATE_MS 200   // ms
+#define MAX_THUMBS_UPDATE_MS 500   // ms. Actually, it is taking about 200, and is fine.
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars
