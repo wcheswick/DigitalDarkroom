@@ -134,7 +134,7 @@
         scaledIncomingFrame.image = [[UIImage alloc] initWithCGImage:frame.image.CGImage
                                                                scale:scale
                                                          orientation:UIImageOrientationUp];
-        scaledIncomingFrame.pixBufNeedsUpdate = YES;
+        [scaledIncomingFrame.pixBuf loadPixelsFromImage:scaledIncomingFrame.image];
     } else {
         assert(frame.pixBuf);   // we need one of these
         assert(NO); //stub
@@ -153,7 +153,7 @@
         else {
             if (!scaledIncomingFrame.depthBuf || !SAME_SIZE(scaledIncomingFrame.depthBuf.size, rawDepthSize)) {
                 scaledIncomingFrame.depthBuf = [[DepthBuf alloc]
-                                                initWithSize:[scaledIncomingFrame.pixBuf size]];
+                                                initWithSize:[scaledIncomingFrame size]];
             }
             assert(frame.depthBuf.db);
             [scaledIncomingFrame.depthBuf scaleFrom:frame.depthBuf];
@@ -235,22 +235,25 @@
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance {
-//    NSLog(@"transform name: %@", transform.name);
-//    NSLog(@"         value: %d", instance.value);
-    NSString *name = [NSString stringWithFormat:@"%@:%d", transform.name, instance.value];
+    //    NSLog(@"transform name: %@", transform.name);
+    //    NSLog(@"         value: %d", instance.value);
+    NSString *name = [NSString stringWithFormat:@"%@:%d-%.0fx%.0f",
+                      transform.name, instance.value,
+                      targetSize.width, targetSize.height];
     RemapBuf *remapBuf = [remapCache objectForKey:name];
     if (remapBuf) {
-#ifdef DEBUG_TASK_CONFIGURATION
+#ifdef DEBUG_REMAP
         NSLog(@"    GG cached remap %@   size %.0f x %.0f",
               groupName, remapBuf.size.width, remapBuf.size.height);
 #endif
         return remapBuf;
     }
-#ifdef DEBUG_TASK_CONFIGURATION
-    NSLog(@"    GG new remap %@   size %.0f x %.0f",
-          groupName, remapBuf.size.width, remapBuf.size.height);
-#endif
     remapBuf = [[RemapBuf alloc] initWithSize:targetSize];
+#ifdef DEBUG_REMAP
+    NSLog(@"    GG new remap %@, %@   size %.0f x %.0f",
+          groupName, transform.name,
+          remapBuf.size.width, remapBuf.size.height);
+#endif
     if (transform.type == RemapImage) {
         transform.remapImageF(remapBuf, instance);
     } else {  // polar remap
@@ -282,7 +285,7 @@
         }
     }
     assert(remapBuf);
-#ifdef DEBUG
+#ifdef DEBUG_REMAP
     [remapBuf verify];
 #endif
     [remapCache setObject:remapBuf forKey:name];

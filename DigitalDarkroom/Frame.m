@@ -12,7 +12,6 @@
 
 @synthesize pixBuf, depthBuf, image;
 @synthesize creationTime;
-@synthesize pixBufNeedsUpdate;
 @synthesize useCount;
 
 - (id)init {
@@ -25,17 +24,18 @@
         pixBuf = nil;
         image = nil;
         creationTime = [NSDate now];
-        pixBufNeedsUpdate = YES;
         useCount = 0;
     }
     return self;
 }
 
 - (CGSize) size {
+#ifdef OLD
     if (image) {
         assert(!pixBuf || SAME_SIZE(pixBuf.size, image.size));
         return image.size;
     }
+#endif
     assert(pixBuf);
     assert(!SAME_SIZE(pixBuf.size, CGSizeZero));
     return pixBuf.size;

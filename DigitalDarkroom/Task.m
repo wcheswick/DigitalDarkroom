@@ -270,11 +270,12 @@ static PixelIndex_t dPI(int x, int y) {
         });
         return nil;
     }
-
+    
     int dstIndex;
     Frame *scaledSrcFrame;
     DepthBuf *scaledSrcDepthBuf = readOnlyIncomingFrame.depthBuf;
-    if (readOnlyIncomingFrame.pixBufNeedsUpdate || needsDepthBuf) {
+    //    if (readOnlyIncomingFrame.pixBufNeedsUpdate || needsDepthBuf) {
+    if (needsDepthBuf) {
         scaledSrcFrame = frames[0];
         [scaledSrcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
         if (needsDepthBuf && readOnlyIncomingFrame.depthBuf &&
@@ -283,11 +284,11 @@ static PixelIndex_t dPI(int x, int y) {
         else
             readOnlyIncomingFrame.depthBuf = nil;   // XXXXXX this is the wrong place for this.
         scaledSrcDepthBuf = scaledSrcFrame.depthBuf;
-        scaledSrcFrame.pixBufNeedsUpdate = NO;
         dstIndex = 1;
     } else {
         scaledSrcFrame = readOnlyIncomingFrame;
         assert(!needsDepthBuf);
+        assert(scaledSrcFrame.depthBuf);
         dstIndex = 0;
     }
 

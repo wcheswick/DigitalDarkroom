@@ -21,8 +21,10 @@
 
 //#define DEBUG_ORIENTATION
 
-#define DEBUG_CONCURRENCY   1
-#define DEBUG_TASK_CONFIGURATION  1
+//#define DEBUG_CONCURRENCY   1
+//#define DEBUG_TASK_CONFIGURATION  1
+#define DEBUG_REMAP 1
+
 //#define DEBUG_OMIT_THUMBS 1
 //#define DEBUG_BORDERS 1
 //#define DEBUG_CAMERA  1
@@ -35,7 +37,9 @@
 //#define ONLY_RED    1   // process pure red input only
 
 #define MAX_FPS  30
+// this isn't needed, it seems, any more
 #define MAX_THUMBS_UPDATE_MS 500   // ms. Actually, it is taking about 200, and is fine.
+#define MAX_TRANSFORM_THREADS   4
 
 #define POINTING_HAND_CHAR  @"☞"
 #define UNICODE_PAUSE   @"\u23F8"   // two bars
