@@ -168,6 +168,8 @@
     for (int i=0; i<tasks.count; i++) {
         Task *task = tasks[startTaskIndex++];
         startTaskIndex %= tasks.count;
+        if (task.taskStatus != Idle)
+            continue;
         [task executeTaskTransformsOnIncomingFrame];
         if (tasks.count > 1) {
             elapsed = [[NSDate now] timeIntervalSinceDate:startTime];
@@ -235,6 +237,8 @@
 
 - (RemapBuf *) remapForTransform:(Transform *) transform
                         instance:(TransformInstance *) instance {
+    assert(transform);
+    assert(instance);
     //    NSLog(@"transform name: %@", transform.name);
     //    NSLog(@"         value: %d", instance.value);
     NSString *name = [NSString stringWithFormat:@"%@:%d-%.0fx%.0f",
@@ -255,7 +259,9 @@
           remapBuf.size.width, remapBuf.size.height);
 #endif
     if (transform.type == RemapImage) {
+        [remapBuf verify];
         transform.remapImageF(remapBuf, instance);
+        [remapBuf verify];
     } else {  // polar remap
         int centerX = remapBuf.size.width/2;
         int centerY = remapBuf.size.height/2;

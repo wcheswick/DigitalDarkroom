@@ -23,7 +23,7 @@
 
 //#define DEBUG_CONCURRENCY   1
 //#define DEBUG_TASK_CONFIGURATION  1
-#define DEBUG_REMAP 1
+//#define DEBUG_REMAP 1
 
 //#define DEBUG_OMIT_THUMBS 1
 //#define DEBUG_BORDERS 1

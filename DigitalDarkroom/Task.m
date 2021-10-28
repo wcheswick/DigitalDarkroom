@@ -148,6 +148,7 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (void) configureTaskForSize {
+    taskStatus = Stopped;   // XXX doesn't wait for idle
 #ifdef DEBUG_TASK_CONFIGURATION
     NSLog(@"   TTT %@  configureTaskForSize: %.0f x %.0f", taskName,
           taskGroup.targetSize.width, taskGroup.targetSize.height);
@@ -175,6 +176,7 @@ static PixelIndex_t dPI(int x, int y) {
         needsDepthBuf |= transform.needsScaledDepth;
         modifiesDepthBuf |= transform.modifiesDepthBuf;
     }
+    taskStatus = Idle;
 }
 
 - (Transform *) configureTransformAtIndex:(size_t)index {
@@ -208,6 +210,7 @@ static PixelIndex_t dPI(int x, int y) {
     switch (transform.type) {
         case RemapImage:
         case RemapPolar:
+            assert(instance);
             instance.remapBuf = [taskGroup remapForTransform:transform instance:instance];
             //    assert(taskStatus == Stopped);
 #ifdef DEBUG_TASK_CONFIGURATION
@@ -288,7 +291,7 @@ static PixelIndex_t dPI(int x, int y) {
     } else {
         scaledSrcFrame = readOnlyIncomingFrame;
         assert(!needsDepthBuf);
-        assert(scaledSrcFrame.depthBuf);
+//        assert(scaledSrcFrame.depthBuf);
         dstIndex = 0;
     }
 

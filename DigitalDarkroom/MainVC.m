@@ -2497,7 +2497,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         if (transform.type != DepthVis)
             continue;
         thumbView.task.enabled = depthAvailable;
-        [thumbView adjustStatus:depthAvailable ? ThumbAvailable : ThumbUnAvailable];
+// XXXXXX        [thumbView adjustStatus:depthAvailable ? ThumbAvailable : ThumbUnAvailable];
     }
     transformChainChanged = NO;
 }
