@@ -34,6 +34,7 @@ typedef enum {  // the transformed display on the main screen
 //        UICollectionViewDelegateFlowLayout,
 //        UIScrollViewDelegate,
         MFMailComposeViewControllerDelegate,
+        UIContentContainer,
         UIPopoverPresentationControllerDelegate> {
     // layout looks at these:
     BOOL isPortrait, isiPhone;
@@ -50,9 +51,9 @@ typedef enum {  // the transformed display on the main screen
 @property (nonatomic, strong)   CameraController *cameraController;
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
-- (void) newDeviceOrientation;
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
+- (void) didChangeOrientation;
 
 extern MainVC *mainVC;
 

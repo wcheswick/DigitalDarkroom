@@ -34,8 +34,8 @@
                      initWithRootViewController:mainVC];
     
     [[NSNotificationCenter defaultCenter] addObserver:mainVC
-                                             selector:@selector(newDeviceOrientation)
-                                                 name:UIDeviceOrientationDidChangeNotification
+                                             selector:@selector(didChangeOrientation)
+                                                 name:UIViewControllerShowDetailTargetDidChangeNotification
                                                object:nil];
 
     self.window.rootViewController = navController;

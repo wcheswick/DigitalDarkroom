@@ -58,7 +58,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (Task *) createTaskForTargetImageView:(UIImageView *) tiv
                                   named:(NSString *)tn;
 - (void) configureGroupForSrcFrame:(const Frame *) srcFrame;
-- (void) newGroupScaling:(CGSize)targetSize;
+//- (void) newGroupScaling:(CGSize)targetSize;
 //- (Frame * __nullable) executeTasksWithFrame:(const Frame *)frame
 //                      dumpFile:(NSFileHandle *__nullable)imageFileHandle;
 - (void) newFrameForGroup:(Frame *) frame;

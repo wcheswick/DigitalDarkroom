@@ -57,30 +57,17 @@
 }
 
 // new source size/depth combo. Reconfigure transforms.
+// Configure all tasks for possibly a new target image size. The task controller
+// has the source image size.  We deal with depth data as we need to.
 
 - (void) configureGroupForSrcFrame:(const Frame *) srcFrame {
     rawImageSize = [srcFrame size];
     rawDepthSize = srcFrame.depthBuf ? srcFrame.depthBuf.size : CGSizeZero;
-    [self newGroupScaling:targetSize];
-}
-
-// Configure all tasks for possibly a new target image size. The task controller
-// has the source image size.  We deal with depth data as we need to.
-
-- (void) newGroupScaling:(CGSize) ts {
-    targetSize = ts;
-    NSLog(@"newTargetSize: %4.0f x %4.0f   %@",
-          targetSize.width, targetSize.height, groupName);
-    if (SAME_SIZE(rawImageSize, CGSizeZero)) {
-        NSLog(@"  (raw size not configured yet)");
-        return;
-    }
+    
     if (!groupEnabled)
         return;
-    
     assert(!groupBusy);
     groupBusy = YES;
-    targetSize = ts;
     
     if (!scaledIncomingFrame) {
         scaledIncomingFrame = [[Frame alloc] init];

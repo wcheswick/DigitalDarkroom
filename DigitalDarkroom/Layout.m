@@ -96,36 +96,39 @@ NSString * __nullable displayOptionNames[] = {
         // these values are tweaked to satisfy the all the cameras on two
         // different iPhones and two different iPads.
       
-        
-        if (mainVC.isiPhone) {
-            if (mainVC.isPortrait) {
-                minDisplayWidth = mainVC.containerView.frame.size.width / 3.0;
-                maxDisplayWidth = 0;    // no max
-                minDisplayHeight = THUMB_W*2;
-                maxDisplayHeight = mainVC.containerView.frame.size.height / 3.0;
-            } else {
-                minDisplayWidth = THUMB_W*2.0;
-                maxDisplayWidth = mainVC.containerView.frame.size.width / 3.0;    // no max
-                minDisplayHeight = THUMB_W*2;
-                maxDisplayHeight = 0;   // no limit
-            }
-            bestMinDisplayFrac = 0.4;
-            minDisplayFrac = 0.3;
-            bestMinThumbFrac = 0.4; // unused
-            minThumbFrac = 0.249;   // 0.3 for large iphones
-            minThumbRows = MIN_IPHONE_THUMB_ROWS;
-            minThumbCols = MIN_IPHONE_THUMB_COLS;
-        } else {
-            minDisplayWidth = maxDisplayWidth = minDisplayHeight = maxDisplayHeight = 0; // XXXX STUB
-            bestMinDisplayFrac = 0.65;  // 0.42;
-            minDisplayFrac = 0.5;   // 0.40
-            bestMinThumbFrac = 0.5;
-            minThumbFrac = 0.3;
-            minThumbRows = MIN_THUMB_ROWS;
-            minThumbCols = MIN_THUMB_COLS;
-       }
+        [self updateScreenLimits];
     }
     return self;
+}
+
+- (void) updateScreenLimits {
+    if (mainVC.isiPhone) {
+        if (mainVC.isPortrait) {
+            minDisplayWidth = mainVC.containerView.frame.size.width / 3.0;
+            maxDisplayWidth = 0;    // no max
+            minDisplayHeight = THUMB_W*2;
+            maxDisplayHeight = mainVC.containerView.frame.size.height / 3.0;
+        } else {
+            minDisplayWidth = THUMB_W*2.0;
+            maxDisplayWidth = mainVC.containerView.frame.size.width / 3.0;    // no max
+            minDisplayHeight = THUMB_W*2;
+            maxDisplayHeight = 0;   // no limit
+        }
+        bestMinDisplayFrac = 0.4;
+        minDisplayFrac = 0.3;
+        bestMinThumbFrac = 0.4; // unused
+        minThumbFrac = 0.249;   // 0.3 for large iphones
+        minThumbRows = MIN_IPHONE_THUMB_ROWS;
+        minThumbCols = MIN_IPHONE_THUMB_COLS;
+    } else {
+        minDisplayWidth = maxDisplayWidth = minDisplayHeight = maxDisplayHeight = 0; // XXXX STUB
+        bestMinDisplayFrac = 0.65;  // 0.42;
+        minDisplayFrac = 0.5;   // 0.40
+        bestMinThumbFrac = 0.5;
+        minThumbFrac = 0.3;
+        minThumbRows = MIN_THUMB_ROWS;
+        minThumbCols = MIN_THUMB_COLS;
+   }
 }
 
 - (CGFloat) thumbsForHeight:(CGFloat) height {
@@ -170,21 +173,29 @@ NSString * __nullable displayOptionNames[] = {
     if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
         if (displayOption != ThumbsOnly)
             return NO;
-    if (displayRect.size.height <= THUMB_W || displayRect.size.width <= 2*THUMB_W)
+    if (displayRect.size.height <= minDisplayHeight ||
+        displayRect.size.width <= minDisplayWidth)
         return NO;  // display just too tiny
 
     displayRect.size = [Layout fitSize:imageSourceSize toSize:displayRect.size];
     displayRect.origin = CGPointZero;   // needs centering
     
-    if (minDisplayWidth && displayRect.size.width < minDisplayWidth)
-        return NO;
-    if (maxDisplayWidth && displayRect.size.width > maxDisplayWidth)
-        return NO;
-
-    if (minDisplayHeight && displayRect.size.height < minDisplayHeight)
-        return NO;
-    if (maxDisplayHeight && displayRect.size.height < maxDisplayHeight)
-        return NO;
+    switch (thumbsPosition) {
+        case Bottom:    // check display height limits
+            if (minDisplayHeight && displayRect.size.height < minDisplayHeight)
+                return NO;
+            if (maxDisplayHeight && displayRect.size.height < maxDisplayHeight)
+                return NO;
+            break;
+        case Right:     // check display width limits
+            if (minDisplayWidth && displayRect.size.width < minDisplayWidth)
+                return NO;
+//            if (maxDisplayWidth && displayRect.size.width > maxDisplayWidth)
+//                return NO;
+            break;
+        default:
+            break;
+    }
     
     transformSize = displayRect.size;
     if (scale == SCALE_UNINITIALIZED)

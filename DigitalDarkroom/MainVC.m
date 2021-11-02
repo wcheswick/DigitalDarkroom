@@ -902,60 +902,37 @@ CGFloat topOfNonDepthArray = 0;
     [self createThumbArray];
 }
 
-- (void) viewWillTransitionToSize:(CGSize)newSize
-        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
-    [super viewWillTransitionToSize:newSize withTransitionCoordinator:coordinator];
-    
-    // "Note that iPhoneX series (with notch) does not support portrait upside down."
-    
+- (void) dumpViewLimits:(NSString *)label {
 #ifdef DEBUG_ORIENTATION
-    NSLog(@"OOOO viewWillTransitionToSize orientation: %@",
-          [CameraController dumpDeviceOrientationName:deviceOrientation]);
-
-    NSLog(@"                                     Size: %.0f x %.0f", newSize.width, newSize.height);
-#else
-#ifdef DEBUG_LAYOUT
-    NSLog(@"********* viewWillTransitionToSize: %.0f x %.0f", newSize.width, newSize.height);
+    NSLog(@"%@,   %@", label, [CameraController
+                               dumpDeviceOrientationName:[[UIDevice currentDevice]
+                                                          orientation]]);
+    CGRect safeFrame = self.view.safeAreaLayoutGuide.layoutFrame;
+    CGRect f = self.view.frame;
+    NSLog(@" view.frame  %2.0f,%2.0f  %4.0f x %4.0f", f.origin.x, f.origin.y,
+          f.size.width, f.size.height);
+    NSLog(@" safe frame  %2.0f,%2.0f  %4.0f x %4.0f", safeFrame.origin.x, safeFrame.origin.y,
+          safeFrame.size.width, safeFrame.size.height);
 #endif
-#endif
-
-    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 - (void) viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     
-#ifdef DEBUG_LAYOUT
-    NSLog(@"OOOO viewWillAppear orientation: %@",
-          [CameraController dumpDeviceOrientationName:deviceOrientation]);
-#else
-#ifdef DEBUG_ORIENTATION
-    NSLog(@"OOOO viewWillAppear orientation: %@",
-          [CameraController dumpDeviceOrientationName:deviceOrientation]);
-#endif
-#endif
+    [self dumpViewLimits:(@"OOOO viewWillAppear")];
     // not needed: we haven't started anything yet
-    [taskCtrl idleFor:NeedsNewLayout];
 }
 
 - (void) viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
-#ifdef DEBUG_ORIENTATION
-    NSLog(@"OOOO viewDidAppear orientation: %@",
-          [CameraController dumpDeviceOrientationName:deviceOrientation]);
-    NSLog(@"                          size: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
-#else
-#ifdef DEBUG_LAYOUT
-    NSLog(@"--------- viewDidAppear: %.0f x %.0f --------",
-          self.view.frame.size.width, self.view.frame.size.height);
-#endif
-#endif
-    
+    [self dumpViewLimits:(@"OOOO viewDidAppear")];
+
     frameCount = depthCount = droppedCount = busyCount = 0;
     [self.view setNeedsDisplay];
     
+    [taskCtrl idleFor:NeedsNewLayout];
+
 #define TICK_INTERVAL   1.0
     statsTimer = [NSTimer scheduledTimerWithTimeInterval:TICK_INTERVAL
                                                   target:self
@@ -975,19 +952,25 @@ CGFloat topOfNonDepthArray = 0;
     [cameraController stopCamera];
 }
 
-- (void) newDeviceOrientation {
-    UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
-#ifdef DEBUG_ORIENTATION
-    NSLog(@"OOOO new orientation: %@",
-          [CameraController dumpDeviceOrientationName:deviceOrientation]);
-#endif
-    if (nextOrientation == UIDeviceOrientationUnknown)
-        nextOrientation = UIDeviceOrientationPortraitUpsideDown;    // klduge, don't know why
-    if (nextOrientation == deviceOrientation)
-        return; // nothing new to see here, folks
-    deviceOrientation = nextOrientation;
-    if (layout) // already layed out, adjust it
-        [taskCtrl idleFor:NeedsNewLayout];
+- (void) viewWillTransitionToSize:(CGSize)size
+        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    
+    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
+        ;
+    } completion:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
+        UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
+        
+        [self dumpViewLimits:@"viewWillTransitionToSize"];
+        if (nextOrientation == UIDeviceOrientationUnknown)
+    //        nextOrientation = UIDeviceOrientationPortraitUpsideDown;    // klduge, don't know why
+            nextOrientation = UIDeviceOrientationPortrait;    // klduge, don't know why
+        if (nextOrientation == self->deviceOrientation)
+            return; // nothing new to see here, folks
+        self->deviceOrientation = nextOrientation;
+        [self->taskCtrl idleFor:NeedsNewLayout];
+        [self.view setNeedsDisplay];
+    }];
 }
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus {
@@ -1048,40 +1031,37 @@ CGFloat topOfNonDepthArray = 0;
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
+#ifdef MAYBENOT
     containerView.translatesAutoresizingMaskIntoConstraints = NO;
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
     [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
     [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
     [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
-    
     UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
 //    CGFloat bottomPadding = window.safeAreaInsets.bottom;
     CGFloat leftPadding = window.safeAreaInsets.left;
     CGFloat rightPadding = window.safeAreaInsets.right;
     
     CGRect f = self.view.frame;
-#ifdef DEBUG_BORDERS
-    CGFloat topPadding = window.safeAreaInsets.top;
-    NSLog(@"padding, L, R, T, B: %0.f %0.f %0.f",
-          leftPadding, rightPadding, topPadding);
-    NSLog(@"                in: %.0f,%.0f  %.0fx%.0f (%4.2f)",
-          f.origin.x, f.origin.y, f.size.width, f.size.height,
-          f.size.width/f.size.height);
-    
-    containerView.layer.borderColor = [UIColor magentaColor].CGColor;
-    containerView.layer.borderWidth = 3.0;
-#endif
-
     f.origin.x = leftPadding; // + SEP;
     f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
     f.size.height -= f.origin.y;
     f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
+    [self dumpViewLimits:@"pickLayout"];
     containerView.frame = f;
-#ifdef DEBUG_LAYOUT
-    NSLog(@"     containerview: %.0f,%.0f  %.0fx%.0f (%4.2f)",
-          f.origin.x, f.origin.y, f.size.width, f.size.height,
-          f.size.width/f.size.height);
+#else
+    CGRect safeFrame = self.view.safeAreaLayoutGuide.layoutFrame;
+    containerView.frame = safeFrame;
+    NSLog(@" ******* containerview: %.0f,%.0f  %.0fx%.0f  %@",
+          containerView.frame.origin.x, containerView.frame.origin.y,
+          containerView.frame.size.width, containerView.frame.size.height,
+          containerView.frame.size.width > containerView.frame.size.height ? @"landscape" : @"portrait");
+#endif
+    
+#ifdef DEBUG_BORDERS
+    containerView.layer.borderColor = [UIColor magentaColor].CGColor;
+    containerView.layer.borderWidth = 3.0;
 #endif
 
     [layouts removeAllObjects];
@@ -1176,6 +1156,7 @@ CGFloat topOfNonDepthArray = 0;
 - (void) tryThumbsForSourceSize:(CGSize) size
                       format:(AVCaptureDeviceFormat *__nullable)format {
     // allocate a layout.  This will get copied if we like it.
+    [self dumpViewLimits:@"tryThumbsForSourceSize"];
     Layout *trialLayout = [[Layout alloc] initWithOption:currentDisplayOption
                                               sourceSize:size format:format];
     switch (currentDisplayOption) {
@@ -1340,9 +1321,10 @@ CGFloat topOfNonDepthArray = 0;
     }
 
 //    [taskCtrl updateRawSourceSizes:imageSize depthSize:depthSize];
-    [screenTasks newGroupScaling:layout.transformSize];
-    [thumbTasks newGroupScaling:layout.thumbImageRect.size];
+    screenTasks.targetSize = layout.transformSize;
+    thumbTasks.targetSize = layout.thumbImageRect.size;
 //    [externalTask newTargetSize:processingSize];
+//  externalTask.targetSize = layout.processing.size;
 
     executeView.frame = layout.executeRect;
     if (DISPLAYING_THUMBS) { // if we are displaying thumbs...

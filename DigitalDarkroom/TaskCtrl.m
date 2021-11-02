@@ -44,13 +44,21 @@
     BOOL rawFrameChanged = !lastFrame || !SAME_SIZE(incomingSize, [lastFrame size]);
     lastFrame = srcFrame;
 
-#ifdef DEBUG_CONCURRENCY
+#ifdef MAYBENOT
     if (rawFrameChanged) {
+#ifdef DEBUG_CONCURRENCY
         NSLog(@"taskCtrl processFrame src new size: %4.0f x %4.0f",
               incomingSize.width, incomingSize.height);
-        if (srcFrame.depthBuf)
-        NSLog(@"                        depth size: %4.0f x %4.0f",
-                  srcFrame.depthBuf.size.width, srcFrame.depthBuf.size.height);
+        if (rawFrameChanged) {
+            if (srcFrame.depthBuf)
+            NSLog(@"                        depth size: %4.0f x %4.0f",
+                      srcFrame.depthBuf.size.width, srcFrame.depthBuf.size.height);
+        }
+#endif
+        for (NSString *groupName in activeGroups) {
+            TaskGroup *taskGroup = [activeGroups objectForKey:groupName];
+            [taskGroup newGroupScaling:<#(CGSize)#>
+        }
     }
 #endif
     
