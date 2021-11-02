@@ -3,7 +3,7 @@
 //  DigitalDarkroom
 //
 //  Created by William Cheswick on 12/22/20.
-//  Copyright © 2020 Cheswick.com. All rights reserved.
+//  Copyright © 2022 Cheswick.com. All rights reserved.
 //
 
 #import <AVFoundation/AVFoundation.h>
@@ -95,7 +95,11 @@
     [remapCache removeAllObjects];
     
     for (Task *task in tasks) {
-        [task configureTaskForSize];
+        if (SAME_SIZE(targetSize, CGSizeZero))
+            task.enabled = NO;
+        else {
+            [task configureTaskForSize];
+        }
     }
     startTaskIndex = 0;
     groupBusy = NO;

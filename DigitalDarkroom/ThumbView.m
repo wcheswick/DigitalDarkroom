@@ -21,7 +21,7 @@
 @synthesize transform, task;
 @synthesize useCount;
 
-- (id)initWith3dAvailable:(BOOL) have3D {
+- (id)init {
     self = [super init];
     if (self) {
         self.frame = CGRectMake(0, LATER, LATER, LATER);
@@ -29,10 +29,6 @@
         transform = nil;
         task = nil;
         useCount = 0;
-        if (have3D)
-            [self adjustStatus:ThumbAvailable];
-        else
-            [self adjustStatus:ThumbUnAvailable];
     }
     return self;
 }
@@ -133,6 +129,30 @@
     [self addSubview:sectionLabel];
 }
 
+- (void) makeAvailableIfPossible {
+    switch (status) {
+        case ThumbTransformBroken:
+        case SectionHeader:
+            return;
+        case ThumbAvailable:
+        case ThumbUnAvailable:
+        case ThumbActive:
+            switch (transform.type) {
+                case DepthVis:
+                case DepthTrans:
+                    if (mainVC.cameraController &&
+                        mainVC.cameraController.depthDataAvailable) {
+                        [self adjustStatus:ThumbAvailable];
+                    } else
+                        [self adjustStatus:ThumbUnAvailable];
+                    break;
+                default:
+                    [self adjustStatus:ThumbAvailable];
+            }
+
+    }
+}
+
 - (void) adjustStatus:(thumbStatus_t) newStatus {
     UILabel *label = [self viewWithTag:THUMB_LABEL_TAG];
     UIImageView *imageView= [self viewWithTag:THUMB_IMAGE_TAG];;
@@ -146,6 +166,7 @@
                 self.layer.borderWidth = 1.0;
             label.highlighted = NO;
             imageView.image = nil;
+            task.enabled = YES;
             break;
         case ThumbActive:
             label.font = [UIFont boldSystemFontOfSize:THUMB_FONT_SIZE];
@@ -164,11 +185,15 @@
                                                    pathForResource:@"images/no3Dcamera.png"
                                                    ofType:@""]];
             [imageView setNeedsDisplay];
+            task.enabled = NO;
             break;
         case SectionHeader:
             self.layer.borderWidth = 0;
             break;
     }
+//    if (!sectionName)
+//        NSLog(@"TT: %d  %@", task.enabled, task.taskName);
+
     status = newStatus;
     [self setNeedsDisplay];
 }

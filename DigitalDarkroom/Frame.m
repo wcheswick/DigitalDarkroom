@@ -36,9 +36,14 @@
         return image.size;
     }
 #endif
-    assert(pixBuf);
-    assert(!SAME_SIZE(pixBuf.size, CGSizeZero));
-    return pixBuf.size;
+    if (pixBuf) {
+        assert(pixBuf);
+        assert(!SAME_SIZE(pixBuf.size, CGSizeZero));
+        return pixBuf.size;
+    } else {
+        assert(image);
+        return image.size;
+    }
 }
 
 - (void) readImageFromPath:(NSString *) path {

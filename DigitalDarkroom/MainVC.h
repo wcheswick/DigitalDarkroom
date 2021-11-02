@@ -16,20 +16,16 @@
 #import "Frame.h"
 #import "Stats.h"
 
+@class CameraController;
+
 NS_ASSUME_NONNULL_BEGIN
 
-typedef enum {
-    Bottom,
-    Right,
-    Both,
-    None,
-} ThumbsPosition;
-
-typedef enum {
-    NoDisplay,          // only controls
-    TightDisplay,       // iPhone and the like
-    BestDisplay,        // good standard iPad display
-    FullScreenDisplay,    // only the display
+typedef enum {  // the transformed display on the main screen
+    ThumbsOnly,         // maybe for external screen of transformed image
+    iPhoneScreen,       // small image on iPhone to show more thumbs
+    iPadScreen,         // standard options for an iPad
+    TransformedPlusExecOnly,
+    TransformedOnly,    // only the display
 } DisplayOptions;
 
 @interface MainVC : UIViewController
@@ -44,12 +40,14 @@ typedef enum {
     UIView *containerView;
     NSMutableArray<ThumbView *> *thumbViewsArray;
     Stats *stats;
+    CameraController *cameraController;
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
 @property (nonatomic, strong)   UIView *containerView;  // Layout uses this
 @property (nonatomic, strong)   NSMutableArray<ThumbView *> *thumbViewsArray; // views that go into thumbsView
 @property (nonatomic, strong)   Stats *stats;
+@property (nonatomic, strong)   CameraController *cameraController;
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
 - (void) newDeviceOrientation;

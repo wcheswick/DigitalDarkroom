@@ -16,7 +16,7 @@
 //#define VERIFY_REMAP_BUFFERS    1
 //#define VERIFY_DEPTHS           1
 
-//#define DEBUG_LAYOUT    1
+#define DEBUG_LAYOUT    1
 //#define MEMLEAK_AIDS 1
 
 //#define DEBUG_ORIENTATION

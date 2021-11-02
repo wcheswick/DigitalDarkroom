@@ -9,15 +9,6 @@
 #import "Layout.h"
 #import "Defines.h"
 
-@interface Layout ()
-
-@property (assign)  float minDisplayFrac, bestMinDisplayFrac;
-@property (assign)  float minThumbFrac, bestMinThumbFrac;
-@property (assign)  int minThumbRows, minThumbCols;
-
-@end
-
-
 BOOL
 same_aspect(CGSize r1, CGSize r2) {
     float ar1 = r1.width/r1.height;
@@ -33,15 +24,23 @@ NSString * __nullable displayThumbsPosition[] = {
 };
 
 NSString * __nullable displayOptionNames[] = {
-    @"n",
-    @"t",
-    @"B",
-    @"F",
+    @"thum",
+    @"ipho",
+    @"ipad",
+    @"tote",
+    @"tot ",
 };
 
 @interface Layout ()
 
 @property (assign)  CGSize imageSourceSize;
+@property (assign)  ThumbsPosition thumbsPosition;
+@property (assign)  float thumbScore, displayScore, scaleScore;
+@property (assign)  float thumbFrac;
+@property (assign)  float minDisplayFrac, bestMinDisplayFrac;
+@property (assign)  float minThumbFrac, bestMinThumbFrac;
+@property (assign)  int minThumbRows, minThumbCols;
+@property (assign)  int minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
 
 @end
 
@@ -53,6 +52,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize minDisplayFrac, bestMinDisplayFrac;
 @synthesize minThumbFrac, bestMinThumbFrac;
 @synthesize minThumbRows, minThumbCols;
+@synthesize maxThumbRows, maxThumbColumns;
 @synthesize imageSourceSize;
 @synthesize transformSize, displayRect;
 @synthesize displayFrac, thumbFrac;
@@ -61,12 +61,29 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize firstThumbRect, thumbImageRect;
 
 @synthesize scale, aspectRatio;
-@synthesize status, shortStatus;
+@synthesize status;
 @synthesize score, thumbScore, displayScore, scaleScore;
+@synthesize minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
 
-- (id)init {
+- (id)initWithOption:(DisplayOptions) disopt
+          sourceSize:(CGSize) ss
+              format:(AVCaptureDeviceFormat * __nullable) fmt {
     self = [super init];
     if (self) {
+        displayOption = disopt;
+        imageSourceSize = ss;
+        format = fmt;
+        depthFormat = nil;
+        
+        aspectRatio = imageSourceSize.width / imageSourceSize.height;
+        firstThumbRect = thumbImageRect = CGRectZero;
+        thumbImageRect.size = CGSizeMake(THUMB_W, round(THUMB_LABEL_H / aspectRatio));
+        firstThumbRect.size = CGSizeMake(thumbImageRect.size.width,
+                                         thumbImageRect.size.height + THUMB_LABEL_H);
+        
+        maxThumbRows = [self thumbsForWidth:mainVC.containerView.frame.size.height];
+        maxThumbColumns = [self thumbsForHeight:mainVC.containerView.frame.size.height];
+        
         scale = 0.0;
         score = BAD_LAYOUT;
         format = depthFormat = nil;
@@ -74,13 +91,24 @@ NSString * __nullable displayOptionNames[] = {
         displayRect = CGRectZero;
         transformSize = CGSizeZero;
         executeRect = CGRectZero;
-        status = shortStatus = nil;
-        imageSourceSize = CGSizeZero;
+        status = nil;
         
         // these values are tweaked to satisfy the all the cameras on two
         // different iPhones and two different iPads.
+      
         
         if (mainVC.isiPhone) {
+            if (mainVC.isPortrait) {
+                minDisplayWidth = mainVC.containerView.frame.size.width / 3.0;
+                maxDisplayWidth = 0;    // no max
+                minDisplayHeight = THUMB_W*2;
+                maxDisplayHeight = mainVC.containerView.frame.size.height / 3.0;
+            } else {
+                minDisplayWidth = THUMB_W*2.0;
+                maxDisplayWidth = mainVC.containerView.frame.size.width / 3.0;    // no max
+                minDisplayHeight = THUMB_W*2;
+                maxDisplayHeight = 0;   // no limit
+            }
             bestMinDisplayFrac = 0.4;
             minDisplayFrac = 0.3;
             bestMinThumbFrac = 0.4; // unused
@@ -88,6 +116,7 @@ NSString * __nullable displayOptionNames[] = {
             minThumbRows = MIN_IPHONE_THUMB_ROWS;
             minThumbCols = MIN_IPHONE_THUMB_COLS;
         } else {
+            minDisplayWidth = maxDisplayWidth = minDisplayHeight = maxDisplayHeight = 0; // XXXX STUB
             bestMinDisplayFrac = 0.65;  // 0.42;
             minDisplayFrac = 0.5;   // 0.40
             bestMinThumbFrac = 0.5;
@@ -99,23 +128,27 @@ NSString * __nullable displayOptionNames[] = {
     return self;
 }
 
+- (CGFloat) thumbsForHeight:(CGFloat) height {
+    return (int)((height+SEP) / (firstThumbRect.size.height + SEP));
+}
 
-#define THUMBS_FOR_HEIGHT(h)  (int)((h+SEP) / (firstThumbRect.size.height + SEP))
-#define THUMBS_FOR_WIDTH(w)  (int)((w+SEP) / (firstThumbRect.size.width + SEP))
+- (CGFloat) thumbsForWidth:(CGFloat) width {
+    return (int)((width+SEP) / (firstThumbRect.size.width + SEP));
+}
 
-//static float scales[] = {0.8, 0.6, 0.5, 0.4, 0.2};
+- (CGFloat) widthForColumns:(size_t) nc {
+    return nc * (firstThumbRect.size.width + SEP);
+}
 
+- (CGFloat) heightForRows:(size_t) nr {
+    return nr * firstThumbRect.size.height + SEP;
+}
 
 // Figure out a reasonable layout for a particular incoming size.
-// return NO if it can't be done. if NO,
-// then the score is not computed.
+// return NO if it can't be done. if NO, then the score is not computed.
 
-- (BOOL) tryLayoutForSize:(CGSize) ss
-          thumbRows:(int) rowsWanted
-       thumbColumns:(int) columnsWanted {
-    int thumbsShown;
-    imageSourceSize = ss;
-    
+- (BOOL) tryLayoutForThumbRowCount:(int) rowsWanted
+                       columnCount:(int) columnsWanted {
     if (rowsWanted == 0 && columnsWanted == 0)
         thumbsPosition = None;
     else if (rowsWanted == 0 && columnsWanted > 0)
@@ -124,31 +157,41 @@ NSString * __nullable displayOptionNames[] = {
         thumbsPosition = Bottom;
     else
         thumbsPosition = Both;  // not implemented
-    
-    aspectRatio = imageSourceSize.width / imageSourceSize.height;
 
 #define NO_SCALE    (-2.0)
 #define SCALE_UNINITIALIZED (-1.0)
     scale = SCALE_UNINITIALIZED;
-    
-    firstThumbRect = thumbImageRect = CGRectZero;
-    thumbImageRect.size.width = THUMB_W;
-    thumbImageRect.size.height = round(thumbImageRect.size.width / aspectRatio);
-    firstThumbRect = thumbImageRect;
-    firstThumbRect.size.height += THUMB_LABEL_H;
 
     CGFloat rightThumbWidthNeeded = [self widthForColumns:columnsWanted];
     CGFloat bottomThumbHeightNeeded = [self heightForRows:rowsWanted];
-
-    displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
-    displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded;
-    if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
-        return NO;
     
+    displayRect.size.width = mainVC.containerView.frame.size.width - rightThumbWidthNeeded;
+    displayRect.size.height = mainVC.containerView.frame.size.height - EXECUTE_MIN_H - bottomThumbHeightNeeded - EXECUTE_MIN_H;
+    if (displayRect.size.height <= 0 || displayRect.size.width <= 0)
+        if (displayOption != ThumbsOnly)
+            return NO;
+    if (displayRect.size.height <= THUMB_W || displayRect.size.width <= 2*THUMB_W)
+        return NO;  // display just too tiny
+
     displayRect.size = [Layout fitSize:imageSourceSize toSize:displayRect.size];
     displayRect.origin = CGPointZero;   // needs centering
-    thumbArrayRect = CGRectZero;
+    
+    if (minDisplayWidth && displayRect.size.width < minDisplayWidth)
+        return NO;
+    if (maxDisplayWidth && displayRect.size.width > maxDisplayWidth)
+        return NO;
 
+    if (minDisplayHeight && displayRect.size.height < minDisplayHeight)
+        return NO;
+    if (maxDisplayHeight && displayRect.size.height < maxDisplayHeight)
+        return NO;
+    
+    transformSize = displayRect.size;
+    if (scale == SCALE_UNINITIALIZED)
+        scale = displayRect.size.width / imageSourceSize.width;
+
+    thumbArrayRect = CGRectZero;
+    int thumbsShown;
     if (columnsWanted && !rowsWanted) {  // nothing underneath at the moment
         [self placeExecuteRectWithSqueeze:NO];
         thumbsShown = [self placeThumbsOnRight];
@@ -203,10 +246,20 @@ NSString * __nullable displayOptionNames[] = {
     float displayArea = displayRect.size.width * displayRect.size.height;
     float containerArea = mainVC.containerView.frame.size.width * mainVC.containerView.frame.size.height;
     displayFrac = displayArea / containerArea;
-
-    transformSize = displayRect.size;
-    if (scale == SCALE_UNINITIALIZED)
-        scale = displayRect.size.width / imageSourceSize.width;
+    
+    // we want the largest display that shows all the thumbs, or, if not
+    // room for all the thumbs, the most thumbs with a small display.
+    switch (displayOption) {
+        case iPhoneScreen: {
+            float pctThumbsShown = round(100.0*((float)thumbsShown/mainVC.thumbViewsArray.count));
+            if (pctThumbsShown < 7.0)
+                return NO;
+            score = pctThumbsShown + displayFrac;
+            return YES;
+        }
+        default:
+            ; // iPhone display stub
+    }
     
     int thumbCount = (int)mainVC.thumbViewsArray.count;
     long wastedThumbs = thumbsShown - thumbCount;
@@ -290,7 +343,6 @@ NSString * __nullable displayOptionNames[] = {
     status = [NSString stringWithFormat:@"%.0fx%.0f\t%4.2f%%\t%@\t%.0fx%.0f",
               displayRect.size.width, displayRect.size.height, scale, stats,
               displayRect.size.width, displayRect.size.height];
-    shortStatus = stats;
 
     assert(same_aspect(imageSourceSize, displayRect.size));
     assert(BELOW(thumbArrayRect) <= mainVC.containerView.frame.size.height);
@@ -299,14 +351,6 @@ NSString * __nullable displayOptionNames[] = {
     assert(RIGHT(executeRect) < mainVC.containerView.frame.size.width);
 
     return YES;
-}
-
-- (CGFloat) widthForColumns:(size_t) nc {
-    return nc * (firstThumbRect.size.width + SEP);
-}
-
-- (CGFloat) heightForRows:(size_t) nr {
-    return nr * firstThumbRect.size.height + SEP;
 }
 
 - (int) columnsInThumbArray {
@@ -334,21 +378,12 @@ NSString * __nullable displayOptionNames[] = {
 // if the array holds all our thumbs, trim extra width and height as needed
 // in any case, return number of thumbs displayed in the array
 - (int) trimThumbArray {
-    int thumbsInRow = THUMBS_FOR_WIDTH(thumbArrayRect.size.width);
-    int thumbsInCol = THUMBS_FOR_HEIGHT(thumbArrayRect.size.height);
-    int thumbCount = thumbsInCol * thumbsInRow;
-//    if (thumbCount < (int)mainVC.thumbViewsArray.count)
-//        return thumbCount;
+    int thumbsInRow = [self thumbsForWidth:thumbArrayRect.size.width];
+    int thumbsInCol = [self thumbsForHeight:thumbArrayRect.size.height];
+
     thumbArrayRect.size.width = thumbsInRow * (firstThumbRect.size.width + SEP) - SEP;
     thumbArrayRect.size.height = thumbsInCol * (firstThumbRect.size.height + SEP) - SEP;
-    return thumbCount;
-}
-
-- (void) showThumbArraySize:(CGSize) s {
-    int thumbRows = THUMBS_FOR_HEIGHT(s.height);
-    int thumbCols = THUMBS_FOR_WIDTH(s.width);
-    NSLog(@"********* Thumb array size for %.1f x %.1f: %d x %d = %d",
-          s.width, s.height, thumbCols, thumbRows, thumbRows*thumbCols);
+    return thumbsInCol * thumbsInRow;
 }
 
 - (void) placeExecuteRectWithSqueeze:(BOOL) squeeze {
@@ -397,6 +432,39 @@ NSString * __nullable displayOptionNames[] = {
     scaledSize.width = round(scale*srcSize.width);
     scaledSize.height = round(scale*srcSize.height);
     return scaledSize;
+}
+
+- (NSString *) info {
+    int thumbsInRow = [self thumbsForWidth:thumbArrayRect.size.width];
+    int thumbsInCol = [self thumbsForHeight:thumbArrayRect.size.height];
+    int thumbsShown = thumbsInRow * thumbsInCol;
+    
+    return [NSString stringWithFormat:@"%4.0f x%4.0f   %@  %6.2f  %2d x %2d = %3d",
+          displayRect.size.width, displayRect.size.height,
+          displayOptionNames[displayOption],
+            score,
+            thumbsInRow, thumbsInCol, thumbsShown];
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    Layout *copy = [[Layout alloc] initWithOption:displayOption
+                                           sourceSize:imageSourceSize
+                                               format:format];
+    copy.depthFormat = self.depthFormat;
+    copy.score = self.score;
+    copy.executeIsTight = self.executeIsTight;
+    copy.transformSize = self.transformSize;
+    copy.displayRect = self.displayRect;
+    copy.displayFrac = self.displayFrac;
+    copy.thumbArrayRect = self.thumbArrayRect;
+    copy.firstThumbRect = self.firstThumbRect;
+    copy.thumbImageRect = self.thumbImageRect;
+    copy.executeRect = self.executeRect;
+    copy.executeOverlayOK = executeOverlayOK;
+    copy.status = self.status;
+    copy.maxThumbRows = self.maxThumbRows;
+    copy.maxThumbColumns = self.maxThumbColumns;
+    return copy;
 }
 
 @end

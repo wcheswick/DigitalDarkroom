@@ -9,6 +9,8 @@
 #import <UIKit/UIKit.h>
 #import "Task.h"
 #import "Transform.h"
+#import "MainVC.h"
+
 
 @class Task;    // why the heck is this needed?
 
@@ -42,11 +44,10 @@ typedef enum {
 @property (nonatomic, strong)   Transform *transform;
 @property (nonatomic, strong)   Task *task;
 
-- (id)initWith3dAvailable:(BOOL) have3D;
-
 - (void) configureForTransform:(Transform *) transform;
 - (void) configureSectionThumbNamed:(NSString *)sectionName;
 - (void) adjustStatus:(thumbStatus_t) newStatus;
+- (void) makeAvailableIfPossible;
 
 @end
 
