@@ -53,7 +53,6 @@ typedef enum {  // the transformed display on the main screen
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
-- (void) didChangeOrientation;
 
 extern MainVC *mainVC;
 

@@ -148,6 +148,17 @@ CameraController *cameraController = nil;
             NSLog(@"??? Unknown depth subtype encountered in format: %@", format);
             return NO;
     }
+    
+    // Weird pixel line lengths?
+#ifdef NOTDEF
+    CGSize rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
+                                     CVPixelBufferGetHeight(depthPixelBufferRef));
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+    size_t bpplane = CVPixelBufferGetWidthOfPlane(depthPixelBufferRef, 0);
+    size_t bprp = CVPixelBufferGetBytesPerRowOfPlane(depthPixelBufferRef, 0);
+    assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
+#endif
+    
     // Do the aspect ratios match?
     CMVideoDimensions depthSize = CMVideoFormatDescriptionGetDimensions(depthFormat.formatDescription);
     float depthAR = depthSize.width / depthSize.height;
@@ -460,16 +471,23 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             
             CGSize rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
                                              CVPixelBufferGetHeight(depthPixelBufferRef));
-            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
-            assert(bytesPerRow == rawDepthSize.width * sizeof(Distance));
+            size_t bpr = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+            size_t bufSize = CVPixelBufferGetDataSize(depthPixelBufferRef);
             if (!lastRawFrame.depthBuf || !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
                 lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
             }
             capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
             assert(capturedDepthBuffer);
-            memcpy(lastRawFrame.depthBuf.db, capturedDepthBuffer,
-                   bytesPerRow * rawDepthSize.height);
-            lastRawFrame.depthBuf.size = rawDepthSize;
+            Distance *rowPtr = capturedDepthBuffer;
+            size_t dataBytesPerPlane = CVPixelBufferGetWidthOfPlane(depthPixelBufferRef, 0);
+            size_t distancesPerRow = rawDepthSize.width;
+            size_t goodBytesPerRow = distancesPerRow * sizeof(Distance);
+            size_t bytesPerSourceRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+            for (int row=0; row<rawDepthSize.height; row++) {
+                memcpy(&lastRawFrame.depthBuf.da[row][0], rowPtr, goodBytesPerRow);
+                rowPtr += dataBytesPerPlane;
+            }
+           lastRawFrame.depthBuf.size = rawDepthSize;
             //            [lastRawFrame.depthBuf stats];
             CVPixelBufferUnlockBaseAddress(depthPixelBufferRef, 0);
         }

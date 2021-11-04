@@ -86,7 +86,6 @@ NSString * __nullable displayOptionNames[] = {
         
         scale = 0.0;
         score = BAD_LAYOUT;
-        format = depthFormat = nil;
         thumbArrayRect = CGRectZero;
         displayRect = CGRectZero;
         transformSize = CGSizeZero;
@@ -450,7 +449,7 @@ NSString * __nullable displayOptionNames[] = {
     int thumbsInCol = [self thumbsForHeight:thumbArrayRect.size.height];
     int thumbsShown = thumbsInRow * thumbsInCol;
     
-    return [NSString stringWithFormat:@"%4.0f x%4.0f   %@  %6.2f  %2d x %2d = %3d",
+    return [NSString stringWithFormat:@"%4.0f x%4.0f   %@  %6.2f  %2dx%2d=%3d",
           displayRect.size.width, displayRect.size.height,
           displayOptionNames[displayOption],
             score,

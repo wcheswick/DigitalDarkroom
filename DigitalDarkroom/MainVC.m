@@ -610,6 +610,8 @@ CGFloat topOfNonDepthArray = 0;
 - (void) viewDidLoad {
     [super viewDidLoad];
 
+    [self adjustOrientation];
+
 #ifdef DEBUG_ORIENTATION
     NSLog(@"OOOO viewDidLoad orientation: %@",
           [CameraController dumpDeviceOrientationName:deviceOrientation]);
@@ -952,6 +954,18 @@ CGFloat topOfNonDepthArray = 0;
     [cameraController stopCamera];
 }
 
+- (void) adjustOrientation {
+    UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
+    
+    [self dumpViewLimits:@"viewWillTransitionToSize"];
+    if (nextOrientation == UIDeviceOrientationUnknown)
+//        nextOrientation = UIDeviceOrientationPortraitUpsideDown;    // klduge, don't know why
+        nextOrientation = UIDeviceOrientationPortrait;    // klduge, don't know why
+    if (nextOrientation == deviceOrientation)
+        return; // nothing new to see here, folks
+    deviceOrientation = nextOrientation;
+}
+
 - (void) viewWillTransitionToSize:(CGSize)size
         withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
@@ -959,15 +973,7 @@ CGFloat topOfNonDepthArray = 0;
     [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
         ;
     } completion:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context) {
-        UIDeviceOrientation nextOrientation = [[UIDevice currentDevice] orientation];
-        
-        [self dumpViewLimits:@"viewWillTransitionToSize"];
-        if (nextOrientation == UIDeviceOrientationUnknown)
-    //        nextOrientation = UIDeviceOrientationPortraitUpsideDown;    // klduge, don't know why
-            nextOrientation = UIDeviceOrientationPortrait;    // klduge, don't know why
-        if (nextOrientation == self->deviceOrientation)
-            return; // nothing new to see here, folks
-        self->deviceOrientation = nextOrientation;
+        [self adjustOrientation];
         [self->taskCtrl idleFor:NeedsNewLayout];
         [self.view setNeedsDisplay];
     }];
@@ -1022,7 +1028,9 @@ CGFloat topOfNonDepthArray = 0;
 - (void) dumpLayouts {
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
-        NSLog(@"%3d    %@", i, [layout info]);
+        NSLog(@"%3d %@ %@", i,
+            layoutIndex == i ? @">>" : @"  ",
+            [layout info]);
     }
 }
 #endif
