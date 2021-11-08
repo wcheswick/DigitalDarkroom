@@ -38,6 +38,7 @@ typedef enum {
     BOOL executeIsTight;    // if save verticle space
     float displayFrac;      // fraction of total display used by the transformed image
     
+    CGSize imageSourceSize;
     CGSize transformSize;   // what we give the transform chain
     CGRect displayRect;     // what we give to the main display
     CGRect thumbArrayRect;  // space for the thumb array, to be placed according thumbsPlacement later
@@ -56,6 +57,7 @@ typedef enum {
 @property (assign)              float displayFrac;
 @property (assign)              int maxThumbRows, maxThumbColumns;
 
+@property (assign)              CGSize imageSourceSize;
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
 @property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes

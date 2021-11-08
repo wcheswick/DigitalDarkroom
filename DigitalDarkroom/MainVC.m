@@ -1234,6 +1234,11 @@ CGFloat topOfNonDepthArray = 0;
     NSLog(@"applyScreenLayout %ld", layoutIndex);
     NSLog(@"screen format %@", layout.format);
 #endif
+    
+    NSLog(@"    source ar: %5.3f", layout.imageSourceSize.width/layout.imageSourceSize.height);
+    NSLog(@"thumbimage ar: %5.3f", layout.thumbImageRect.size.width/layout.thumbImageRect.size.height);
+    NSLog(@"   display ar: %5.3f", layout.displayRect.size.width/layout.displayRect.size.height);
+    NSLog(@" transform ar: %5.3f", layout.transformSize.width/layout.transformSize.height);
 
     // We have several image sizes to consider and process:
     //

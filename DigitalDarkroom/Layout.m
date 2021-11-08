@@ -33,7 +33,6 @@ NSString * __nullable displayOptionNames[] = {
 
 @interface Layout ()
 
-@property (assign)  CGSize imageSourceSize;
 @property (assign)  ThumbsPosition thumbsPosition;
 @property (assign)  float thumbScore, displayScore, scaleScore;
 @property (assign)  float thumbFrac;
@@ -77,7 +76,7 @@ NSString * __nullable displayOptionNames[] = {
         
         aspectRatio = imageSourceSize.width / imageSourceSize.height;
         firstThumbRect = thumbImageRect = CGRectZero;
-        thumbImageRect.size = CGSizeMake(THUMB_W, round(THUMB_LABEL_H / aspectRatio));
+        thumbImageRect.size = CGSizeMake(THUMB_W, THUMB_W/aspectRatio);
         firstThumbRect.size = CGSizeMake(thumbImageRect.size.width,
                                          thumbImageRect.size.height + THUMB_LABEL_H);
         
