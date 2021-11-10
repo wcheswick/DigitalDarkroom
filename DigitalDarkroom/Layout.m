@@ -55,7 +55,7 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize imageSourceSize;
 @synthesize transformSize, displayRect;
 @synthesize displayFrac, thumbFrac;
-@synthesize thumbArrayRect;
+@synthesize thumbArrayRect, plusRect;
 @synthesize executeRect, executeOverlayOK, executeIsTight;
 @synthesize firstThumbRect, thumbImageRect;
 

@@ -51,6 +51,7 @@ typedef enum {  // the transformed display on the main screen
 @property (nonatomic, strong)   CameraController *cameraController;
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
+- (void) adjustOrientation;
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet
 

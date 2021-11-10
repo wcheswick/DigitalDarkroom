@@ -34,7 +34,7 @@
                      initWithRootViewController:mainVC];
     
     [[NSNotificationCenter defaultCenter] addObserver:mainVC
-                                             selector:@selector(didChangeOrientation)
+                                             selector:@selector(adjustOrientation)
                                                  name:UIViewControllerShowDetailTargetDidChangeNotification
                                                object:nil];
 

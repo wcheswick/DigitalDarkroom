@@ -42,6 +42,7 @@ typedef enum {
     CGSize transformSize;   // what we give the transform chain
     CGRect displayRect;     // what we give to the main display
     CGRect thumbArrayRect;  // space for the thumb array, to be placed according thumbsPlacement later
+    CGRect plusRect;
     CGRect firstThumbRect;  // thumb size for device, orientation, and aspect ratio
     CGRect thumbImageRect;  // image sample size in the thumb
     CGRect executeRect;     // where the active transform list is shown
@@ -61,6 +62,7 @@ typedef enum {
 @property (assign)              CGSize transformSize;   // what we give to the transform chain
 @property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
 @property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
+@property (assign)              CGRect plusRect;
 @property (assign)              CGRect executeRect;     // total area available for the execute list
 @property (assign)              BOOL executeOverlayOK, executeIsTight;  // text placement guidance
 

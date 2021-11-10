@@ -28,6 +28,8 @@ typedef enum {
     ThumbActive,
     ThumbTransformBroken,
     SectionHeader,
+    PlusButton,
+    DoubleWidthPlusButton,
 } thumbStatus_t;
 
 @interface ThumbView : UIView {

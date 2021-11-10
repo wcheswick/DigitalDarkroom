@@ -222,6 +222,7 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UISegmentedControl *plusBar;
 @property (nonatomic, strong)   UIButton *plusButton;
+@property (nonatomic, strong)   UIButton *thumbPlusButton;
 @property (nonatomic, strong)   UIButton *doublePlusButton;
 
 @property (nonatomic, strong)   UIButton *plusBarButtonItem;
@@ -294,6 +295,7 @@ MainVC *mainVC = nil;
 @synthesize layout;
 
 @synthesize plusBar, plusButton, doublePlusButton;
+@synthesize thumbPlusButton;
 @synthesize undoBarButton, shareBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
@@ -661,6 +663,21 @@ CGFloat topOfNonDepthArray = 0;
                      target:self
                       action:@selector(doShare:)];
     
+#define PLUS_BUTTON_FONT_SIZE   THUMB_W/2
+    
+    thumbPlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    thumbPlusButton.frame = CGRectMake(LATER, LATER,
+                                         THUMB_W, THUMB_W);
+    [thumbPlusButton addTarget:self
+                          action:@selector(doThumbPlus:)
+                forControlEvents:UIControlEventTouchUpInside];
+    [thumbPlusButton setTintColor:[UIColor whiteColor]];
+    thumbPlusButton.titleLabel.text = @"+";
+    thumbPlusButton.selected = NO;
+    [self adjustThumbPlusButton];
+    [containerView addSubview:thumbPlusButton];
+
+#ifdef NOTDEF
     plusBar = [[UISegmentedControl alloc]
                                    initWithItems:@[[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"],
                                                    [UIImage systemImageNamed:@"plus.rectangle"]]];
@@ -671,7 +688,8 @@ CGFloat topOfNonDepthArray = 0;
     
     UIBarButtonItem *plusBarSelectionButton = [[UIBarButtonItem alloc]
                                                initWithCustomView:plusBar];
-
+#endif
+    
     undoBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"arrow.uturn.backward"]
                      style:UIBarButtonItemStylePlain
@@ -711,7 +729,7 @@ CGFloat topOfNonDepthArray = 0;
 #endif
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-                                               plusBarSelectionButton,
+//                                               plusBarSelectionButton,
                                                undoBarButton,
                                                trashBarButton,
                                                fixedSpace,
@@ -1233,12 +1251,12 @@ CGFloat topOfNonDepthArray = 0;
 #ifdef DEBUG_LAYOUT
     NSLog(@"applyScreenLayout %ld", layoutIndex);
     NSLog(@"screen format %@", layout.format);
-#endif
     
     NSLog(@"    source ar: %5.3f", layout.imageSourceSize.width/layout.imageSourceSize.height);
     NSLog(@"thumbimage ar: %5.3f", layout.thumbImageRect.size.width/layout.thumbImageRect.size.height);
     NSLog(@"   display ar: %5.3f", layout.displayRect.size.width/layout.displayRect.size.height);
     NSLog(@" transform ar: %5.3f", layout.transformSize.width/layout.transformSize.height);
+#endif
 
     // We have several image sizes to consider and process:
     //
@@ -1563,11 +1581,14 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (IBAction) doPlus:(UISegmentedControl *)caller {
-    NSInteger newMode = caller.selectedSegmentIndex;
-    assert(newMode != NoPlus); // cannot be selected
-    plusMode = (int)newMode;
-    [self adjustPlus];
+- (IBAction) doThumbPlus:(UIButton *)caller {
+    thumbPlusButton.selected = YES;
+}
+
+- (void) adjustThumbPlusButton {
+    thumbPlusButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_BUTTON_FONT_SIZE
+                                                        weight:thumbPlusButton.selected ?
+                                            UIFontWeightHeavy : UIFontWeightLight];
 }
 
 - (void) adjustPlus {

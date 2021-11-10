@@ -133,6 +133,8 @@
     switch (status) {
         case ThumbTransformBroken:
         case SectionHeader:
+        case PlusButton:
+        case DoubleWidthPlusButton:
             return;
         case ThumbAvailable:
         case ThumbUnAvailable:
@@ -189,6 +191,8 @@
             break;
         case SectionHeader:
             self.layer.borderWidth = 0;
+        case PlusButton:
+        case DoubleWidthPlusButton:
             break;
     }
 //    if (!sectionName)
