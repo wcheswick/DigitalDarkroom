@@ -58,8 +58,7 @@ typedef enum {
 
 - (long) appendTransformToTask:(Transform *) transform;
 - (void) removeTransformAtIndex:(long) index;
-- (void) changeTransformAtIndex:(long) index
-                    to:(Transform *) transform;
+- (void) changeLastTransformTo:(Transform *) transform;
 - (long) removeLastTransform;
 - (void) removeAllTransforms;
 

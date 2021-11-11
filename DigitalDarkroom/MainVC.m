@@ -105,18 +105,6 @@ typedef enum {
 } PlusMode;
 #define PLUS_MODE_COUNT    3
 
-NSString *plusNames[] = {
-    @"No",
-    @"One",
-    @"Many"
-};
-
-NSString *plusImageNames[] = {
-    @"plus.rectangle",
-    @"plus.rectangle.fill",
-    @"plus.rectangle.fill.on.rectangle.fill"
-};
-
 struct camera_t {
     BOOL front, threeD;
     NSString *name;
@@ -154,6 +142,7 @@ MainVC *mainVC = nil;
 
 @interface MainVC ()
 
+@property (assign)              BOOL plusRequested, plusRequestLocked;
 @property (nonatomic, strong)   Options *options;
 @property (assign)              DisplayOptions currentDisplayOption;
 
@@ -205,7 +194,6 @@ MainVC *mainVC = nil;
 @property (assign)              int cameraCount;
 
 @property (nonatomic, strong)   Transforms *transforms;
-@property (assign)              long currentTransformIndex; // or NO_TRANSFORM
 
 @property (nonatomic, strong)   NSTimer *statsTimer;
 @property (nonatomic, strong)   UILabel *allStatsLabel;
@@ -220,15 +208,8 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
 
-@property (nonatomic, strong)   UISegmentedControl *plusBar;
 @property (nonatomic, strong)   UIButton *plusButton;
-@property (nonatomic, strong)   UIButton *thumbPlusButton;
-@property (nonatomic, strong)   UIButton *doublePlusButton;
-
-@property (nonatomic, strong)   UIButton *plusBarButtonItem;
 @property (nonatomic, strong)   UIBarButtonItem *cameraBarButtonItem;
-
-@property (assign)              PlusMode plusMode;
 
 @property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 
@@ -249,6 +230,7 @@ MainVC *mainVC = nil;
 
 @implementation MainVC
 
+@synthesize plusRequested, plusRequestLocked, plusButton;
 @synthesize taskCtrl;
 @synthesize screenTasks, thumbTasks, externalTasks;
 @synthesize hiresTasks;
@@ -273,7 +255,6 @@ MainVC *mainVC = nil;
 @synthesize executeView;
 @synthesize layoutValuesView;
 
-@synthesize plusBarButtonItem;
 @synthesize cameraBarButtonItem;
 
 @synthesize deviceOrientation;
@@ -285,7 +266,6 @@ MainVC *mainVC = nil;
 @synthesize currentSourceIndex, nextSourceIndex;
 @synthesize inputSources;
 @synthesize cameraSourceThumb;
-@synthesize currentTransformIndex;
 @synthesize fileSourceFrame;
 @synthesize live;
 @synthesize cameraCount;
@@ -293,13 +273,11 @@ MainVC *mainVC = nil;
 @synthesize cameraController;
 @synthesize layout;
 
-@synthesize plusBar, plusButton, doublePlusButton;
-@synthesize thumbPlusButton;
 @synthesize undoBarButton, shareBarButton, trashBarButton;
 
 @synthesize transformTotalElapsed, transformCount;
 @synthesize frameCount, depthCount, droppedCount, busyCount;
-@synthesize busy, plusMode;
+@synthesize busy;
 @synthesize statsTimer, allStatsLabel, lastTime;
 @synthesize transforms;
 @synthesize hiresButton;
@@ -320,13 +298,12 @@ MainVC *mainVC = nil;
 
         transforms = [[Transforms alloc] init];
         
-        currentTransformIndex = NO_TRANSFORM;
         fileSourceFrame = nil;
         layout = nil;
         helpNavVC = nil;
+        plusRequested = plusRequestLocked = NO;
         showControls = NO;
         transformChainChanged = NO;
-        plusMode = NoPlus;
         lastDisplayedFrame = nil;
         layouts = [[NSMutableArray alloc] init];
         taskCtrl = [[TaskCtrl alloc] init];
@@ -453,7 +430,16 @@ MainVC *mainVC = nil;
         ThumbView *thumbView = [[ThumbView alloc] init];
 
         NSString *section = [transform.helpPath pathComponents][0];
-        if (!lastSection || ![lastSection isEqualToString:section]) {   // new section.
+        
+        // first, the plus thumb button
+        if (ti == 0) {
+            [thumbView adjustStatus:ThumbPlusButton];
+            [thumbViewsArray addObject:thumbView];
+            thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
+        }
+        
+        // insert section button if new section
+        if (!lastSection || ![lastSection isEqualToString:section]) {
             [thumbView configureSectionThumbNamed:section];
             [thumbViewsArray addObject:thumbView];  // Add section thumb, then...
             
@@ -461,6 +447,8 @@ MainVC *mainVC = nil;
             thumbView.transform = transform;
             lastSection = section;
         }
+        
+        // append thumb
         [thumbView configureForTransform:transform];
         transform.thumbView = thumbView;
         thumbView.tag = ti + TRANSFORM_BASE_TAG;
@@ -540,25 +528,49 @@ CGFloat topOfNonDepthArray = 0;
     
     // run through the thumbview array
     for (ThumbView *thumbView in thumbViewsArray) {
-        if (thumbView.status == SectionHeader) {   // new section
+        switch (thumbView.status) {
+            case SectionHeader: {
 #ifdef DEBUG_THUMB_LAYOUT
-            NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Section %@",
-                  nextButtonFrame.origin.x, nextButtonFrame.origin.y,
-                  nextButtonFrame.size.width, nextButtonFrame.size.height,
-                  thumbView.sectionName);
+                NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Section %@",
+                      nextButtonFrame.origin.x, nextButtonFrame.origin.y,
+                      nextButtonFrame.size.width, nextButtonFrame.size.height,
+                      thumbView.sectionName);
 #endif
 #ifdef OLD
-            if (lastSection) {  // not our first section, make space
-                if (!atStartOfRow) {
-                    [self nextTransformButtonPosition];
+                if (lastSection) {  // not our first section, make space
+                    if (!atStartOfRow) {
+                        [self nextTransformButtonPosition];
+                    }
                 }
-            }
 #endif
-            UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
-            label.frame = sectionNameRect;
-            thumbView.frame = nextButtonFrame;  // this is a little incomplete
-//            lastSection = thumbView.sectionName;
-        } else {
+                UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+                label.frame = sectionNameRect;
+                thumbView.frame = nextButtonFrame;  // this is a little incomplete
+                //            lastSection = thumbView.sectionName;
+                break;
+            }
+            case ThumbPlusButton:
+                thumbView.frame = nextButtonFrame;
+                thumbView.userInteractionEnabled = YES;
+
+                plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+                CGRect f = thumbView.frame;
+                f.size = nextButtonFrame.size;
+                plusButton.frame = f;
+                [plusButton addTarget:self
+                                      action:@selector(doPlusTapped:)
+                            forControlEvents:UIControlEventTouchUpInside];
+                [plusButton setTitle: @"+" forState: UIControlStateNormal];
+                [plusButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+                [plusButton setTitle: @"+" forState: UIControlStateSelected];
+                [plusButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
+                [plusButton setTitle: @"+" forState: UIControlStateHighlighted];
+                [plusButton setTitleColor:[UIColor blueColor] forState:UIControlStateHighlighted];
+                [self adjustPlusButton];
+                break;
+            case DoubleWidthPlusButton:
+                break;
+        default:    // regular thumb button
             [thumbView adjustThumbEnabled];
 #ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
@@ -579,8 +591,6 @@ CGFloat topOfNonDepthArray = 0;
         
         [self nextTransformButtonPosition];
     }
-    
-//    [self updateThumbAvailability];
     
     SET_VIEW_HEIGHT(thumbsView, thumbsH);
     thumbScrollView.contentSize = thumbsView.frame.size;
@@ -661,20 +671,6 @@ CGFloat topOfNonDepthArray = 0;
                      style:UIBarButtonItemStylePlain
                      target:self
                       action:@selector(doShare:)];
-    
-#define PLUS_BUTTON_FONT_SIZE   THUMB_W/2
-    
-    thumbPlusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-    thumbPlusButton.frame = CGRectMake(LATER, LATER,
-                                         THUMB_W, THUMB_W);
-    [thumbPlusButton addTarget:self
-                          action:@selector(doThumbPlus:)
-                forControlEvents:UIControlEventTouchUpInside];
-    [thumbPlusButton setTintColor:[UIColor whiteColor]];
-    thumbPlusButton.titleLabel.text = @"+";
-    thumbPlusButton.selected = NO;
-    [self adjustThumbPlusButton];
-    [containerView addSubview:thumbPlusButton];
 
 #ifdef NOTDEF
     plusBar = [[UISegmentedControl alloc]
@@ -1491,7 +1487,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (size_t) nextTransformTapIndex {
-    if (plusMode == PlusOne || plusMode == PlusMany)
+    if (plusRequested || plusRequestLocked)
         return screenTask.transformList.count;
     if (screenTask.transformList.count > 0)
         return screenTask.transformList.count - 1;
@@ -1501,50 +1497,34 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
-
-//    size_t indexToChange = [self nextTransformTapIndex];
-    switch (plusMode) {
-        case NoPlus: {
-            if (currentTransformIndex == NO_TRANSFORM ||
-                currentTransformIndex == screenTask.transformList.count) {
-                // plus beyond the end, add the transform
-                [screenTask appendTransformToTask:tappedTransform];
-                [screenTask configureTaskForSize];
-                currentTransformIndex = screenTask.transformList.count - 1;
-                [tappedThumb adjustStatus:ThumbActive];
-                break;
-            }
-            if (tappedThumb.status == ThumbActive) {    // deselect tapped thumb
-                [tappedThumb adjustStatus:ThumbAvailable];
-                [screenTask removeTransformAtIndex:currentTransformIndex];
-                [screenTask configureTaskForSize];
-                break;
-            }
-            // turn off the old thumb and add the new one
-            Transform *oldTransform = screenTask.transformList[currentTransformIndex];
-            ThumbView *oldThumb = oldTransform.thumbView;
-            [oldThumb adjustStatus:ThumbAvailable];
-            [tappedThumb adjustStatus:ThumbActive];
-            [screenTask changeTransformAtIndex:currentTransformIndex to:tappedTransform];
-            [screenTask configureTaskForSize];
-            break;
+    
+    //    size_t indexToChange = [self nextTransformTapIndex];
+    // if there is no current transform, or plus is selected, append the transform
+    if (!screenTasks.tasks.count || plusRequested || plusRequestLocked) {
+        [screenTask appendTransformToTask:tappedTransform];
+        [tappedThumb adjustStatus:ThumbActive];
+        if (plusRequested) {
+            plusRequested = NO;
+            [self adjustPlusButton];
         }
-        case PlusOne:
-            [screenTask appendTransformToTask:tappedTransform];
-            [screenTask configureTaskForSize];
-            currentTransformIndex = screenTask.transformList.count - 1;
-            [tappedThumb adjustStatus:ThumbActive];
-            currentTransformIndex = screenTask.transformList.count - 1;
-            plusMode = NoPlus;
-            break;
-        case PlusMany:
-            [screenTask appendTransformToTask:tappedTransform];
-            [screenTask configureTaskForSize];
-            currentTransformIndex = screenTask.transformList.count - 1;
-            [tappedThumb adjustStatus:ThumbActive];
-            currentTransformIndex = screenTask.transformList.count - 1;
-            break;
+    } else {    // we have a current transform. deselect if he tapped current transform
+        if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
+            [tappedThumb adjustStatus:ThumbAvailable];
+            [screenTask removeLastTransform];
+        } else {
+            Transform *oldTransform = [screenTask.transformList lastObject];
+            if (oldTransform) {
+                ThumbView *oldThumb = oldTransform.thumbView;
+                [oldThumb adjustStatus:ThumbAvailable];
+                [tappedThumb adjustStatus:ThumbActive];
+                [screenTask changeLastTransformTo:tappedTransform];
+            } else {
+                [screenTask appendTransformToTask:tappedTransform];
+                [tappedThumb adjustStatus:ThumbActive];
+            }
+        }
     }
+    [screenTask configureTaskForSize];
     transformChainChanged = YES;
     [self updateThumbAvailability];
 //   [self adjustParametersFrom:lastTransform to:tappedTransform];
@@ -1583,51 +1563,38 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (IBAction) doThumbPlus:(UIButton *)caller {
-    thumbPlusButton.selected = YES;
+- (IBAction) doPlusTapped:(UIButton *)caller {
+    NSLog(@"doPlusTapped");
+    plusButton.selected = !plusButton.selected;
+    plusRequested = !plusRequested;
+    [self adjustPlusButton];
 }
 
-- (void) adjustThumbPlusButton {
-    thumbPlusButton.titleLabel.font = [UIFont systemFontOfSize:PLUS_BUTTON_FONT_SIZE
-                                                        weight:thumbPlusButton.selected ?
-                                            UIFontWeightHeavy : UIFontWeightLight];
+- (IBAction) doPlusPressed:(UIButton *)caller {
+    NSLog(@"doPlusPressed");
+    plusButton.highlighted = !plusButton.highlighted;
+    plusRequestLocked = plusButton.highlighted;
+    plusRequested = plusRequested || plusRequestLocked;
+    [self adjustPlusButton];
 }
 
-- (void) adjustPlus {
-#ifdef BROKEN
-    switch (plusMode) { // adjust buttons
-        case NoPlus:
-            plusBarButton.style = UIBarButtonItemStyleDone;
-            doublePlusBarButton.style = UIBarButtonItemStyleDone;
-            break;
-        case PlusOne:
-            plusBarButton.style = UIBarButtonItemStyleDone;
-            doublePlusBarButton.style = UIBarButtonItemStyleDone;
-            break;
-        case PlusMany:
-            plusBarButton.style = UIBarButtonItemStyleDone;
-            doublePlusBarButton.style = UIBarButtonItemStyleDone;
-            break;
+- (void) adjustPlusButton {
+    UIFontWeight weight;
+    if (plusButton.highlighted) {
+        weight = UIFontWeightHeavy;
+    } else if (plusButton.selected) {
+        weight = UIFontWeightMedium;
+    } else {
+        weight = UIFontWeightThin;
     }
-#endif
+    UIFont *font = [UIFont
+                    systemFontOfSize:plusButton.frame.size.height/2.0
+                    weight:weight];
+    plusButton.titleLabel.attributedText = [[NSAttributedString alloc]
+                                            initWithString:@"+"
+                                            attributes:@{ NSFontAttributeName : font}];
+    [plusButton setNeedsDisplay];
 }
-
-#ifdef OLD
-- (IBAction) doDoublePlusButton:(UIBarButtonItem *)caller {
-    switch (plusMode) {
-        case NoPlus:
-            plusMode = PlusMany;
-            break;
-        case PlusOne:
-            plusMode = PlusMany;
-            break;
-        case PlusMany:
-            plusMode = NoPlus;
-            break;
-    }
-    [self adjustPlus];
-}
-#endif
 
 
 // If the camera is off, turn it on, to the first possible setting,

@@ -86,10 +86,11 @@ static PixelIndex_t dPI(int x, int y) {
     return transformList.count - 1;
 }
 
-- (void) changeTransformAtIndex:(long) index
-                    to:(Transform *) transform {
+- (void) changeLastTransformTo:(Transform *) transform {
     TransformInstance *instance = [[TransformInstance alloc]
                                    initFromTransform:(Transform *)transform];
+    assert(transformList.count);
+    size_t index = transformList.count - 1;
     [transformList replaceObjectAtIndex:index withObject:transform];
     [paramList replaceObjectAtIndex:index withObject:instance];
     [self updateDepthNeeds];

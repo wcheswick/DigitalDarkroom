@@ -28,7 +28,7 @@ typedef enum {
     ThumbActive,
     ThumbTransformBroken,
     SectionHeader,
-    PlusButton,
+    ThumbPlusButton,
     DoubleWidthPlusButton,
 } thumbStatus_t;
 
