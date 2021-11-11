@@ -32,7 +32,7 @@ typedef enum {
     Transforms *transforms;
     NSMutableArray<TaskGroup *> *taskGroups;
     NSMutableDictionary *activeGroups;
-    Frame *lastFrame;
+    Frame *__nullable lastFrame;
 }
 
 @property (nonatomic, strong)   NSMutableArray<TaskGroup *> *taskGroups;
@@ -40,7 +40,7 @@ typedef enum {
 @property (assign)              LayoutStatus_t state;
 @property (assign)              id mainVC;
 @property (nonatomic, strong)   NSMutableDictionary *activeGroups;
-@property (nonatomic, strong)   Frame *lastFrame;
+@property (nonatomic, strong)   Frame *__nullable lastFrame;
 
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;

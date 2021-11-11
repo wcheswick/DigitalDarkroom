@@ -232,7 +232,6 @@ MainVC *mainVC = nil;
 
 @property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 
-//@property (assign)              UIImageOrientation imageOrientation;
 @property (assign)              UIDeviceOrientation deviceOrientation;
 
 @property (nonatomic, strong)   Layout *layout;
@@ -920,6 +919,7 @@ CGFloat topOfNonDepthArray = 0;
     [self.view addSubview:containerView];
     self.view.backgroundColor = [UIColor whiteColor];
     [self createThumbArray];
+    [self adjustBarButtons];
 }
 
 - (void) dumpViewLimits:(NSString *)label {
@@ -982,6 +982,8 @@ CGFloat topOfNonDepthArray = 0;
     if (nextOrientation == deviceOrientation)
         return; // nothing new to see here, folks
     deviceOrientation = nextOrientation;
+    [self reloadSourceImage];
+//    taskCtrl.lastFrame = nil;
 }
 
 - (void) viewWillTransitionToSize:(CGSize)size
@@ -2041,11 +2043,6 @@ CGFloat topOfNonDepthArray = 0;
 }
 #endif
 
-#ifdef DEBUG_TASK_CONFIGURATION
-BOOL haveOrientation = NO;
-UIImageOrientation lastOrientation;
-#endif
-
 - (IBAction) didPressVideo:(UILongPressGestureRecognizer *)recognizer {
     NSLog(@" === didPressVideo");
     if (recognizer.state == UIGestureRecognizerStateEnded) {
@@ -2060,6 +2057,7 @@ UIImageOrientation lastOrientation;
 //    [self updateOverlayView];
     [self updateExecuteView];
     [self adjustBarButtons];
+    [self reloadSourceImage];
 }
 
 - (void) deselectAllThumbs {
@@ -2272,6 +2270,14 @@ static CGSize startingPinchSize;
 //    NSLog(@"III changeSource To  index %ld", (long)nextIndex);
     nextSourceIndex = nextIndex;
     [taskCtrl idleFor:NeedsNewLayout];
+}
+
+- (void) reloadSourceImage {
+    if (currentSourceIndex == NO_SOURCE)
+        return;
+   if (IS_CAMERA(CURRENT_SOURCE) && live)
+       return;  // no need: the camera will refresh
+    [self changeSourceTo:currentSourceIndex];
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
