@@ -483,7 +483,7 @@ MainVC *mainVC = nil;
                                                              initWithTarget:self action:@selector(doHelp:)];
             thumbHelp.minimumPressDuration = 1.0;
             [thumbView addGestureRecognizer:thumbHelp];
-            [thumbView makeAvailableIfPossible];
+            [thumbView adjustThumbEnabled];
         }
 
         [thumbViewsArray addObject:thumbView];
@@ -560,7 +560,7 @@ CGFloat topOfNonDepthArray = 0;
             thumbView.frame = nextButtonFrame;  // this is a little incomplete
 //            lastSection = thumbView.sectionName;
         } else {
-            thumbView.userInteractionEnabled = !thumbView.transform.broken;
+            [thumbView adjustThumbEnabled];
 #ifdef DEBUG_THUMB_LAYOUT
             NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
                   nextButtonFrame.origin.x, nextButtonFrame.origin.y,
@@ -1544,7 +1544,7 @@ CGFloat topOfNonDepthArray = 0;
             break;
     }
     transformChainChanged = YES;
-    [self updateThumbAvailability]; // XXXXXX right?
+    [self updateThumbAvailability];
 //   [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
     [self adjustBarButtons];
@@ -2065,8 +2065,9 @@ UIImageOrientation lastOrientation;
 - (void) deselectAllThumbs {
     for (ThumbView *thumbView in thumbViewsArray) {
         // deselect all selected thumbs
-        if (thumbView.status == ThumbActive)
-            [thumbView makeAvailableIfPossible];
+        if (thumbView.status == ThumbActive) {
+            [thumbView adjustStatus:ThumbAvailable];
+        }
     }
 }
 
@@ -2497,7 +2498,7 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 // displayedFrame has the source frame.  if nil?
 - (void) updateThumbAvailability {
     for (ThumbView *thumbView in thumbViewsArray) {
-        [thumbView makeAvailableIfPossible];
+        [thumbView adjustThumbEnabled];
     }
     transformChainChanged = NO;
 }

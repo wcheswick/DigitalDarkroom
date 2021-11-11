@@ -129,29 +129,23 @@
     [self addSubview:sectionLabel];
 }
 
-- (void) makeAvailableIfPossible {
-    switch (status) {
-        case ThumbTransformBroken:
-        case SectionHeader:
-        case PlusButton:
-        case DoubleWidthPlusButton:
-            return;
-        case ThumbAvailable:
-        case ThumbUnAvailable:
-        case ThumbActive:
-            switch (transform.type) {
-                case DepthVis:
-                case DepthTrans:
-                    if (mainVC.cameraController &&
-                        mainVC.cameraController.depthDataAvailable) {
-                        [self adjustStatus:ThumbAvailable];
-                    } else
-                        [self adjustStatus:ThumbUnAvailable];
-                    break;
-                default:
+- (void) adjustThumbEnabled {
+    if (transform.broken) {
+        [self adjustStatus:ThumbUnAvailable];
+    }
+    
+    switch (transform.type) {
+        case DepthVis:
+        case DepthTrans:
+            if (mainVC.cameraController &&
+                mainVC.cameraController.depthDataAvailable) {
+                if (self.status == ThumbUnAvailable)
                     [self adjustStatus:ThumbAvailable];
-            }
-
+            } else
+                [self adjustStatus:ThumbUnAvailable];
+            break;
+        default:
+            ;
     }
 }
 
@@ -197,7 +191,7 @@
     }
 //    if (!sectionName)
 //        NSLog(@"TT: %d  %@", task.enabled, task.taskName);
-
+    self.userInteractionEnabled = task.enabled;
     status = newStatus;
     [self setNeedsDisplay];
 }

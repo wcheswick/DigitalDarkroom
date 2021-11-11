@@ -49,7 +49,7 @@ typedef enum {
 - (void) configureForTransform:(Transform *) transform;
 - (void) configureSectionThumbNamed:(NSString *)sectionName;
 - (void) adjustStatus:(thumbStatus_t) newStatus;
-- (void) makeAvailableIfPossible;
+- (void) adjustThumbEnabled;
 
 @end
 
