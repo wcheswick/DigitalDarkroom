@@ -25,6 +25,10 @@
 #define UI_MODE_KEY             @"UIMode"
 #define LAST_SOURCE_KEY      @"Current source index"
 
+#define PLUS_ENABLED    plusButton.enabled
+#define PLUS_REQUESTED  plusButton.selected
+#define PLUS_LOCKED     plusButton.highlighted
+
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
 
@@ -98,13 +102,6 @@
 #define SOURCE_INDEX_IS_FRONT(si)   (possibleCameras[SOURCE(si).cameraIndex].front)
 #define SOURCE_INDEX_IS_3D(si)   (possibleCameras[SOURCE(si).cameraIndex].threeD)
 
-typedef enum {
-    NoPlus = -1,    // values correspond to plus segment index
-    PlusOne = 0,
-    PlusMany = 1,
-} PlusMode;
-#define PLUS_MODE_COUNT    3
-
 struct camera_t {
     BOOL front, threeD;
     NSString *name;
@@ -142,7 +139,6 @@ MainVC *mainVC = nil;
 
 @interface MainVC ()
 
-@property (assign)              BOOL plusRequested, plusRequestLocked;
 @property (nonatomic, strong)   Options *options;
 @property (assign)              DisplayOptions currentDisplayOption;
 
@@ -157,8 +153,8 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *cameraBarButton;
 
-@property (nonatomic, strong)   UIBarButtonItem *depthBarButton;
 @property (nonatomic, strong)   Frame *lastDisplayedFrame;  // what's on the screen
 
 // in containerview:
@@ -230,14 +226,14 @@ MainVC *mainVC = nil;
 
 @implementation MainVC
 
-@synthesize plusRequested, plusRequestLocked, plusButton;
+@synthesize plusButton;
 @synthesize taskCtrl;
 @synthesize screenTasks, thumbTasks, externalTasks;
 @synthesize hiresTasks;
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize depthBarButton, flipBarButton, sourceBarButton;
+@synthesize flipBarButton, sourceBarButton, cameraBarButton;
 @synthesize transformView;
 @synthesize transformChainChanged;
 @synthesize overlayDebugStatus;
@@ -301,7 +297,6 @@ MainVC *mainVC = nil;
         fileSourceFrame = nil;
         layout = nil;
         helpNavVC = nil;
-        plusRequested = plusRequestLocked = NO;
         showControls = NO;
         transformChainChanged = NO;
         lastDisplayedFrame = nil;
@@ -431,7 +426,7 @@ MainVC *mainVC = nil;
 
         NSString *section = [transform.helpPath pathComponents][0];
         
-        // first, the plus thumb button
+        // first, the plus button, in the thumbs
         if (ti == 0) {
             [thumbView adjustStatus:ThumbPlusButton];
             [thumbViewsArray addObject:thumbView];
@@ -497,6 +492,7 @@ CGRect nextButtonFrame;
 BOOL atStartOfRow;
 CGFloat topOfNonDepthArray = 0;
 
+
 // Transform thumb layout needs to be checked at
 // - every display size change
 // - device rotation
@@ -549,42 +545,61 @@ CGFloat topOfNonDepthArray = 0;
                 //            lastSection = thumbView.sectionName;
                 break;
             }
-            case ThumbPlusButton:
+            case ThumbPlusButton: {
                 thumbView.frame = nextButtonFrame;
                 thumbView.userInteractionEnabled = YES;
-
+                
                 plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
                 CGRect f = thumbView.frame;
                 f.size = nextButtonFrame.size;
                 plusButton.frame = f;
                 [plusButton addTarget:self
-                                      action:@selector(doPlusTapped:)
-                            forControlEvents:UIControlEventTouchUpInside];
-                [plusButton setTitle: @"+" forState: UIControlStateNormal];
-                [plusButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-                [plusButton setTitle: @"+" forState: UIControlStateSelected];
-                [plusButton setTitleColor:[UIColor blackColor] forState:UIControlStateSelected];
-                [plusButton setTitle: @"+" forState: UIControlStateHighlighted];
-                [plusButton setTitleColor:[UIColor blueColor] forState:UIControlStateHighlighted];
+                               action:@selector(doPlusTapped:)
+                     forControlEvents:UIControlEventTouchUpInside];
+                [self plusTitleForState:UIControlStateNormal
+                                 weight:UIFontWeightThin
+                                  color:[UIColor blackColor]];
+                [self plusTitleForState:UIControlStateDisabled
+                                 weight:UIFontWeightThin
+                                  color:[UIColor lightGrayColor]];
+                [self plusTitleForState:UIControlStateSelected
+                                 weight:UIFontWeightMedium
+                                  color:[UIColor blackColor]];
+                [self plusTitleForState:UIControlStateHighlighted
+                                 weight:UIFontWeightHeavy
+                                  color:[UIColor blueColor]];
+                PLUS_ENABLED = NO;
+                PLUS_REQUESTED = NO;
+                PLUS_LOCKED = NO;
+                
                 [self adjustPlusButton];
+                
+                UILongPressGestureRecognizer *lockPlus = [[UILongPressGestureRecognizer alloc]
+                                                                 initWithTarget:self
+                                                          action:@selector(doPlusPressed:)];
+                lockPlus.minimumPressDuration = 1.0;
+                [plusButton addGestureRecognizer:lockPlus];
+
+                [thumbView addSubview:plusButton];
                 break;
+            }
             case DoubleWidthPlusButton:
                 break;
-        default:    // regular thumb button
-            [thumbView adjustThumbEnabled];
+            default:    // regular thumb button
+                [thumbView adjustThumbEnabled];
 #ifdef DEBUG_THUMB_LAYOUT
-            NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
-                  nextButtonFrame.origin.x, nextButtonFrame.origin.y,
-                  nextButtonFrame.size.width, nextButtonFrame.size.height,
-                  transform.name);
+                NSLog(@"%3.0f,%3.0f  %3.0fx%3.0f   Transform %@",
+                      nextButtonFrame.origin.x, nextButtonFrame.origin.y,
+                      nextButtonFrame.size.width, nextButtonFrame.size.height,
+                      transform.name);
 #endif
-            UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
-            thumbImage.frame = layout.thumbImageRect;
-            thumbView.task.targetImageView = thumbImage;
-            
-            UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
-            label.frame = transformNameRect;
-            thumbView.frame = nextButtonFrame;
+                UIImageView *thumbImage = [thumbView viewWithTag:THUMB_IMAGE_TAG];
+                thumbImage.frame = layout.thumbImageRect;
+                thumbView.task.targetImageView = thumbImage;
+                
+                UILabel *label = [thumbView viewWithTag:THUMB_LABEL_TAG];
+                label.frame = transformNameRect;
+                thumbView.frame = nextButtonFrame;
         }
         atStartOfRow = NO;
         thumbsH = BELOW(thumbView.frame);
@@ -700,14 +715,14 @@ CGFloat topOfNonDepthArray = 0;
 
 #define NAVBAR_H   self.navigationController.navigationBar.frame.size.height
     
-    depthBarButton = [[UIBarButtonItem alloc] initWithImage:nil
+    cameraBarButton = [[UIBarButtonItem alloc] initWithImage:nil
                                                       style:UIBarButtonItemStylePlain
                                                      target:self
-                                                     action:@selector(doVideoAndDepth:)];
+                                                     action:@selector(doCamera:)];
     
     self.navigationItem.leftBarButtonItems = [[NSArray alloc] initWithObjects:
                                               sourceBarButton,
-//                                              depthBarButton,
+                                              cameraBarButton,
                                               flipBarButton,
                                               nil];
     
@@ -1040,7 +1055,6 @@ CGFloat topOfNonDepthArray = 0;
     taskCtrl.state = LayoutOK;
 }
 
-#ifdef DEBUG
 - (void) dumpLayouts {
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
@@ -1049,7 +1063,6 @@ CGFloat topOfNonDepthArray = 0;
             [layout info]);
     }
 }
-#endif
     
 - (void) pickLayout {
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
@@ -1204,8 +1217,11 @@ CGFloat topOfNonDepthArray = 0;
                     continue;
                 [layouts addObject:[trialLayout copy]];
             }
+#ifdef DEBUG_LAYOUT
             NSLog(@"thumb columns layouts");
-//            [self dumpLayouts];
+            [self dumpLayouts];
+#endif
+            
             for (int thumbRows=2; trialLayout.maxThumbRows; thumbRows++) {
                 if (![trialLayout tryLayoutForThumbRowCount:thumbRows
                                                 columnCount:0]) {
@@ -1215,8 +1231,10 @@ CGFloat topOfNonDepthArray = 0;
                     continue;
                 [layouts addObject:[trialLayout copy]];
             }
+#ifdef DEBUG_LAYOUT
             NSLog(@" + thumb rows layouts");
             [self dumpLayouts];
+#endif
             break;
         case TransformedPlusExecOnly:   // XXXX exec location?  Overlay?
         case TransformedOnly:
@@ -1421,12 +1439,13 @@ CGFloat topOfNonDepthArray = 0;
     trashBarButton.enabled = screenTask.transformList.count > 0;
     undoBarButton.enabled = screenTask.transformList.count > 0;
 
+#ifdef NOTDEF
     NSString *imageName;
     if (!cameraCount) { // never a camera here
         flipBarButton.enabled = depthBarButton.enabled = NO;
         imageName = @"video";
     } else {
-        if (!IS_CAMERA(CURRENT_SOURCE)) { // not using a camera at the moment
+        if (!IS_CAMERA(CURRENT_SOURCE)) {   // not using a camera at the moment
             depthBarButton.enabled = YES;   // to select the camera
             imageName = @"video";
         } else {
@@ -1439,6 +1458,7 @@ CGFloat topOfNonDepthArray = 0;
         }
     }
     depthBarButton.image = [UIImage systemImageNamed:imageName];
+#endif
 }
 
 // do we have an input camera source that is the flip of the current source?
@@ -1487,7 +1507,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (size_t) nextTransformTapIndex {
-    if (plusRequested || plusRequestLocked)
+    if (PLUS_REQUESTED || PLUS_LOCKED)
         return screenTask.transformList.count;
     if (screenTask.transformList.count > 0)
         return screenTask.transformList.count - 1;
@@ -1500,17 +1520,29 @@ CGFloat topOfNonDepthArray = 0;
     
     //    size_t indexToChange = [self nextTransformTapIndex];
     // if there is no current transform, or plus is selected, append the transform
-    if (!screenTasks.tasks.count || plusRequested || plusRequestLocked) {
+    if (!screenTask.transformList.count || PLUS_REQUESTED || PLUS_LOCKED) {
         [screenTask appendTransformToTask:tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
-        if (plusRequested) {
-            plusRequested = NO;
-            [self adjustPlusButton];
+        if (!PLUS_LOCKED) {
+            if (PLUS_REQUESTED) {
+                PLUS_REQUESTED = NO;    // satisfied
+                PLUS_ENABLED = NO;
+            } else {
+                PLUS_REQUESTED = NO;    // satisfied
+                PLUS_ENABLED = YES;
+            }
         }
+        [self adjustPlusButton];
     } else {    // we have a current transform. deselect if he tapped current transform
         if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
+            if (!screenTask.transformList.count || !PLUS_LOCKED) {
+                PLUS_REQUESTED = NO;    // satisfied
+                PLUS_ENABLED = NO;
+                PLUS_LOCKED = NO;
+                [self adjustPlusButton];
+            }
         } else {
             Transform *oldTransform = [screenTask.transformList lastObject];
             if (oldTransform) {
@@ -1522,12 +1554,18 @@ CGFloat topOfNonDepthArray = 0;
                 [screenTask appendTransformToTask:tappedTransform];
                 [tappedThumb adjustStatus:ThumbActive];
             }
+            if (!PLUS_LOCKED) {
+                PLUS_REQUESTED = NO;    // satisfied
+                PLUS_ENABLED = NO;
+                PLUS_LOCKED = NO;
+                [self adjustPlusButton];
+            }
         }
     }
     [screenTask configureTaskForSize];
     transformChainChanged = YES;
     [self updateThumbAvailability];
-//   [self adjustParametersFrom:lastTransform to:tappedTransform];
+    //   [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
     [self adjustBarButtons];
     [self refreshScreen];
@@ -1565,42 +1603,61 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
     NSLog(@"doPlusTapped");
-    plusButton.selected = !plusButton.selected;
-    plusRequested = !plusRequested;
+    NSLog(@"doPlusTapped %@ %@ %@",
+          PLUS_ENABLED ? @"E" : @"e",
+          PLUS_REQUESTED ? @"R" : @"r",
+          PLUS_LOCKED ? @"L" : @"l");
+    PLUS_REQUESTED = !PLUS_REQUESTED;
+    PLUS_ENABLED = PLUS_REQUESTED || PLUS_LOCKED;
     [self adjustPlusButton];
 }
 
 - (IBAction) doPlusPressed:(UIButton *)caller {
     NSLog(@"doPlusPressed");
-    plusButton.highlighted = !plusButton.highlighted;
-    plusRequestLocked = plusButton.highlighted;
-    plusRequested = plusRequested || plusRequestLocked;
+    PLUS_LOCKED = !PLUS_LOCKED;
     [self adjustPlusButton];
 }
 
 - (void) adjustPlusButton {
-    UIFontWeight weight;
-    if (plusButton.highlighted) {
-        weight = UIFontWeightHeavy;
-    } else if (plusButton.selected) {
-        weight = UIFontWeightMedium;
+    NSLog(@"plus button: %@ %@ %@",
+          PLUS_ENABLED ? @"E" : @"e",
+          PLUS_REQUESTED ? @"R" : @"r",
+          PLUS_LOCKED ? @"L" : @"l");
+    if (PLUS_REQUESTED) {
+        plusButton.selected = YES;
+        plusButton.highlighted = NO;
+    } else if (PLUS_LOCKED) {
+        plusButton.selected = NO;
+        plusButton.highlighted = YES;
     } else {
-        weight = UIFontWeightThin;
+        plusButton.selected = NO;
+        plusButton.highlighted = NO;
     }
+    NSLog(@"     button: %@ %@ %@",
+          PLUS_ENABLED ? @"E" : @"e",
+          PLUS_REQUESTED ? @"R" : @"r",
+          PLUS_LOCKED ? @"L" : @"l");
+    [plusButton setNeedsDisplay];
+}
+
+- (void) plusTitleForState:(UIControlState) state
+                    weight:(UIFontWeight) weight
+                     color:(UIColor *) color {
     UIFont *font = [UIFont
                     systemFontOfSize:plusButton.frame.size.height/2.0
                     weight:weight];
-    plusButton.titleLabel.attributedText = [[NSAttributedString alloc]
-                                            initWithString:@"+"
-                                            attributes:@{ NSFontAttributeName : font}];
-    [plusButton setNeedsDisplay];
+    [plusButton setAttributedTitle:[[NSAttributedString alloc]
+                                    initWithString:@"+"
+                                    attributes:@{ NSFontAttributeName : font,
+                                                  NSForegroundColorAttributeName: color,
+                                               }] forState:state];
 }
 
 
 // If the camera is off, turn it on, to the first possible setting,
-// almost certainly the front camera, 2d.  Otherwise, change the depth.
+// almost certainly the front camera, 2d. //  Otherwise, change the depth.
 
-- (IBAction) doVideoAndDepth:(UIBarButtonItem *)caller {
+- (IBAction) doCamera:(UIBarButtonItem *)caller {
     if (!IS_CAMERA(CURRENT_SOURCE)) { // select default camera
         nextSourceIndex = 0;
     } else {

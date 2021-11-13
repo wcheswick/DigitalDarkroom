@@ -282,7 +282,7 @@ static PixelIndex_t dPI(int x, int y) {
     if (needsDepthBuf) {
         scaledSrcFrame = frames[0];
         [scaledSrcFrame.pixBuf loadPixelsFromImage:readOnlyIncomingFrame.image];
-        if (needsDepthBuf && readOnlyIncomingFrame.depthBuf &&
+        if (readOnlyIncomingFrame.depthBuf &&
             readOnlyIncomingFrame.depthBuf.size.width > 0)
             [scaledSrcFrame.depthBuf scaleFrom:readOnlyIncomingFrame.depthBuf];
         else
