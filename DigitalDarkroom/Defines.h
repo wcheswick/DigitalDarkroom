@@ -20,13 +20,12 @@
 //#define DEBUG_ORIENTATION
 //#define MEMLEAK_AIDS 1
 
-
 //#define DEBUG_CONCURRENCY   1
 //#define DEBUG_TASK_CONFIGURATION  1
 //#define DEBUG_REMAP 1
 
 //#define DEBUG_OMIT_THUMBS 1
-//#define DEBUG_BORDERS 1
+#define DEBUG_BORDERS 1
 //#define DEBUG_CAMERA  1
 //#define DEBUG_TASK_BUSY 1
 //#define DEBUG_DEPTH  1

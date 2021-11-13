@@ -76,7 +76,7 @@ NSString * __nullable displayOptionNames[] = {
         
         aspectRatio = imageSourceSize.width / imageSourceSize.height;
         firstThumbRect = thumbImageRect = CGRectZero;
-        thumbImageRect.size = CGSizeMake(THUMB_W, THUMB_W/aspectRatio);
+        thumbImageRect.size = CGSizeMake(THUMB_W, trunc(THUMB_W/aspectRatio));
         firstThumbRect.size = CGSizeMake(thumbImageRect.size.width,
                                          thumbImageRect.size.height + THUMB_LABEL_H);
         

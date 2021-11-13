@@ -151,7 +151,7 @@ static PixelIndex_t dPI(int x, int y) {
 - (void) configureTaskForSize {
     taskStatus = Stopped;   // XXX doesn't wait for idle
 #ifdef DEBUG_TASK_CONFIGURATION
-    NSLog(@"   TTT %@  configureTaskForSize: %.0f x %.0f", taskName,
+    NSLog(@"   TTT %@  configureTaskForSize: %.3f x %.3f", taskName,
           taskGroup.targetSize.width, taskGroup.targetSize.height);
 #endif
     
@@ -207,6 +207,7 @@ static PixelIndex_t dPI(int x, int y) {
     CGSize s = taskGroup.targetSize;
 // maybe ok    assert(taskStatus == Stopped);
     assert(s.width > 0 && s.height > 0);
+    assert(trunc(s.height) == s.height);
     
     switch (transform.type) {
         case RemapImage:
@@ -345,10 +346,12 @@ static PixelIndex_t dPI(int x, int y) {
             case RemapImage: {
                 assert(instance);
                 assert(instance.remapBuf);
+                assert(SAME_SIZE(instance.remapBuf.size, scaledSrcFrame.pixBuf.size));
      //           [instance.remapBuf verify];
                 BufferIndex *bip = instance.remapBuf.rb;
                 Pixel *dp = dstFrame.pixBuf.pb;
                 int N = instance.remapBuf.size.width * instance.remapBuf.size.height;
+                assert(N <= scaledSrcFrame.pixBuf.size.width * scaledSrcFrame.pixBuf.size.height);
                 for (int i=0; i<N; i++) {
                     Pixel p;
                     BufferIndex bi = *bip++;

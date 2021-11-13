@@ -32,11 +32,6 @@
     mainVC = [[MainVC alloc] init];
     navController = [[UINavigationController alloc]
                      initWithRootViewController:mainVC];
-    
-    [[NSNotificationCenter defaultCenter] addObserver:mainVC
-                                             selector:@selector(adjustOrientation)
-                                                 name:UIViewControllerShowDetailTargetDidChangeNotification
-                                               object:nil];
 
     self.window.rootViewController = navController;
     [self.window makeKeyAndVisible];

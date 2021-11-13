@@ -12,6 +12,7 @@
 		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
+		FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */; };
 		FB56160F2654620500E5BE54 /* ThumbView.m in Sources */ = {isa = PBXBuildFile; fileRef = FB56160E2654620500E5BE54 /* ThumbView.m */; };
 		FB57A28B26F8B133001A6583 /* Stats.m in Sources */ = {isa = PBXBuildFile; fileRef = FB57A28A26F8B133001A6583 /* Stats.m */; };
 		FB625E1E260B9DFA008636FC /* UndebuggedTransforms.m in Sources */ = {isa = PBXBuildFile; fileRef = FB625E1D260B9DFA008636FC /* UndebuggedTransforms.m */; };
@@ -71,6 +72,8 @@
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
 		FB389A4A254055F500E29530 /* ColorTable.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ColorTable.m; sourceTree = "<group>"; };
 		FB3A386C252226C6001FE7AB /* DigitalDarkroom.profdata */ = {isa = PBXFileReference; lastKnownFileType = file; path = DigitalDarkroom.profdata; sourceTree = "<group>"; };
+		FB4F251E2740629A00F2F8AB /* ExternalScreenVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExternalScreenVC.h; sourceTree = "<group>"; };
+		FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExternalScreenVC.m; sourceTree = "<group>"; };
 		FB56160D2654620500E5BE54 /* ThumbView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThumbView.h; sourceTree = "<group>"; };
 		FB56160E2654620500E5BE54 /* ThumbView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ThumbView.m; sourceTree = "<group>"; };
 		FB57A28926F8B133001A6583 /* Stats.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Stats.h; sourceTree = "<group>"; };
@@ -240,6 +243,8 @@
 				FBB16D63232EB49B0026F789 /* Defines.h */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FB4F251E2740629A00F2F8AB /* ExternalScreenVC.h */,
+				FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */,
 				FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */,
 				FB97DAF126B1915A0025EE56 /* PopoverMenuVC.m */,
 				FB9BBAD9260A32A70026C4E4 /* HelpVC.h */,
@@ -414,6 +419,7 @@
 				FBB1D9E7232FE44400845DF1 /* etc.c in Sources */,
 				FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */,
 				FBB1D9E3232FE44400845DF1 /* geom.c in Sources */,
+				FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */,
 				FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */,
 				FB56160F2654620500E5BE54 /* ThumbView.m in Sources */,
 			);

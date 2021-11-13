@@ -9,6 +9,7 @@
 #import "MainVC.h"
 #import "CollectionHeaderView.h"
 #import "PopoverMenuVC.h"
+#import "ExternalScreenVC.h"
 
 #import "Transforms.h"  // includes DepthImage.h
 #import "OptionsVC.h"
@@ -139,6 +140,8 @@ MainVC *mainVC = nil;
 
 @interface MainVC ()
 
+@property (nonatomic, strong)   ExternalScreenVC *extScreenVC;
+@property (nonatomic, strong)   UIImageView *extImageView;
 @property (nonatomic, strong)   Options *options;
 @property (assign)              DisplayOptions currentDisplayOption;
 
@@ -154,6 +157,12 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIBarButtonItem *flipBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *sourceBarButton;
 @property (nonatomic, strong)   UIBarButtonItem *cameraBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *extScreenBarButton;
+
+@property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *hiresButton;
+@property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
+@property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
 
 @property (nonatomic, strong)   Frame *lastDisplayedFrame;  // what's on the screen
 
@@ -199,13 +208,7 @@ MainVC *mainVC = nil;
 @property (assign)              int transformCount;
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 
-@property (nonatomic, strong)   UIBarButtonItem *trashBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *hiresButton;
-@property (nonatomic, strong)   UIBarButtonItem *undoBarButton;
-@property (nonatomic, strong)   UIBarButtonItem *shareBarButton;
-
 @property (nonatomic, strong)   UIButton *plusButton;
-@property (nonatomic, strong)   UIBarButtonItem *cameraBarButtonItem;
 
 @property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 
@@ -226,6 +229,8 @@ MainVC *mainVC = nil;
 
 @implementation MainVC
 
+@synthesize extScreenVC, extImageView;
+
 @synthesize plusButton;
 @synthesize taskCtrl;
 @synthesize screenTasks, thumbTasks, externalTasks;
@@ -233,7 +238,7 @@ MainVC *mainVC = nil;
 @synthesize screenTask, externalTask;
 
 @synthesize containerView;
-@synthesize flipBarButton, sourceBarButton, cameraBarButton;
+@synthesize flipBarButton, sourceBarButton, cameraBarButton, extScreenBarButton;
 @synthesize transformView;
 @synthesize transformChainChanged;
 @synthesize overlayDebugStatus;
@@ -250,8 +255,6 @@ MainVC *mainVC = nil;
 
 @synthesize executeView;
 @synthesize layoutValuesView;
-
-@synthesize cameraBarButtonItem;
 
 @synthesize deviceOrientation;
 @synthesize isPortrait, isiPhone;
@@ -298,6 +301,8 @@ MainVC *mainVC = nil;
         layout = nil;
         helpNavVC = nil;
         showControls = NO;
+        extScreenVC = nil;
+        extImageView = nil;
         transformChainChanged = NO;
         lastDisplayedFrame = nil;
         layouts = [[NSMutableArray alloc] init];
@@ -635,6 +640,7 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) viewDidLoad {
     [super viewDidLoad];
+    
 
     [self adjustOrientation];
 
@@ -671,6 +677,13 @@ CGFloat topOfNonDepthArray = 0;
                                         action:@selector(goSelectOptions:)];
 #endif
     
+    extScreenBarButton = [[UIBarButtonItem alloc]
+                      initWithImage:[UIImage systemImageNamed:@"tv"]
+                      style:UIBarButtonItemStylePlain
+                   target:self
+                          action:@selector(didTapAlternateDisplay:)];
+    extScreenBarButton.enabled = NO;
+
     trashBarButton = [[UIBarButtonItem alloc]
                       initWithImage:[UIImage systemImageNamed:@"trash"]
                       style:UIBarButtonItemStylePlain
@@ -681,13 +694,13 @@ CGFloat topOfNonDepthArray = 0;
                    initWithTitle:@"Hi res" style:UIBarButtonItemStylePlain
                    target:self action:@selector(doToggleHires:)];
     
+#ifdef NOTDEF
     shareBarButton = [[UIBarButtonItem alloc]
                      initWithImage:[UIImage systemImageNamed:@"square.and.arrow.up"]
                      style:UIBarButtonItemStylePlain
                      target:self
                       action:@selector(doShare:)];
 
-#ifdef NOTDEF
     plusBar = [[UISegmentedControl alloc]
                                    initWithItems:@[[UIImage systemImageNamed:@"plus.rectangle.on.rectangle"],
                                                    [UIImage systemImageNamed:@"plus.rectangle"]]];
@@ -739,11 +752,10 @@ CGFloat topOfNonDepthArray = 0;
 #endif
     
     self.navigationItem.rightBarButtonItems = [[NSArray alloc] initWithObjects:
-//                                               plusBarSelectionButton,
                                                undoBarButton,
                                                trashBarButton,
                                                fixedSpace,
-                                               shareBarButton,
+                                               extScreenBarButton,
                                                docBarButton,
                                                nil];
 
@@ -931,6 +943,43 @@ CGFloat topOfNonDepthArray = 0;
     self.view.backgroundColor = [UIColor whiteColor];
     [self createThumbArray];
     [self adjustBarButtons];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidConnect:) name:UIScreenDidConnectNotification object:nil];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidDisconnect:) name:UIScreenDidDisconnectNotification object:nil];
+}
+
+-(void)externalScreenDidConnect:(NSNotification *)notification {
+    UIScreen *screen = (UIScreen *)[notification object];
+    if (!screen)
+        return;
+    extScreenVC = [[ExternalScreenVC alloc] initWithScreen:[UIScreen screens][1]];
+    extScreenBarButton.enabled = YES;
+}
+
+-(void)externalScreenDidDisconnect:(NSNotification *)notification {
+    id obj = [notification object];
+    if (!obj)
+        return;
+    [extScreenVC deactivateExternalScreen];
+    [self turnExternalScreenOn:NO];
+    extScreenVC = nil;
+    extImageView = nil;
+    extScreenBarButton.enabled = NO;
+}
+
+- (IBAction) didTapAlternateDisplay:(UIBarButtonItem *)sender {
+    NSLog(@"didTapAlternateDisplay tapped");
+    assert(extScreenBarButton.enabled);
+}
+
+- (void) turnExternalScreenOn:(BOOL) on {
+    if (on) {
+        extImageView = [extScreenVC activateExternalScreen];
+    } else {
+         [extScreenVC deactivateExternalScreen];
+        extImageView = nil;
+    }
 }
 
 - (void) dumpViewLimits:(NSString *)label {
@@ -2140,8 +2189,8 @@ CGFloat topOfNonDepthArray = 0;
     frameCount = depthCount = droppedCount = busyCount = 0;
     transformCount = transformTotalElapsed = 0;
 #endif
-    
 }
+
 
 - (IBAction) doRemoveLastTransform {
     if (screenTask.transformList.count > 1) {
