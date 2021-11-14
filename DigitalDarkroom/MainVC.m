@@ -141,7 +141,7 @@ MainVC *mainVC = nil;
 @interface MainVC ()
 
 @property (nonatomic, strong)   ExternalScreenVC *extScreenVC;
-@property (nonatomic, strong)   UIImageView *extImageView;
+@property (nonatomic, strong)   UIImageView *extImageView;  // not yet implemented...use native screen mirror
 @property (nonatomic, strong)   Options *options;
 @property (assign)              DisplayOptions currentDisplayOption;
 
@@ -848,7 +848,6 @@ CGFloat topOfNonDepthArray = 0;
 
     paramView = [[UIView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
     paramView.backgroundColor = [UIColor colorWithRed:0.5 green:1.0 blue:0.0 alpha:0.5];
-    paramView.hidden = YES;
     paramView.opaque = NO;
     paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.8];
     paramView.layer.cornerRadius = 6.0;
@@ -858,14 +857,17 @@ CGFloat topOfNonDepthArray = 0;
     paramView.layer.borderWidth = 3.0;
 #endif
     [transformView addSubview:paramView];
+    [transformView bringSubviewToFront:paramView];
 
     paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_LABEL_H)];
     paramLabel.textAlignment = NSTextAlignmentCenter;
     paramLabel.font = [UIFont boldSystemFontOfSize:PARAM_LABEL_FONT_SIZE];
     paramLabel.textColor = [UIColor blackColor];
     [paramView addSubview:paramLabel];
-
-    paramSlider = [[UISlider alloc] initWithFrame:CGRectMake(0, BELOW(paramLabel.frame) + SEP, LATER, PARAM_SLIDER_H)];
+    
+    paramSlider = [[UISlider alloc]
+                   initWithFrame:CGRectMake(0, BELOW(paramLabel.frame) + SEP,
+                                            LATER, PARAM_SLIDER_H)];
     paramSlider.continuous = YES;
     [paramSlider addTarget:self action:@selector(doParamSlider:)
           forControlEvents:UIControlEventValueChanged];
@@ -1351,7 +1353,23 @@ CGFloat topOfNonDepthArray = 0;
     // - I suppose there will be a video file capture option some day.  That would be another target.
     
     transformView.frame = layout.displayRect;
-    [self positionControls];
+    CGRect f = transformView.frame;
+    f.origin.x = f.size.width - CONTROL_BUTTON_SIZE - SEP;
+    f.origin.y = f.size.height - CONTROL_BUTTON_SIZE - SEP;
+    f.size = snapButton.frame.size;
+    snapButton.frame = f;
+    
+    f.origin.x -= f.size.width + SEP;
+    runningButton.frame = f;
+    
+    f.origin.x = INSET;
+    f.origin.y = transformView.frame.size.height;   // off screen below transform window
+    f.size.width = runningButton.frame.origin.x - SEP - f.origin.x;
+    f.size.height = paramView.frame.size.height;
+    paramView.frame = f;
+    SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
+    SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
+    [self addParamsFor:[screenTask.transformList lastObject]];
     thumbScrollView.frame = layout.thumbArrayRect;
 #ifdef DEBUG_BORDERS
     thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
@@ -1566,11 +1584,14 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
-    
+    Transform *oldTransform = [screenTask.transformList lastObject];
+
     //    size_t indexToChange = [self nextTransformTapIndex];
     // if there is no current transform, or plus is selected, append the transform
     if (!screenTask.transformList.count || PLUS_REQUESTED || PLUS_LOCKED) {
+        [self removeParamsFor: oldTransform];
         [screenTask appendTransformToTask:tappedTransform];
+        [self addParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
         if (!PLUS_LOCKED) {
             if (PLUS_REQUESTED) {
@@ -1584,6 +1605,7 @@ CGFloat topOfNonDepthArray = 0;
         [self adjustPlusButton];
     } else {    // we have a current transform. deselect if he tapped current transform
         if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
+            [self removeParamsFor: tappedTransform];
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
             if (!screenTask.transformList.count || !PLUS_LOCKED) {
@@ -1593,15 +1615,17 @@ CGFloat topOfNonDepthArray = 0;
                 [self adjustPlusButton];
             }
         } else {
-            Transform *oldTransform = [screenTask.transformList lastObject];
             if (oldTransform) {
+                [self removeParamsFor: oldTransform];
                 ThumbView *oldThumb = oldTransform.thumbView;
                 [oldThumb adjustStatus:ThumbAvailable];
                 [tappedThumb adjustStatus:ThumbActive];
                 [screenTask changeLastTransformTo:tappedTransform];
+                [self addParamsFor:tappedTransform];
             } else {
                 [screenTask appendTransformToTask:tappedTransform];
                 [tappedThumb adjustStatus:ThumbActive];
+                [self addParamsFor:tappedTransform];
             }
             if (!PLUS_LOCKED) {
                 PLUS_REQUESTED = NO;    // satisfied
@@ -1614,7 +1638,6 @@ CGFloat topOfNonDepthArray = 0;
     [screenTask configureTaskForSize];
     transformChainChanged = YES;
     [self updateThumbAvailability];
-    //   [self adjustParametersFrom:lastTransform to:tappedTransform];
     [self updateExecuteView];
     [self adjustBarButtons];
     [self refreshScreen];
@@ -1628,26 +1651,33 @@ CGFloat topOfNonDepthArray = 0;
     [taskCtrl processFrame:frame];
 }
 
-- (void) adjustParametersFrom:(Transform *)oldTransform to:(Transform *)newTransform {
+- (void) removeParamsFor:(Transform *) oldTransform {
     BOOL oldParameters = oldTransform && oldTransform.hasParameters;
+    if (!oldParameters)
+        return;
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        // slide old parameters off the bottom of the display
+        SET_VIEW_Y(self->paramView, BELOW(self->transformView.frame));
+    } completion:nil];
+}
+
+- (void) addParamsFor:(Transform *) newTransform {
     BOOL newParameters = newTransform && newTransform.hasParameters;
-    if (oldParameters) {
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            SET_VIEW_Y(self->paramView, BELOW(self->transformView.frame));
-        } completion:^(BOOL finished) {
-            if (newParameters) {
-                [UIView animateWithDuration:0.5 animations:^(void) {
-                    SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
-                    [self adjustParamView];
-                }];
-            }
-        }];
-    } else if (newParameters) {
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
-            [self adjustParamView];
-        }];
-    }
+    if (!newParameters)
+        return;
+    paramSlider.minimumValue = newTransform.low;
+    paramSlider.maximumValue = newTransform.high;
+    paramSlider.value = newTransform.value;
+    paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
+                       newTransform.name,
+                       newTransform.paramName,
+                       paramSlider.value];
+    [paramSlider setNeedsDisplay];
+    [paramLabel setNeedsDisplay];
+    [paramView setNeedsDisplay];
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
+    }];
 }
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
@@ -1853,38 +1883,21 @@ CGFloat topOfNonDepthArray = 0;
         return;
     }
 //    NSLog(@"slider value %.1f", slider.value);
-    [slider setNeedsDisplay];
     if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
-//        [self doTransformsOn:previousSourceImage depth:rawDepthBuf];    // XXXXXX depth of source image
-        [self updateParamViewFor: lastTransform];
+        transformChainChanged = YES;
+        paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
+                           lastTransform.name,
+                           lastTransform.paramName,
+                           paramSlider.value];
+        [paramSlider setNeedsDisplay];
+        [paramLabel setNeedsDisplay];
+        [paramView setNeedsDisplay];
         [self updateExecuteView];
+        [self refreshScreen];
     }
 }
 
-// reveal or hide the parameter slider
 - (void) adjustParamView {
-    Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
-    if (!lastTransform || !lastTransform.hasParameters) {
-        paramView.hidden = YES;
-        SET_VIEW_Y(paramView, transformView.frame.size.height);    // under the bottom
-        return;
-    }
-    paramView.hidden = NO;
-//    NSString *lowValue = [NSString stringWithFormat:lastTransform.lowValueFormat, lastTransform.low];
-//    NSString *highValue = [NSString stringWithFormat:lastTransform.highValueFormat, lastTransform.high];
-    paramSlider.minimumValue = lastTransform.low;
-    paramSlider.maximumValue = lastTransform.high;
-    paramSlider.value = lastTransform.value;
-    [self updateParamViewFor: lastTransform];
-    [transformView bringSubviewToFront:paramView];
-}
-
-- (void) updateParamViewFor:(Transform *)transform {
-     paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
-                       transform.name,
-                       transform.paramName,
-                       paramSlider.value];
-    [paramLabel setNeedsDisplay];
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -2350,7 +2363,7 @@ static CGSize startingPinchSize;
         return;
    if (IS_CAMERA(CURRENT_SOURCE) && live)
        return;  // no need: the camera will refresh
-    [self changeSourceTo:currentSourceIndex];
+    transformChainChanged = YES;
 }
 
 - (IBAction) selectOptions:(UIButton *)button {
@@ -2548,30 +2561,6 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     }];
 }
 
-// The bottom of the image has, from right to left
-// - the snap button
-// - the running/pause button
-// - the parameter slider
-
-- (void) positionControls {
-    CGRect f = transformView.frame;
-    f.origin.x = f.size.width - CONTROL_BUTTON_SIZE - SEP;
-    f.origin.y = f.size.height - CONTROL_BUTTON_SIZE - SEP;
-    f.size = snapButton.frame.size;
-    snapButton.frame = f;
-    
-    f.origin.x -= f.size.width + SEP;
-    runningButton.frame = f;
-    
-    f.origin.x = INSET;
-    f.origin.y = transformView.frame.size.height;   // off screen below transform window
-    f.size.width = runningButton.frame.origin.x - SEP - f.origin.x;
-    f.size.height = paramView.frame.size.height;
-    paramView.frame = f;
-    SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
-    SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
-    [self adjustParamView];
-}
 
 // update the thumbs to show which are available for the end of the new transform chain
 // displayedFrame has the source frame.  if nil?
