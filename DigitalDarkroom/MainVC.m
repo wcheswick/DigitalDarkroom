@@ -1129,7 +1129,7 @@ CGFloat topOfNonDepthArray = 0;
     if (mainVC.isiPhone) { // iphone display is very cramped.  Make the best of it.
         execFontSize = EXECUTE_IPHONE_FONT_SIZE;
         if (mainVC.isPortrait) {
-            minDisplayWidth = currentDisplayOption == NoTransformDisplayed ? 0 : containerView.frame.size.width / 3.0;
+            minDisplayWidth = currentDisplayOption == NoTransformDisplayed ? 0 : containerView.frame.size.width / 6.0;
             maxDisplayWidth = 0;    // no max
             minDisplayHeight = PARAM_VIEW_H*3;
             maxDisplayHeight = containerView.frame.size.height / 3.0;
@@ -1149,7 +1149,7 @@ CGFloat topOfNonDepthArray = 0;
         minThumbCols = MIN_IPHONE_THUMB_COLS;
     } else {
         execFontSize = EXECUTE_IPAD_FONT_SIZE;
-        minDisplayWidth = 3*THUMB_W;
+        minDisplayWidth = 2*THUMB_W;
         maxDisplayWidth = containerView.frame.size.width;
         minDisplayHeight = 2*THUMB_W;
         maxDisplayHeight = containerView.frame.size.height;
@@ -1269,7 +1269,7 @@ CGFloat topOfNonDepthArray = 0;
         }
     }
     
-    NSLog(@" *** findLayouts: %d", layouts.count);
+    NSLog(@" *** findLayouts: %lu", (unsigned long)layouts.count);
     [self dumpLayouts];
 }
 
@@ -1280,12 +1280,13 @@ CGFloat topOfNonDepthArray = 0;
     
     size_t thumbCols = minThumbCols;
     size_t thumbRows = minThumbRows;
-
+    Layout *layout;
+    
     switch (currentDisplayOption) {
         case iPadSize:
             // try right thumbs
             do {
-                Layout *layout = [[Layout alloc]
+                layout = [[Layout alloc]
                                   initForSize: sourceSize
                                   rightThumbs:thumbCols++
                                   bottomThumbs:0
@@ -1301,13 +1302,13 @@ CGFloat topOfNonDepthArray = 0;
             
             // try bottom thumbs
             do {    // try bottom thumbs
-                Layout *layout = [[Layout alloc]
+                layout = [[Layout alloc]
                                   initForSize: sourceSize
                                   rightThumbs:0
                                   bottomThumbs:thumbRows++
                                   displayOption:currentDisplayOption
                                   format:format];
-                if (layout) {
+                if (NO && layout) {
                     NSLog(@"BT  %@", [layout layoutSum]);
                 }
 
@@ -2590,17 +2591,44 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSArray *)keyCommands {
-    UIKeyCommand *upArrow = [UIKeyCommand keyCommandWithInput:UIKeyInputUpArrow modifierFlags:0 action:@selector(upArrow:)];
-    UIKeyCommand *downArrow = [UIKeyCommand keyCommandWithInput:UIKeyInputDownArrow modifierFlags:0 action:@selector(downArrow:)];
+    UIKeyCommand *upArrow = [UIKeyCommand keyCommandWithInput:@"u" // UIKeyInputUpArrow
+                                                modifierFlags:0
+                                                       action:@selector(upArrow:)];
+    UIKeyCommand *downArrow = [UIKeyCommand keyCommandWithInput:@"d" // UIKeyInputDownArrow
+                                                  modifierFlags:0
+                                                         action:@selector(downArrow:)];
     return @[upArrow, downArrow];
 }
 
 - (void)upArrow:(UIKeyCommand *)keyCommand {
-    NSLog(@"Up Arrow");
+    if (![self keyTimeOK])
+        return;
+    if (layoutIndex == 0)
+        return;
+    [self applyScreenLayout:layoutIndex - 1];
+    
 }
 
 - (void)downArrow:(UIKeyCommand *)keyCommand {
+    if (![self keyTimeOK])
+        return;
     NSLog(@"Down Arrow");
+    if (layoutIndex+1 >= layouts.count)
+        return;
+    [self applyScreenLayout:layoutIndex + 1];
+}
+
+NSDate *lastArrowKeyNotice = 0;
+#define KEY_TIME    0.15    // suppress duplicate presses
+
+- (BOOL) keyTimeOK {
+    NSDate *now = [NSDate now];
+    if (lastArrowKeyNotice && [now timeIntervalSinceDate:lastArrowKeyNotice] < KEY_TIME) {
+        lastArrowKeyNotice = now;
+        return NO;
+    }
+    lastArrowKeyNotice = now;
+    return YES;
 }
 
 @end

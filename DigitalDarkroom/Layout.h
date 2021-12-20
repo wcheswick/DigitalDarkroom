@@ -55,7 +55,6 @@ typedef enum {
     
     BOOL executeOverlayOK;  // if execute can creep up onto the transform display
     NSString *status;
-    int maxThumbRows, maxThumbCols;
 }
 
 @property (assign)              DisplayOptions displayOption;
@@ -83,7 +82,6 @@ typedef enum {
 
 @property (assign)              BOOL executeOverlayOK;  // text placement guidance
 @property (nonatomic, strong)   NSString *status;
-@property (assign)              int maxThumbRows, maxThumbCols;
 
 - (id)initForSize:(CGSize) ss
       rightThumbs:(size_t) rightThumbs
