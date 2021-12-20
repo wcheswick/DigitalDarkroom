@@ -21,7 +21,8 @@
 @synthesize navController;
 @synthesize mainVC;
 
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+- (BOOL)application:(UIApplication *)application
+didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
     if (![[NSFileManager defaultManager] changeCurrentDirectoryPath: documentsDirectory])
@@ -59,6 +60,13 @@
 }
 
 #ifdef notdef
+
+- (void)pressesBegan:(NSSet<UIPress *> *)presses
+           withEvent:(UIPressesEvent *)event {
+    NSLog(@"pressesBegan");
+    
+}
+
 - (BOOL)application:(UIApplication *)application handleOpenURL:(NSURL *)url {
     NSLog(@"opening app with URL %@", [url absoluteString]);
     if (!url)

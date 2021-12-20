@@ -16,7 +16,7 @@
 //#define VERIFY_REMAP_BUFFERS    1
 //#define VERIFY_DEPTHS           1
 
-//#define DEBUG_LAYOUT    1
+#define DEBUG_LAYOUT    1
 //#define DEBUG_ORIENTATION
 //#define MEMLEAK_AIDS 1
 
@@ -124,17 +124,9 @@ typedef long PixelIndex_t;
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
-#define EXECUTE_FONT_SIZE   (18)
-#define EXECUTE_ROW_H       (EXECUTE_FONT_SIZE + SEP)
-#define EXECUTE_H_FOR(n)    ((n)*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W + 2*SEP)
-#define EXECUTE_MIN_H       EXECUTE_H_FOR(1)
-#define EXECUTE_FULL_H      EXECUTE_H_FOR(6)
+#define PLUS_SIZE   CONTROL_BUTTON_SIZE
 
 #define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
-
-// There is always a bit of display available, for pinching
-#define MIN_DISPLAY_W   THUMB_W
-#define MIN_DISPLAY_H   THUMB_W
 
 #define ASPECT_PCT_DIFF_OK  5.0
 #define DIFF_PCT(a,b)   (100.0*fabsf((a) - (b))/(a))

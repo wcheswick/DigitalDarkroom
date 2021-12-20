@@ -22,6 +22,7 @@ typedef enum {
     LayoutOK,
     NeedsNewLayout,
     ApplyLayout,
+    LayoutUnavailable,
 } LayoutStatus_t;
 
 //@class Task;

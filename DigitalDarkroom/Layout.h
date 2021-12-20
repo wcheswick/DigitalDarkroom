@@ -20,69 +20,93 @@ NS_ASSUME_NONNULL_BEGIN
 typedef enum {
     Bottom,
     Right,
-    Both,
     None,
 } ThumbsPosition;
 
 @interface Layout : NSObject {
-    AVCaptureDeviceFormat * __nullable format;
-    AVCaptureDeviceFormat * __nullable depthFormat;
     DisplayOptions displayOption;
-
+    CGSize imageSourceSize;
+    
+    // computed layout rectangles:
+    CGSize transformSize;   // what we give the transform chain
+    CGRect displayRect;     // where we put the transformed (and scaled) result
+    CGRect fullThumbViewRect;
+    CGRect thumbScrollRect;
+    CGRect executeRect;     // where the active transform list is shown
+    CGRect plusRect;        // in executeRect
+    CGRect paramRect;       // where the parameter slider goes
+    
+    CGRect firstThumbRect;  // thumb size and position in fullThumbViewRect
+    CGRect thumbImageRect;  // image sample size in each thumb button
+    
+    // details about this layout
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
     float aspectRatio;      // of the input source
-    // quality of layout from 0.0 (reject) to 1.0 (perfect)
-    float score;
+
+    AVCaptureDeviceFormat * __nullable format;
+    AVCaptureDeviceFormat * __nullable depthFormat;
+    
+    float score;            // quality of layout from 0.0 (reject) to 1.0 (perfect)
+    NSString *type;         // layout type (coded text)
 
     // layout stats and results:
     BOOL executeIsTight;    // if save verticle space
     float displayFrac;      // fraction of total display used by the transformed image
     
-    CGSize imageSourceSize;
-    CGSize transformSize;   // what we give the transform chain
-    CGRect displayRect;     // what we give to the main display
-    CGRect thumbArrayRect;  // space for the thumb array, to be placed according thumbsPlacement later
-    CGRect plusRect;
-    CGRect firstThumbRect;  // thumb size for device, orientation, and aspect ratio
-    CGRect thumbImageRect;  // image sample size in the thumb
-    CGRect executeRect;     // where the active transform list is shown
     BOOL executeOverlayOK;  // if execute can creep up onto the transform display
     NSString *status;
-    int maxThumbRows, maxThumbColumns;
+    int maxThumbRows, maxThumbCols;
 }
 
-@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
-@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable depthFormat;
 @property (assign)              DisplayOptions displayOption;
-@property (assign)              float score;
-@property (assign)              float displayFrac;
-@property (assign)              int maxThumbRows, maxThumbColumns;
-
 @property (assign)              CGSize imageSourceSize;
-@property (assign)              CGSize transformSize;   // what we give to the transform chain
-@property (assign)              CGRect displayRect;     // where the transform chain puts the (possibly scaled) result
-@property (assign)              CGRect thumbArrayRect;  // where the scrollable thumb array goes
+
+@property (assign)              CGSize transformSize;
+@property (assign)              CGRect displayRect;
+@property (assign)              CGRect fullThumbViewRect;
+@property (assign)              CGRect thumbScrollRect;
+@property (assign)              CGRect executeRect;
 @property (assign)              CGRect plusRect;
-@property (assign)              CGRect executeRect;     // total area available for the execute list
-@property (assign)              BOOL executeOverlayOK, executeIsTight;  // text placement guidance
+@property (assign)              CGRect paramRect;
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 
 @property (assign)              float scale, aspectRatio;
-@property (assign)              int quality;        // -1 = no, more positive is better
 
+@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
+@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable depthFormat;
+
+@property (assign)              float score;
+@property (nonatomic, strong)   NSString *type;
+@property (assign)              BOOL executeIsTight;
+@property (assign)              float displayFrac;
+
+@property (assign)              BOOL executeOverlayOK;  // text placement guidance
 @property (nonatomic, strong)   NSString *status;
+@property (assign)              int maxThumbRows, maxThumbCols;
 
-- (id)initWithOption:(DisplayOptions) disopt
-          sourceSize:(CGSize) ss
-              format:(AVCaptureDeviceFormat * __nullable) fmt;
-
-- (BOOL) tryLayoutForThumbRowCount:(int) rowsWanted
-                       columnCount:(int) columnsWanted;
+- (id)initForSize:(CGSize) ss
+      rightThumbs:(size_t) rightThumbs
+     bottomThumbs:(size_t) bottomThumbs
+    displayOption:(DisplayOptions) dopt
+           format:(AVCaptureDeviceFormat * __nullable) fmt;
 
 - (NSComparisonResult) compare:(Layout *)layout;
 + (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size;
-- (NSString *) info;
+
+#ifdef NOTDEF
+- (void) tryLayoutsForThumbsAndExecOnly:(BOOL) narrowExec;
+
+- (void) tryLayoutsOnRight:(BOOL) narrowExec;
+- (void) tryLayoutsForExecOnLeft:(BOOL) narrowExec;
+- (void) tryLayoutsForStacked;
+- (void) tryLayoutsForJustDisplayOnLeft:(BOOL) narrowExec;
+- (void) tryLayoutsForJustDisplay;
+#endif
+
+- (CGFloat) executeHForRowCount:(size_t)rows;
+- (NSString *) layoutSum;
+- (void) dump;
 
 extern  NSString * __nullable displayOptionNames[];
 

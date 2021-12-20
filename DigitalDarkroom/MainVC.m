@@ -10,11 +10,10 @@
 #import "CollectionHeaderView.h"
 #import "PopoverMenuVC.h"
 #import "ExternalScreenVC.h"
-
+#import "Layout.h"
 #import "Transforms.h"  // includes DepthImage.h
 #import "OptionsVC.h"
 #import "ReticleView.h"
-#import "Layout.h"
 #import "HelpVC.h"
 #import "Defines.h"
 
@@ -25,10 +24,6 @@
 #define LAST_FILE_SOURCE_KEY    @"LastFileSource"
 #define UI_MODE_KEY             @"UIMode"
 #define LAST_SOURCE_KEY      @"Current source index"
-
-#define PLUS_ENABLED    plusButton.enabled
-#define PLUS_REQUESTED  plusButton.selected
-#define PLUS_LOCKED     plusButton.highlighted
 
 #define BUTTON_FONT_SIZE    20
 #define STATS_W             75
@@ -87,15 +82,11 @@
 
 #define EXECUTE_STATS_TAG   1
 
-#define PLUS_W    300
-
 #define DEPTH_TABLE_SECTION     0
 
 #define NO_STEP_SELECTED    -1
 #define NO_LAYOUT_SELECTED   (-1)
 #define NO_SOURCE       (-1)
-
-#define DISPLAYING_THUMBS   (self->thumbScrollView && self->thumbScrollView.frame.size.width > 0)
 
 #define SOURCE(si)   ((InputSource *)inputSources[si])
 #define CURRENT_SOURCE  SOURCE(currentSourceIndex)
@@ -177,15 +168,19 @@ MainVC *mainVC = nil;
 
 @property (assign)              BOOL showControls, showStats, live;
 @property (assign)              BOOL transformChainChanged;
+@property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
 
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIButton *runningButton, *snapButton;
+@property (nonatomic, strong)   UIButton *plusButton;
+
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
 @property (nonatomic, strong)   UITextView *executeView;    // active transform list
 @property (nonatomic, strong)   NSMutableArray<Layout *> *layouts;    // approved list of current layouts
-@property (assign)              long layoutIndex;           // index into layouts
+@property (assign)              long layoutIndex;           // index into layouts, or NO_LAYOUT_SELECTED
+@property (assign)              BOOL layoutIsBroken;    // for debugging
 
 @property (nonatomic, strong)   UINavigationController *helpNavVC;
 // in sources view
@@ -208,12 +203,8 @@ MainVC *mainVC = nil;
 @property (assign)              int transformCount;
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
 
-@property (nonatomic, strong)   UIButton *plusButton;
-
-@property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 
 @property (assign)              UIDeviceOrientation deviceOrientation;
-
 @property (nonatomic, strong)   Layout *layout;
 
 @property (nonatomic, strong)   NSMutableDictionary *rowIsCollapsed;
@@ -271,6 +262,7 @@ MainVC *mainVC = nil;
 
 @synthesize cameraController;
 @synthesize layout;
+@synthesize layoutIsBroken;
 
 @synthesize undoBarButton, shareBarButton, trashBarButton;
 
@@ -290,6 +282,14 @@ MainVC *mainVC = nil;
 @synthesize lastDisplayedFrame;
 @synthesize stats;
 
+@synthesize minDisplayFrac, bestMinDisplayFrac;
+@synthesize minThumbFrac, bestMinThumbFrac, minPctThumbsShown;
+@synthesize minThumbRows, minThumbCols;
+@synthesize minExecWidth, maxExecWidth;
+@synthesize minDisplayWidth, maxDisplayWidth;
+@synthesize minDisplayHeight, maxDisplayHeight;
+@synthesize execFontSize;
+
 - (id) init {
     self = [super init];
     if (self) {
@@ -299,6 +299,7 @@ MainVC *mainVC = nil;
         
         fileSourceFrame = nil;
         layout = nil;
+        layoutIsBroken = NO;
         helpNavVC = nil;
         showControls = NO;
         extScreenVC = nil;
@@ -330,14 +331,13 @@ MainVC *mainVC = nil;
         transformTotalElapsed = 0;
         transformCount = 0;
         rawDepthBuf = nil;
-        thumbScrollView = nil;
         busy = NO;
         options = [[Options alloc] init];
         
         overlayDebugStatus = nil;
         
         isiPhone  = [UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPhone;
-        currentDisplayOption = isiPhone ? iPhoneScreen : iPadScreen;
+        currentDisplayOption = isiPhone ? iPhoneSize : iPadSize;
         
 #if TARGET_OS_SIMULATOR
         cameraController = nil;
@@ -431,13 +431,6 @@ MainVC *mainVC = nil;
 
         NSString *section = [transform.helpPath pathComponents][0];
         
-        // first, the plus button, in the thumbs
-        if (ti == 0) {
-            [thumbView adjustStatus:ThumbPlusButton];
-            [thumbViewsArray addObject:thumbView];
-            thumbView = [[ThumbView alloc] init];   // a new thumbview for the actual transform
-        }
-        
         // insert section button if new section
         if (!lastSection || ![lastSection isEqualToString:section]) {
             [thumbView configureSectionThumbNamed:section];
@@ -483,6 +476,9 @@ MainVC *mainVC = nil;
         [thumbsView addSubview:thumbView];
 //        NSLog(@"TTTTT: %d  %@", thumbView.task.enabled, thumbView.task.taskName);
     }
+#ifdef DEBUG_LAYOUT
+    NSLog(@"Number of thumbViews: %d", (int)thumbViewsArray.count);
+#endif
 }
 
 // A thumb can have three states:
@@ -550,46 +546,6 @@ CGFloat topOfNonDepthArray = 0;
                 //            lastSection = thumbView.sectionName;
                 break;
             }
-            case ThumbPlusButton: {
-                thumbView.frame = nextButtonFrame;
-                thumbView.userInteractionEnabled = YES;
-                
-                plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
-                CGRect f = thumbView.frame;
-                f.size = nextButtonFrame.size;
-                plusButton.frame = f;
-                [plusButton addTarget:self
-                               action:@selector(doPlusTapped:)
-                     forControlEvents:UIControlEventTouchUpInside];
-                [self plusTitleForState:UIControlStateNormal
-                                 weight:UIFontWeightThin
-                                  color:[UIColor blackColor]];
-                [self plusTitleForState:UIControlStateDisabled
-                                 weight:UIFontWeightThin
-                                  color:[UIColor lightGrayColor]];
-                [self plusTitleForState:UIControlStateSelected
-                                 weight:UIFontWeightMedium
-                                  color:[UIColor blackColor]];
-                [self plusTitleForState:UIControlStateHighlighted
-                                 weight:UIFontWeightHeavy
-                                  color:[UIColor blueColor]];
-                PLUS_ENABLED = NO;
-                PLUS_REQUESTED = NO;
-                PLUS_LOCKED = NO;
-                
-                [self adjustPlusButton];
-                
-                UILongPressGestureRecognizer *lockPlus = [[UILongPressGestureRecognizer alloc]
-                                                                 initWithTarget:self
-                                                          action:@selector(doPlusPressed:)];
-                lockPlus.minimumPressDuration = 1.0;
-                [plusButton addGestureRecognizer:lockPlus];
-
-                [thumbView addSubview:plusButton];
-                break;
-            }
-            case DoubleWidthPlusButton:
-                break;
             default:    // regular thumb button
                 [thumbView adjustThumbEnabled];
 #ifdef DEBUG_THUMB_LAYOUT
@@ -872,6 +828,7 @@ CGFloat topOfNonDepthArray = 0;
     [paramSlider addTarget:self action:@selector(doParamSlider:)
           forControlEvents:UIControlEventValueChanged];
     [paramView addSubview:paramSlider];
+    [containerView addSubview:paramView];
 
     SET_VIEW_HEIGHT(paramView, BELOW(paramSlider.frame) + SEP);
     
@@ -879,7 +836,7 @@ CGFloat topOfNonDepthArray = 0;
                    initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
     executeView.userInteractionEnabled = NO;
-    executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
+// LATER    executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
     executeView.textColor = [UIColor blackColor];
     executeView.text = @"";
     executeView.opaque = YES;
@@ -887,6 +844,24 @@ CGFloat topOfNonDepthArray = 0;
     executeView.layer.borderColor = [UIColor greenColor].CGColor;
     executeView.layer.borderWidth = 3.0;
 #endif
+
+    plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
+    [plusButton addTarget:self
+                   action:@selector(doPlusTapped:)
+         forControlEvents:UIControlEventTouchUpInside];
+    [self plusTitleForState:UIControlStateDisabled
+                     weight:UIFontWeightThin
+                      color:[UIColor lightGrayColor]];
+    [self plusTitleForState:UIControlStateNormal
+                     weight:UIFontWeightThin
+                      color:[UIColor blackColor]];
+    [self plusTitleForState:UIControlStateSelected
+                     weight:UIFontWeightMedium
+                      color:[UIColor blackColor]];
+    plusButton.enabled = NO;
+    plusButton.selected = NO;
+    [self adjustPlusButton];
+    [executeView addSubview:plusButton];
 
     // select overlaied stuff
     UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
@@ -1062,7 +1037,11 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus {
+    if (layoutIsBroken)
+        return;
     switch (layoutStatus) {
+        case LayoutUnavailable:
+            break;
         case LayoutOK:
             assert(NO); // should not be ok yet
             break;
@@ -1091,7 +1070,26 @@ CGFloat topOfNonDepthArray = 0;
                 }
                 [self saveSourceIndex];
             }
-            [self pickLayout];
+            [self computeLayouts];
+            if (!layouts.count) {
+                NSLog(@"Inconceivable: no useful layout found.");
+                UIAlertController * alert = [UIAlertController
+                                             alertControllerWithTitle:@"No layout found"
+                                             message:@"inconceivable"
+                                             preferredStyle:UIAlertControllerStyleAlert];
+                UIAlertAction* defaultAction = [UIAlertAction actionWithTitle:@"Dismiss"
+                                                                        style:UIAlertActionStyleDefault
+                                                                      handler:^(UIAlertAction * action) {}
+                ];
+                [alert addAction:defaultAction];
+                [self presentViewController:alert animated:YES completion:nil];
+                
+                layoutStatus = LayoutUnavailable;
+                layoutIndex = NO_LAYOUT_SELECTED;
+                layoutIsBroken = YES;
+                return;
+            }
+            layoutIndex = 0;    // highest score, top of the array
             taskCtrl.state = ApplyLayout;
             // FALLTHROUGH
         case ApplyLayout:
@@ -1111,41 +1109,70 @@ CGFloat topOfNonDepthArray = 0;
         Layout *layout = layouts[i];
         NSLog(@"%3d %@ %@", i,
             layoutIndex == i ? @">>" : @"  ",
-            [layout info]);
+            [layout layoutSum]);
     }
 }
     
-- (void) pickLayout {
+#define EXECUTE_IPAD_FONT_SIZE   (18)
+#define EXECUTE_IPHONE_FONT_SIZE   (18)
+
+#define EXECUTE_MIN_TEXT_CHARS  20
+#define EXEC_MIN_TEXT_WIDTH (EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7))
+
+- (void) computeLayouts {
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
-#ifdef MAYBENOT
-    containerView.translatesAutoresizingMaskIntoConstraints = NO;
-    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    [containerView.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor].active = YES;
-    [containerView.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor].active = YES;
-    [containerView.topAnchor constraintEqualToAnchor:guide.topAnchor].active = YES;
-    [containerView.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor].active = YES;
-    UIWindow *window = self.view.window; // UIApplication.sharedApplication.keyWindow;
-//    CGFloat bottomPadding = window.safeAreaInsets.bottom;
-    CGFloat leftPadding = window.safeAreaInsets.left;
-    CGFloat rightPadding = window.safeAreaInsets.right;
+    // screen/view limits
+    minExecWidth = PLUS_SIZE + EXEC_MIN_TEXT_WIDTH;
+    maxExecWidth = containerView.frame.size.width;
+    if (mainVC.isiPhone) { // iphone display is very cramped.  Make the best of it.
+        execFontSize = EXECUTE_IPHONE_FONT_SIZE;
+        if (mainVC.isPortrait) {
+            minDisplayWidth = currentDisplayOption == NoTransformDisplayed ? 0 : containerView.frame.size.width / 3.0;
+            maxDisplayWidth = 0;    // no max
+            minDisplayHeight = PARAM_VIEW_H*3;
+            maxDisplayHeight = containerView.frame.size.height / 3.0;
+            minPctThumbsShown = 7.0;
+        } else {    // iphone landscape
+            minDisplayWidth = currentDisplayOption == NoTransformDisplayed ? 0 : THUMB_W*2.0;
+            maxDisplayWidth = containerView.frame.size.width / 3.0;    // no max
+            minDisplayHeight = THUMB_W*2;
+            maxDisplayHeight = 0;   // no limit
+            minPctThumbsShown = 14.0;
+        }
+        bestMinDisplayFrac = 0.2; // 0.4;
+        minDisplayFrac = currentDisplayOption == NoTransformDisplayed ? 0 : 0.3;
+        bestMinThumbFrac = 0.4; // unused
+        minThumbFrac = 0.249;   // 0.3 for large iphones
+        minThumbRows = MIN_IPHONE_THUMB_ROWS;
+        minThumbCols = MIN_IPHONE_THUMB_COLS;
+    } else {
+        execFontSize = EXECUTE_IPAD_FONT_SIZE;
+        minDisplayWidth = 3*THUMB_W;
+        maxDisplayWidth = containerView.frame.size.width;
+        minDisplayHeight = 2*THUMB_W;
+        maxDisplayHeight = containerView.frame.size.height;
+        bestMinDisplayFrac = 0.65;  // 0.42;
+        minDisplayFrac = 0.3; // 0.5;   // 0.40
+        bestMinThumbFrac = 0.5;
+        minThumbFrac = 0.3;
+        minThumbRows = MIN_THUMB_ROWS;
+        minThumbCols = MIN_THUMB_COLS;
+    }
     
-    CGRect f = self.view.frame;
-    f.origin.x = leftPadding; // + SEP;
-    f.origin.y = BELOW(self.navigationController.navigationBar.frame) + SEP;
-    f.size.height -= f.origin.y;
-    f.size.width = self.view.frame.size.width - rightPadding - f.origin.x;
-    [self dumpViewLimits:@"pickLayout"];
-    containerView.frame = f;
-#else
+    if (currentDisplayOption == OnlyTransformDisplayed) {
+        minThumbRows = 0;
+        minThumbCols = 0;
+    }
+    assert(minExecWidth > 0);
+    
     CGRect safeFrame = self.view.safeAreaLayoutGuide.layoutFrame;
     containerView.frame = safeFrame;
     NSLog(@" ******* containerview: %.0f,%.0f  %.0fx%.0f  %@",
           containerView.frame.origin.x, containerView.frame.origin.y,
           containerView.frame.size.width, containerView.frame.size.height,
           containerView.frame.size.width > containerView.frame.size.height ? @"landscape" : @"portrait");
-#endif
     
 #ifdef DEBUG_BORDERS
     containerView.layer.borderColor = [UIColor magentaColor].CGColor;
@@ -1153,37 +1180,23 @@ CGFloat topOfNonDepthArray = 0;
 #endif
 
     [layouts removeAllObjects];
-    
-    if (fileSourceFrame) {
-        [self tryThumbsForSourceSize:fileSourceFrame.size format:nil];
-    } else {
-        assert(cameraController);
-        [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
-        // XXXXXXX        assert(live);
-        // select camera setting for available area
-        
-        for (AVCaptureDeviceFormat *format in cameraController.formatList) {
-            if (cameraController.depthDataAvailable) {
-                if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
-                    continue;   // we want depth, if available
-            }
-            CGSize formatSize = [cameraController sizeForFormat:format];
-            [self tryThumbsForSourceSize:formatSize format:format];
-        }
+    [self findLayouts];
+
+    if (!layouts.count) {
+        return;
     }
-    assert(layouts.count > 0);
+
     // sort the layouts by score.
     
-#ifdef DEBUG_LAYOUT
-    NSLog(@" *** unsorted layouts");
-    [self dumpLayouts];
-#endif
-
     [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
-        // sort in decending order, hence l1 and l2 are switched
-        return [[NSNumber numberWithFloat:l2.displayFrac]
-                compare:[NSNumber numberWithFloat:l1.displayFrac]];
+        // sort by descending score and displayfractions.  The latter will
+        // be merged
+        if (l1.score != l2.score)
+            return [[NSNumber numberWithFloat:l2.score]
+                    compare:[NSNumber numberWithFloat:l1.score]];
+        else
+            return [[NSNumber numberWithFloat:l2.displayFrac]
+                    compare:[NSNumber numberWithFloat:l1.displayFrac]];
     }];
     
     // run down through the layouts, from largest display to smallest, removing
@@ -1191,13 +1204,11 @@ CGFloat topOfNonDepthArray = 0;
     
     NSMutableArray<Layout *> *editedLayouts = [[NSMutableArray alloc] init];
     
-    float topScore = -1;;
     Layout *previousLayout = nil;
     
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
         if (layouts.count == 0) {   // first one
-            topScore = layout.score;
             layoutIndex = layouts.count;
             [editedLayouts addObject:layout];
             previousLayout = layout;
@@ -1215,10 +1226,6 @@ CGFloat topOfNonDepthArray = 0;
         }
         
         [editedLayouts addObject:layout];
-        if (layout.score > topScore) {
-            topScore = layout.score;
-            layoutIndex = editedLayouts.count - 1;
-        }
         previousLayout = layout;
     }
     //    NSLog(@"LLLL remaining layouts: %lu, top score %.5f at %ld",
@@ -1241,88 +1248,123 @@ CGFloat topOfNonDepthArray = 0;
 #endif
 }
 
-- (void) tryThumbsForSourceSize:(CGSize) size
-                      format:(AVCaptureDeviceFormat *__nullable)format {
-    // allocate a layout.  This will get copied if we like it.
-    [self dumpViewLimits:@"tryThumbsForSourceSize"];
-    Layout *trialLayout = [[Layout alloc] initWithOption:currentDisplayOption
-                                              sourceSize:size format:format];
+- (void) findLayouts {
+    CGSize sourceSize;
+    if (fileSourceFrame) {
+        sourceSize = fileSourceFrame.size;
+        [self searchThumbOptionsForSize:sourceSize format:nil];
+    } else {
+        assert(cameraController);
+        [cameraController updateOrientationTo:deviceOrientation];
+        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
+        // XXXXXXX        assert(live);
+    
+        for (AVCaptureDeviceFormat *format in cameraController.formatList) {
+            if (cameraController.depthDataAvailable) {
+                if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
+                    continue;   // we want depth if needed and available
+            }
+            CGSize formatSize = [cameraController sizeForFormat:format];
+            [self searchThumbOptionsForSize:formatSize format:format];
+        }
+    }
+    
+    NSLog(@" *** findLayouts: %d", layouts.count);
+    [self dumpLayouts];
+}
+
+// try different thumb placement options for this source size
+- (void) searchThumbOptionsForSize:(CGSize) sourceSize
+                            format:(AVCaptureDeviceFormat *__nullable)format {
+    [self dumpViewLimits:@"searchThumbOptionsForSize"];
+    
+    size_t thumbCols = minThumbCols;
+    size_t thumbRows = minThumbRows;
+
     switch (currentDisplayOption) {
-        case ThumbsOnly: {
-            if ([trialLayout tryLayoutForThumbRowCount:trialLayout.maxThumbRows
-                                           columnCount:trialLayout.maxThumbColumns]) {
-                if (trialLayout.score) {
-                    [layouts addObject:[trialLayout copy]];
+        case iPadSize:
+            // try right thumbs
+            do {
+                Layout *layout = [[Layout alloc]
+                                  initForSize: sourceSize
+                                  rightThumbs:thumbCols++
+                                  bottomThumbs:0
+                                  displayOption:currentDisplayOption
+                                  format:format];
+                if (layout) {
+                    NSLog(@"RT  %@", [layout layoutSum]);
                 }
+
+                if (layout && layout.score != BAD_LAYOUT)
+                    [layouts addObject:layout];
+            } while (layout);
+            
+            // try bottom thumbs
+            do {    // try bottom thumbs
+                Layout *layout = [[Layout alloc]
+                                  initForSize: sourceSize
+                                  rightThumbs:0
+                                  bottomThumbs:thumbRows++
+                                  displayOption:currentDisplayOption
+                                  format:format];
+                if (layout) {
+                    NSLog(@"BT  %@", [layout layoutSum]);
+                }
+
+                if (layout && layout.score != BAD_LAYOUT)
+                    [layouts addObject:layout];
+            } while (layout);
+            
+#ifdef NOMORE
+            [trialLayout tryLayoutsOnRight:YES];
+            [trialLayout tryLayoutsOnRight:NO];
+            [trialLayout tryLayoutsForStacked];
+            [trialLayout tryLayoutsForExecOnLeft:NO];
+            [trialLayout tryLayoutsForExecOnLeft:YES];
+            [trialLayout tryLayoutsForJustDisplayOnLeft:YES];
+            [trialLayout tryLayoutsForJustDisplayOnLeft:NO];
+#endif
+            break;
+        case iPhoneSize:    // NB: iPhone is suboptimal for this app
+            if (isPortrait) {   // portrait iphone
+                
+            } else {            // landscape iphone
+                
+            }
+#ifdef NOTYET
+            [trialLayout tryLayoutsOnRight:YES];
+            [trialLayout tryLayoutsOnRight:NO];
+            [trialLayout tryLayoutsForExecOnLeft:YES];
+            [trialLayout tryLayoutsForExecOnLeft:NO];
+            [trialLayout tryLayoutsForStacked];
+#endif
+            break;
+        case OnlyTransformDisplayed:
+#ifdef NOTYET
+            [trialLayout tryLayoutsForJustDisplay];
+#endif
+            break;
+        case NoTransformDisplayed: {  // execute and thumbs only
+            if (isPortrait) {       // portrait iphone
+                
+            } else {            // landscape iphone
+                
             }
             break;
         }
-        case iPhoneScreen:
-        case iPadScreen:
-            for (int thumbColumns=2; trialLayout.maxThumbColumns; thumbColumns++) {
-                if (![trialLayout tryLayoutForThumbRowCount:0
-                                                columnCount:thumbColumns]) {
-                    break;  // can't be done
-                }
-                if (!trialLayout.score)
-                    continue;
-                [layouts addObject:[trialLayout copy]];
-            }
-#ifdef DEBUG_LAYOUT
-            NSLog(@"thumb columns layouts");
-            [self dumpLayouts];
-#endif
-            
-            for (int thumbRows=2; trialLayout.maxThumbRows; thumbRows++) {
-                if (![trialLayout tryLayoutForThumbRowCount:thumbRows
-                                                columnCount:0]) {
-                    break;  // can't be done
-                }
-                if (!trialLayout.score)
-                    continue;
-                [layouts addObject:[trialLayout copy]];
-            }
-#ifdef DEBUG_LAYOUT
-            NSLog(@" + thumb rows layouts");
-            [self dumpLayouts];
-#endif
-            break;
-        case TransformedPlusExecOnly:   // XXXX exec location?  Overlay?
-        case TransformedOnly:
-            if ([trialLayout tryLayoutForThumbRowCount:0
-                                           columnCount:0]) {
-                if (trialLayout.score) {
-                    [layouts addObject:[trialLayout copy]];
-                }
-            }
-            break;
-    }
-}
-
-- (void) addLayoutsForSourceSize:(CGSize) size {
-    switch (currentDisplayOption) {
-        case ThumbsOnly:
-        case iPhoneScreen:
-        case iPadScreen:
-        case TransformedPlusExecOnly:
-        case TransformedOnly:
-            ;
     }
 }
 
 - (void) applyScreenLayout:(long) newLayoutIndex {
-    assert(newLayoutIndex >= 0 && newLayoutIndex < layouts.count);
+    if (newLayoutIndex == NO_LAYOUT_SELECTED)
+        return;
+    assert(newLayoutIndex < layouts.count);
     
     layoutIndex = newLayoutIndex;
     layout = layouts[layoutIndex];
 #ifdef DEBUG_LAYOUT
-    NSLog(@"applyScreenLayout %ld", layoutIndex);
-    NSLog(@"screen format %@", layout.format);
-    
-    NSLog(@"    source ar: %5.3f", layout.imageSourceSize.width/layout.imageSourceSize.height);
-    NSLog(@"thumbimage ar: %5.3f", layout.thumbImageRect.size.width/layout.thumbImageRect.size.height);
-    NSLog(@"   display ar: %5.3f", layout.displayRect.size.width/layout.displayRect.size.height);
-    NSLog(@" transform ar: %5.3f", layout.transformSize.width/layout.transformSize.height);
+    NSLog(@"applyScreenLayout");
+    [layout dump];
 #endif
 
     // We have several image sizes to consider and process:
@@ -1362,15 +1404,12 @@ CGFloat topOfNonDepthArray = 0;
     f.origin.x -= f.size.width + SEP;
     runningButton.frame = f;
     
-    f.origin.x = INSET;
-    f.origin.y = transformView.frame.size.height;   // off screen below transform window
-    f.size.width = runningButton.frame.origin.x - SEP - f.origin.x;
-    f.size.height = paramView.frame.size.height;
-    paramView.frame = f;
+    paramView.frame = layout.paramRect;
     SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
     SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
     [self addParamsFor:[screenTask.transformList lastObject]];
-    thumbScrollView.frame = layout.thumbArrayRect;
+    
+    thumbScrollView.frame = layout.thumbScrollRect;
 #ifdef DEBUG_BORDERS
     thumbScrollView.layer.borderColor = [UIColor cyanColor].CGColor;
     thumbScrollView.layer.borderWidth = 3.0;
@@ -1378,10 +1417,11 @@ CGFloat topOfNonDepthArray = 0;
     
     CGFloat below = BELOW(thumbScrollView.frame);
     assert(below <= BELOW(containerView.frame));
-
+    
     thumbsView.frame = CGRectMake(0, 0,
                                   thumbScrollView.frame.size.width,
                                   thumbScrollView.frame.size.height);
+
 #ifdef NOTDEF
     NSLog(@"layout selected:");
 
@@ -1439,14 +1479,12 @@ CGFloat topOfNonDepthArray = 0;
     thumbTasks.targetSize = layout.thumbImageRect.size;
 //    [externalTask newTargetSize:processingSize];
 //  externalTask.targetSize = layout.processing.size;
-
+    
     executeView.frame = layout.executeRect;
-    if (DISPLAYING_THUMBS) { // if we are displaying thumbs...
-        [UIView animateWithDuration:0.5 animations:^(void) {
-            // move views to where they need to be now.
-            [self layoutThumbs: self->layout];
-        }];
-    }
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        // move views to where they need to be now.
+        [self layoutThumbs: self->layout];
+    }];
     
     layoutValuesView.frame = transformView.frame;
     [containerView bringSubviewToFront:layoutValuesView];
@@ -1467,7 +1505,7 @@ CGFloat topOfNonDepthArray = 0;
 #ifdef DEBUG_LAYOUT
             NSLog(@"%1ld%@%@", i,
                   i == newLayoutIndex ? @"->" : @"  ",
-                  [layout info]);
+                  [layout layoutSum]);
 #endif
     }
     //    [layoutValuesView sizeToFit];
@@ -1574,7 +1612,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (size_t) nextTransformTapIndex {
-    if (PLUS_REQUESTED || PLUS_LOCKED)
+    if (plusButton.selected)
         return screenTask.transformList.count;
     if (screenTask.transformList.count > 0)
         return screenTask.transformList.count - 1;
@@ -1585,22 +1623,20 @@ CGFloat topOfNonDepthArray = 0;
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
     Transform *oldTransform = [screenTask.transformList lastObject];
-
+    
     //    size_t indexToChange = [self nextTransformTapIndex];
     // if there is no current transform, or plus is selected, append the transform
-    if (!screenTask.transformList.count || PLUS_REQUESTED || PLUS_LOCKED) {
+    if (!screenTask.transformList.count || plusButton.selected) {
         [self removeParamsFor: oldTransform];
         [screenTask appendTransformToTask:tappedTransform];
         [self addParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
-        if (!PLUS_LOCKED) {
-            if (PLUS_REQUESTED) {
-                PLUS_REQUESTED = NO;    // satisfied
-                PLUS_ENABLED = NO;
-            } else {
-                PLUS_REQUESTED = NO;    // satisfied
-                PLUS_ENABLED = YES;
-            }
+        if (plusButton.selected) {
+            plusButton.selected = NO;    // satisfied
+            plusButton.enabled = NO;
+        } else {
+            plusButton.selected = NO;    // satisfied
+            plusButton.enabled = YES;
         }
         [self adjustPlusButton];
     } else {    // we have a current transform. deselect if he tapped current transform
@@ -1608,10 +1644,9 @@ CGFloat topOfNonDepthArray = 0;
             [self removeParamsFor: tappedTransform];
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
-            if (!screenTask.transformList.count || !PLUS_LOCKED) {
-                PLUS_REQUESTED = NO;    // satisfied
-                PLUS_ENABLED = NO;
-                PLUS_LOCKED = NO;
+            if (!screenTask.transformList.count) {
+                plusButton.selected = NO;    // satisfied
+                plusButton.enabled = NO;
                 [self adjustPlusButton];
             }
         } else {
@@ -1627,12 +1662,9 @@ CGFloat topOfNonDepthArray = 0;
                 [tappedThumb adjustStatus:ThumbActive];
                 [self addParamsFor:tappedTransform];
             }
-            if (!PLUS_LOCKED) {
-                PLUS_REQUESTED = NO;    // satisfied
-                PLUS_ENABLED = NO;
-                PLUS_LOCKED = NO;
-                [self adjustPlusButton];
-            }
+            plusButton.selected = NO;    // satisfied
+            plusButton.enabled = NO;
+            [self adjustPlusButton];
         }
     }
     [screenTask configureTaskForSize];
@@ -1657,7 +1689,7 @@ CGFloat topOfNonDepthArray = 0;
         return;
     [UIView animateWithDuration:0.5 animations:^(void) {
         // slide old parameters off the bottom of the display
-        SET_VIEW_Y(self->paramView, BELOW(self->transformView.frame));
+        SET_VIEW_Y(self->paramView, BELOW(self->layout.displayRect));
     } completion:nil];
 }
 
@@ -1682,40 +1714,21 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
     NSLog(@"doPlusTapped");
-    NSLog(@"doPlusTapped %@ %@ %@",
-          PLUS_ENABLED ? @"E" : @"e",
-          PLUS_REQUESTED ? @"R" : @"r",
-          PLUS_LOCKED ? @"L" : @"l");
-    PLUS_REQUESTED = !PLUS_REQUESTED;
-    PLUS_ENABLED = PLUS_REQUESTED || PLUS_LOCKED;
-    [self adjustPlusButton];
-}
-
-- (IBAction) doPlusPressed:(UIButton *)caller {
-    NSLog(@"doPlusPressed");
-    PLUS_LOCKED = !PLUS_LOCKED;
+    NSLog(@"doPlusTapped %@ %@",
+          plusButton.enabled ? @"E" : @"e",
+          plusButton.selected ? @"R" : @"r");
+    plusButton.selected = !plusButton.selected;
+    plusButton.enabled = plusButton.selected;
     [self adjustPlusButton];
 }
 
 - (void) adjustPlusButton {
-    NSLog(@"plus button: %@ %@ %@",
-          PLUS_ENABLED ? @"E" : @"e",
-          PLUS_REQUESTED ? @"R" : @"r",
-          PLUS_LOCKED ? @"L" : @"l");
-    if (PLUS_REQUESTED) {
-        plusButton.selected = YES;
-        plusButton.highlighted = NO;
-    } else if (PLUS_LOCKED) {
-        plusButton.selected = NO;
-        plusButton.highlighted = YES;
-    } else {
-        plusButton.selected = NO;
-        plusButton.highlighted = NO;
-    }
-    NSLog(@"     button: %@ %@ %@",
-          PLUS_ENABLED ? @"E" : @"e",
-          PLUS_REQUESTED ? @"R" : @"r",
-          PLUS_LOCKED ? @"L" : @"l");
+    NSLog(@"plus button: %@ %@",
+          plusButton.enabled ? @"E" : @"e",
+          plusButton.selected ? @"R" : @"r");
+    NSLog(@"     button: %@ %@",
+          plusButton.enabled ? @"E" : @"e",
+          plusButton.selected ? @"R" : @"r");
     [plusButton setNeedsDisplay];
 }
 
@@ -2117,11 +2130,9 @@ CGFloat topOfNonDepthArray = 0;
     }
     if (transformChainChanged)
         [self updateThumbAvailability];
-
-    if (DISPLAYING_THUMBS) {
-        if (displayedFrame)
-            [thumbTasks executeTasksWithFrame:displayedFrame dumpFile:nil];
-    }
+    
+    if (displayedFrame)
+        [thumbTasks executeTasksWithFrame:displayedFrame dumpFile:nil];
     if (cameraSourceThumb) {
         [cameraSourceThumb setImage:[frame toUIImage]];
         [cameraSourceThumb setNeedsDisplay];
@@ -2228,7 +2239,7 @@ CGFloat topOfNonDepthArray = 0;
 - (void) updateExecuteView {
     long step = 0;
     long displaySteps = screenTask.transformList.count;
-    CGFloat bestH = EXECUTE_H_FOR(displaySteps);
+    CGFloat bestH = [layout executeHForRowCount:displaySteps];
     BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
     NSString *sep = onePerLine ? @"\n" : @" ";
     NSString *text = @"";
@@ -2275,6 +2286,10 @@ CGFloat topOfNonDepthArray = 0;
 static CGSize startingPinchSize;
 
 - (IBAction) doPinch:(UIPinchGestureRecognizer *)pinch {
+    if (layoutIndex == NO_LAYOUT_SELECTED) {
+        NSLog(@"pinch ignored, no layout available");
+        return;
+    }
     switch (pinch.state) {
         case UIGestureRecognizerStateBegan:
             startingPinchSize = layout.displayRect.size;
@@ -2297,7 +2312,6 @@ static CGSize startingPinchSize;
                     layoutIndex = 0;
             }
             [taskCtrl idleFor:ApplyLayout];
-            [self applyScreenLayout:layoutIndex];
             break;
         }
         default:
@@ -2569,6 +2583,24 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
         [thumbView adjustThumbEnabled];
     }
     transformChainChanged = NO;
+}
+
+- (BOOL)canBecomeFirstResponder {
+    return YES;
+}
+
+- (NSArray *)keyCommands {
+    UIKeyCommand *upArrow = [UIKeyCommand keyCommandWithInput:UIKeyInputUpArrow modifierFlags:0 action:@selector(upArrow:)];
+    UIKeyCommand *downArrow = [UIKeyCommand keyCommandWithInput:UIKeyInputDownArrow modifierFlags:0 action:@selector(downArrow:)];
+    return @[upArrow, downArrow];
+}
+
+- (void)upArrow:(UIKeyCommand *)keyCommand {
+    NSLog(@"Up Arrow");
+}
+
+- (void)downArrow:(UIKeyCommand *)keyCommand {
+    NSLog(@"Down Arrow");
 }
 
 @end

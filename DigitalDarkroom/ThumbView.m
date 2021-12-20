@@ -184,9 +184,6 @@
             task.enabled = NO;
             break;
         case SectionHeader:
-        case ThumbPlusButton:
-        case DoubleWidthPlusButton:
-            self.layer.borderWidth = 0;
             break;
     }
 //    if (!sectionName)

@@ -17,15 +17,15 @@
 #import "Stats.h"
 
 @class CameraController;
+@class Layout;
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef enum {  // the transformed display on the main screen
-    ThumbsOnly,         // maybe for external screen of transformed image
-    iPhoneScreen,       // small image on iPhone to show more thumbs
-    iPadScreen,         // standard options for an iPad
-    TransformedPlusExecOnly,
-    TransformedOnly,    // only the display
+typedef enum {
+    OnlyTransformDisplayed,
+    NoTransformDisplayed,
+    iPhoneSize,         // small image on iPhone to show more thumbs
+    iPadSize,           // standard options for an iPad
 } DisplayOptions;
 
 @interface MainVC : UIViewController
@@ -42,6 +42,15 @@ typedef enum {  // the transformed display on the main screen
     NSMutableArray<ThumbView *> *thumbViewsArray;
     Stats *stats;
     CameraController *cameraController;
+    
+    // screen limits
+    CGFloat minExecWidth, maxExecWidth;
+    CGFloat execFontSize;
+    float minDisplayFrac, bestMinDisplayFrac;
+    float minThumbFrac, bestMinThumbFrac;
+    float minPctThumbsShown;
+    int minThumbRows, minThumbCols;
+    int minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
@@ -49,6 +58,14 @@ typedef enum {  // the transformed display on the main screen
 @property (nonatomic, strong)   NSMutableArray<ThumbView *> *thumbViewsArray; // views that go into thumbsView
 @property (nonatomic, strong)   Stats *stats;
 @property (nonatomic, strong)   CameraController *cameraController;
+
+@property (assign)  CGFloat minExecWidth, maxExecWidth;
+@property (assign)  CGFloat execFontSize;
+@property (assign)  float minDisplayFrac, bestMinDisplayFrac;
+@property (assign)  float minThumbFrac, bestMinThumbFrac;
+@property (assign)  float minPctThumbsShown;
+@property (assign)  int minThumbRows, minThumbCols;
+@property (assign)  int minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
 
 - (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
 - (void) adjustOrientation;

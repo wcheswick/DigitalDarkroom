@@ -26,7 +26,7 @@
     if (self) {
         externalWindow = [[UIWindow alloc]initWithFrame:screen.bounds];
         externalWindow.rootViewController = self;
-        externalWindow.screen = screen;
+// not yet        externalWindow.screen = screen;
         externalWindow.hidden = YES;
     }
     return self;

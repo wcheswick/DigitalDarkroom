@@ -471,8 +471,8 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             
             CGSize rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
                                              CVPixelBufferGetHeight(depthPixelBufferRef));
-            size_t bpr = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
-            size_t bufSize = CVPixelBufferGetDataSize(depthPixelBufferRef);
+//            size_t bpr = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+//            size_t bufSize = CVPixelBufferGetDataSize(depthPixelBufferRef);
             if (!lastRawFrame.depthBuf || !SAME_SIZE(lastRawFrame.depthBuf.size, rawDepthSize)) {
                 lastRawFrame.depthBuf = [[DepthBuf alloc] initWithSize:rawDepthSize];
             }
@@ -482,7 +482,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             size_t dataBytesPerPlane = CVPixelBufferGetWidthOfPlane(depthPixelBufferRef, 0);
             size_t distancesPerRow = rawDepthSize.width;
             size_t goodBytesPerRow = distancesPerRow * sizeof(Distance);
-            size_t bytesPerSourceRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+//            size_t bytesPerSourceRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
             for (int row=0; row<rawDepthSize.height; row++) {
                 memcpy(&lastRawFrame.depthBuf.da[row][0], rowPtr, goodBytesPerRow);
                 rowPtr += dataBytesPerPlane;

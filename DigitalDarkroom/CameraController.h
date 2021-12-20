@@ -23,7 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
         AVCaptureDataOutputSynchronizerDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
-    NSMutableArray *formatList;     // from the device, edited to what we could use
+    NSMutableArray<AVCaptureDeviceFormat *> *formatList;     // from dev., only what we can use
     BOOL depthDataAvailable;
     Stats *stats;
     Frame *lastRawFrame;
