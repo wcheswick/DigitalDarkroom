@@ -124,7 +124,7 @@ typedef long PixelIndex_t;
 #define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
 #define STEP_W          (EXECUTE_CHAR_W*2)
 
-#define PLUS_SIZE   CONTROL_BUTTON_SIZE
+#define PLUS_H   CONTROL_BUTTON_SIZE
 
 #define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
 

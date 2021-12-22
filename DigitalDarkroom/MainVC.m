@@ -72,7 +72,7 @@
 #define SLIDER_AREA_W   200
 
 #define SHOW_LAYOUT_FONT_SIZE   14
-#define MAIN_STATS_FONT_SIZE 20
+#define MAIN_STATS_FONT_SIZE 28
 
 #define STATS_HEADER_INDEX  1   // second section is just stats
 #define TRANSFORM_USES_SLIDER(t) ((t).p != UNINITIALIZED_P)
@@ -849,20 +849,22 @@ CGFloat topOfNonDepthArray = 0;
     [plusButton addTarget:self
                    action:@selector(doPlusTapped:)
          forControlEvents:UIControlEventTouchUpInside];
+#ifdef NOTHERE
     [self plusTitleForState:UIControlStateDisabled
-                     weight:UIFontWeightThin
+                     weight:UIFontWeightRegular
                       color:[UIColor lightGrayColor]];
     [self plusTitleForState:UIControlStateNormal
-                     weight:UIFontWeightThin
-                      color:[UIColor blackColor]];
-    [self plusTitleForState:UIControlStateSelected
                      weight:UIFontWeightMedium
                       color:[UIColor blackColor]];
-    plusButton.enabled = NO;
-    plusButton.selected = NO;
-    [self adjustPlusButton];
+    [self plusTitleForState:UIControlStateSelected
+                     weight:UIFontWeightBold
+                      color:[UIColor blackColor]];
+#endif
+    [self enablePlus:NO select:NO];
+    plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
+    plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
+    plusButton.layer.borderColor = RETLO_GREEN.CGColor;
     [executeView addSubview:plusButton];
-
     // select overlaied stuff
     UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
                                    initWithTarget:self action:@selector(didTapTransformView:)];
@@ -1093,7 +1095,6 @@ CGFloat topOfNonDepthArray = 0;
             taskCtrl.state = ApplyLayout;
             // FALLTHROUGH
         case ApplyLayout:
-            [self applyScreenLayout: layoutIndex];     // top one is best
             if (IS_CAMERA(CURRENT_SOURCE)) {
                 [cameraController updateOrientationTo:deviceOrientation];
                 [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
@@ -1107,7 +1108,7 @@ CGFloat topOfNonDepthArray = 0;
 - (void) dumpLayouts {
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
-        NSLog(@"%3d %@ %@", i,
+        NSLog(@"%2d %@ %@", i,
             layoutIndex == i ? @">>" : @"  ",
             [layout layoutSum]);
     }
@@ -1124,7 +1125,7 @@ CGFloat topOfNonDepthArray = 0;
         UIDeviceOrientationIsFlat(deviceOrientation);
     
     // screen/view limits
-    minExecWidth = PLUS_SIZE + EXEC_MIN_TEXT_WIDTH;
+    minExecWidth = PLUS_H + EXEC_MIN_TEXT_WIDTH;
     maxExecWidth = containerView.frame.size.width;
     if (mainVC.isiPhone) { // iphone display is very cramped.  Make the best of it.
         execFontSize = EXECUTE_IPHONE_FONT_SIZE;
@@ -1186,52 +1187,65 @@ CGFloat topOfNonDepthArray = 0;
         return;
     }
 
-    // sort the layouts by score.
+    // sort the layouts by descending size, and score. Default is the highest
+    // scoring one.  Discard the ones that are close.
     
     [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
-        // sort by descending score and displayfractions.  The latter will
-        // be merged
-        if (l1.score != l2.score)
-            return [[NSNumber numberWithFloat:l2.score]
-                    compare:[NSNumber numberWithFloat:l1.score]];
-        else
+        if (l1.displayFrac != l2.displayFrac)
             return [[NSNumber numberWithFloat:l2.displayFrac]
                     compare:[NSNumber numberWithFloat:l1.displayFrac]];
+
+        return [[NSNumber numberWithFloat:l2.score]
+                    compare:[NSNumber numberWithFloat:l1.score]];
     }];
-    
+
     // run down through the layouts, from largest display to smallest, removing
-    // ones that are essentially duplicates.
+    // ones that are essentially duplicates. Find the best scoring one, our default
+    // selection.
     
     NSMutableArray<Layout *> *editedLayouts = [[NSMutableArray alloc] init];
     
     Layout *previousLayout = nil;
-    
+    float bestScore = -1;
+    int bestScoreIndex = -1;
+
     for (int i=0; i<layouts.count; i++) {
         Layout *layout = layouts[i];
-        if (layouts.count == 0) {   // first one
-            layoutIndex = layouts.count;
+        if (i == 0) {   // first one
+            bestScore = layout.score;
+            bestScoreIndex = i;
             [editedLayouts addObject:layout];
             previousLayout = layout;
             continue;
         }
         
-        // find best depth format for this.  Must have same aspect ratio, and correct type.
-        
-        NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
-        layout.depthFormat = nil;
-        for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
-            if (![CameraController depthFormat:depthFormat isSuitableFor:layout.format])
-                continue;
-            layout.depthFormat = depthFormat;
+        if (layout.format) {
+            // find best depth format for this.  Must have same aspect ratio, and correct type.
+            NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
+            layout.depthFormat = nil;
+            for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
+                if (![CameraController depthFormat:depthFormat isSuitableFor:layout.format])
+                    continue;
+                layout.depthFormat = depthFormat;
+            }
         }
         
         [editedLayouts addObject:layout];
+        if (layout.score > bestScore) {
+            bestScore = layout.score;
+            bestScoreIndex = (int)editedLayouts.count - 1;
+        }
         previousLayout = layout;
     }
-    //    NSLog(@"LLLL remaining layouts: %lu, top score %.5f at %ld",
-    //          (unsigned long)editedLayouts.count, topScore, layoutIndex);
-    layouts = editedLayouts;
     
+#ifdef DEBUG_LAYOUT
+    NSLog(@"LLLL %lu trimmed to %lu, top score %.5f at %d",
+          layouts.count, editedLayouts.count, bestScore, bestScoreIndex);
+#endif
+    
+    layouts = editedLayouts;
+    [self applyScreenLayout:bestScoreIndex];
+
 #ifdef NOTDEF
     int i = 0;
     for (Layout *layout in layouts) {
@@ -1308,7 +1322,7 @@ CGFloat topOfNonDepthArray = 0;
                                   bottomThumbs:thumbRows++
                                   displayOption:currentDisplayOption
                                   format:format];
-                if (NO && layout) {
+                if (/* DISABLES CODE */ (NO) && layout) {
                     NSLog(@"BT  %@", [layout layoutSum]);
                 }
 
@@ -1482,6 +1496,7 @@ CGFloat topOfNonDepthArray = 0;
 //  externalTask.targetSize = layout.processing.size;
     
     executeView.frame = layout.executeRect;
+    plusButton.frame = layout.plusRect;
     [UIView animateWithDuration:0.5 animations:^(void) {
         // move views to where they need to be now.
         [self layoutThumbs: self->layout];
@@ -1492,6 +1507,7 @@ CGFloat topOfNonDepthArray = 0;
     NSString *formatList = @"";
     long start = newLayoutIndex - 6;
     long finish = newLayoutIndex + 6;
+    start = 0; finish = layouts.count;
     if (start < 0)
         start = 0;
     if (finish > layouts.count)
@@ -1633,22 +1649,17 @@ CGFloat topOfNonDepthArray = 0;
         [self addParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
         if (plusButton.selected) {
-            plusButton.selected = NO;    // satisfied
-            plusButton.enabled = NO;
+            [self enablePlus:NO select:NO];
         } else {
-            plusButton.selected = NO;    // satisfied
-            plusButton.enabled = YES;
+            [self enablePlus:YES select:NO];
         }
-        [self adjustPlusButton];
     } else {    // we have a current transform. deselect if he tapped current transform
         if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
             [self removeParamsFor: tappedTransform];
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
             if (!screenTask.transformList.count) {
-                plusButton.selected = NO;    // satisfied
-                plusButton.enabled = NO;
-                [self adjustPlusButton];
+                [self enablePlus:NO select:NO];    // satisfied
             }
         } else {
             if (oldTransform) {
@@ -1663,9 +1674,7 @@ CGFloat topOfNonDepthArray = 0;
                 [tappedThumb adjustStatus:ThumbActive];
                 [self addParamsFor:tappedTransform];
             }
-            plusButton.selected = NO;    // satisfied
-            plusButton.enabled = NO;
-            [self adjustPlusButton];
+            [self enablePlus:NO select:NO]; // satisfied
         }
     }
     [screenTask configureTaskForSize];
@@ -1718,12 +1727,12 @@ CGFloat topOfNonDepthArray = 0;
     NSLog(@"doPlusTapped %@ %@",
           plusButton.enabled ? @"E" : @"e",
           plusButton.selected ? @"R" : @"r");
-    plusButton.selected = !plusButton.selected;
-    plusButton.enabled = plusButton.selected;
-    [self adjustPlusButton];
+    [self enablePlus:plusButton.selected select:!plusButton.selected];
 }
 
-- (void) adjustPlusButton {
+- (void) enablePlus:(BOOL)enable select:(BOOL)select {
+    plusButton.enabled = enable;
+    plusButton.selected = select;
     NSLog(@"plus button: %@ %@",
           plusButton.enabled ? @"E" : @"e",
           plusButton.selected ? @"R" : @"r");
@@ -1737,7 +1746,7 @@ CGFloat topOfNonDepthArray = 0;
                     weight:(UIFontWeight) weight
                      color:(UIColor *) color {
     UIFont *font = [UIFont
-                    systemFontOfSize:plusButton.frame.size.height/2.0
+                    systemFontOfSize:PLUS_H
                     weight:weight];
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
                                     initWithString:@"+"
@@ -2181,6 +2190,11 @@ CGFloat topOfNonDepthArray = 0;
     [mainStatsView setNeedsDisplay];
     [self updateExecuteView];
     [taskCtrl checkForIdle];
+    if (showStats)
+        self.title = [NSString stringWithFormat:@"\"%@\",    layout %ld/%lu  %@",
+                      CURRENT_SOURCE.label,
+                      layoutIndex, (unsigned long)layouts.count,
+                      layout.type];
 
 #ifdef OLD
     NSDate *now = [NSDate now];
@@ -2591,31 +2605,38 @@ didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (NSArray *)keyCommands {
-    UIKeyCommand *upArrow = [UIKeyCommand keyCommandWithInput:@"u" // UIKeyInputUpArrow
+    UIKeyCommand *uKey = [UIKeyCommand keyCommandWithInput:@"u" // UIKeyInputUpArrow
                                                 modifierFlags:0
-                                                       action:@selector(upArrow:)];
-    UIKeyCommand *downArrow = [UIKeyCommand keyCommandWithInput:@"d" // UIKeyInputDownArrow
+                                                       action:@selector(upLayout:)];
+    UIKeyCommand *dKey = [UIKeyCommand keyCommandWithInput:@"d" // UIKeyInputDownArrow
                                                   modifierFlags:0
-                                                         action:@selector(downArrow:)];
-    return @[upArrow, downArrow];
+                                                         action:@selector(downLayout:)];
+    UIKeyCommand *spaceKey = [UIKeyCommand keyCommandWithInput:@" " // UIKeyInputDownArrow
+                                                  modifierFlags:0
+                                                         action:@selector(nextLayout:)];
+    return @[uKey, dKey, spaceKey];
 }
 
-- (void)upArrow:(UIKeyCommand *)keyCommand {
+- (void)upLayout:(UIKeyCommand *)keyCommand {
     if (![self keyTimeOK])
         return;
     if (layoutIndex == 0)
         return;
     [self applyScreenLayout:layoutIndex - 1];
-    
 }
 
-- (void)downArrow:(UIKeyCommand *)keyCommand {
+- (void)downLayout:(UIKeyCommand *)keyCommand {
     if (![self keyTimeOK])
         return;
-    NSLog(@"Down Arrow");
     if (layoutIndex+1 >= layouts.count)
         return;
     [self applyScreenLayout:layoutIndex + 1];
+}
+
+- (void)nextLayout:(UIKeyCommand *)keyCommand {
+    if (![self keyTimeOK])
+        return;
+    [self applyScreenLayout:(layoutIndex + 1) % layouts.count];
 }
 
 NSDate *lastArrowKeyNotice = 0;

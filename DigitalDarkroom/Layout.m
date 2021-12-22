@@ -34,7 +34,7 @@ NSString * __nullable displayOptionNames[] = {
 
 #define EXECUTE_ROW_H       (mainVC.execFontSize + SEP)
 #define EXECUTE_H_FOR(n)    ((n)*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W + 2*SEP)
-#define EXECUTE_MIN_H       MIN(PLUS_SIZE, EXECUTE_H_FOR(1))
+#define EXECUTE_MIN_H       MIN(PLUS_H, EXECUTE_H_FOR(1))
 #define EXECUTE_FULL_H      [self executeHForRowCount:6]
 
 #define SCALE_UNINITIALIZED (-1.0)
@@ -138,7 +138,7 @@ NSString * __nullable displayOptionNames[] = {
             thumbScrollRect.size.height = SCREEN.size.height - thumbScrollRect.origin.y;
         }
         
-        plusRect = CGRectMake(0, 0, PLUS_SIZE, PLUS_SIZE);
+        plusRect = CGRectMake(0, 0, PLUS_H, PLUS_H);
         paramRect.size.width = displayRect.size.width;
 
         // plus sits at the beginning of the thumbs.  For now.
@@ -255,7 +255,7 @@ NSString * __nullable displayOptionNames[] = {
 }
 
 - (NSString *) layoutSum {
-    return [NSString stringWithFormat:@"%4.0fx%4.0f  %4.0fx%4.0f   %5.3f%%  e%3.0fx%3.0f p%3.0fx%3.0f %4.2f   score:%4.2f   %@",
+    return [NSString stringWithFormat:@"%4.0fx%4.0f %4.0fx%4.0f %4.2f%%  e%3.0fx%3.0f p%3.0fx%2.0f  %4.2f%%  sc:%4.2f %@",
             transformSize.width, transformSize.height,
             displayRect.size.width, displayRect.size.height,
             scale,
