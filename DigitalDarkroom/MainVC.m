@@ -285,7 +285,7 @@ MainVC *mainVC = nil;
 @synthesize minDisplayFrac, bestMinDisplayFrac;
 @synthesize minThumbFrac, bestMinThumbFrac, minPctThumbsShown;
 @synthesize minThumbRows, minThumbCols;
-@synthesize minExecWidth, maxExecWidth;
+@synthesize minExecWidth;
 @synthesize minDisplayWidth, maxDisplayWidth;
 @synthesize minDisplayHeight, maxDisplayHeight;
 @synthesize execFontSize;
@@ -832,16 +832,15 @@ CGFloat topOfNonDepthArray = 0;
 
     SET_VIEW_HEIGHT(paramView, BELOW(paramSlider.frame) + SEP);
     
-    executeView = [[UITextView alloc]
-                   initWithFrame: CGRectMake(0, LATER, LATER, LATER)];
+    executeView = [[UITextView alloc] init];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
     executeView.userInteractionEnabled = NO;
-// LATER    executeView.font = [UIFont boldSystemFontOfSize: EXECUTE_FONT_SIZE];
+    executeView.font = [UIFont boldSystemFontOfSize: execFontSize];
     executeView.textColor = [UIColor blackColor];
     executeView.text = @"";
     executeView.opaque = YES;
 #ifdef DEBUG_BORDERS
-    executeView.layer.borderColor = [UIColor greenColor].CGColor;
+    executeView.layer.borderColor = [UIColor darkGrayColor].CGColor;
     executeView.layer.borderWidth = 3.0;
 #endif
 
@@ -863,8 +862,9 @@ CGFloat topOfNonDepthArray = 0;
     [self enablePlus:NO select:NO];
     plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
     plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
-    plusButton.layer.borderColor = RETLO_GREEN.CGColor;
-    [executeView addSubview:plusButton];
+    plusButton.layer.borderColor = [UIColor orangeColor].CGColor;
+    [containerView addSubview:plusButton];
+    
     // select overlaied stuff
     UITapGestureRecognizer *transformTap = [[UITapGestureRecognizer alloc]
                                    initWithTarget:self action:@selector(didTapTransformView:)];
@@ -1113,20 +1113,13 @@ CGFloat topOfNonDepthArray = 0;
             [layout layoutSum]);
     }
 }
-    
-#define EXECUTE_IPAD_FONT_SIZE   (18)
-#define EXECUTE_IPHONE_FONT_SIZE   (18)
-
-#define EXECUTE_MIN_TEXT_CHARS  20
-#define EXEC_MIN_TEXT_WIDTH (EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7))
 
 - (void) computeLayouts {
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
     // screen/view limits
-    minExecWidth = PLUS_H + EXEC_MIN_TEXT_WIDTH;
-    maxExecWidth = containerView.frame.size.width;
+    minExecWidth = EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7) + 2*EXECUTE_BORDER_W;
     if (mainVC.isiPhone) { // iphone display is very cramped.  Make the best of it.
         execFontSize = EXECUTE_IPHONE_FONT_SIZE;
         if (mainVC.isPortrait) {

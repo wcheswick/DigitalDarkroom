@@ -111,7 +111,6 @@ typedef long PixelIndex_t;
 
 #define SECTION_HEADER_FONT_SIZE    20
 
-#define EXECUTE_BORDER_W    2
 
 #define CONTROL_BUTTON_SIZE 50
 
@@ -120,9 +119,12 @@ typedef long PixelIndex_t;
 #define PARAM_SLIDER_H  (40)
 #define PARAM_VIEW_H    (SEP + PARAM_LABEL_H + SEP + PARAM_SLIDER_H + SEP)
 
-#define EXECUTE_STATUS_W    30
-#define EXECUTE_CHAR_W  (EXECUTE_STATUS_FONT_SIZE*0.8)
-#define STEP_W          (EXECUTE_CHAR_W*2)
+
+#define EXECUTE_IPAD_FONT_SIZE   (18)
+#define EXECUTE_IPHONE_FONT_SIZE   (16)
+#define EXECUTE_MIN_TEXT_CHARS  20
+
+#define EXECUTE_BORDER_W    2
 
 #define PLUS_H   CONTROL_BUTTON_SIZE
 

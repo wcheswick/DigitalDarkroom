@@ -321,7 +321,7 @@ if (lastRawFrame.depthBuf.valid) {
         ok++;
     }
     NSLog(@"   zeros: %zu", zeros);
-    NSLog(@"    nans: %zu   %4.1f%%", nans, nans/(size.width*size.height));
+    NSLog(@"    nans: %zu   %5.1f%%", nans, nans/(size.width*size.height));
     NSLog(@"    negs: %zu", negs);
     NSLog(@"    bigs: %zu", bigs);
     NSLog(@"      ok: %zu", ok);

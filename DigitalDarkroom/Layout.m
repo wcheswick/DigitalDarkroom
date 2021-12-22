@@ -103,8 +103,7 @@ NSString * __nullable displayOptionNames[] = {
         CGSize targetSize;
         displayRect.origin = CGPointZero;
         if (rightThumbs) {
-            type = @"DP/ET";    // display and params on left, execute and thumbs on right
-            thumbScrollRect.size.height = mainVC.containerView.frame.size.height - basicExecuteSize.height;
+            type = @"DPE/T";    // thumbs on right
             thumbScrollRect.size.width = (firstThumbRect.size.width + SEP)*rightThumbs;
             targetSize = CGSizeMake(SCREEN.size.width - thumbScrollRect.size.width - SEP,
                                     SCREEN.size.height - SEP - PARAM_VIEW_H);
@@ -116,29 +115,39 @@ NSString * __nullable displayOptionNames[] = {
             paramRect.origin.y = BELOW(displayRect) + SEP;
 
             // adjust thumbs view for actual available width:
-            thumbScrollRect.size.width = thumbScrollRect.size.width - thumbScrollRect.origin.x;
+            thumbScrollRect.origin = CGPointMake(RIGHT(displayRect) + SEP, 0);
+            thumbScrollRect.size.width = SCREEN.size.width - thumbScrollRect.origin.x;
+            thumbScrollRect.size.height = mainVC.containerView.frame.size.height;
+
+            plusRect.origin = CGPointMake(0, BELOW(paramRect) + SEP);
+            plusRect.size = CGSizeMake(displayRect.size.width, PLUS_H);
             
-            executeRect.origin = CGPointMake(RIGHT(displayRect) + SEP, 0);
-            executeRect.size = CGSizeMake(thumbScrollRect.size.width, basicExecuteSize.height);
-            thumbScrollRect.origin = CGPointMake(executeRect.origin.x, BELOW(executeRect) + SEP);
-            thumbScrollRect.size.height = SCREEN.size.height - thumbScrollRect.origin.y;
+            executeRect.origin = CGPointMake(0, BELOW(plusRect) + SEP);
+            executeRect.size = CGSizeMake(displayRect.size.width, SCREEN.size.height - executeRect.origin.y);
         } else {
-            type = @"DPET"; // all in a column
+            type = @"DT/PE"; // thumbs underneath, P over E on right
             thumbScrollRect.size.width = mainVC.containerView.frame.size.width;
             thumbScrollRect.size.height = (firstThumbRect.size.height + SEP)*bottomThumbs;
-            targetSize = CGSizeMake(SCREEN.size.width,
+            executeRect.size = CGSizeMake(SCREEN.size.width - SEP - mainVC.minExecWidth, LATER);
+            targetSize = CGSizeMake(SCREEN.size.width - executeRect.size.width,
                                     SCREEN.size.height - SEP - PARAM_VIEW_H - SEP - thumbScrollRect.size.height);
             if (targetSize.height < mainVC.minDisplayHeight) {
                 NSLog(@"no room for %zu thumb rows on bottom", bottomThumbs);
                 return nil;
             }
             displayRect.size = [Layout fitSize:imageSourceSize toSize:targetSize];
+
+            plusRect.origin = CGPointMake(RIGHT(displayRect) + SEP, 0);
+            plusRect.size = CGSizeMake(SCREEN.size.width - plusRect.origin.x, PLUS_H);
+            
+            executeRect.origin = CGPointMake(plusRect.origin.x, BELOW(plusRect) + SEP);
+            executeRect.size = CGSizeMake(plusRect.size.width, displayRect.size.height - executeRect.origin.y);
+
             paramRect.origin.y = BELOW(displayRect) + SEP;
             thumbScrollRect.origin.y = BELOW(paramRect) + SEP;
             thumbScrollRect.size.height = SCREEN.size.height - thumbScrollRect.origin.y;
-        }
+        }   // XXXX DPET
         
-        plusRect = CGRectMake(0, 0, PLUS_H, PLUS_H);
         paramRect.size.width = displayRect.size.width;
 
         // plus sits at the beginning of the thumbs.  For now.
@@ -255,13 +264,13 @@ NSString * __nullable displayOptionNames[] = {
 }
 
 - (NSString *) layoutSum {
-    return [NSString stringWithFormat:@"%4.0fx%4.0f %4.0fx%4.0f %4.2f%%  e%3.0fx%3.0f p%3.0fx%2.0f  %4.2f%%  sc:%4.2f %@",
+    return [NSString stringWithFormat:@"%4.0fx%4.0f %4.0fx%4.0f %4.2f  e%3.0fx%3.0f p%3.0fx%2.0f  %5.2f%%  sc:%4.2f %@",
             transformSize.width, transformSize.height,
             displayRect.size.width, displayRect.size.height,
             scale,
             executeRect.size.width, executeRect.size.height,
             paramRect.size.width, paramRect.size.height,
-            displayFrac,
+            displayFrac*100.0,
             score, type
     ];
 }
