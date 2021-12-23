@@ -1119,9 +1119,9 @@ CGFloat topOfNonDepthArray = 0;
         UIDeviceOrientationIsFlat(deviceOrientation);
     
     // screen/view limits
-    minExecWidth = EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7) + 2*EXECUTE_BORDER_W;
     if (mainVC.isiPhone) { // iphone display is very cramped.  Make the best of it.
         execFontSize = EXECUTE_IPHONE_FONT_SIZE;
+        minExecWidth = EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7) + 2*EXECUTE_BORDER_W;
         if (mainVC.isPortrait) {
             minDisplayWidth = currentDisplayOption == NoTransformDisplayed ? 0 : containerView.frame.size.width / 6.0;
             maxDisplayWidth = 0;    // no max
@@ -1143,6 +1143,7 @@ CGFloat topOfNonDepthArray = 0;
         minThumbCols = MIN_IPHONE_THUMB_COLS;
     } else {
         execFontSize = EXECUTE_IPAD_FONT_SIZE;
+        minExecWidth = EXECUTE_MIN_TEXT_CHARS * (execFontSize*0.7) + 2*EXECUTE_BORDER_W;
         minDisplayWidth = 2*THUMB_W;
         maxDisplayWidth = containerView.frame.size.width;
         minDisplayHeight = 2*THUMB_W;
@@ -1188,6 +1189,8 @@ CGFloat topOfNonDepthArray = 0;
             return [[NSNumber numberWithFloat:l2.displayFrac]
                     compare:[NSNumber numberWithFloat:l1.displayFrac]];
 
+//        return [[NSNumber numberWithFloat:l2.pctUsed]
+//                    compare:[NSNumber numberWithFloat:l1.pctUsed]];
         return [[NSNumber numberWithFloat:l2.score]
                     compare:[NSNumber numberWithFloat:l1.score]];
     }];

@@ -68,7 +68,7 @@ NSString * __nullable displayOptionNames[] = {
 
 @synthesize imageSourceSize;
 @synthesize executeIsTight;
-@synthesize displayFrac, thumbFrac;
+@synthesize displayFrac, thumbFrac, pctUsed;
 @synthesize scale, aspectRatio;
 @synthesize executeOverlayOK;
 @synthesize status, type;
@@ -95,9 +95,6 @@ NSString * __nullable displayOptionNames[] = {
         thumbImageRect.size = CGSizeMake(THUMB_W, trunc(THUMB_W/aspectRatio));
         firstThumbRect.size = CGSizeMake(thumbImageRect.size.width,
                                          thumbImageRect.size.height + THUMB_LABEL_H);
-        BOOL narrowScreen = mainVC.isiPhone;
-        CGSize basicExecuteSize = CGSizeMake(narrowScreen ? mainVC.minExecWidth : mainVC.minExecWidth,
-                                             narrowScreen ? EXECUTE_MIN_H : EXECUTE_FULL_H);
         paramRect.size = CGSizeMake(LATER, PARAM_VIEW_H);
 
         CGSize targetSize;
@@ -159,7 +156,6 @@ NSString * __nullable displayOptionNames[] = {
         scale = displayRect.size.width / imageSourceSize.width;
         transformSize = displayRect.size;
 
-
         [self scoreLayout];
     }
     return self;
@@ -185,16 +181,33 @@ NSString * __nullable displayOptionNames[] = {
 //        NSLog(@"display too short");
         return;
     }
-
-    CGFloat displayArea = displayRect.size.width * displayRect.size.height;
-    CGFloat containerArea = SCREEN.size.width * SCREEN.size.height;
-    displayFrac = displayArea / containerArea;
 #ifdef OLD
     if (displayFrac < mainVC.minDisplayFrac) {
         score = 0;
         return;
     }
 #endif
+
+#define AREA(r) ((r).size.width * (r).size.height)
+    
+    CGFloat displayArea = AREA(displayRect);
+    CGFloat containerArea = AREA(SCREEN);
+    displayFrac = displayArea / containerArea;
+    CGFloat usedArea = displayArea + AREA(executeRect) + AREA(plusRect) +
+        AREA(paramRect) + AREA(thumbScrollRect);
+    pctUsed = 100.0*(usedArea/AREA(SCREEN));
+    
+#ifdef DEBUG_LAYOUT
+    NSLog(@"area %4.1f%% = d%4.1f%% e%4.1f%% p%4.1f%% P%4.1f%% T%4.1f%%",
+          pctUsed,
+          displayArea,
+          100.0*(AREA(executeRect))/AREA(SCREEN),
+          100.0*(AREA(plusRect))/AREA(SCREEN),
+          100.0*(AREA(paramRect))/AREA(SCREEN),
+          100.0*(AREA(thumbScrollRect))/AREA(SCREEN));
+    
+#endif
+    
     if (scale == 1.0)
         scaleScore = 1.0;
     else if (scale > 1.0)
@@ -229,6 +242,7 @@ NSString * __nullable displayOptionNames[] = {
     assert(scaleScore >= 0);
     assert(displayScore >= 0);
     score = thumbScore * scaleScore * displayScore;
+    score = pctUsed * displayFrac;
     NSLog(@"SSSS   %3.1f * %3.1f * %3.1f  = %3.1f",
           thumbScore, scaleScore, displayScore, score);
 }
@@ -264,7 +278,7 @@ NSString * __nullable displayOptionNames[] = {
 }
 
 - (NSString *) layoutSum {
-    return [NSString stringWithFormat:@"%4.0fx%4.0f %4.0fx%4.0f %4.2f  e%3.0fx%3.0f p%3.0fx%2.0f  %5.2f%%  sc:%4.2f %@",
+    return [NSString stringWithFormat:@"%4.0fx%4.0f %4.0fx%4.0f %4.2f  e%3.0fx%3.0f p%3.0fx%2.0f  df:%5.2f%%  sc:%4.2f %@",
             transformSize.width, transformSize.height,
             displayRect.size.width, displayRect.size.height,
             scale,

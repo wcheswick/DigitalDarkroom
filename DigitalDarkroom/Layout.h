@@ -52,6 +52,7 @@ typedef enum {
     // layout stats and results:
     BOOL executeIsTight;    // if save verticle space
     float displayFrac;      // fraction of total display used by the transformed image
+    float pctUsed;         // non-wasted screen use
     
     BOOL executeOverlayOK;  // if execute can creep up onto the transform display
     NSString *status;
@@ -78,7 +79,7 @@ typedef enum {
 @property (assign)              float score;
 @property (nonatomic, strong)   NSString *type;
 @property (assign)              BOOL executeIsTight;
-@property (assign)              float displayFrac;
+@property (assign)              float displayFrac, pctUsed;
 
 @property (assign)              BOOL executeOverlayOK;  // text placement guidance
 @property (nonatomic, strong)   NSString *status;
