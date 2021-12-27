@@ -803,19 +803,18 @@ CGFloat topOfNonDepthArray = 0;
     [transformView bringSubviewToFront:snapButton];
 
     paramView = [[UIView alloc] initWithFrame:CGRectMake(0, LATER, LATER, LATER)];
+#ifdef OLD
     paramView.backgroundColor = [UIColor colorWithRed:0.5 green:1.0 blue:0.0 alpha:0.5];
     paramView.opaque = NO;
     paramView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.8];
+#endif
     paramView.layer.cornerRadius = 6.0;
     paramView.clipsToBounds = YES;
-#ifdef DEBUG_BORDERS
-    paramView.layer.borderColor = [UIColor yellowColor].CGColor;
     paramView.layer.borderWidth = 3.0;
-#endif
     [transformView addSubview:paramView];
     [transformView bringSubviewToFront:paramView];
 
-    paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, LATER, PARAM_LABEL_H)];
+    paramLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, SEP, LATER, PARAM_LABEL_H)];
     paramLabel.textAlignment = NSTextAlignmentCenter;
     paramLabel.font = [UIFont boldSystemFontOfSize:PARAM_LABEL_FONT_SIZE];
     paramLabel.textColor = [UIColor blackColor];
@@ -828,9 +827,10 @@ CGFloat topOfNonDepthArray = 0;
     [paramSlider addTarget:self action:@selector(doParamSlider:)
           forControlEvents:UIControlEventValueChanged];
     [paramView addSubview:paramSlider];
-    [containerView addSubview:paramView];
 
     SET_VIEW_HEIGHT(paramView, BELOW(paramSlider.frame) + SEP);
+    
+    [containerView addSubview:paramView];
     
     executeView = [[UITextView alloc] init];
     executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
@@ -848,7 +848,7 @@ CGFloat topOfNonDepthArray = 0;
     [plusButton addTarget:self
                    action:@selector(doPlusTapped:)
          forControlEvents:UIControlEventTouchUpInside];
-#ifdef NOTHERE
+
     [self plusTitleForState:UIControlStateDisabled
                      weight:UIFontWeightRegular
                       color:[UIColor lightGrayColor]];
@@ -858,7 +858,7 @@ CGFloat topOfNonDepthArray = 0;
     [self plusTitleForState:UIControlStateSelected
                      weight:UIFontWeightBold
                       color:[UIColor blackColor]];
-#endif
+
     [self enablePlus:NO select:NO];
     plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
     plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
@@ -1693,29 +1693,28 @@ CGFloat topOfNonDepthArray = 0;
     BOOL oldParameters = oldTransform && oldTransform.hasParameters;
     if (!oldParameters)
         return;
+#ifdef NOTDEF
     [UIView animateWithDuration:0.5 animations:^(void) {
         // slide old parameters off the bottom of the display
         SET_VIEW_Y(self->paramView, BELOW(self->layout.displayRect));
     } completion:nil];
+#endif
 }
 
 - (void) addParamsFor:(Transform *) newTransform {
     BOOL newParameters = newTransform && newTransform.hasParameters;
-    if (!newParameters)
+    if (!newParameters) {
+        [self adjustParamView];
         return;
+    }
     paramSlider.minimumValue = newTransform.low;
     paramSlider.maximumValue = newTransform.high;
     paramSlider.value = newTransform.value;
-    paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
-                       newTransform.name,
-                       newTransform.paramName,
-                       paramSlider.value];
-    [paramSlider setNeedsDisplay];
-    [paramLabel setNeedsDisplay];
-    [paramView setNeedsDisplay];
-    [UIView animateWithDuration:0.5 animations:^(void) {
-        SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
-    }];
+    transformChainChanged = YES;
+    [self adjustParamView];
+//    [UIView animateWithDuration:0.5 animations:^(void) {
+ //       SET_VIEW_Y(self->paramView, self->transformView.frame.size.height - self->paramView.frame.size.height);
+ //   }];
 }
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
@@ -1729,10 +1728,7 @@ CGFloat topOfNonDepthArray = 0;
 - (void) enablePlus:(BOOL)enable select:(BOOL)select {
     plusButton.enabled = enable;
     plusButton.selected = select;
-    NSLog(@"plus button: %@ %@",
-          plusButton.enabled ? @"E" : @"e",
-          plusButton.selected ? @"R" : @"r");
-    NSLog(@"     button: %@ %@",
+    NSLog(@"enablePlus: %@ %@",
           plusButton.enabled ? @"E" : @"e",
           plusButton.selected ? @"R" : @"r");
     [plusButton setNeedsDisplay];
@@ -1898,25 +1894,38 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction)doParamSlider:(UISlider *)slider {
     Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
-    if (!lastTransform || !lastTransform.hasParameters) {
+//    NSLog(@"slider value %.1f", slider.value);
+    if (lastTransform && lastTransform.hasParameters) {
+        if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
+            transformChainChanged = YES;
+        }
+    }
+    [self adjustParamView];
+}
+
+- (void) adjustParamView {
+    Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
+    if (!lastTransform) {
+        paramLabel.text = [NSString stringWithFormat:@"(Source image)"];
+        paramLabel.textColor = [UIColor lightGrayColor];
+        [paramLabel setNeedsDisplay];
         return;
     }
-//    NSLog(@"slider value %.1f", slider.value);
-    if ([screenTask updateParamOfLastTransformTo:paramSlider.value]) {
-        transformChainChanged = YES;
+    paramLabel.textColor = [UIColor blackColor];
+    [paramLabel setNeedsDisplay];
+    if (!lastTransform.hasParameters) {
+        paramLabel.text = [NSString stringWithFormat:@"%@",
+                           lastTransform.name];
+    } else if (transformChainChanged) {
         paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
                            lastTransform.name,
                            lastTransform.paramName,
                            paramSlider.value];
         [paramSlider setNeedsDisplay];
-        [paramLabel setNeedsDisplay];
         [paramView setNeedsDisplay];
         [self updateExecuteView];
         [self refreshScreen];
     }
-}
-
-- (void) adjustParamView {
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
