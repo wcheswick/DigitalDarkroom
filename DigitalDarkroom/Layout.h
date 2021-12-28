@@ -32,7 +32,7 @@ typedef enum {
     CGRect displayRect;     // where we put the transformed (and scaled) result
     CGRect fullThumbViewRect;
     CGRect thumbScrollRect;
-    CGRect executeRect;     // where the active transform list is shown
+    CGRect executeScrollRect;     // where the active transform list is shown
     CGRect plusRect;        // in executeRect
     CGRect paramRect;       // where the parameter slider goes
     
@@ -65,7 +65,7 @@ typedef enum {
 @property (assign)              CGRect displayRect;
 @property (assign)              CGRect fullThumbViewRect;
 @property (assign)              CGRect thumbScrollRect;
-@property (assign)              CGRect executeRect;
+@property (assign)              CGRect executeScrollRect;
 @property (assign)              CGRect plusRect;
 @property (assign)              CGRect paramRect;
 

@@ -88,12 +88,14 @@ typedef long PixelIndex_t;
 
 #define SOURCE_SELECT_BUTTON_W  40
 
+// characters
 #define CHECKMARK   @"✓"
 #define BIGPLUS     @"＋"
 #define DOUBLE_PLUS @"⧺"
 #define LOCK        @"🔒"
 #define SHY         @"\u00ad"   // soft hyphen
 #define BIGSTAR     @"✵"        // unicode pinwheel star
+#define POINTING_HAND   @"👉🏿"
 
 #define MIN_THUMB_COLS  4
 #define MIN_THUMB_ROWS  3
@@ -119,11 +121,12 @@ typedef long PixelIndex_t;
 #define PARAM_SLIDER_H  (40)
 #define PARAM_VIEW_H    (SEP + PARAM_LABEL_H + SEP + PARAM_SLIDER_H + SEP)
 
+#define VIEW_BORDER_W   3.0
+#define VIEW_BORDER_COLOR   [UIColor blackColor].CGColor
 
-#define EXECUTE_IPAD_FONT_SIZE   (18)
-#define EXECUTE_IPHONE_FONT_SIZE   (16)
+#define EXECUTE_IPAD_FONT_SIZE   (24)
+#define EXECUTE_IPHONE_FONT_SIZE   (20)
 #define EXECUTE_MIN_TEXT_CHARS  20
-
 #define EXECUTE_BORDER_W    2
 
 #define PLUS_H   CONTROL_BUTTON_SIZE

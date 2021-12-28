@@ -146,28 +146,4 @@
     [self clearRemap];
 }
 
-- (id)copyWithZone:(NSZone *)zone {
-    Transform *copy = [[Transform alloc] init];
-    copy.name = name;
-    copy.type = type;
-    copy.transformsArrayIndex = transformsArrayIndex;
-    copy.description = description;
-//    copy.pointF = pointF;
-    copy.areaF = areaF;
-    NSLog(@" **** copy areaTransform %@,   areaF: %p:", copy.name, copy.areaF);
-    copy.depthVisF = depthVisF;
-    copy.remapImageF = remapImageF;
-    copy.remapPolarF = remapPolarF;
-    copy.remapSizeF = remapSizeF;
-    copy.low = low;
-    copy.high = high;
-    copy.value = value;
-    copy.newValue = newValue;
-    copy.hasParameters = hasParameters;
-    copy.needsScaledDepth = needsScaledDepth;
-    copy.modifiesDepthBuf = modifiesDepthBuf;
-    copy.remapTable = NULL;
-    return copy;
-}
-
 @end

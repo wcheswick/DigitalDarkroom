@@ -177,7 +177,8 @@ MainVC *mainVC = nil;
 
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
-@property (nonatomic, strong)   UITextView *executeView;    // active transform list
+@property (nonatomic, strong)   UIScrollView *executeScrollView;    // active transform list area
+@property (nonatomic, strong)   UIView *executeView;                // stack of UILabels in executeScrollView
 @property (nonatomic, strong)   NSMutableArray<Layout *> *layouts;    // approved list of current layouts
 @property (assign)              long layoutIndex;           // index into layouts, or NO_LAYOUT_SELECTED
 @property (assign)              BOOL layoutIsBroken;    // for debugging
@@ -244,7 +245,7 @@ MainVC *mainVC = nil;
 @synthesize showControls, showStats, flashView;
 @synthesize paramLow, paramName, paramHigh, paramValue;
 
-@synthesize executeView;
+@synthesize executeScrollView, executeView;
 @synthesize layoutValuesView;
 
 @synthesize deviceOrientation;
@@ -810,7 +811,8 @@ CGFloat topOfNonDepthArray = 0;
 #endif
     paramView.layer.cornerRadius = 6.0;
     paramView.clipsToBounds = YES;
-    paramView.layer.borderWidth = 3.0;
+    paramView.layer.borderWidth = VIEW_BORDER_W;
+    paramView.layer.borderColor = VIEW_BORDER_COLOR;
     [transformView addSubview:paramView];
     [transformView bringSubviewToFront:paramView];
 
@@ -832,17 +834,16 @@ CGFloat topOfNonDepthArray = 0;
     
     [containerView addSubview:paramView];
     
-    executeView = [[UITextView alloc] init];
-    executeView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.5];
-    executeView.userInteractionEnabled = NO;
-    executeView.font = [UIFont boldSystemFontOfSize: execFontSize];
-    executeView.textColor = [UIColor blackColor];
-    executeView.text = @"";
-    executeView.opaque = YES;
-#ifdef DEBUG_BORDERS
-    executeView.layer.borderColor = [UIColor darkGrayColor].CGColor;
-    executeView.layer.borderWidth = 3.0;
-#endif
+    executeScrollView = [[UIScrollView alloc] init];
+//    executeScrollView.backgroundColor = [UIColor yellowColor];
+    executeScrollView.layer.borderColor = VIEW_BORDER_COLOR;
+    executeScrollView.layer.borderWidth = VIEW_BORDER_W;
+    executeScrollView.userInteractionEnabled = NO;
+    executeScrollView.contentOffset = CGPointZero;
+    [containerView addSubview:executeScrollView];
+    
+    executeView = [[UIView alloc] init];
+    [executeScrollView addSubview:executeView];
 
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     [plusButton addTarget:self
@@ -896,7 +897,6 @@ CGFloat topOfNonDepthArray = 0;
     [transformView addGestureRecognizer:pinch];
     
     [containerView addSubview:transformView];
-    [containerView addSubview:executeView];
     
     screenTask = [screenTasks createTaskForTargetImageView:transformView
                                                      named:@"main"];
@@ -1491,7 +1491,15 @@ CGFloat topOfNonDepthArray = 0;
 //    [externalTask newTargetSize:processingSize];
 //  externalTask.targetSize = layout.processing.size;
     
-    executeView.frame = layout.executeRect;
+    executeScrollView.frame = layout.executeScrollRect;
+    executeView.frame = CGRectMake(0, 0,
+                                   executeScrollView.frame.size.width,
+                                   executeScrollView.frame.size.height);
+    executeScrollView.contentSize = executeView.frame.size;
+    
+    thumbScrollView.contentOffset = thumbsView.frame.origin;
+    [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
+
     plusButton.frame = layout.plusRect;
     [UIView animateWithDuration:0.5 animations:^(void) {
         // move views to where they need to be now.
@@ -2193,7 +2201,8 @@ CGFloat topOfNonDepthArray = 0;
     NSString *taskStats = [taskCtrl stats];
     mainStatsView.text = [stats report:taskStats];
     [mainStatsView setNeedsDisplay];
-    [self updateExecuteView];
+    if ((NO) && showStats)
+        [self updateExecuteView];
     [taskCtrl checkForIdle];
     if (showStats)
         self.title = [NSString stringWithFormat:@"\"%@\",    layout %ld/%lu  %@",
@@ -2260,28 +2269,50 @@ CGFloat topOfNonDepthArray = 0;
     long step = 0;
     long displaySteps = screenTask.transformList.count;
     CGFloat bestH = [layout executeHForRowCount:displaySteps];
-    BOOL onePerLine = !layout.executeIsTight && bestH <= executeView.frame.size.height;
-    NSString *sep = onePerLine ? @"\n" : @" ";
-    NSString *text = @"";
+//    NSString *sep = onePerLine ? @"\n" : @" ";
+//    NSString *text = @"";
     
-    // loop includes last line +1
-    for (int i=0; i<=displaySteps; i++, step++) {
-        NSString *line = [screenTask displayInfoForStep:i
-                                              shortForm:!onePerLine
-                                                  stats:showStats];
-        size_t plusIndex = [self nextTransformTapIndex];
-        text = [NSString stringWithFormat:@"%@%@%@%@",
-                text,
-                (plusIndex == i) ? @"+ " : @"  ",
-                line, sep];
+    if ((YES) || (!layout.executeIsTight && bestH <= executeView.frame.size.height)) {
+        // one-per-line layout
+        // loop includes last line +1
+        // next transform to be entered/changed is in a box, with a hand pointing to it
+        
+        NSArray *viewsToRemove = [executeView subviews];
+        for (UIView *v in viewsToRemove) {
+            [v removeFromSuperview];
+        }
+
+#define EXEC_LABEL_H    (execFontSize + 7)
+        for (int i=0; i<=displaySteps; i++, step++) {
+            UILabel *execLine = [[UILabel alloc]
+                                 initWithFrame:CGRectMake(2*INSET, i*EXEC_LABEL_H,
+                                                          executeView.frame.size.width - 2*2*INSET,
+                                                          EXEC_LABEL_H)];
+            execLine.font = [UIFont systemFontOfSize:execFontSize];
+            NSString *transformInfo = [screenTask displayInfoForStep:i
+                                                  shortForm:NO
+                                                      stats:showStats];
+            size_t plusIndex = [self nextTransformTapIndex];
+            BOOL currentTransform = plusIndex == i;
+            execLine.text = [NSString stringWithFormat:@" %@ %@",
+                             currentTransform ? POINTING_HAND : @" ",
+                             transformInfo];
+            if (currentTransform) {
+                execLine.layer.borderWidth = 0.50;
+                execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
+            }
+            [executeView addSubview:execLine];
+        }
+    } else {    // compressed layout. XXX: STUB
+//        executeView.text = text;
     }
     
-    executeView.text = text;
-    
+#ifdef OLD
     if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
         SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
     }
-   
+#endif
+    
 #ifdef notdef
 //    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
 //    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
@@ -2294,11 +2325,6 @@ CGFloat topOfNonDepthArray = 0;
                           constrainedToSize:plusButton.frame.size
                           lineBreakMode:NSLineBreakByWordWrapping];
 //    float numberOfLines = size.height / font.lineHeight;
-#endif
-#ifdef DEBUG_LAYOUT
-    executeView.layer.borderWidth = 2.0;
-    executeView.layer.borderColor = layout.executeIsTight ?
-        [UIColor redColor].CGColor : [UIColor greenColor].CGColor;
 #endif
     [executeView setNeedsDisplay];
 }

@@ -133,15 +133,16 @@ static PixelIndex_t dPI(int x, int y) {
     NSString *params = @"";
     if (instance.hasParams) {
         int value = instance.value;
-        params = [NSString stringWithFormat:@"  %@%d%@",
-             value == transform.low ? @"[" : @"<",
-             value,
-             value == transform.high ? @"]" : @">"];
+        params = [NSString stringWithFormat:@"   %@:  %@%d%@",
+                  transform.paramName,
+                  value == transform.low ? @"[" : @"<",
+                  value,
+                  value == transform.high ? @"]" : @">"];
     }
-
+    
     NSString *desc = @"";
     if (!shortForm && ![transform.description isEqual:@""])
-        desc = [NSString stringWithFormat:@"  %@", transform.description];
+        desc = [NSString stringWithFormat:@"  (%@)", transform.description];
 
     return [NSString stringWithFormat:@"%@%@%@%@",
             stats ? [instance timeInfo] : @"",
