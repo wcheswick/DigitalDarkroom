@@ -664,7 +664,6 @@ CGFloat topOfNonDepthArray = 0;
     [plusBar addTarget:self
                 action:@selector(doPlus:)
       forControlEvents:UIControlEventValueChanged];
-    [self adjustPlus];
     
     UIBarButtonItem *plusBarSelectionButton = [[UIBarButtonItem alloc]
                                                initWithCustomView:plusBar];
@@ -845,22 +844,28 @@ CGFloat topOfNonDepthArray = 0;
     executeView = [[UIView alloc] init];
     [executeScrollView addSubview:executeView];
 
+#define PLUS_SELECTED    plusButton.selected
+#define PLUS_LOCKED     plusButton.highlighted
+    
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     [plusButton addTarget:self
                    action:@selector(doPlusTapped:)
          forControlEvents:UIControlEventTouchUpInside];
 
-    [self plusTitleForState:UIControlStateDisabled
-                     weight:UIFontWeightRegular
-                      color:[UIColor lightGrayColor]];
+    // NOT SELECTED
     [self plusTitleForState:UIControlStateNormal
-                     weight:UIFontWeightMedium
+                     weight:UIFontWeightThin
                       color:[UIColor blackColor]];
+    // SELECTED
     [self plusTitleForState:UIControlStateSelected
+                     weight:UIFontWeightRegular
+                      color:[UIColor blackColor]];
+    // LOCKED:
+    [self plusTitleForState:UIControlStateHighlighted
                      weight:UIFontWeightBold
                       color:[UIColor blackColor]];
 
-    [self enablePlus:NO select:NO];
+    [self adjustPlusSelected:NO locked:NO];
     plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
     plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
     plusButton.layer.borderColor = [UIColor orangeColor].CGColor;
@@ -1633,7 +1638,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (size_t) nextTransformTapIndex {
-    if (plusButton.selected)
+    if (PLUS_SELECTED)
         return screenTask.transformList.count;
     if (screenTask.transformList.count > 0)
         return screenTask.transformList.count - 1;
@@ -1647,15 +1652,15 @@ CGFloat topOfNonDepthArray = 0;
     
     //    size_t indexToChange = [self nextTransformTapIndex];
     // if there is no current transform, or plus is selected, append the transform
-    if (!screenTask.transformList.count || plusButton.selected) {
+    if (!screenTask.transformList.count || PLUS_SELECTED) {
         [self removeParamsFor: oldTransform];
         [screenTask appendTransformToTask:tappedTransform];
         [self addParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
-        if (plusButton.selected) {
-            [self enablePlus:NO select:NO];
+        if (PLUS_SELECTED) {
+            [self adjustPlusSelected:NO locked:NO]; // satisfied
         } else {
-            [self enablePlus:YES select:NO];
+            [self adjustPlusSelected:YES locked:NO]; // satisfied
         }
     } else {    // we have a current transform. deselect if he tapped current transform
         if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
@@ -1663,7 +1668,7 @@ CGFloat topOfNonDepthArray = 0;
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
             if (!screenTask.transformList.count) {
-                [self enablePlus:NO select:NO];    // satisfied
+                [self adjustPlusSelected:NO locked:NO]; // satisfied
             }
         } else {
             if (oldTransform) {
@@ -1678,7 +1683,7 @@ CGFloat topOfNonDepthArray = 0;
                 [tappedThumb adjustStatus:ThumbActive];
                 [self addParamsFor:tappedTransform];
             }
-            [self enablePlus:NO select:NO]; // satisfied
+            [self adjustPlusSelected:NO locked:NO]; // satisfied
         }
     }
     [screenTask configureTaskForSize];
@@ -1727,19 +1732,22 @@ CGFloat topOfNonDepthArray = 0;
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
     NSLog(@"doPlusTapped");
-    NSLog(@"doPlusTapped %@ %@",
-          plusButton.enabled ? @"E" : @"e",
-          plusButton.selected ? @"R" : @"r");
-    [self enablePlus:plusButton.selected select:!plusButton.selected];
+    [self adjustPlusSelected:!PLUS_SELECTED locked:PLUS_LOCKED];
 }
 
-- (void) enablePlus:(BOOL)enable select:(BOOL)select {
-    plusButton.enabled = enable;
-    plusButton.selected = select;
-    NSLog(@"enablePlus: %@ %@",
-          plusButton.enabled ? @"E" : @"e",
-          plusButton.selected ? @"R" : @"r");
-    [plusButton setNeedsDisplay];
+- (IBAction) doPlusPressed:(UIButton *)caller {
+    NSLog(@"doPlusPressed");
+    [self adjustPlusSelected:PLUS_SELECTED
+                    locked:!PLUS_LOCKED];
+}
+
+- (void) adjustPlusSelected:(BOOL)selected locked:(BOOL)locked {
+    PLUS_SELECTED = selected;
+    PLUS_LOCKED = locked;
+    NSLog(@"new plus: %@ %@",
+          PLUS_SELECTED ? @"S" : @"s",
+          PLUS_LOCKED ? @"L" : @"l");
+    [self updateExecuteView];
 }
 
 - (void) plusTitleForState:(UIControlState) state
@@ -2264,6 +2272,8 @@ CGFloat topOfNonDepthArray = 0;
 
 // The executeView is a list of transforms.  There is a regular list mode, and a compressed
 // mode for small, tight screens or long lists of transforms (which should be rare.)
+//
+// we update the plus button, too.
 
 - (void) updateExecuteView {
     long step = 0;
