@@ -16,7 +16,7 @@
 //#define VERIFY_REMAP_BUFFERS    1
 //#define VERIFY_DEPTHS           1
 
-#define DEBUG_LAYOUT    1
+//#define DEBUG_LAYOUT    1
 //#define DEBUG_ORIENTATION
 //#define MEMLEAK_AIDS 1
 
@@ -25,7 +25,7 @@
 //#define DEBUG_REMAP 1
 
 //#define DEBUG_OMIT_THUMBS 1
-#define DEBUG_BORDERS 1
+//#define DEBUG_BORDERS 1
 //#define DEBUG_CAMERA  1
 //#define DEBUG_TASK_BUSY 1
 //#define DEBUG_DEPTH  1
@@ -34,6 +34,8 @@
 //#define DEBUG_EXECUTE 1
 //#define DEBUG_THUMB_LAYOUT 1
 //#define ONLY_RED    1   // process pure red input only
+
+#define SHOW_THUMB_STATS
 
 #define MAX_FPS  30
 // this isn't needed, it seems, any more
@@ -96,6 +98,9 @@ typedef long PixelIndex_t;
 #define SHY         @"\u00ad"   // soft hyphen
 #define BIGSTAR     @"✵"        // unicode pinwheel star
 #define POINTING_HAND   @"👉🏿"
+#define FULL_WIDTH_PLUS @"＋"
+#define CIRCLED_PLUS    @"⊕"
+#define SQUARED_PLUS    @"⊞"
 
 #define MIN_THUMB_COLS  4
 #define MIN_THUMB_ROWS  3
@@ -128,8 +133,10 @@ typedef long PixelIndex_t;
 #define EXECUTE_IPHONE_FONT_SIZE   (20)
 #define EXECUTE_MIN_TEXT_CHARS  20
 #define EXECUTE_BORDER_W    2
+#define EXEC_STATS_W_CHARS  (10)   // this is a fudge
 
 #define PLUS_H   CONTROL_BUTTON_SIZE
+#define MIN_PLUS_W  (2*PLUS_H)    // room for two characters
 
 #define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
 

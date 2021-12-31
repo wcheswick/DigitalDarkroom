@@ -127,6 +127,21 @@ typedef enum {
 } SourceTypes;
 #define N_SOURCES 3
 
+typedef enum {
+    PlusUnavailable,
+    PlusAvailable,
+    PlusSelected,
+    PlusLocked,
+} PlusStatus_t;
+
+NSString * __nullable plusStatusNames[] = {
+    @"PlusUnavailable",
+    @"PlusAvailable",
+    @"PlusSelected",
+    @"PlusLocked",
+};
+
+
 MainVC *mainVC = nil;
 
 @interface MainVC ()
@@ -174,6 +189,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   NSString *overlayDebugStatus;
 @property (nonatomic, strong)   UIButton *runningButton, *snapButton;
 @property (nonatomic, strong)   UIButton *plusButton;
+@property (assign)              PlusStatus_t plusStatus;
 
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
@@ -223,7 +239,7 @@ MainVC *mainVC = nil;
 
 @synthesize extScreenVC, extImageView;
 
-@synthesize plusButton;
+@synthesize plusButton, plusStatus;
 @synthesize taskCtrl;
 @synthesize screenTasks, thumbTasks, externalTasks;
 @synthesize hiresTasks;
@@ -461,7 +477,8 @@ MainVC *mainVC = nil;
             [thumbView.task appendTransformToTask:transform];
             [thumbView addGestureRecognizer:touch];
             UILongPressGestureRecognizer *thumbHelp = [[UILongPressGestureRecognizer alloc]
-                                                             initWithTarget:self action:@selector(doHelp:)];
+                                                             initWithTarget:self
+                                                       action:@selector(doHelp:)];
             thumbHelp.minimumPressDuration = 1.0;
             [thumbView addGestureRecognizer:thumbHelp];
             [thumbView adjustThumbEnabled];
@@ -843,29 +860,18 @@ CGFloat topOfNonDepthArray = 0;
     
     executeView = [[UIView alloc] init];
     [executeScrollView addSubview:executeView];
-
-#define PLUS_SELECTED    plusButton.selected
-#define PLUS_LOCKED     plusButton.highlighted
     
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     [plusButton addTarget:self
                    action:@selector(doPlusTapped:)
          forControlEvents:UIControlEventTouchUpInside];
-
-    // NOT SELECTED
-    [self plusTitleForState:UIControlStateNormal
-                     weight:UIFontWeightThin
-                      color:[UIColor blackColor]];
-    // SELECTED
-    [self plusTitleForState:UIControlStateSelected
-                     weight:UIFontWeightRegular
-                      color:[UIColor blackColor]];
-    // LOCKED:
-    [self plusTitleForState:UIControlStateHighlighted
-                     weight:UIFontWeightBold
-                      color:[UIColor blackColor]];
-
-    [self adjustPlusSelected:NO locked:NO];
+    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc]
+                                               initWithTarget:self
+                                               action:@selector(doPlusPressed:)];
+    longPress.minimumPressDuration = 0.7;
+    [plusButton addGestureRecognizer:longPress];
+    
+    [self changePlusStatusTo: PlusUnavailable];
     plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
     plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
     plusButton.layer.borderColor = [UIColor orangeColor].CGColor;
@@ -927,6 +933,7 @@ CGFloat topOfNonDepthArray = 0;
     self.view.backgroundColor = [UIColor whiteColor];
     [self createThumbArray];
     [self adjustBarButtons];
+    [self updateExecuteView];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidConnect:) name:UIScreenDidConnectNotification object:nil];
 
@@ -1169,10 +1176,12 @@ CGFloat topOfNonDepthArray = 0;
     
     CGRect safeFrame = self.view.safeAreaLayoutGuide.layoutFrame;
     containerView.frame = safeFrame;
+#ifdef DEBUG_LAYOUT
     NSLog(@" ******* containerview: %.0f,%.0f  %.0fx%.0f  %@",
           containerView.frame.origin.x, containerView.frame.origin.y,
           containerView.frame.size.width, containerView.frame.size.height,
           containerView.frame.size.width > containerView.frame.size.height ? @"landscape" : @"portrait");
+#endif
     
 #ifdef DEBUG_BORDERS
     containerView.layer.borderColor = [UIColor magentaColor].CGColor;
@@ -1284,8 +1293,12 @@ CGFloat topOfNonDepthArray = 0;
         }
     }
     
+#ifdef DEBUG_LAYOUT
     NSLog(@" *** findLayouts: %lu", (unsigned long)layouts.count);
     [self dumpLayouts];
+
+#endif
+    
 }
 
 // try different thumb placement options for this source size
@@ -1307,9 +1320,11 @@ CGFloat topOfNonDepthArray = 0;
                                   bottomThumbs:0
                                   displayOption:currentDisplayOption
                                   format:format];
+#ifdef DEBUG_LAYOUT
                 if (layout) {
                     NSLog(@"RT  %@", [layout layoutSum]);
                 }
+#endif
 
                 if (layout && layout.score != BAD_LAYOUT)
                     [layouts addObject:layout];
@@ -1637,54 +1652,42 @@ CGFloat topOfNonDepthArray = 0;
     atStartOfRow = YES;
 }
 
-- (size_t) nextTransformTapIndex {
-    if (PLUS_SELECTED)
-        return screenTask.transformList.count;
-    if (screenTask.transformList.count > 0)
-        return screenTask.transformList.count - 1;
-    return 0;
-}
-
 - (IBAction) didTapThumb:(UITapGestureRecognizer *)recognizer {
     ThumbView *tappedThumb = (ThumbView *)[recognizer view];
     Transform *tappedTransform = tappedThumb.transform;
     Transform *oldTransform = [screenTask.transformList lastObject];
     
-    //    size_t indexToChange = [self nextTransformTapIndex];
-    // if there is no current transform, or plus is selected, append the transform
-    if (!screenTask.transformList.count || PLUS_SELECTED) {
-        [self removeParamsFor: oldTransform];
+    BOOL firstTransform = (oldTransform == nil);
+    if (firstTransform) {
         [screenTask appendTransformToTask:tappedTransform];
         [self addParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
-        if (PLUS_SELECTED) {
-            [self adjustPlusSelected:NO locked:NO]; // satisfied
-        } else {
-            [self adjustPlusSelected:YES locked:NO]; // satisfied
+        if (plusStatus != PlusLocked) {
+            [self changePlusStatusTo:PlusAvailable];
         }
-    } else {    // we have a current transform. deselect if he tapped current transform
-        if (tappedThumb.status == ThumbActive) {    // just deselect tapped thumb
+    } else if (plusStatus == PlusSelected || plusStatus == PlusLocked) {
+        [self removeParamsFor: oldTransform];
+        ThumbView *oldThumb = oldTransform.thumbView;
+        [oldThumb adjustStatus:ThumbAvailable];
+        
+        [screenTask changeLastTransformTo:tappedTransform];
+        [self addParamsFor:tappedTransform];
+        [tappedThumb adjustStatus:ThumbActive];
+        [self adjustPlusStatus];
+    } else {    // no plus, just a tap.
+        if (tappedThumb.status == ThumbActive) {    // current transform, deselect
             [self removeParamsFor: tappedTransform];
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
-            if (!screenTask.transformList.count) {
-                [self adjustPlusSelected:NO locked:NO]; // satisfied
-            }
-        } else {
-            if (oldTransform) {
-                [self removeParamsFor: oldTransform];
-                ThumbView *oldThumb = oldTransform.thumbView;
-                [oldThumb adjustStatus:ThumbAvailable];
-                [tappedThumb adjustStatus:ThumbActive];
-                [screenTask changeLastTransformTo:tappedTransform];
-                [self addParamsFor:tappedTransform];
-            } else {
-                [screenTask appendTransformToTask:tappedTransform];
-                [tappedThumb adjustStatus:ThumbActive];
-                [self addParamsFor:tappedTransform];
-            }
-            [self adjustPlusSelected:NO locked:NO]; // satisfied
-        }
+            [self adjustPlusStatus];
+        } else {    // simply change the current transform
+            [self removeParamsFor: oldTransform];
+            ThumbView *oldThumb = oldTransform.thumbView;
+            [oldThumb adjustStatus:ThumbAvailable];
+            [screenTask changeLastTransformTo:tappedTransform];
+            [self addParamsFor:tappedTransform];
+            [tappedThumb adjustStatus:ThumbActive];
+       }
     }
     [screenTask configureTaskForSize];
     transformChainChanged = YES;
@@ -1731,38 +1734,96 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction) doPlusTapped:(UIButton *)caller {
-    NSLog(@"doPlusTapped");
-    [self adjustPlusSelected:!PLUS_SELECTED locked:PLUS_LOCKED];
+    switch (plusStatus) {
+        case PlusUnavailable:
+            NSLog(@"doPlusTapped: ignored");
+            return;
+        case PlusAvailable:
+            [self changePlusStatusTo:PlusSelected];
+            NSLog(@"doPlusTapped: selected");
+            break;
+        case PlusSelected:
+       case PlusLocked:
+            NSLog(@"doPlusTapped: oops");
+            [self changePlusStatusTo:PlusUnavailable];
+            break;
+    }
+    [self updateExecuteView];
 }
 
 - (IBAction) doPlusPressed:(UIButton *)caller {
     NSLog(@"doPlusPressed");
-    [self adjustPlusSelected:PLUS_SELECTED
-                    locked:!PLUS_LOCKED];
-}
-
-- (void) adjustPlusSelected:(BOOL)selected locked:(BOOL)locked {
-    PLUS_SELECTED = selected;
-    PLUS_LOCKED = locked;
-    NSLog(@"new plus: %@ %@",
-          PLUS_SELECTED ? @"S" : @"s",
-          PLUS_LOCKED ? @"L" : @"l");
+    UILongPressGestureRecognizer *gesture = (UILongPressGestureRecognizer *)caller;
+    if (gesture.state != UIGestureRecognizerStateBegan)
+        return;
+    
+    switch (plusStatus) {
+        case PlusUnavailable:
+        case PlusAvailable:
+        case PlusSelected:
+            [self changePlusStatusTo:PlusLocked];
+            return;
+        case PlusLocked:
+            [self changePlusStatusTo:PlusUnavailable];
+            break;
+    }
     [self updateExecuteView];
 }
 
-- (void) plusTitleForState:(UIControlState) state
-                    weight:(UIFontWeight) weight
-                     color:(UIColor *) color {
+// adjust plus based on current transform list
+- (void) adjustPlusStatus {
+    switch (plusStatus) {
+        case PlusUnavailable:
+        case PlusAvailable:
+            if (![screenTask.transformList lastObject]) {
+                [self changePlusStatusTo:PlusUnavailable];
+            }
+            return;
+        case PlusSelected:
+            if (![screenTask.transformList lastObject]) {
+                [self changePlusStatusTo:PlusUnavailable];
+            }
+            return;
+        case PlusLocked:
+            return;
+    }
+}
+
+- (void) changePlusStatusTo:(PlusStatus_t) newStatus {
+    NSLog(@"new plus status: %@ -> %@", plusStatusNames[plusStatus],
+          plusStatusNames[newStatus]);
+    UIFontWeight weight;
+    UIColor *color = [UIColor blackColor];
+    NSString *plusString = @"+";
+    
+    switch (newStatus) {
+        case PlusUnavailable:
+            weight = UIFontWeightLight;
+            color = [UIColor lightGrayColor];
+            break;
+        case PlusAvailable:
+            weight = UIFontWeightRegular;
+            break;
+        case PlusSelected:
+            weight = UIFontWeightBold;
+            break;
+        case PlusLocked:
+            plusString = @"+🔒";
+            weight = UIFontWeightBold;
+            break;
+    }
+    
+    plusStatus = newStatus;
     UIFont *font = [UIFont
                     systemFontOfSize:PLUS_H
                     weight:weight];
     [plusButton setAttributedTitle:[[NSAttributedString alloc]
-                                    initWithString:@"+"
+                                    initWithString:plusString
                                     attributes:@{ NSFontAttributeName : font,
                                                   NSForegroundColorAttributeName: color,
-                                               }] forState:state];
+                                               }] forState:UIControlStateNormal];
+    [plusButton setNeedsDisplay];
 }
-
 
 // If the camera is off, turn it on, to the first possible setting,
 // almost certainly the front camera, 2d. //  Otherwise, change the depth.
@@ -1848,6 +1909,7 @@ CGFloat topOfNonDepthArray = 0;
     showStats = !showStats;
     mainStatsView.hidden = !showStats;
     [mainStatsView setNeedsDisplay];
+    [self updateExecuteView];
 //    layoutValuesView.hidden = !layoutValuesView.hidden;
 //    [self didTapTransformView:recognizer];
 }
@@ -1939,7 +2001,6 @@ CGFloat topOfNonDepthArray = 0;
                            paramSlider.value];
         [paramSlider setNeedsDisplay];
         [paramView setNeedsDisplay];
-        [self updateExecuteView];
         [self refreshScreen];
     }
 }
@@ -2181,6 +2242,7 @@ CGFloat topOfNonDepthArray = 0;
 - (IBAction) doRemoveAllTransforms {
     [screenTasks removeAllTransforms];
     [self deselectAllThumbs];
+    [self adjustPlusStatus];
 //    transformDisplayNeedsUpdate = YES;
 //    [self updateOverlayView];
     [self updateExecuteView];
@@ -2209,7 +2271,7 @@ CGFloat topOfNonDepthArray = 0;
     NSString *taskStats = [taskCtrl stats];
     mainStatsView.text = [stats report:taskStats];
     [mainStatsView setNeedsDisplay];
-    if ((NO) && showStats)
+    if (showStats)
         [self updateExecuteView];
     [taskCtrl checkForIdle];
     if (showStats)
@@ -2276,11 +2338,9 @@ CGFloat topOfNonDepthArray = 0;
 // we update the plus button, too.
 
 - (void) updateExecuteView {
-    long step = 0;
-    long displaySteps = screenTask.transformList.count;
-    CGFloat bestH = [layout executeHForRowCount:displaySteps];
-//    NSString *sep = onePerLine ? @"\n" : @" ";
-//    NSString *text = @"";
+    size_t plusIndex = [self nextTransformTapIndex];
+    long activeSteps = screenTask.transformList.count;
+    CGFloat bestH = [layout executeHForRowCount:activeSteps] + 1;
     
     if ((YES) || (!layout.executeIsTight && bestH <= executeView.frame.size.height)) {
         // one-per-line layout
@@ -2293,21 +2353,47 @@ CGFloat topOfNonDepthArray = 0;
         }
 
 #define EXEC_LABEL_H    (execFontSize + 7)
-        for (int i=0; i<=displaySteps; i++, step++) {
-            UILabel *execLine = [[UILabel alloc]
-                                 initWithFrame:CGRectMake(2*INSET, i*EXEC_LABEL_H,
-                                                          executeView.frame.size.width - 2*2*INSET,
-                                                          EXEC_LABEL_H)];
-            execLine.font = [UIFont systemFontOfSize:execFontSize];
-            NSString *transformInfo = [screenTask displayInfoForStep:i
-                                                  shortForm:NO
-                                                      stats:showStats];
-            size_t plusIndex = [self nextTransformTapIndex];
-            BOOL currentTransform = plusIndex == i;
-            execLine.text = [NSString stringWithFormat:@" %@ %@",
-                             currentTransform ? POINTING_HAND : @" ",
-                             transformInfo];
-            if (currentTransform) {
+        CGFloat execFontW = execFontSize*0.9;       // rough approximation
+
+        for (int i=0; i<=MAX(activeSteps, plusIndex); i++) {
+            UIView *execLine = [[UIView alloc]
+                                initWithFrame:CGRectMake(2*INSET, i*EXEC_LABEL_H,
+                                                         executeView.frame.size.width - 2*2*INSET,
+                                                         EXEC_LABEL_H)];
+            UILabel *ptr = [[UILabel alloc]
+                            initWithFrame:CGRectMake(2*INSET, 0,
+                                                     2*execFontW,
+                                                     EXEC_LABEL_H)];
+            ptr.text = (plusIndex == i) ? POINTING_HAND : @"";
+            ptr.font = [UIFont systemFontOfSize:execFontSize];
+            [execLine addSubview:ptr];
+            
+            CGFloat descTextLen;
+            if (showStats && i < activeSteps) {
+                CGFloat w = EXEC_STATS_W_CHARS*execFontW;
+                UILabel *statsLabel = [[UILabel alloc]
+                                  initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
+                                                           w, EXEC_LABEL_H)];
+                statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
+                statsLabel.textAlignment = NSTextAlignmentRight;
+                TransformInstance *instance = [screenTask instanceForStep:i];
+                statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
+                [execLine addSubview:statsLabel];
+                descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
+            } else
+                descTextLen = execLine.frame.size.width - RIGHT(ptr.frame);
+            
+            UILabel *desc = [[UILabel alloc]
+                             initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
+                                                      descTextLen, EXEC_LABEL_H)];
+            desc.font = [UIFont systemFontOfSize:execFontSize];
+            if (i < activeSteps) {
+                desc.text = [screenTask displayInfoForStep:i shortForm:NO];
+            } else
+                desc.text = @"";
+            [execLine addSubview:desc];
+
+            if (plusIndex == i) {
                 execLine.layer.borderWidth = 0.50;
                 execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
             }
@@ -2316,27 +2402,20 @@ CGFloat topOfNonDepthArray = 0;
     } else {    // compressed layout. XXX: STUB
 //        executeView.text = text;
     }
-    
-#ifdef OLD
-    if (layout.executeOverlayOK || executeView.contentSize.height > executeView.frame.size.height) {
-        SET_VIEW_Y(executeView, BELOW(layout.executeRect) - executeView.contentSize.height);
-    }
-#endif
-    
-#ifdef notdef
-//    SET_VIEW_WIDTH(executeView, executeView.contentSize.width);
-//    SET_VIEW_Y(executeView, transformView.frame.size.height - executeView.frame.size.height);
-    NSLog(@"  *** updateExecuteView: %.0f,%.0f  %.0f x %.0f (%0.f x %.0f) text:%@",
-          executeView.frame.origin.x, executeView.frame.origin.y,
-          executeView.frame.size.width, executeView.frame.size.height,
-          executeView.contentSize.width, executeView.contentSize.height, t);
-    UIFont *font = [UIFont systemFontOfSize:EXECUTE_STATUS_FONT_SIZE];
-    CGSize size = [t sizeWithFont:font
-                          constrainedToSize:plusButton.frame.size
-                          lineBreakMode:NSLineBreakByWordWrapping];
-//    float numberOfLines = size.height / font.lineHeight;
-#endif
     [executeView setNeedsDisplay];
+}
+
+- (size_t) nextTransformTapIndex {
+    switch (plusStatus) {
+        case PlusUnavailable:
+        case PlusAvailable:
+            if (screenTask.transformList.count)
+                return screenTask.transformList.count - 1;
+            return 0;
+        case PlusSelected:
+        case PlusLocked:
+            return screenTask.transformList.count;
+    }
 }
 
 static CGSize startingPinchSize;

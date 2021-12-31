@@ -122,10 +122,8 @@ static PixelIndex_t dPI(int x, int y) {
 }
 
 - (NSString *) displayInfoForStep:(long) step
-                        shortForm:(BOOL) shortForm
-                            stats:(BOOL) stats {
-    if (step >= transformList.count)
-        return @"";
+                        shortForm:(BOOL) shortForm {
+    assert(step < transformList.count);
     Transform *transform = transformList[step];
     TransformInstance *instance = paramList[step];
     NSString *name = [transform.name stringByReplacingOccurrencesOfString:@"\n"
@@ -144,9 +142,14 @@ static PixelIndex_t dPI(int x, int y) {
     if (!shortForm && ![transform.description isEqual:@""])
         desc = [NSString stringWithFormat:@"  (%@)", transform.description];
 
-    return [NSString stringWithFormat:@"%@%@%@%@",
-            stats ? [instance timeInfo] : @"",
+    return [NSString stringWithFormat:@"%@%@%@",
             name, params, desc];
+}
+
+- (TransformInstance *) instanceForStep:(long) step {
+    assert(step < transformList.count);
+    TransformInstance *instance = paramList[step];
+    return instance;
 }
 
 - (void) configureTaskForSize {

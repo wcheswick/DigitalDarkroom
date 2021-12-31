@@ -64,8 +64,9 @@ typedef enum {
 
 - (const Frame * __nullable) executeTaskTransformsOnIncomingFrame;
 - (NSString *) displayInfoForStep:(long) step
-                        shortForm:(BOOL) shortForm
-                            stats:(BOOL) stats;
+                        shortForm:(BOOL) shortForm;
+- (TransformInstance *) instanceForStep:(long) step;
+- (NSString *) statsForStep:(long) step;
 
 @end
 
