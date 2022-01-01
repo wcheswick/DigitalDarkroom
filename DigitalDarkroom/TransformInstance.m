@@ -40,7 +40,7 @@
 
 - (NSString *) timeInfo {
    float ms = 1000.0*elapsedProcessingTime/timesCalled;
-    int fps = round(1000.0/ms);
+//    int fps = round(1000.0/ms);
     NSString *timing = [NSString stringWithFormat:@"%5.1f",
                         ms];
     return timing;

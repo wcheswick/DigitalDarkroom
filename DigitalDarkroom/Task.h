@@ -66,7 +66,7 @@ typedef enum {
 - (NSString *) displayInfoForStep:(long) step
                         shortForm:(BOOL) shortForm;
 - (TransformInstance *) instanceForStep:(long) step;
-- (NSString *) statsForStep:(long) step;
+//- (NSString *) statsForStep:(long) step;
 
 @end
 

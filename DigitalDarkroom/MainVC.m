@@ -855,7 +855,9 @@ CGFloat topOfNonDepthArray = 0;
     executeScrollView.layer.borderColor = VIEW_BORDER_COLOR;
     executeScrollView.layer.borderWidth = VIEW_BORDER_W;
     executeScrollView.userInteractionEnabled = NO;
-    executeScrollView.contentOffset = CGPointZero;
+    executeScrollView.scrollEnabled = YES;
+    executeScrollView.showsHorizontalScrollIndicator = NO;
+    executeScrollView.showsVerticalScrollIndicator = YES;
     [containerView addSubview:executeScrollView];
     
     executeView = [[UIView alloc] init];
@@ -872,9 +874,12 @@ CGFloat topOfNonDepthArray = 0;
     [plusButton addGestureRecognizer:longPress];
     
     [self changePlusStatusTo: PlusUnavailable];
+    plusButton.layer.borderColor = [UIColor blackColor].CGColor;
+    plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
+#ifdef UNDEF
     plusButton.layer.borderWidth = isiPhone ? 1.0 : 5.0;
     plusButton.layer.cornerRadius = isiPhone ? 3.0 : 5.0;
-    plusButton.layer.borderColor = [UIColor orangeColor].CGColor;
+#endif
     [containerView addSubview:plusButton];
     
     // select overlaied stuff
@@ -1174,7 +1179,7 @@ CGFloat topOfNonDepthArray = 0;
     }
     assert(minExecWidth > 0);
     
-    CGRect safeFrame = self.view.safeAreaLayoutGuide.layoutFrame;
+    CGRect safeFrame = CGRectInset(self.view.safeAreaLayoutGuide.layoutFrame, INSET, 0);
     containerView.frame = safeFrame;
 #ifdef DEBUG_LAYOUT
     NSLog(@" ******* containerview: %.0f,%.0f  %.0fx%.0f  %@",
@@ -1512,10 +1517,7 @@ CGFloat topOfNonDepthArray = 0;
 //  externalTask.targetSize = layout.processing.size;
     
     executeScrollView.frame = layout.executeScrollRect;
-    executeView.frame = CGRectMake(0, 0,
-                                   executeScrollView.frame.size.width,
-                                   executeScrollView.frame.size.height);
-    executeScrollView.contentSize = executeView.frame.size;
+    executeView.frame = CGRectMake(0, 0, LATER, LATER);
     
     thumbScrollView.contentOffset = thumbsView.frame.origin;
     [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
@@ -1666,22 +1668,24 @@ CGFloat topOfNonDepthArray = 0;
             [self changePlusStatusTo:PlusAvailable];
         }
     } else if (plusStatus == PlusSelected || plusStatus == PlusLocked) {
-        [self removeParamsFor: oldTransform];
+//        [self removeParamsFor: oldTransform];
         ThumbView *oldThumb = oldTransform.thumbView;
         [oldThumb adjustStatus:ThumbAvailable];
-        
-        [screenTask changeLastTransformTo:tappedTransform];
+        [screenTask appendTransformToTask:tappedTransform];
         [self addParamsFor:tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
-        [self adjustPlusStatus];
+        if (plusStatus == PlusSelected) {
+            plusStatus = PlusAvailable;
+            [self adjustPlusStatus];
+        }
     } else {    // no plus, just a tap.
         if (tappedThumb.status == ThumbActive) {    // current transform, deselect
-            [self removeParamsFor: tappedTransform];
+//            [self removeParamsFor: tappedTransform];
             [tappedThumb adjustStatus:ThumbAvailable];
             [screenTask removeLastTransform];
             [self adjustPlusStatus];
         } else {    // simply change the current transform
-            [self removeParamsFor: oldTransform];
+//            [self removeParamsFor: oldTransform];
             ThumbView *oldThumb = oldTransform.thumbView;
             [oldThumb adjustStatus:ThumbAvailable];
             [screenTask changeLastTransformTo:tappedTransform];
@@ -1705,6 +1709,7 @@ CGFloat topOfNonDepthArray = 0;
     [taskCtrl processFrame:frame];
 }
 
+#ifdef NOTDEF
 - (void) removeParamsFor:(Transform *) oldTransform {
     BOOL oldParameters = oldTransform && oldTransform.hasParameters;
     if (!oldParameters)
@@ -1716,6 +1721,7 @@ CGFloat topOfNonDepthArray = 0;
     } completion:nil];
 #endif
 }
+#endif
 
 - (void) addParamsFor:(Transform *) newTransform {
     BOOL newParameters = newTransform && newTransform.hasParameters;
@@ -1789,6 +1795,9 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
+#define PLUS_UNLOCKED_BORDER_W  (isiPhone ? 1.0 : 2.0)
+#define PLUS_LOCKED_BORDER_W  (isiPhone ? 3.0 : 7.0)
+
 - (void) changePlusStatusTo:(PlusStatus_t) newStatus {
     NSLog(@"new plus status: %@ -> %@", plusStatusNames[plusStatus],
           plusStatusNames[newStatus]);
@@ -1796,6 +1805,7 @@ CGFloat topOfNonDepthArray = 0;
     UIColor *color = [UIColor blackColor];
     NSString *plusString = @"+";
     
+    plusButton.layer.borderWidth = PLUS_UNLOCKED_BORDER_W;
     switch (newStatus) {
         case PlusUnavailable:
             weight = UIFontWeightLight;
@@ -1808,7 +1818,7 @@ CGFloat topOfNonDepthArray = 0;
             weight = UIFontWeightBold;
             break;
         case PlusLocked:
-            plusString = @"+🔒";
+            plusButton.layer.borderWidth = PLUS_LOCKED_BORDER_W;
             weight = UIFontWeightBold;
             break;
     }
@@ -2342,10 +2352,23 @@ CGFloat topOfNonDepthArray = 0;
     long activeSteps = screenTask.transformList.count;
     CGFloat bestH = [layout executeHForRowCount:activeSteps] + 1;
     
+    executeView.frame = CGRectMake(0, 0, executeScrollView.frame.size.width, bestH);
+    executeScrollView.contentSize = executeView.frame.size;
+    
+    if (executeScrollView.contentSize.height <= executeScrollView.frame.size.height)
+        [executeScrollView setContentOffset:CGPointZero animated:YES];
+    else {
+        CGPoint bottomOffset = CGPointMake(0, executeScrollView.contentSize.height -
+                                           executeScrollView.bounds.size.height +
+                                           executeScrollView.contentInset.bottom);
+        [executeScrollView setContentOffset:bottomOffset animated:YES];
+    }
+    
     if ((YES) || (!layout.executeIsTight && bestH <= executeView.frame.size.height)) {
         // one-per-line layout
         // loop includes last line +1
         // next transform to be entered/changed is in a box, with a hand pointing to it
+        
         
         NSArray *viewsToRemove = [executeView subviews];
         for (UIView *v in viewsToRemove) {
@@ -2354,29 +2377,28 @@ CGFloat topOfNonDepthArray = 0;
 
 #define EXEC_LABEL_H    (execFontSize + 7)
         CGFloat execFontW = execFontSize*0.9;       // rough approximation
-
-        for (int i=0; i<=MAX(activeSteps, plusIndex); i++) {
+        for (int step=0; step<=[layout rowsInExecRect]; step++) {
             UIView *execLine = [[UIView alloc]
-                                initWithFrame:CGRectMake(2*INSET, i*EXEC_LABEL_H,
+                                initWithFrame:CGRectMake(2*INSET, step*EXEC_LABEL_H,
                                                          executeView.frame.size.width - 2*2*INSET,
                                                          EXEC_LABEL_H)];
             UILabel *ptr = [[UILabel alloc]
                             initWithFrame:CGRectMake(2*INSET, 0,
                                                      2*execFontW,
                                                      EXEC_LABEL_H)];
-            ptr.text = (plusIndex == i) ? POINTING_HAND : @"";
+            ptr.text = (plusIndex == step) ? POINTING_HAND : @"";
             ptr.font = [UIFont systemFontOfSize:execFontSize];
             [execLine addSubview:ptr];
             
             CGFloat descTextLen;
-            if (showStats && i < activeSteps) {
+            if (showStats && step < activeSteps) {
                 CGFloat w = EXEC_STATS_W_CHARS*execFontW;
                 UILabel *statsLabel = [[UILabel alloc]
                                   initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
                                                            w, EXEC_LABEL_H)];
                 statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
                 statsLabel.textAlignment = NSTextAlignmentRight;
-                TransformInstance *instance = [screenTask instanceForStep:i];
+                TransformInstance *instance = [screenTask instanceForStep:step];
                 statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
                 [execLine addSubview:statsLabel];
                 descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
@@ -2387,13 +2409,13 @@ CGFloat topOfNonDepthArray = 0;
                              initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
                                                       descTextLen, EXEC_LABEL_H)];
             desc.font = [UIFont systemFontOfSize:execFontSize];
-            if (i < activeSteps) {
-                desc.text = [screenTask displayInfoForStep:i shortForm:NO];
+            if (step < activeSteps) {
+                desc.text = [screenTask displayInfoForStep:step shortForm:NO];
             } else
                 desc.text = @"";
             [execLine addSubview:desc];
 
-            if (plusIndex == i) {
+            if (plusIndex == step) {
                 execLine.layer.borderWidth = 0.50;
                 execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
             }

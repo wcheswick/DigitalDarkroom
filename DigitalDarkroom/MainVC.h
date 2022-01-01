@@ -32,7 +32,7 @@ typedef enum {
         <UICollectionViewDelegate,
         UICollectionViewDataSource,
 //        UICollectionViewDelegateFlowLayout,
-//        UIScrollViewDelegate,
+        UIScrollViewDelegate,
         MFMailComposeViewControllerDelegate,
         UIContentContainer,
         UIPopoverPresentationControllerDelegate> {

@@ -104,6 +104,7 @@ typedef enum {
 #endif
 
 - (CGFloat) executeHForRowCount:(size_t)rows;
+- (int) rowsInExecRect;
 - (NSString *) layoutSum;
 - (void) dump;
 

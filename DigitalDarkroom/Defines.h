@@ -136,7 +136,7 @@ typedef long PixelIndex_t;
 #define EXEC_STATS_W_CHARS  (10)   // this is a fudge
 
 #define PLUS_H   CONTROL_BUTTON_SIZE
-#define MIN_PLUS_W  (2*PLUS_H)    // room for two characters
+#define MIN_PLUS_W  PLUS_H    // room for two characters
 
 #define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
 
