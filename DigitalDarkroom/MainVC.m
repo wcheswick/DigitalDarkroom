@@ -938,7 +938,7 @@ CGFloat topOfNonDepthArray = 0;
     self.view.backgroundColor = [UIColor whiteColor];
     [self createThumbArray];
     [self adjustBarButtons];
-    [self updateExecuteView];
+//    [self updateExecuteView];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidConnect:) name:UIScreenDidConnectNotification object:nil];
 
@@ -2326,7 +2326,7 @@ CGFloat topOfNonDepthArray = 0;
 
 
 - (IBAction) doRemoveLastTransform {
-    if (screenTask.transformList.count > 1) {
+    if (screenTask.transformList.count) {
         Transform *lastTransform = screenTask.transformList[screenTask.transformList.count - 1];
         ThumbView *thumbView = [self thumbForTransform:lastTransform];
         [thumbView adjustStatus:ThumbAvailable];
@@ -2347,10 +2347,18 @@ CGFloat topOfNonDepthArray = 0;
 //
 // we update the plus button, too.
 
+#define EXEC_LABEL_H    (execFontSize + 7)
+
 - (void) updateExecuteView {
     size_t plusIndex = [self nextTransformTapIndex];
     long activeSteps = screenTask.transformList.count;
-    CGFloat bestH = [layout executeHForRowCount:activeSteps] + 1;
+    BOOL plusActive = (plusStatus == PlusSelected || plusStatus == PlusLocked);
+    long stepsToShow;
+    if (!activeSteps)
+        stepsToShow = 1;    // where the first transform goes
+    else
+        stepsToShow = activeSteps + (plusActive ? 1 : 0);
+    CGFloat bestH = stepsToShow*EXEC_LABEL_H;
     
     executeView.frame = CGRectMake(0, 0, executeScrollView.frame.size.width, bestH);
     executeScrollView.contentSize = executeView.frame.size;
@@ -2359,8 +2367,7 @@ CGFloat topOfNonDepthArray = 0;
         [executeScrollView setContentOffset:CGPointZero animated:YES];
     else {
         CGPoint bottomOffset = CGPointMake(0, executeScrollView.contentSize.height -
-                                           executeScrollView.bounds.size.height +
-                                           executeScrollView.contentInset.bottom);
+                                           executeScrollView.bounds.size.height);
         [executeScrollView setContentOffset:bottomOffset animated:YES];
     }
     
@@ -2375,9 +2382,8 @@ CGFloat topOfNonDepthArray = 0;
             [v removeFromSuperview];
         }
 
-#define EXEC_LABEL_H    (execFontSize + 7)
         CGFloat execFontW = execFontSize*0.9;       // rough approximation
-        for (int step=0; step<=[layout rowsInExecRect]; step++) {
+        for (int step=0; step < stepsToShow; step++) {
             UIView *execLine = [[UIView alloc]
                                 initWithFrame:CGRectMake(2*INSET, step*EXEC_LABEL_H,
                                                          executeView.frame.size.width - 2*2*INSET,
