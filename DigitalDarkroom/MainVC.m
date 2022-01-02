@@ -2361,15 +2361,15 @@ CGFloat topOfNonDepthArray = 0;
     CGFloat bestH = stepsToShow*EXEC_LABEL_H;
     
     executeView.frame = CGRectMake(0, 0, executeScrollView.frame.size.width, bestH);
-    executeScrollView.contentSize = executeView.frame.size;
     
-    if (executeScrollView.contentSize.height <= executeScrollView.frame.size.height)
-        [executeScrollView setContentOffset:CGPointZero animated:YES];
-    else {
-        CGPoint bottomOffset = CGPointMake(0, executeScrollView.contentSize.height -
-                                           executeScrollView.bounds.size.height);
-        [executeScrollView setContentOffset:bottomOffset animated:YES];
-    }
+    CGPoint bottomOffset = CGPointMake(0, 0);
+    
+    if (executeScrollView.contentSize.height > executeScrollView.frame.size.height)
+        bottomOffset.y = executeScrollView.contentSize.height -
+            executeScrollView.bounds.size.height;
+    
+    executeScrollView.contentSize = executeView.frame.size;
+    [executeScrollView setContentOffset:bottomOffset animated:YES];
     
     if ((YES) || (!layout.executeIsTight && bestH <= executeView.frame.size.height)) {
         // one-per-line layout
