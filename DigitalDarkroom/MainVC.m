@@ -194,7 +194,6 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIImageView *transformView; // transformed image
 @property (nonatomic, strong)   UIView *thumbsView;         // transform thumbs view of thumbArray
 @property (nonatomic, strong)   UIScrollView *executeScrollView;    // active transform list area
-@property (nonatomic, strong)   UIView *executeView;                // stack of UILabels in executeScrollView
 @property (nonatomic, strong)   NSMutableArray<Layout *> *layouts;    // approved list of current layouts
 @property (assign)              long layoutIndex;           // index into layouts, or NO_LAYOUT_SELECTED
 @property (assign)              BOOL layoutIsBroken;    // for debugging
@@ -261,7 +260,7 @@ MainVC *mainVC = nil;
 @synthesize showControls, showStats, flashView;
 @synthesize paramLow, paramName, paramHigh, paramValue;
 
-@synthesize executeScrollView, executeView;
+@synthesize executeScrollView;
 @synthesize layoutValuesView;
 
 @synthesize deviceOrientation;
@@ -859,9 +858,6 @@ CGFloat topOfNonDepthArray = 0;
     executeScrollView.showsHorizontalScrollIndicator = NO;
     executeScrollView.showsVerticalScrollIndicator = YES;
     [containerView addSubview:executeScrollView];
-    
-    executeView = [[UIView alloc] init];
-    [executeScrollView addSubview:executeView];
     
     plusButton = [UIButton buttonWithType:UIButtonTypeRoundedRect];
     [plusButton addTarget:self
@@ -1517,7 +1513,6 @@ CGFloat topOfNonDepthArray = 0;
 //  externalTask.targetSize = layout.processing.size;
     
     executeScrollView.frame = layout.executeScrollRect;
-    executeView.frame = CGRectMake(0, 0, LATER, LATER);
     
     thumbScrollView.contentOffset = thumbsView.frame.origin;
     [thumbScrollView setContentOffset:CGPointMake(0, 0) animated:YES];
@@ -2281,8 +2276,9 @@ CGFloat topOfNonDepthArray = 0;
     NSString *taskStats = [taskCtrl stats];
     mainStatsView.text = [stats report:taskStats];
     [mainStatsView setNeedsDisplay];
-    if (showStats)
-        [self updateExecuteView];
+    // needs to update execute view, not layout
+//    if (showStats)
+//        [self updateExecuteView];
     [taskCtrl checkForIdle];
     if (showStats)
         self.title = [NSString stringWithFormat:@"\"%@\",    layout %ld/%lu  %@",
@@ -2342,95 +2338,122 @@ CGFloat topOfNonDepthArray = 0;
     return [thumbsView viewWithTag:TRANSFORM_BASE_TAG + transform.transformsArrayIndex];
 }
 
-// The executeView is a list of transforms.  There is a regular list mode, and a compressed
+//
+// The executeView is the source name followed by a list of transforms.
+//
+// There could be a regular list mode, and a compressed
 // mode for small, tight screens or long lists of transforms (which should be rare.)
 //
-// we update the plus button, too.
+// we update the plus button here, too.
 
 #define EXEC_LABEL_H    (execFontSize + 7)
 
 - (void) updateExecuteView {
-    size_t plusIndex = [self nextTransformTapIndex];
+    int plusIndex = (int)[self nextTransformTapIndex];
     long activeSteps = screenTask.transformList.count;
     BOOL plusActive = (plusStatus == PlusSelected || plusStatus == PlusLocked);
-    long stepsToShow;
-    if (!activeSteps)
-        stepsToShow = 1;    // where the first transform goes
-    else
-        stepsToShow = activeSteps + (plusActive ? 1 : 0);
-    CGFloat bestH = stepsToShow*EXEC_LABEL_H;
     
-    executeView.frame = CGRectMake(0, 0, executeScrollView.frame.size.width, bestH);
+    int totalLines = 1;  // start with line 0, the header line
+    totalLines += activeSteps;  // each installed transform
+    if (plusActive || activeSteps == 0)
+        // room for next plus, or first transform if not there yet
+        totalLines++;
     
-    CGPoint bottomOffset = CGPointMake(0, 0);
+    int maxLinesVisible = layout.executeScrollRect.size.height / EXEC_LABEL_H;
     
-    if (executeScrollView.contentSize.height > executeScrollView.frame.size.height)
-        bottomOffset.y = executeScrollView.contentSize.height -
-            executeScrollView.bounds.size.height;
+    int linesVisible;
+    CGPoint offset = CGPointMake(0, LATER);
+    if (totalLines >= maxLinesVisible) {
+        linesVisible = maxLinesVisible;
+        offset.y += (totalLines - maxLinesVisible) * EXEC_LABEL_H;
+    } else {
+        linesVisible = totalLines;
+        offset.y = 0;
+    }
     
-    executeScrollView.contentSize = executeView.frame.size;
-    [executeScrollView setContentOffset:bottomOffset animated:YES];
+    // fresh view to scroll....
+    NSArray *viewsToRemove = [executeScrollView subviews];
+    for (UIView *v in viewsToRemove) {
+        [v removeFromSuperview];
+    }
+    UIView *executeView = [[UIView alloc]
+                           initWithFrame:CGRectMake(0, 0,
+                                                    executeScrollView.frame.size.width,
+                                                    totalLines*EXEC_LABEL_H)];
+    [executeScrollView addSubview:executeView];
     
-    if ((YES) || (!layout.executeIsTight && bestH <= executeView.frame.size.height)) {
-        // one-per-line layout
-        // loop includes last line +1
-        // next transform to be entered/changed is in a box, with a hand pointing to it
-        
-        
-        NSArray *viewsToRemove = [executeView subviews];
-        for (UIView *v in viewsToRemove) {
-            [v removeFromSuperview];
-        }
-
+    SET_VIEW_HEIGHT(executeScrollView, linesVisible*EXEC_LABEL_H);
+    [executeScrollView setContentSize:CGSizeMake(executeScrollView.frame.size.width, totalLines*EXEC_LABEL_H)];
+    [executeScrollView setContentOffset:offset animated:YES];
+    
+    if ((YES) || (!layout.executeIsTight)) {
         CGFloat execFontW = execFontSize*0.9;       // rough approximation
-        for (int step=0; step < stepsToShow; step++) {
+        int startLine = totalLines - linesVisible;
+        for (int line=startLine; line < totalLines; line++) {
             UIView *execLine = [[UIView alloc]
-                                initWithFrame:CGRectMake(2*INSET, step*EXEC_LABEL_H,
+                                initWithFrame:CGRectMake(2*INSET, (line - startLine)*EXEC_LABEL_H,
                                                          executeView.frame.size.width - 2*2*INSET,
                                                          EXEC_LABEL_H)];
-            UILabel *ptr = [[UILabel alloc]
-                            initWithFrame:CGRectMake(2*INSET, 0,
-                                                     2*execFontW,
-                                                     EXEC_LABEL_H)];
-            ptr.text = (plusIndex == step) ? POINTING_HAND : @"";
-            ptr.font = [UIFont systemFontOfSize:execFontSize];
-            [execLine addSubview:ptr];
-            
-            CGFloat descTextLen;
-            if (showStats && step < activeSteps) {
-                CGFloat w = EXEC_STATS_W_CHARS*execFontW;
-                UILabel *statsLabel = [[UILabel alloc]
-                                  initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
-                                                           w, EXEC_LABEL_H)];
-                statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
-                statsLabel.textAlignment = NSTextAlignmentRight;
-                TransformInstance *instance = [screenTask instanceForStep:step];
-                statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
-                [execLine addSubview:statsLabel];
-                descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
-            } else
-                descTextLen = execLine.frame.size.width - RIGHT(ptr.frame);
-            
-            UILabel *desc = [[UILabel alloc]
-                             initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
-                                                      descTextLen, EXEC_LABEL_H)];
-            desc.font = [UIFont systemFontOfSize:execFontSize];
-            if (step < activeSteps) {
-                desc.text = [screenTask displayInfoForStep:step shortForm:NO];
-            } else
-                desc.text = @"";
-            [execLine addSubview:desc];
-
-            if (plusIndex == step) {
-                execLine.layer.borderWidth = 0.50;
-                execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
+            execLine.tag = line;
+            if (line == 0) {    // header, image source name
+                UILabel *header = [[UILabel alloc] initWithFrame:CGRectMake(0, 0,
+                                                                            execLine.frame.size.width,
+                                                                            EXEC_LABEL_H)];
+                header.text = CURRENT_SOURCE.label;
+                header.textAlignment = NSTextAlignmentCenter;
+                header.font = [UIFont boldSystemFontOfSize:execFontSize];
+                [execLine addSubview:header];
+            } else {    // not the header
+                int step = line - 1;
+                assert(step >= 0);
+                
+                UILabel *ptr = [[UILabel alloc]
+                                initWithFrame:CGRectMake(2*INSET, 0,
+                                                         2*execFontW,
+                                                         EXEC_LABEL_H)];
+                ptr.text = (plusIndex == step) ? POINTING_HAND : @"";
+                ptr.font = [UIFont systemFontOfSize:execFontSize];
+                [execLine addSubview:ptr];
+                
+                CGFloat descTextLen;
+                if (showStats && step < activeSteps) {
+                    CGFloat w = EXEC_STATS_W_CHARS*execFontW;
+                    UILabel *statsLabel = [[UILabel alloc]
+                                           initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
+                                                                    w, EXEC_LABEL_H)];
+                    statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
+                    statsLabel.textAlignment = NSTextAlignmentRight;
+                    TransformInstance *instance = [screenTask instanceForStep:step];
+                    statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
+                    [execLine addSubview:statsLabel];
+                    descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
+                } else
+                    descTextLen = execLine.frame.size.width - RIGHT(ptr.frame);
+                
+                UILabel *desc = [[UILabel alloc]
+                                 initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
+                                                          descTextLen, EXEC_LABEL_H)];
+                desc.font = [UIFont systemFontOfSize:execFontSize];
+                if (step < activeSteps) {
+                    desc.text = [screenTask displayInfoForStep:step shortForm:NO];
+                } else
+                    desc.text = @"";
+                [execLine addSubview:desc];
+                if (plusIndex == step) {
+                    execLine.layer.borderWidth = 0.50;
+                    execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
+                } else {
+                    execLine.layer.borderWidth = 0.10;
+                    execLine.layer.borderColor = [UIColor lightGrayColor].CGColor;
+                }
             }
+            [execLine setNeedsDisplay];
             [executeView addSubview:execLine];
         }
     } else {    // compressed layout. XXX: STUB
-//        executeView.text = text;
+        //        executeView.text = text;
     }
-    [executeView setNeedsDisplay];
+    [executeScrollView setNeedsDisplay];
 }
 
 - (size_t) nextTransformTapIndex {
