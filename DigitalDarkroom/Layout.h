@@ -33,6 +33,7 @@ typedef enum {
     CGRect fullThumbViewRect;
     CGRect thumbScrollRect;
     CGRect executeScrollRect;     // where the active transform list is shown
+    CGFloat executeScrollMinH;
     CGRect plusRect;        // in executeRect
     CGRect paramRect;       // where the parameter slider goes
     
@@ -68,6 +69,7 @@ typedef enum {
 @property (assign)              CGRect executeScrollRect;
 @property (assign)              CGRect plusRect;
 @property (assign)              CGRect paramRect;
+@property (assign)              CGFloat executeScrollMinH;
 
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 
@@ -103,7 +105,6 @@ typedef enum {
 - (void) tryLayoutsForJustDisplay;
 #endif
 
-- (CGFloat) executeHForRowCount:(size_t)rows;
 - (NSString *) layoutSum;
 - (void) dump;
 

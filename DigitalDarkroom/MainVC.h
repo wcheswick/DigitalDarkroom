@@ -45,7 +45,7 @@ typedef enum {
     
     // screen limits
     CGFloat minExecWidth;
-    CGFloat execFontSize;
+    CGFloat execFontSize, executeLabelH;
     float minDisplayFrac, bestMinDisplayFrac;
     float minThumbFrac, bestMinThumbFrac;
     float minPctThumbsShown;
@@ -60,7 +60,7 @@ typedef enum {
 @property (nonatomic, strong)   CameraController *cameraController;
 
 @property (assign)  CGFloat minExecWidth;
-@property (assign)  CGFloat execFontSize;
+@property (assign)  CGFloat executeLabelH;
 @property (assign)  float minDisplayFrac, bestMinDisplayFrac;
 @property (assign)  float minThumbFrac, bestMinThumbFrac;
 @property (assign)  float minPctThumbsShown;

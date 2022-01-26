@@ -218,7 +218,7 @@ MainVC *mainVC = nil;
 @property (assign)              NSTimeInterval transformTotalElapsed;
 @property (assign)              int transformCount;
 @property (assign)              volatile int frameCount, depthCount, droppedCount, busyCount;
-
+@property (assign)              CGFloat execFontSize;
 
 @property (assign)              UIDeviceOrientation deviceOrientation;
 @property (nonatomic, strong)   Layout *layout;
@@ -304,7 +304,7 @@ MainVC *mainVC = nil;
 @synthesize minExecWidth;
 @synthesize minDisplayWidth, maxDisplayWidth;
 @synthesize minDisplayHeight, maxDisplayHeight;
-@synthesize execFontSize;
+@synthesize execFontSize, executeLabelH;
 
 - (id) init {
     self = [super init];
@@ -828,6 +828,7 @@ CGFloat topOfNonDepthArray = 0;
     paramView.clipsToBounds = YES;
     paramView.layer.borderWidth = VIEW_BORDER_W;
     paramView.layer.borderColor = VIEW_BORDER_COLOR;
+    paramView.hidden = YES;     // initialized as hidden
     [transformView addSubview:paramView];
     [transformView bringSubviewToFront:paramView];
 
@@ -1168,6 +1169,7 @@ CGFloat topOfNonDepthArray = 0;
         minThumbRows = MIN_THUMB_ROWS;
         minThumbCols = MIN_THUMB_COLS;
     }
+    executeLabelH = execFontSize + 7;
     
     if (currentDisplayOption == OnlyTransformDisplayed) {
         minThumbRows = 0;
@@ -1439,7 +1441,7 @@ CGFloat topOfNonDepthArray = 0;
     paramView.frame = layout.paramRect;
     SET_VIEW_WIDTH(paramLabel, paramView.frame.size.width);
     SET_VIEW_WIDTH(paramSlider, paramView.frame.size.width);
-    [self addParamsFor:[screenTask.transformList lastObject]];
+    [self checkParamsFor:[screenTask.transformList lastObject]];
     
     thumbScrollView.frame = layout.thumbScrollRect;
 #ifdef DEBUG_BORDERS
@@ -1657,7 +1659,7 @@ CGFloat topOfNonDepthArray = 0;
     BOOL firstTransform = (oldTransform == nil);
     if (firstTransform) {
         [screenTask appendTransformToTask:tappedTransform];
-        [self addParamsFor: tappedTransform];
+        [self checkParamsFor: tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
         if (plusStatus != PlusLocked) {
             [self changePlusStatusTo:PlusAvailable];
@@ -1667,7 +1669,7 @@ CGFloat topOfNonDepthArray = 0;
         ThumbView *oldThumb = oldTransform.thumbView;
         [oldThumb adjustStatus:ThumbAvailable];
         [screenTask appendTransformToTask:tappedTransform];
-        [self addParamsFor:tappedTransform];
+        [self checkParamsFor:tappedTransform];
         [tappedThumb adjustStatus:ThumbActive];
         if (plusStatus == PlusSelected) {
             plusStatus = PlusAvailable;
@@ -1684,7 +1686,7 @@ CGFloat topOfNonDepthArray = 0;
             ThumbView *oldThumb = oldTransform.thumbView;
             [oldThumb adjustStatus:ThumbAvailable];
             [screenTask changeLastTransformTo:tappedTransform];
-            [self addParamsFor:tappedTransform];
+            [self checkParamsFor:tappedTransform];
             [tappedThumb adjustStatus:ThumbActive];
        }
     }
@@ -1710,18 +1712,13 @@ CGFloat topOfNonDepthArray = 0;
     if (!oldParameters)
         return;
 #ifdef NOTDEF
-    [UIView animateWithDuration:0.5 animations:^(void) {
-        // slide old parameters off the bottom of the display
-        SET_VIEW_Y(self->paramView, BELOW(self->layout.displayRect));
-    } completion:nil];
 #endif
 }
 #endif
 
-- (void) addParamsFor:(Transform *) newTransform {
+- (void) checkParamsFor:(Transform *) newTransform {
     BOOL newParameters = newTransform && newTransform.hasParameters;
     if (!newParameters) {
-        [self adjustParamView];
         return;
     }
     paramSlider.minimumValue = newTransform.low;
@@ -1976,6 +1973,7 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (IBAction)doParamSlider:(UISlider *)slider {
+    assert(!paramView.hidden);
     Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
 //    NSLog(@"slider value %.1f", slider.value);
     if (lastTransform && lastTransform.hasParameters) {
@@ -1988,26 +1986,40 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) adjustParamView {
     Transform *lastTransform = LAST_TRANSFORM_IN_TASK(screenTask);
-    if (!lastTransform) {
-        paramLabel.text = [NSString stringWithFormat:@"(Source image)"];
-        paramLabel.textColor = [UIColor lightGrayColor];
+    CGFloat paramDeltaY = 0;
+    if (!lastTransform || !lastTransform.hasParameters) {
+        if (!paramView.hidden) {    // hide param view
+            paramDeltaY -= self->paramView.frame.size.height + SEP;
+            paramView.hidden = YES;
+        }
+    } else if (lastTransform && lastTransform.hasParameters) {
+        if (paramView.hidden) { // reveal param view
+            paramDeltaY += self->paramView.frame.size.height + SEP;
+            paramView.hidden = NO;
+        }
+        paramLabel.textColor = [UIColor blackColor];
         [paramLabel setNeedsDisplay];
-        return;
+        if (transformChainChanged) {
+            paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
+                               lastTransform.name,
+                               lastTransform.paramName,
+                               paramSlider.value];
+            [paramSlider setNeedsDisplay];
+            [paramView setNeedsDisplay];
+            [self refreshScreen];
+        }
     }
-    paramLabel.textColor = [UIColor blackColor];
-    [paramLabel setNeedsDisplay];
-    if (!lastTransform.hasParameters) {
-        paramLabel.text = [NSString stringWithFormat:@"%@",
-                           lastTransform.name];
-    } else if (transformChainChanged) {
-        paramLabel.text = [NSString stringWithFormat:@"%@:    %@: %.0f",
-                           lastTransform.name,
-                           lastTransform.paramName,
-                           paramSlider.value];
-        [paramSlider setNeedsDisplay];
-        [paramView setNeedsDisplay];
-        [self refreshScreen];
-    }
+    [UIView animateWithDuration:0.5 animations:^(void) {
+        // slide old parameters off the bottom of the display
+        SET_VIEW_Y(self->paramView, self->paramView.frame.origin.y + paramDeltaY);
+        SET_VIEW_Y(self->plusButton, BELOW(self->paramView.frame) + SEP);
+        SET_VIEW_Y(self->executeScrollView, BELOW(self->plusButton.frame) + SEP);
+        SET_VIEW_HEIGHT(self->executeScrollView,
+                        self->containerView.frame.size.height -
+                        self->executeScrollView.frame.origin.y);
+    } completion:^(BOOL finished) {
+        self->paramView.hidden = YES;
+    }];
 }
 
 - (IBAction) didThreeTapSceen:(UITapGestureRecognizer *)recognizer {
@@ -2346,26 +2358,27 @@ CGFloat topOfNonDepthArray = 0;
 //
 // we update the plus button here, too.
 
-#define EXEC_LABEL_H    (execFontSize + 7)
 
 - (void) updateExecuteView {
+    [self adjustParamView];
+    
     int plusIndex = (int)[self nextTransformTapIndex];
-    long activeSteps = screenTask.transformList.count;
+    int activeSteps = (int)screenTask.transformList.count;
     BOOL plusActive = (plusStatus == PlusSelected || plusStatus == PlusLocked);
     
-    int totalLines = 1;  // start with line 0, the header line
-    totalLines += activeSteps;  // each installed transform
+    int totalLines = activeSteps;
     if (plusActive || activeSteps == 0)
         // room for next plus, or first transform if not there yet
         totalLines++;
-    
-    int maxLinesVisible = layout.executeScrollRect.size.height / EXEC_LABEL_H;
+
+    int maxLinesVisible = executeScrollView.frame.size.height / executeLabelH;
+    assert(maxLinesVisible >= 1);
     
     int linesVisible;
     CGPoint offset = CGPointMake(0, LATER);
     if (totalLines >= maxLinesVisible) {
         linesVisible = maxLinesVisible;
-        offset.y += (totalLines - maxLinesVisible) * EXEC_LABEL_H;
+        offset.y += (totalLines - maxLinesVisible) * executeLabelH;
     } else {
         linesVisible = totalLines;
         offset.y = 0;
@@ -2379,11 +2392,11 @@ CGFloat topOfNonDepthArray = 0;
     UIView *executeView = [[UIView alloc]
                            initWithFrame:CGRectMake(0, 0,
                                                     executeScrollView.frame.size.width,
-                                                    totalLines*EXEC_LABEL_H)];
+                                                    totalLines*executeLabelH)];
     [executeScrollView addSubview:executeView];
     
-    SET_VIEW_HEIGHT(executeScrollView, linesVisible*EXEC_LABEL_H);
-    [executeScrollView setContentSize:CGSizeMake(executeScrollView.frame.size.width, totalLines*EXEC_LABEL_H)];
+    SET_VIEW_HEIGHT(executeScrollView, linesVisible*executeLabelH);
+    [executeScrollView setContentSize:CGSizeMake(executeScrollView.frame.size.width, totalLines*executeLabelH)];
     [executeScrollView setContentOffset:offset animated:YES];
     
     if ((YES) || (!layout.executeIsTight)) {
@@ -2391,66 +2404,55 @@ CGFloat topOfNonDepthArray = 0;
         int startLine = totalLines - linesVisible;
         for (int line=startLine; line < totalLines; line++) {
             UIView *execLine = [[UIView alloc]
-                                initWithFrame:CGRectMake(2*INSET, (line - startLine)*EXEC_LABEL_H,
+                                initWithFrame:CGRectMake(2*INSET, (line - startLine)*executeLabelH,
                                                          executeView.frame.size.width - 2*2*INSET,
-                                                         EXEC_LABEL_H)];
+                                                         executeLabelH)];
             execLine.tag = line;
-            if (line == 0) {    // header, image source name
-                UILabel *header = [[UILabel alloc] initWithFrame:CGRectMake(0, 0,
-                                                                            execLine.frame.size.width,
-                                                                            EXEC_LABEL_H)];
-                header.text = CURRENT_SOURCE.label;
-                header.textAlignment = NSTextAlignmentCenter;
-                header.font = [UIFont boldSystemFontOfSize:execFontSize];
-                [execLine addSubview:header];
-            } else {    // not the header
-                int step = line - 1;
-                assert(step >= 0);
-                
-                UILabel *ptr = [[UILabel alloc]
-                                initWithFrame:CGRectMake(2*INSET, 0,
-                                                         2*execFontW,
-                                                         EXEC_LABEL_H)];
-                ptr.text = (plusIndex == step) ? POINTING_HAND : @"";
-                ptr.font = [UIFont systemFontOfSize:execFontSize];
-                [execLine addSubview:ptr];
-                
-                CGFloat descTextLen;
-                if (showStats && step < activeSteps) {
-                    CGFloat w = EXEC_STATS_W_CHARS*execFontW;
-                    UILabel *statsLabel = [[UILabel alloc]
-                                           initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
-                                                                    w, EXEC_LABEL_H)];
-                    statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
-                    statsLabel.textAlignment = NSTextAlignmentRight;
-                    TransformInstance *instance = [screenTask instanceForStep:step];
-                    statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
-                    [execLine addSubview:statsLabel];
-                    descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
-                } else
-                    descTextLen = execLine.frame.size.width - RIGHT(ptr.frame);
-                
-                UILabel *desc = [[UILabel alloc]
-                                 initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
-                                                          descTextLen, EXEC_LABEL_H)];
-                desc.font = [UIFont systemFontOfSize:execFontSize];
-                if (step < activeSteps) {
-                    desc.text = [screenTask displayInfoForStep:step shortForm:NO];
-                } else
-                    desc.text = @"";
-                [execLine addSubview:desc];
-                if (plusIndex == step) {
-                    execLine.layer.borderWidth = 0.50;
-                    execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
-                } else {
-                    execLine.layer.borderWidth = 0.10;
-                    execLine.layer.borderColor = [UIColor lightGrayColor].CGColor;
-                }
+            int step = line;
+            
+            UILabel *ptr = [[UILabel alloc]
+                            initWithFrame:CGRectMake(2*INSET, 0,
+                                                     2*execFontW,
+                                                     executeLabelH)];
+            ptr.text = (plusIndex == step) ? POINTING_HAND : @"";
+            ptr.font = [UIFont systemFontOfSize:execFontSize];
+            [execLine addSubview:ptr];
+            
+            CGFloat descTextLen;
+            if (showStats && step < activeSteps) {
+                CGFloat w = EXEC_STATS_W_CHARS*execFontW;
+                UILabel *statsLabel = [[UILabel alloc]
+                                       initWithFrame:CGRectMake(execLine.frame.size.width - w, 0,
+                                                                w, executeLabelH)];
+                statsLabel.font = [UIFont fontWithName:@"Courier" size:execFontSize];
+                statsLabel.textAlignment = NSTextAlignmentRight;
+                TransformInstance *instance = [screenTask instanceForStep:step];
+                statsLabel.text = instance.timesCalled ? [instance timeInfo] : @"";
+                [execLine addSubview:statsLabel];
+                descTextLen = statsLabel.frame.origin.x - RIGHT(ptr.frame);
+            } else
+                descTextLen = execLine.frame.size.width - RIGHT(ptr.frame);
+            
+            UILabel *desc = [[UILabel alloc]
+                             initWithFrame:CGRectMake(RIGHT(ptr.frame) + SEP, 0,
+                                                      descTextLen, executeLabelH)];
+            desc.font = [UIFont systemFontOfSize:execFontSize];
+            if (step < activeSteps) {
+                desc.text = [screenTask displayInfoForStep:step shortForm:NO];
+            } else
+                desc.text = @"";
+            [execLine addSubview:desc];
+            if (plusIndex == step) {
+                execLine.layer.borderWidth = 0.50;
+                execLine.layer.borderColor = [UIColor darkGrayColor].CGColor;
+            } else {
+                execLine.layer.borderWidth = 0.10;
+                execLine.layer.borderColor = [UIColor lightGrayColor].CGColor;
             }
             [execLine setNeedsDisplay];
             [executeView addSubview:execLine];
         }
-    } else {    // compressed layout. XXX: STUB
+    }else {    // compressed layout. XXX: STUB
         //        executeView.text = text;
     }
     [executeScrollView setNeedsDisplay];

@@ -118,7 +118,6 @@ typedef long PixelIndex_t;
 
 #define SECTION_HEADER_FONT_SIZE    20
 
-
 #define CONTROL_BUTTON_SIZE 50
 
 #define PARAM_LABEL_H   20
@@ -134,8 +133,15 @@ typedef long PixelIndex_t;
 #define EXECUTE_MIN_TEXT_CHARS  20
 #define EXECUTE_BORDER_W    2
 #define EXEC_STATS_W_CHARS  (10)   // this is a fudge
+#define EXEC_MIN_LINES  2
 
-#define PLUS_H   CONTROL_BUTTON_SIZE
+#define EXECUTE_ROW_H       (mainVC.executeLabelH + SEP)
+#define EXECUTE_H_FOR(n)    ((n)*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W + 2*SEP)
+#define EXECUTE_MIN_H       EXECUTE_H_FOR(2)
+//#define EXECUTE_MIN_H       MIN(PLUS_H, EXECUTE_H_FOR(1))
+#define EXECUTE_FULL_H      EXECUTE_H_FOR(6)
+
+#define PLUS_H      CONTROL_BUTTON_SIZE
 #define MIN_PLUS_W  PLUS_H    // room for two characters
 
 #define  LAYOUT_BEST_DISPLAY_AREA_FRAC   0.75
