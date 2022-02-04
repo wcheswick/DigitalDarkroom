@@ -340,7 +340,6 @@ MainVC *mainVC = nil;
 #ifdef DEBUG_OMIT_THUMBS
         thumbTasks.groupEnabled = NO;
 #endif
-        
         externalTasks = [taskCtrl newTaskGroupNamed:@"External"];
         externalTasks.groupEnabled = NO;    // not implemented
 
@@ -371,8 +370,9 @@ MainVC *mainVC = nil;
         cameraCount = 0;
         
         if (HAVE_CAMERA) {
+            // select first available camera by default
             for (int ci=0; ci<N_POSS_CAM; ci++) {
-                if ([cameraController selectCameraOnSide:possibleCameras[ci].front]) {
+                if ([cameraController selectCameraOnFront:possibleCameras[ci].front needs3D:possibleCameras[ci].threeD]) {
                     cameraCount++;
                     InputSource *newSource = [[InputSource alloc] init];
                     [newSource makeCameraSource:possibleCameras[ci].name
@@ -425,14 +425,6 @@ MainVC *mainVC = nil;
         currentSourceIndex = NO_SOURCE;
     }
     return self;
-}
-
-- (void) dumpInputCameraSources {
-    for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
-        NSLog(@"camera source %d  ci %ld   %@  %@", i, SOURCE(i).cameraIndex,
-              IS_FRONT_CAMERA(SOURCE(i)) ? @"front" : @"rear ",
-              IS_3D_CAMERA(SOURCE(i)) ? @"3D" : @"2D");
-    }
 }
 
 - (void) createThumbArray {
@@ -613,7 +605,6 @@ CGFloat topOfNonDepthArray = 0;
 
 - (void) viewDidLoad {
     [super viewDidLoad];
-    
 
     [self adjustOrientation];
 
@@ -937,9 +928,12 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustBarButtons];
 //    [self updateExecuteView];
     
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidConnect:) name:UIScreenDidConnectNotification object:nil];
-
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(externalScreenDidDisconnect:) name:UIScreenDidDisconnectNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(externalScreenDidConnect:)
+                                                 name:UIScreenDidConnectNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(externalScreenDidDisconnect:)
+                                                 name:UIScreenDidDisconnectNotification object:nil];
 }
 
 -(void)externalScreenDidConnect:(NSNotification *)notification {
@@ -1061,7 +1055,7 @@ CGFloat topOfNonDepthArray = 0;
         case LayoutOK:
             assert(NO); // should not be ok yet
             break;
-        case NeedsNewLayout:
+        case NeedsNewLayout: {
             // On entry:
             //  currentSource or nextSource
             //  transform tasks must be idle
@@ -1086,8 +1080,18 @@ CGFloat topOfNonDepthArray = 0;
                 }
                 [self saveSourceIndex];
             }
-            [self computeLayouts];
-            if (!layouts.count) {
+            
+            NSMutableArray<Layout *> *candidateLayouts = [[NSMutableArray alloc] init];
+            [self computeLayoutLimits];
+            
+            if (fileSourceFrame) {  // fixed, non-camera input
+                [self proposeLayoutsTo:candidateLayouts forSize:fileSourceFrame.size];
+            } else {        // various camera source size options
+                for (AVCaptureDeviceFormat *format in cameraController.usefulFormatList) {
+                    [self proposeLayoutsTo:candidateLayouts forFormat:format];
+                }
+            }
+            if (!candidateLayouts.count) {
                 NSLog(@"Inconceivable: no useful layout found.");
                 UIAlertController * alert = [UIAlertController
                                              alertControllerWithTitle:@"No layout found"
@@ -1105,18 +1109,198 @@ CGFloat topOfNonDepthArray = 0;
                 layoutIsBroken = YES;
                 return;
             }
-            layoutIndex = 0;    // highest score, top of the array
+            
+            [layouts removeAllObjects]; // loaded by the next routine
+            layoutIndex = [self editAndSortLayouts:candidateLayouts];
+            NSLog(@"LLLL best index: %ld", layoutIndex);
             taskCtrl.state = ApplyLayout;
             // FALLTHROUGH
+        }
         case ApplyLayout:
             if (IS_CAMERA(CURRENT_SOURCE)) {
-                [cameraController updateOrientationTo:deviceOrientation];
-                [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
-                [self liveOn:YES];
+//                XXXX set format from current layout
+                [self selectCurrentCamera];
             }
+            
+            [self applyScreenLayout:layoutIndex];
+
+        #ifdef NOTDEF
+            int i = 0;
+            for (Layout *layout in layouts) {
+                NSLog(@"%3d   %.3f  %.3f %.3f    %@", i,
+                      layout.displayFrac, layout.score, layout.thumbFrac,
+                      i == layoutIndex ? @"<---" : @"");
+                i++;
+            }
+            
+            for (int i=0; i<layouts.count; i++ ) {
+                Layout *layout = layouts[i];
+                NSLog(@"%2d %@", i, layout.status);
+            }
+        #endif
+
             [self refreshScreen];
     }
     taskCtrl.state = LayoutOK;
+}
+
+- (void) selectCurrentCamera {
+    [cameraController updateOrientationTo:deviceOrientation];
+    struct camera_t camera = possibleCameras[CURRENT_SOURCE.cameraIndex];
+    [cameraController selectCameraOnFront:camera.front needs3D:camera.threeD];
+    [self liveOn:YES];
+}
+
+- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts
+                  forSize:(CGSize) s {
+    [self proposeLayoutsTo: candidateLayouts forSize:s format:nil];
+}
+
+- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts
+                forFormat:(AVCaptureDeviceFormat *) format  {
+    CMVideoDimensions vs = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
+    CGSize s = CGSizeMake(vs.width, vs.height);
+    [self proposeLayoutsTo: candidateLayouts forSize:s format:format];
+}
+
+- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts forSize:(CGSize) sourceSize
+                   format:(AVCaptureDeviceFormat *__nullable)format {
+    [self dumpViewLimits:@"searchThumbOptionsForSize"];
+    size_t thumbCols = minThumbCols;
+    size_t thumbRows = minThumbRows;
+    Layout *layout;
+    
+    switch (currentDisplayOption) {
+        case iPadSize:
+            // try right thumbs
+            do {
+                layout = [[Layout alloc]
+                          initForSize: sourceSize
+                          rightThumbs:thumbCols++
+                          bottomThumbs:0
+                          displayOption:currentDisplayOption
+                          format:format];
+#ifdef DDDEBUG_LAYOUT
+                if (layout) {
+                    NSLog(@"RT  %@", [layout layoutSum]);
+                }
+#endif
+                if (layout && layout.score != BAD_LAYOUT)
+                    [candidateLayouts addObject:layout];
+            } while (layout);
+            
+            // try bottom thumbs
+            do {    // try bottom thumbs
+                layout = [[Layout alloc]
+                                  initForSize: sourceSize
+                                  rightThumbs:0
+                                  bottomThumbs:thumbRows++
+                                  displayOption:currentDisplayOption
+                                  format:format];
+                if (/* DISABLES CODE */ (NO) && layout) {
+                    NSLog(@"BT  %@", [layout layoutSum]);
+                }
+
+                if (layout && layout.score != BAD_LAYOUT)
+                    [candidateLayouts addObject:layout];
+            } while (layout);
+            
+#ifdef NOMORE
+            [trialLayout tryLayoutsOnRight:YES];
+            [trialLayout tryLayoutsOnRight:NO];
+            [trialLayout tryLayoutsForStacked];
+            [trialLayout tryLayoutsForExecOnLeft:NO];
+            [trialLayout tryLayoutsForExecOnLeft:YES];
+            [trialLayout tryLayoutsForJustDisplayOnLeft:YES];
+            [trialLayout tryLayoutsForJustDisplayOnLeft:NO];
+#endif
+            break;
+        case iPhoneSize:    // NB: iPhone is suboptimal for this app
+            if (isPortrait) {   // portrait iphone
+                
+            } else {            // landscape iphone
+                
+            }
+#ifdef NOTYET
+            [trialLayout tryLayoutsOnRight:YES];
+            [trialLayout tryLayoutsOnRight:NO];
+            [trialLayout tryLayoutsForExecOnLeft:YES];
+            [trialLayout tryLayoutsForExecOnLeft:NO];
+            [trialLayout tryLayoutsForStacked];
+#endif
+            break;
+        case OnlyTransformDisplayed:
+#ifdef NOTYET
+            [trialLayout tryLayoutsForJustDisplay];
+#endif
+            break;
+        case NoTransformDisplayed: {  // execute and thumbs only
+            if (isPortrait) {       // portrait iphone
+                
+            } else {            // landscape iphone
+                
+            }
+            break;
+        }
+    }
+}
+
+// make list of approved layouts,  with best guess first
+- (long) editAndSortLayouts: (NSMutableArray<Layout *> *)candidates {
+
+    // sort the layouts by descending size, and score. Default is the highest
+    // scoring one.  Discard the ones that are close.
+    
+    [candidates sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
+        if (l1.displayFrac != l2.displayFrac)
+            return [[NSNumber numberWithFloat:l2.displayFrac]
+                    compare:[NSNumber numberWithFloat:l1.displayFrac]];
+
+//        return [[NSNumber numberWithFloat:l2.pctUsed]
+//                    compare:[NSNumber numberWithFloat:l1.pctUsed]];
+        return [[NSNumber numberWithFloat:l2.score]
+                    compare:[NSNumber numberWithFloat:l1.score]];
+    }];
+
+    // run down through the layouts, from largest display to smallest, removing
+    // ones that are essentially duplicates. Find the best scoring one, our default
+    // selection.
+    
+    Layout *previousBestLayout = nil;
+    float bestScore = -1;
+    int bestScoreIndex = -1;
+    CMVideoDimensions lastVideoSize = {0,0};
+    
+    for (int i=0; i<candidates.count; i++) {
+        Layout *layout = candidates[i];
+        if (layout.format) {
+            CMVideoDimensions vs = CMVideoFormatDescriptionGetDimensions(layout.format.formatDescription);
+            if (vs.width == lastVideoSize.width && vs.height == lastVideoSize.height)
+                continue;
+            lastVideoSize = vs;
+        }
+        [layouts addObject:layout];
+#ifdef DEBUG_LAYOUT
+        NSLog(@"Layout %3d: %@", i, [layout layoutSum]);
+#endif
+        
+        if (i == 0) {   // first one
+            bestScore = layout.score;
+            bestScoreIndex = i;
+            previousBestLayout = layout;
+        } else {
+            if (layout.score > bestScore) {
+                bestScore = layout.score;
+                bestScoreIndex = i;
+                previousBestLayout = layout;
+            }
+        }
+    }
+#ifdef DEBUG_LAYOUT
+    NSLog(@"LLLL %lu trimmed to %lu, top score %.5f at %d",
+          candidates.count, layouts.count, bestScore, bestScoreIndex);
+#endif
+    return bestScoreIndex;
 }
 
 - (void) dumpLayouts {
@@ -1128,7 +1312,7 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (void) computeLayouts {
+- (void) computeLayoutLimits {
     isPortrait = UIDeviceOrientationIsPortrait(deviceOrientation) ||
         UIDeviceOrientationIsFlat(deviceOrientation);
     
@@ -1190,203 +1374,6 @@ CGFloat topOfNonDepthArray = 0;
     containerView.layer.borderColor = [UIColor magentaColor].CGColor;
     containerView.layer.borderWidth = 3.0;
 #endif
-
-    [layouts removeAllObjects];
-    [self findLayouts];
-
-    if (!layouts.count) {
-        return;
-    }
-
-    // sort the layouts by descending size, and score. Default is the highest
-    // scoring one.  Discard the ones that are close.
-    
-    [layouts sortUsingComparator:^NSComparisonResult(Layout *l1, Layout *l2) {
-        if (l1.displayFrac != l2.displayFrac)
-            return [[NSNumber numberWithFloat:l2.displayFrac]
-                    compare:[NSNumber numberWithFloat:l1.displayFrac]];
-
-//        return [[NSNumber numberWithFloat:l2.pctUsed]
-//                    compare:[NSNumber numberWithFloat:l1.pctUsed]];
-        return [[NSNumber numberWithFloat:l2.score]
-                    compare:[NSNumber numberWithFloat:l1.score]];
-    }];
-
-    // run down through the layouts, from largest display to smallest, removing
-    // ones that are essentially duplicates. Find the best scoring one, our default
-    // selection.
-    
-    NSMutableArray<Layout *> *editedLayouts = [[NSMutableArray alloc] init];
-    
-    Layout *previousLayout = nil;
-    float bestScore = -1;
-    int bestScoreIndex = -1;
-
-    for (int i=0; i<layouts.count; i++) {
-        Layout *layout = layouts[i];
-        if (i == 0) {   // first one
-            bestScore = layout.score;
-            bestScoreIndex = i;
-            [editedLayouts addObject:layout];
-            previousLayout = layout;
-            continue;
-        }
-        
-        if (layout.format) {
-            // find best depth format for this.  Must have same aspect ratio, and correct type.
-            NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
-            layout.depthFormat = nil;
-            for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
-                if (![CameraController depthFormat:depthFormat isSuitableFor:layout.format])
-                    continue;
-                layout.depthFormat = depthFormat;
-            }
-        }
-        
-        [editedLayouts addObject:layout];
-        if (layout.score > bestScore) {
-            bestScore = layout.score;
-            bestScoreIndex = (int)editedLayouts.count - 1;
-        }
-        previousLayout = layout;
-    }
-    
-#ifdef DEBUG_LAYOUT
-    NSLog(@"LLLL %lu trimmed to %lu, top score %.5f at %d",
-          layouts.count, editedLayouts.count, bestScore, bestScoreIndex);
-#endif
-    
-    layouts = editedLayouts;
-    [self applyScreenLayout:bestScoreIndex];
-
-#ifdef NOTDEF
-    int i = 0;
-    for (Layout *layout in layouts) {
-        NSLog(@"%3d   %.3f  %.3f %.3f    %@", i,
-              layout.displayFrac, layout.score, layout.thumbFrac,
-              i == layoutIndex ? @"<---" : @"");
-        i++;
-    }
-    
-    for (int i=0; i<layouts.count; i++ ) {
-        Layout *layout = layouts[i];
-        NSLog(@"%2d %@", i, layout.status);
-    }
-#endif
-}
-
-- (void) findLayouts {
-    CGSize sourceSize;
-    if (fileSourceFrame) {
-        sourceSize = fileSourceFrame.size;
-        [self searchThumbOptionsForSize:sourceSize format:nil];
-    } else {
-        assert(cameraController);
-        [cameraController updateOrientationTo:deviceOrientation];
-        [cameraController selectCameraOnSide:IS_FRONT_CAMERA(CURRENT_SOURCE)];
-        // XXXXXXX        assert(live);
-    
-        for (AVCaptureDeviceFormat *format in cameraController.formatList) {
-            if (cameraController.depthDataAvailable) {
-                if (!format.supportedDepthDataFormats || format.supportedDepthDataFormats.count == 0)
-                    continue;   // we want depth if needed and available
-            }
-            CGSize formatSize = [cameraController sizeForFormat:format];
-            [self searchThumbOptionsForSize:formatSize format:format];
-        }
-    }
-    
-#ifdef DEBUG_LAYOUT
-    NSLog(@" *** findLayouts: %lu", (unsigned long)layouts.count);
-    [self dumpLayouts];
-
-#endif
-    
-}
-
-// try different thumb placement options for this source size
-- (void) searchThumbOptionsForSize:(CGSize) sourceSize
-                            format:(AVCaptureDeviceFormat *__nullable)format {
-    [self dumpViewLimits:@"searchThumbOptionsForSize"];
-    
-    size_t thumbCols = minThumbCols;
-    size_t thumbRows = minThumbRows;
-    Layout *layout;
-    
-    switch (currentDisplayOption) {
-        case iPadSize:
-            // try right thumbs
-            do {
-                layout = [[Layout alloc]
-                                  initForSize: sourceSize
-                                  rightThumbs:thumbCols++
-                                  bottomThumbs:0
-                                  displayOption:currentDisplayOption
-                                  format:format];
-#ifdef DEBUG_LAYOUT
-                if (layout) {
-                    NSLog(@"RT  %@", [layout layoutSum]);
-                }
-#endif
-
-                if (layout && layout.score != BAD_LAYOUT)
-                    [layouts addObject:layout];
-            } while (layout);
-            
-            // try bottom thumbs
-            do {    // try bottom thumbs
-                layout = [[Layout alloc]
-                                  initForSize: sourceSize
-                                  rightThumbs:0
-                                  bottomThumbs:thumbRows++
-                                  displayOption:currentDisplayOption
-                                  format:format];
-                if (/* DISABLES CODE */ (NO) && layout) {
-                    NSLog(@"BT  %@", [layout layoutSum]);
-                }
-
-                if (layout && layout.score != BAD_LAYOUT)
-                    [layouts addObject:layout];
-            } while (layout);
-            
-#ifdef NOMORE
-            [trialLayout tryLayoutsOnRight:YES];
-            [trialLayout tryLayoutsOnRight:NO];
-            [trialLayout tryLayoutsForStacked];
-            [trialLayout tryLayoutsForExecOnLeft:NO];
-            [trialLayout tryLayoutsForExecOnLeft:YES];
-            [trialLayout tryLayoutsForJustDisplayOnLeft:YES];
-            [trialLayout tryLayoutsForJustDisplayOnLeft:NO];
-#endif
-            break;
-        case iPhoneSize:    // NB: iPhone is suboptimal for this app
-            if (isPortrait) {   // portrait iphone
-                
-            } else {            // landscape iphone
-                
-            }
-#ifdef NOTYET
-            [trialLayout tryLayoutsOnRight:YES];
-            [trialLayout tryLayoutsOnRight:NO];
-            [trialLayout tryLayoutsForExecOnLeft:YES];
-            [trialLayout tryLayoutsForExecOnLeft:NO];
-            [trialLayout tryLayoutsForStacked];
-#endif
-            break;
-        case OnlyTransformDisplayed:
-#ifdef NOTYET
-            [trialLayout tryLayoutsForJustDisplay];
-#endif
-            break;
-        case NoTransformDisplayed: {  // execute and thumbs only
-            if (isPortrait) {       // portrait iphone
-                
-            } else {            // landscape iphone
-                
-            }
-            break;
-        }
-    }
 }
 
 - (void) applyScreenLayout:(long) newLayoutIndex {
@@ -1497,14 +1484,14 @@ CGFloat topOfNonDepthArray = 0;
     // then display (possibly scaled) onto transformView.
     
     CGSize imageSize, depthSize;
-    if (!fileSourceFrame) { // camera input: set format and get raw sizes
+    if (IS_CAMERA_LAYOUT(layout)) { // camera input: set format and get raw sizes
         [cameraController setupCameraSessionWithFormat:layout.format depthFormat:layout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
         //cameraController.captureVideoPreviewLayer = previewLayer;
         [cameraController currentRawSizes:&imageSize
                              rawDepthSize:&depthSize];
     } else {
-        imageSize = [fileSourceFrame imageSize];
+        imageSize = layout.sourceImageSize;
         depthSize = CGSizeZero;
     }
 
@@ -2825,4 +2812,66 @@ NSDate *lastArrowKeyNotice = 0;
     return YES;
 }
 
+#ifdef NOTDEF
+- (void) dumpInputCameraSources {
+    for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
+        NSLog(@"camera source %d  ci %ld   %@  %@", i, SOURCE(i).cameraIndex,
+              IS_FRONT_CAMERA(SOURCE(i)) ? @"front" : @"rear ",
+              IS_3D_CAMERA(SOURCE(i)) ? @"3D" : @"2D");
+    }
+}
+#endif
+
 @end
+
+#ifdef OLD
+- (NSMutableArray<Layout *> *) selectLayoutsByFormats {
+    NSMutableArray *usableFormats = [[NSMutableArray alloc] init];
+    
+    assert(cameraController);
+    [self selectCurrentCamera];
+    
+    for (AVCaptureDeviceFormat *format in cameraController.formatList) {
+        if (cameraController.depthDataAvailable) {
+            // at the moment, accept all formats if depth is not an issue
+            [usableFormats addObject:format];
+            continue;
+        }
+        if (!format.supportedDepthDataFormats || !format.supportedDepthDataFormats.count))
+            // depth available, but not for this format, skip it
+            continue;
+        
+        // must have a suitable depth available
+        NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
+        for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
+            if (![CameraController depthFormat:depthFormat isSuitableFor:layout.format])
+                continue;
+            break;
+        }
+    }
+    
+    if (! == 0)
+        continue;   // we want depth if needed and available
+}
+
+#ifdef DEBUG_LAYOUT
+NSLog(@" *** findLayouts: %lu", (unsigned long)layouts.count);
+[self dumpLayouts];
+
+#endif
+
+}
+if (layout.format) {
+    // find best depth format for this.  Must have same aspect ratio, and correct type.
+    NSArray<AVCaptureDeviceFormat *> *depthFormats = layout.format.supportedDepthDataFormats;
+    layout.depthFormat = nil;
+    for (AVCaptureDeviceFormat *depthFormat in depthFormats) {
+        if ([CameraController depthFormat:depthFormat isSuitableFor:layout.format]) {
+            layout.depthFormat = depthFormat;
+//                    NSLog(@"DDDD 1 >>    %@", depthFormat.formatDescription);
+            NSLog(@"LLL layout %d has depth", i);
+            break;
+        }
+    }
+}
+#endif

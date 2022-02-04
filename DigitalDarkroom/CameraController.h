@@ -23,7 +23,8 @@ NS_ASSUME_NONNULL_BEGIN
         AVCaptureDataOutputSynchronizerDelegate> {
     AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
     __unsafe_unretained id videoProcessor;
-    NSMutableArray<AVCaptureDeviceFormat *> *formatList;     // from dev., only what we can use
+    NSMutableArray<AVCaptureDeviceFormat *> *usefulFormatList;
+    BOOL hasSome3D;
     BOOL depthDataAvailable;
     Stats *stats;
     Frame *lastRawFrame;
@@ -33,14 +34,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   AVCaptureVideoPreviewLayer *captureVideoPreviewLayer;
 @property (assign)  __unsafe_unretained id videoProcessor;
 @property (assign)  volatile BOOL depthDataAvailable;
-@property (nonatomic, strong)   NSMutableArray *formatList; // available with this camera
+@property (nonatomic, strong)   NSMutableArray *usefulFormatList;
+@property (assign)              BOOL hasSome3D;
 @property (nonatomic, strong)   Stats *stats;
 @property (nonatomic, strong)   Frame *lastRawFrame;
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 
 - (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
                           depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat;
-- (BOOL) selectCameraOnSide:(BOOL)front;
+- (BOOL) selectCameraOnFront:(BOOL)front needs3D:(BOOL) needs3D;
 - (CGSize) sizeForFormat:(AVCaptureDeviceFormat *)format;
 
 - (void) updateOrientationTo:(UIDeviceOrientation) devo;

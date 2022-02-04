@@ -14,6 +14,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 #define LAYOUT_IS_BAD(q)   (q < 0)
+#define IS_CAMERA_LAYOUT(l) ((l) != nil)
 
 #define BAD_LAYOUT          (0.0)    // no quality. 1.0 is perfect
 
@@ -25,7 +26,7 @@ typedef enum {
 
 @interface Layout : NSObject {
     DisplayOptions displayOption;
-    CGSize imageSourceSize;
+    CGSize sourceImageSize;  // file or camera output size
     
     // computed layout rectangles:
     CGSize transformSize;   // what we give the transform chain
@@ -60,7 +61,7 @@ typedef enum {
 }
 
 @property (assign)              DisplayOptions displayOption;
-@property (assign)              CGSize imageSourceSize;
+@property (assign)              CGSize sourceImageSize;
 
 @property (assign)              CGSize transformSize;
 @property (assign)              CGRect displayRect;

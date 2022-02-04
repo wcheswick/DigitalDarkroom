@@ -41,7 +41,8 @@ CameraController *cameraController = nil;
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
-@synthesize formatList;
+@synthesize usefulFormatList;
+@synthesize hasSome3D;
 @synthesize stats;
 @synthesize busy;
 @synthesize lastRawFrame;
@@ -55,14 +56,14 @@ CameraController *cameraController = nil;
         captureSession = nil;
         lastRawFrame = nil;
         videoOrientation = -1;  // not initialized
-        formatList = [[NSMutableArray alloc] init];
+        usefulFormatList = [[NSMutableArray alloc] init];
         cameraController = self;
        busy = NO;
     }
     return self;
 }
 
-- (BOOL) cameraDeviceOnFront:(BOOL)onFront {
+- (BOOL) cameraDeviceOnFront:(BOOL)onFront needs3D:(BOOL) needs3D {
     AVCaptureDeviceDiscoverySession *discSess = [AVCaptureDeviceDiscoverySession
                                                  discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInTrueDepthCamera,
                                                                                    AVCaptureDeviceTypeBuiltInDualWideCamera,
@@ -72,41 +73,69 @@ CameraController *cameraController = nil;
                                                                                    AVCaptureDeviceTypeBuiltInUltraWideCamera]
                                                  mediaType:AVMediaTypeVideo
                                                  position:onFront ? AVCaptureDevicePositionFront : AVCaptureDevicePositionBack];
-//    NSLog(@" discovered devices: %@", discSess.devices);
-//    NSLog(@"        device sets: %@", discSess.supportedMultiCamDeviceSets);
+    //    NSLog(@" discovered devices: %@", discSess.devices);
+    //    NSLog(@"        device sets: %@", discSess.supportedMultiCamDeviceSets);
+    hasSome3D = NO;
     if (!discSess.devices.count)
         return NO;
     
     captureDevice = discSess.devices[0];
     //    NSLog(@" top device: %@", activeDevice);
     //    NSLog(@"    formats: %@", activeDevice.formats);    // need to select supports depth
-    [formatList removeAllObjects];
-    int depthCount = 0;
-    for (AVCaptureDeviceFormat *format in captureDevice.formats) {
-        if (![self formatHasUsefulSubtype:format])
+    
+    // first, scan for depth formats.  If available at all, then reject all formats
+    // that do not have a useable depth format
+    
+    NSMutableArray *usefulVideoFormats = [[NSMutableArray alloc]
+                                          initWithCapacity:captureDevice.formats.count];
+    NSMutableArray *usefulVideoWithDepthFormats = [[NSMutableArray alloc]
+                                                   initWithCapacity:captureDevice.formats.count];
+
+    AVCaptureDeviceFormat *lastFormat;
+    CMVideoDimensions lastSize;
+
+    for (int i=0; i<captureDevice.formats.count; i++) {
+        AVCaptureDeviceFormat *thisFormat = captureDevice.formats[i];
+        BOOL has3D = thisFormat.supportedDepthDataFormats && thisFormat.supportedDepthDataFormats.count;
+        if (needs3D && has3D)
             continue;
-        if (format.supportedDepthDataFormats &&
-            format.supportedDepthDataFormats.count > 0)
-            depthCount++;
-#ifdef NOT
-        NSLog(@"DDDDDD format: %@", format.formatDescription);
-        NSArray<AVCaptureDeviceFormat *> *depthFormats = format.supportedDepthDataFormats;
-        NSLog(@"       depth formats: %@", depthFormats);
-#endif
-        [formatList addObject:format];
+        hasSome3D |= has3D;
+        CMVideoDimensions thisSize = CMVideoFormatDescriptionGetDimensions(thisFormat.formatDescription);
+        if (i > 0 && SAME_SIZE(thisSize, lastSize)) {
+            // same size.  Is this better than the previous?  If so, replace
+            if (lastFormat.videoHDRSupported && !thisFormat.videoHDRSupported)
+                continue;
+            usefulVideoFormats[usefulVideoFormats.count - 1] = thisFormat;
+            lastFormat = thisFormat;
+            continue;
+        }
+        [usefulVideoFormats addObject:thisFormat];
+        lastSize = thisSize;
+        lastFormat = thisFormat;
     }
-    assert(formatList.count);   // we need at least one format!
-    if (!formatList.count) {
+    usefulFormatList = usefulVideoFormats;
+    
+//    NSLog(@"useful: %@", usefulFormatList);
+    
+#ifdef NOTYET
+    if (depthDataAvailable) {
+        assert(usefulVideoWithDepthFormats.count);
+        usefulFormatList = usefulVideoWithDepthFormats;
+    } else
+        usefulFormatList = usefulVideoFormats;
+    NSLog(@"%d:  %@", onFront, usefulFormatList);
+#endif
+    
+    assert(usefulFormatList.count);   // we need at least one format!
+    if (!usefulFormatList.count) {
         return NO;
     }
-//    NSLog(@" --- depthcount: %d", depthCount);
-    if (depthCount)
-        depthDataAvailable = YES;
     return YES;
 }
 
 - (BOOL) formatHasUsefulSubtype: (AVCaptureDeviceFormat *)format {
     FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
+    u_char *typeCode = (u_char *)&mediaSubType;
     //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
     switch (mediaSubType) {
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
@@ -116,14 +145,23 @@ CameraController *cameraController = nil;
             /* 2 plane YCbCr10 4:2:2, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
         case kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange: // 'x444'
             /* 2 plane YCbCr10 4:4:4, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
+//#ifdef DEBUG_CAMERA
+//            NSLog(@"Rejecting media subtype %1c%1c%1c%1c",
+//                  typeCode[0], typeCode[1], typeCode[2], typeCode[3]);
+//#endif
             return NO;
        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
+//#ifdef DEBUG_CAMERA
+//            NSLog(@"** Accepting media subtype %1c%1c%1c%1c",
+//                  typeCode[0], typeCode[1], typeCode[2], typeCode[3]);
+//#endif
             return YES;
         default:
             NSLog(@"??? Unknown media subtype encountered in format: %@", format);
             return NO;
     }
 }
+
 
 + (BOOL) depthFormat:(AVCaptureDeviceFormat *)depthFormat
        isSuitableFor:(AVCaptureDeviceFormat *)format {
@@ -149,6 +187,14 @@ CameraController *cameraController = nil;
             return NO;
     }
     
+    // is it the same size?
+    CMVideoDimensions depthSize = CMVideoFormatDescriptionGetDimensions(depthFormat.formatDescription);
+    CMVideoDimensions videoSize = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
+    
+    if (SAME_SIZE(depthSize, videoSize))
+        return YES;
+    
+#ifdef ASPECT_CHECK // not working
     // Weird pixel line lengths?
 #ifdef NOTDEF
     CGSize rawDepthSize = CGSizeMake(CVPixelBufferGetWidth(depthPixelBufferRef),
@@ -160,20 +206,24 @@ CameraController *cameraController = nil;
 #endif
     
     // Do the aspect ratios match?
-    CMVideoDimensions depthSize = CMVideoFormatDescriptionGetDimensions(depthFormat.formatDescription);
-    float depthAR = depthSize.width / depthSize.height;
-    CMVideoDimensions videoSize = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
-    float videoAr = videoSize.width / videoSize.height;
+    float depthAR = (float)depthSize.width / (float)depthSize.height;
+    float videoAr = (float)videoSize.width / (float)videoSize.height;
     float aspectDiffPct = DIFF_PCT(depthAR, videoAr);
     return (aspectDiffPct < ASPECT_PCT_DIFF_OK);
+#endif
+    return NO;
 }
 
-- (BOOL) selectCameraOnSide:(BOOL)front {
+- (BOOL) selectCameraOnFront:(BOOL)front needs3D:(BOOL) needs3D {
 #ifdef DEBUG_CAMERA
-    NSLog(@"CCC selecting camera on side %@", front ? @"Front" : @"Rear ");
+    NSLog(@"CCC selecting camera on side %@ 3d:%@", front ? @"Front" : @"Rear ",
+          needs3D ?@"YES" : @"NO");
 #endif
-    if (![self cameraDeviceOnFront:front])
+    if (![self cameraDeviceOnFront:front needs3D:needs3D])
         return NO;
+#ifdef DEBUG_CAMERA
+    NSLog(@"CCC found %ld", cameraController.usefulFormatList.count);
+#endif
     return YES;
 }
 
@@ -233,6 +283,8 @@ CameraController *cameraController = nil;
 
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
     captureDevice.activeFormat = format;
+    assert(depthFormat);    // XXXXXX for the moment
+    NSLog(@"depth format: %@", depthFormat);
     if (depthFormat)
         captureDevice.activeDepthDataFormat = depthFormat;
 
@@ -348,6 +400,7 @@ CameraController *cameraController = nil;
         *rawDepthSize = CGSizeZero;
     else {
         AVCaptureDeviceFormat *depthFormat = captureDevice.activeDepthDataFormat;
+        NSLog(@"DDDDDD Depth format: %@", depthFormat);
         CMFormatDescriptionRef ref = depthFormat.formatDescription;
         CMVideoDimensions size = CMVideoFormatDescriptionGetDimensions(ref);
         *rawDepthSize = CGSizeMake(size.width, size.height);
@@ -387,7 +440,7 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
         return;
     }
 
-    AVCaptureSynchronizedData *syncedVideoData=[synchronizedDataCollection
+    AVCaptureSynchronizedData *syncedVideoData = [synchronizedDataCollection
                                                 synchronizedDataForCaptureOutput:self.videoDataOutput];
     AVCaptureSynchronizedSampleBufferData *syncedSampleBufferData = (AVCaptureSynchronizedSampleBufferData *)syncedVideoData;
     AVCaptureSynchronizedData *syncedDepthData = [synchronizedDataCollection
@@ -479,13 +532,17 @@ didOutputSynchronizedDataCollection:(AVCaptureSynchronizedDataCollection *)synch
             capturedDepthBuffer = (float *)CVPixelBufferGetBaseAddress(depthPixelBufferRef);
             assert(capturedDepthBuffer);
             Distance *rowPtr = capturedDepthBuffer;
-            size_t dataBytesPerPlane = CVPixelBufferGetWidthOfPlane(depthPixelBufferRef, 0);
+            size_t bytesPerRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
+            size_t width = CVPixelBufferGetWidth(depthPixelBufferRef);
+
+            assert(bytesPerRow/width == sizeof(Distance));
+            
             size_t distancesPerRow = rawDepthSize.width;
             size_t goodBytesPerRow = distancesPerRow * sizeof(Distance);
 //            size_t bytesPerSourceRow = CVPixelBufferGetBytesPerRow(depthPixelBufferRef);
             for (int row=0; row<rawDepthSize.height; row++) {
                 memcpy(&lastRawFrame.depthBuf.da[row][0], rowPtr, goodBytesPerRow);
-                rowPtr += dataBytesPerPlane;
+                rowPtr += bytesPerRow;
             }
            lastRawFrame.depthBuf.size = rawDepthSize;
             //            [lastRawFrame.depthBuf stats];
