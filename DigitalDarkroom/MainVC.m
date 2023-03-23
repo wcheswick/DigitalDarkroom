@@ -15,9 +15,9 @@
 #import "OptionsVC.h"
 #import "ReticleView.h"
 #import "HelpVC.h"
+#import "FormatInfo.h"
 #import "Defines.h"
 
-#define HAVE_CAMERA (cameraController != nil)
 
 // last settings
 
@@ -150,6 +150,8 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UIImageView *extImageView;  // not yet implemented...use native screen mirror
 @property (nonatomic, strong)   Options *options;
 @property (assign)              DisplayOptions currentDisplayOption;
+
+@property (nonatomic, strong)   NSMutableArray<FormatInfo *> *availableFormats ;
 
 @property (nonatomic, strong)   TaskCtrl *taskCtrl;
 @property (nonatomic, strong)   TaskGroup *screenTasks; // only one task in this group
@@ -298,6 +300,8 @@ MainVC *mainVC = nil;
 @synthesize lastDisplayedFrame;
 @synthesize stats;
 
+@synthesize availableFormats;
+
 @synthesize minDisplayFrac, bestMinDisplayFrac;
 @synthesize minThumbFrac, bestMinThumbFrac, minPctThumbsShown;
 @synthesize minThumbRows, minThumbCols;
@@ -369,19 +373,42 @@ MainVC *mainVC = nil;
         cameraSourceThumb = nil;
         cameraCount = 0;
         
-        if (HAVE_CAMERA) {
+        if (cameraController) {
             // select first available camera by default
+            availableFormats = [[NSMutableArray alloc] init];
+            
             for (int ci=0; ci<N_POSS_CAM; ci++) {
-                if ([cameraController selectCameraOnFront:possibleCameras[ci].front needs3D:possibleCameras[ci].threeD]) {
+                if ([cameraController selectCameraOnFront:possibleCameras[ci].front
+                                                  needs3D:possibleCameras[ci].threeD]) {
                     cameraCount++;
                     InputSource *newSource = [[InputSource alloc] init];
                     [newSource makeCameraSource:possibleCameras[ci].name
                                     cameraIndex:ci];
                     [inputSources addObject:newSource];
+                    
+                    for (int i = 0; i < cameraController.usefulFormatList.count; i++) {
+                        FormatInfo *fi = [[FormatInfo alloc] initWithSource:newSource];
+                        
+                        AVCaptureDeviceFormat *format = cameraController.usefulFormatList[i];
+                        fi.formatIndex = i;
+                        CMVideoDimensions vs = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
+                        fi.w = vs.width;
+                        fi.h = vs.height;
+                        
+                        fi.HDR = format.videoHDRSupported;
+                        BOOL has3D = format.supportedDepthDataFormats && format.supportedDepthDataFormats.count;
+                     }
                 }
             }
+            currentSourceIndex = NO_SOURCE;
+            
+            if (cameraCount) {
+                nextSourceIndex = 0;    // first camera is default
+#ifdef DEBUG_LAYOUT
+                [self dumpInputCameraSources];
+#endif
+            }
         }
-        // [self dumpInputCameraSources];
 
 #ifdef DEBUG
         [self addFileSource:@"Olive.png" label:@"Olive"];
@@ -405,10 +432,11 @@ MainVC *mainVC = nil;
 //        currentSourceIndex = [[NSUserDefaults standardUserDefaults]
 //                              integerForKey: LAST_SOURCE_KEY];
 //        NSLog(@"III loading source index %ld, %@", (long)currentSourceIndex, CURRENT_SOURCE.label);
-        
-        if (currentSourceIndex == NO_SOURCE) {  // select default source
+
+#ifdef OLD
+        // select default source
             for (currentSourceIndex=0; currentSourceIndex<inputSources.count; currentSourceIndex++) {
-                if (HAVE_CAMERA) {
+                if (cameraController) {
                     if (IS_CAMERA(CURRENT_SOURCE)) {
                         NSLog(@"first source is default camera");
                         break;
@@ -420,9 +448,12 @@ MainVC *mainVC = nil;
                 }
                 assert(currentSourceIndex != NO_SOURCE);
             }
-        }
+#ifdef DEBUG_FORMAT
+            [self dumpInputCameraSources];
+#endif
         nextSourceIndex = currentSourceIndex;
         currentSourceIndex = NO_SOURCE;
+#endif
     }
     return self;
 }
@@ -924,6 +955,7 @@ CGFloat topOfNonDepthArray = 0;
 
     [self.view addSubview:containerView];
     self.view.backgroundColor = [UIColor whiteColor];
+    
     [self createThumbArray];
     [self adjustBarButtons];
 //    [self updateExecuteView];
@@ -1065,6 +1097,7 @@ CGFloat topOfNonDepthArray = 0;
                 }
                 
                 currentSourceIndex = nextSourceIndex;
+                
                 transformChainChanged = YES;
                 //        NSLog(@"III switching to source index %ld, %@",
                 //  (long)currentSourceIndex, CURRENT_SOURCE.label);
@@ -1081,15 +1114,23 @@ CGFloat topOfNonDepthArray = 0;
                 [self saveSourceIndex];
             }
             
-            NSMutableArray<Layout *> *candidateLayouts = [[NSMutableArray alloc] init];
+            assert(cameraController);
+            [self selectCurrentCamera];
+
             [self computeLayoutLimits];
             
             if (fileSourceFrame) {  // fixed, non-camera input
-                [self proposeLayoutsTo:candidateLayouts forSize:fileSourceFrame.size];
+                [self proposeLayoutsForSize:fileSourceFrame.size];
             } else {        // various camera source size options
+                for (int i = 0; i < cameraController.usefulFormatList.count; i++) {
+                    [self proposeLayoutsTo:candidateLayouts forFormatIndex:i];
+                }
+#ifdef BRITTLEQM
                 for (AVCaptureDeviceFormat *format in cameraController.usefulFormatList) {
                     [self proposeLayoutsTo:candidateLayouts forFormat:format];
                 }
+#endif
+                
             }
             if (!candidateLayouts.count) {
                 NSLog(@"Inconceivable: no useful layout found.");
@@ -1120,6 +1161,7 @@ CGFloat topOfNonDepthArray = 0;
             if (IS_CAMERA(CURRENT_SOURCE)) {
 //                XXXX set format from current layout
                 [self selectCurrentCamera];
+                [self setLive:YES];
             }
             
             [self applyScreenLayout:layoutIndex];
@@ -1145,25 +1187,34 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) selectCurrentCamera {
+    NSLog(@"CCC selecting current camera, %ld", CURRENT_SOURCE.cameraIndex);
     [cameraController updateOrientationTo:deviceOrientation];
     struct camera_t camera = possibleCameras[CURRENT_SOURCE.cameraIndex];
     [cameraController selectCameraOnFront:camera.front needs3D:camera.threeD];
-    [self liveOn:YES];
 }
 
-- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts
-                  forSize:(CGSize) s {
+- (void) proposeLayoutsTForSize:(CGSize) s {
     [self proposeLayoutsTo: candidateLayouts forSize:s format:nil];
+}
+
+- (void) proposeLayoutsForFormatIndex:(int) i {
+    assert(cameraController);
+    assert(cameraController.usefulFormatList);
+    AVCaptureDeviceFormat *format = cameraController.usefulFormatList[i];
+    assert(format);
+    [self proposeLayoutsTo:candidateLayouts forFormat:format];
 }
 
 - (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts
                 forFormat:(AVCaptureDeviceFormat *) format  {
     CMVideoDimensions vs = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
     CGSize s = CGSizeMake(vs.width, vs.height);
+    assert(format);
     [self proposeLayoutsTo: candidateLayouts forSize:s format:format];
 }
 
-- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts forSize:(CGSize) sourceSize
+- (void) proposeLayoutsTo:(NSMutableArray *)candidateLayouts
+                  forSize:(CGSize) sourceSize
                    format:(AVCaptureDeviceFormat *__nullable)format {
     [self dumpViewLimits:@"searchThumbOptionsForSize"];
     size_t thumbCols = minThumbCols;
@@ -1174,6 +1225,7 @@ CGFloat topOfNonDepthArray = 0;
         case iPadSize:
             // try right thumbs
             do {
+                assert(format);
                 layout = [[Layout alloc]
                           initForSize: sourceSize
                           rightThumbs:thumbCols++
@@ -1185,12 +1237,17 @@ CGFloat topOfNonDepthArray = 0;
                     NSLog(@"RT  %@", [layout layoutSum]);
                 }
 #endif
-                if (layout && layout.score != BAD_LAYOUT)
-                    [candidateLayouts addObject:layout];
+                if (!layout || layout.score == BAD_LAYOUT || !layout.format)
+                    continue;
+#ifdef DEBUG_LAYOUT
+                NSLog(@"%2ld -- %@", candidateLayouts.count, [cameraController dumpFormat:layout.format]);
+#endif
+                [candidateLayouts addObject:layout];
             } while (layout);
             
             // try bottom thumbs
             do {    // try bottom thumbs
+                assert(format);
                 layout = [[Layout alloc]
                                   initForSize: sourceSize
                                   rightThumbs:0
@@ -1201,8 +1258,12 @@ CGFloat topOfNonDepthArray = 0;
                     NSLog(@"BT  %@", [layout layoutSum]);
                 }
 
-                if (layout && layout.score != BAD_LAYOUT)
-                    [candidateLayouts addObject:layout];
+                if (!layout || layout.score == BAD_LAYOUT || !layout.format)
+                    continue;
+#ifdef DEBUG_LAYOUT
+                NSLog(@"%2ld -- %@", candidateLayouts.count, [cameraController dumpFormat:layout.format]);
+#endif
+                [candidateLayouts addObject:layout];
             } while (layout);
             
 #ifdef NOMORE
@@ -1271,6 +1332,7 @@ CGFloat topOfNonDepthArray = 0;
     int bestScoreIndex = -1;
     CMVideoDimensions lastVideoSize = {0,0};
     
+    NSLog(@"editAndSortLayouts: checking %lu candidates", (unsigned long)candidates.count);
     for (int i=0; i<candidates.count; i++) {
         Layout *layout = candidates[i];
         if (layout.format) {
@@ -1281,7 +1343,7 @@ CGFloat topOfNonDepthArray = 0;
         }
         [layouts addObject:layout];
 #ifdef DEBUG_LAYOUT
-        NSLog(@"Layout %3d: %@", i, [layout layoutSum]);
+        NSLog(@"--- %3d: %5.1f  %@", i, layout.score, [cameraController dumpFormat:layout.format]);
 #endif
         
         if (i == 0) {   // first one
@@ -1299,6 +1361,8 @@ CGFloat topOfNonDepthArray = 0;
 #ifdef DEBUG_LAYOUT
     NSLog(@"LLLL %lu trimmed to %lu, top score %.5f at %d",
           candidates.count, layouts.count, bestScore, bestScoreIndex);
+    NSLog(@"LLLL %3d: %5.1f  %@", bestScoreIndex, bestScore,
+          [cameraController dumpFormat:candidates[bestScoreIndex].format]);
 #endif
     return bestScoreIndex;
 }
@@ -1364,7 +1428,7 @@ CGFloat topOfNonDepthArray = 0;
     CGRect safeFrame = CGRectInset(self.view.safeAreaLayoutGuide.layoutFrame, INSET, 0);
     containerView.frame = safeFrame;
 #ifdef DEBUG_LAYOUT
-    NSLog(@" ******* containerview: %.0f,%.0f  %.0fx%.0f  %@",
+    NSLog(@" ******* containerview: @%.0f,%.0f  %.0fx%.0f  %@",
           containerView.frame.origin.x, containerView.frame.origin.y,
           containerView.frame.size.width, containerView.frame.size.height,
           containerView.frame.size.width > containerView.frame.size.height ? @"landscape" : @"portrait");
@@ -1384,8 +1448,9 @@ CGFloat topOfNonDepthArray = 0;
     layoutIndex = newLayoutIndex;
     layout = layouts[layoutIndex];
 #ifdef DEBUG_LAYOUT
-    NSLog(@"applyScreenLayout");
-    [layout dump];
+    NSLog(@"MainVC: *** applyScreenLayout index %ld, %@",
+          layoutIndex, [cameraController dumpFormat:layout.format]);
+//    [layout dump];
 #endif
 
     // We have several image sizes to consider and process:
@@ -1824,7 +1889,9 @@ CGFloat topOfNonDepthArray = 0;
         long ci = CURRENT_SOURCE.cameraIndex;
         nextSourceIndex = 0;
         do {
-            // [self dumpInputCameraSources];
+#ifdef DEBUG_FORMAT
+            [self dumpInputCameraSources];
+#endif
             InputSource *s = inputSources[nextSourceIndex];
             long nci = s.cameraIndex;
             assert(nci != NOT_A_CAMERA);
@@ -2812,10 +2879,16 @@ NSDate *lastArrowKeyNotice = 0;
     return YES;
 }
 
-#ifdef NOTDEF
+#ifdef DEBUG_FORMAT
 - (void) dumpInputCameraSources {
+    NSLog(@"Camera sources:");
     for (int i=0; i < inputSources.count && IS_CAMERA(SOURCE(i)); i++) {
-        NSLog(@"camera source %d  ci %ld   %@  %@", i, SOURCE(i).cameraIndex,
+        InputSource *is = SOURCE(i);
+        long index = is.cameraIndex;
+        
+        NSLog(@"  %@   %2d  ci %ld   %@  %@",
+              i == currentSourceIndex ? @"->" : @"  ",
+              i, SOURCE(i).cameraIndex,
               IS_FRONT_CAMERA(SOURCE(i)) ? @"front" : @"rear ",
               IS_3D_CAMERA(SOURCE(i)) ? @"3D" : @"2D");
     }

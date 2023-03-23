@@ -58,6 +58,7 @@
 		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
 		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
 		FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */; };
+		FBF993F829CC9C680014CD91 /* FormatInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF993F729CC9C680014CD91 /* FormatInfo.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -145,6 +146,8 @@
 		FBF5B3C3232E99CE00DDFC4E /* CameraController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraController.m; sourceTree = "<group>"; };
 		FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CollectionHeaderView.h; sourceTree = "<group>"; };
 		FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CollectionHeaderView.m; sourceTree = "<group>"; };
+		FBF993F629CC9C680014CD91 /* FormatInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FormatInfo.h; sourceTree = "<group>"; };
+		FBF993F729CC9C680014CD91 /* FormatInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FormatInfo.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -243,6 +246,8 @@
 				FBB16D63232EB49B0026F789 /* Defines.h */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
+				FBF993F629CC9C680014CD91 /* FormatInfo.h */,
+				FBF993F729CC9C680014CD91 /* FormatInfo.m */,
 				FB4F251E2740629A00F2F8AB /* ExternalScreenVC.h */,
 				FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */,
 				FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */,
@@ -392,6 +397,7 @@
 				FB97DAF226B1915A0025EE56 /* PopoverMenuVC.m in Sources */,
 				FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */,
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
+				FBF993F829CC9C680014CD91 /* FormatInfo.m in Sources */,
 				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
 				FB57A28B26F8B133001A6583 /* Stats.m in Sources */,

@@ -56,6 +56,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void) currentRawSizes:(CGSize *)rawImageSize
             rawDepthSize:(CGSize *) rawDepthSize;
+
+- (NSString *)dumpFormat:(AVCaptureDeviceFormat *)fmt;
+
 extern  CameraController *cameraController;
 
 @end

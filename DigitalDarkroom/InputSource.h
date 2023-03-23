@@ -26,7 +26,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSString *label;
 @property (assign)              long cameraIndex;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
-@property (nonatomic, strong)   NSArray *cameraNames;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 //@property (nonatomic, strong)   UIImage *__nullable image;
 

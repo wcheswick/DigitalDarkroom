@@ -93,6 +93,12 @@ CameraController *cameraController = nil;
 
     AVCaptureDeviceFormat *lastFormat;
     CMVideoDimensions lastSize;
+    
+#ifdef DEBUG_LAYOUT
+    NSLog(@"Examining %lu formats for device %@",
+          (unsigned long)captureDevice.formats.count,
+          captureDevice.uniqueID);
+#endif
 
     for (int i=0; i<captureDevice.formats.count; i++) {
         AVCaptureDeviceFormat *thisFormat = captureDevice.formats[i];
@@ -114,9 +120,11 @@ CameraController *cameraController = nil;
         lastFormat = thisFormat;
     }
     usefulFormatList = usefulVideoFormats;
-    
-//    NSLog(@"useful: %@", usefulFormatList);
-    
+#ifdef DEBUG_LAYOUT
+    NSLog(@"          found: %lu", (unsigned long)usefulFormatList.count);
+//    [self dumpFormats:usefulFormatList];
+#endif
+
 #ifdef NOTYET
     if (depthDataAvailable) {
         assert(usefulVideoWithDepthFormats.count);
@@ -272,6 +280,9 @@ CameraController *cameraController = nil;
     [captureSession beginConfiguration];
 
 #pragma mark - Capture device
+#ifdef DEBUG_FORMAT
+    NSLog(@"CC: locking device %@", captureDevice.uniqueID);
+#endif
     [captureDevice lockForConfiguration:&error];
     if (error) {
         NSLog(@"startSession: could not lock camera: %@",
@@ -282,12 +293,25 @@ CameraController *cameraController = nil;
     assert(format);
 
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
+#ifdef DEBUG_FORMAT
+    NSLog(@"***** desired format: %@", [self dumpFormat: format]);
+    for (AVCaptureDeviceFormat *fmt in captureDevice.formats) {
+        NSLog(@"format: %@", [self dumpFormat: fmt]);
+    }
+#ifdef DEBUG_LAYOUT
+    NSLog(@"Cameracontroller set format %@", [self dumpFormat:format]);
+#endif
+#endif
     captureDevice.activeFormat = format;
-    assert(depthFormat);    // XXXXXX for the moment
+//    assert(depthFormat);    // XXXXXX for the moment
     NSLog(@"depth format: %@", depthFormat);
-    if (depthFormat)
+    if (depthFormat) {
+#ifdef DEBUG_LAYOUT
+        NSLog(@"Cameracontroller capture depth format %@", depthFormat);
+#endif
         captureDevice.activeDepthDataFormat = depthFormat;
-
+    }
+    
 #pragma mark - video input
 
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
@@ -716,6 +740,28 @@ static NSString * const imageOrientation[] = {
             return @"kCVPixelFormatType_DepthFloat32";
     }
     return [NSString stringWithFormat:@"%d", t];
+}
+
+// 0x282cc6b50 'vide'/'420f'  640x 480, { 2- 60 fps}, photo dims:{640x480,2016x1512}, fov:59.498, binned, max zoom:94.50 (upscales @3.15), AF System:1, ISO:18.0-1728.0, SS:0.000016-0.500000, supports wide color, supports multicam>
+
+- (NSString *)dumpFormat:(AVCaptureDeviceFormat *)fmt {
+    if (!fmt)
+        return @"** nil format";
+    NSString *fullFmt = [NSString stringWithFormat:@"%@", fmt];
+    NSArray <NSString *>*fields = [fullFmt componentsSeparatedByString:@","];
+    NSString *first = [fields[0] stringByReplacingOccurrencesOfString:@"x " withString:@"x"];
+    first = [first stringByReplacingOccurrencesOfString:@"  " withString:@" "];
+    NSArray <NSString *>*hdrField = [first componentsSeparatedByString:@" "];
+    NSString *vdim = hdrField[3];
+    NSString *response = [NSString stringWithFormat:@"%@ %@ %@",
+            hdrField[1], hdrField[2], vdim];
+    return response;
+}
+
+- (void) dumpFormats:(NSMutableArray<AVCaptureDeviceFormat *> *)formats {
+    for (AVCaptureDeviceFormat *format in formats) {
+        NSLog(@"FFF %@", [self dumpFormat:format]);
+    }
 }
 
 @end
