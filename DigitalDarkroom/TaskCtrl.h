@@ -18,18 +18,10 @@ NS_ASSUME_NONNULL_BEGIN
 // tasks are grouped by targetsize.  All active tasks in a particular group
 // are processed in parallel, from a shared pixel/depth buffer.
 
-typedef enum {
-    LayoutOK,
-    NeedsNewLayout,
-    ApplyLayout,
-    LayoutUnavailable,
-} LayoutStatus_t;
-
 //@class Task;
 //@class TaskGroup;
 
 @interface TaskCtrl : NSObject {
-    LayoutStatus_t state;
     Transforms *transforms;
     NSMutableArray<TaskGroup *> *taskGroups;
     NSMutableDictionary *activeGroups;
@@ -38,14 +30,14 @@ typedef enum {
 
 @property (nonatomic, strong)   NSMutableArray<TaskGroup *> *taskGroups;
 @property (nonatomic, strong)   Transforms *transforms;
-@property (assign)              LayoutStatus_t state;
+//@property (assign)              Display_Update_t pendingUpdateType;
 @property (assign)              id mainVC;
 @property (nonatomic, strong)   NSMutableDictionary *activeGroups;
 @property (nonatomic, strong)   Frame *__nullable lastFrame;
 
 
 - (TaskGroup *) newTaskGroupNamed:(NSString *)name;
-- (void) idleFor:(LayoutStatus_t) newStatus;
+- (void) suspendTasksForDisplayUpdate;
 - (void) checkForIdle;  // are we ready to resume, after possible layout?
 - (void) enableTasks;
 - (void) processFrame:(Frame *) frame;

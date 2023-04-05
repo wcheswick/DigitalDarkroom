@@ -21,12 +21,14 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+
 typedef enum {
     OnlyTransformDisplayed,
-    NoTransformDisplayed,
-    iPhoneSize,         // small image on iPhone to show more thumbs
-    iPadSize,           // standard options for an iPad
-} DisplayOptions;
+    OnlyThumbsDisplayed,
+    BestiPhoneLayout,
+    BestIPadLayout,
+//    ModifiedLayout,     // larger or smaller by layoutSteps
+} LayoutOptions;
 
 @interface MainVC : UIViewController
         <UICollectionViewDelegate,
@@ -51,6 +53,8 @@ typedef enum {
     float minPctThumbsShown;
     int minThumbRows, minThumbCols;
     int minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
+    LayoutOptions layoutStyle;
+    int layoutSteps;
 }
 
 @property (assign)              BOOL isPortrait, isiPhone;
@@ -66,8 +70,10 @@ typedef enum {
 @property (assign)  float minPctThumbsShown;
 @property (assign)  int minThumbRows, minThumbCols;
 @property (assign)  int minDisplayWidth, maxDisplayWidth, minDisplayHeight, maxDisplayHeight;
+@property (assign)  LayoutOptions layoutStyle;
+@property (assign)  int layoutSteps;
 
-- (void) tasksReadyFor:(LayoutStatus_t) layoutStatus;
+- (void) reconfigureDisplay;
 - (void) adjustOrientation;
 
 //- (void) loadImageWithURL: (NSURL *)URL;    // not implemented yet

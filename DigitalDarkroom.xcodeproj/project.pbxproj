@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 50;
+	objectVersion = 53;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -58,7 +58,6 @@
 		FBF5B3B9232E974000DDFC4E /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3B8232E974000DDFC4E /* main.m */; };
 		FBF5B3C4232E99CE00DDFC4E /* CameraController.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF5B3C3232E99CE00DDFC4E /* CameraController.m */; };
 		FBF849B2254D6F5D005571AF /* CollectionHeaderView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */; };
-		FBF993F829CC9C680014CD91 /* FormatInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = FBF993F729CC9C680014CD91 /* FormatInfo.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -146,8 +145,6 @@
 		FBF5B3C3232E99CE00DDFC4E /* CameraController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CameraController.m; sourceTree = "<group>"; };
 		FBF849B0254D6F5D005571AF /* CollectionHeaderView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CollectionHeaderView.h; sourceTree = "<group>"; };
 		FBF849B1254D6F5D005571AF /* CollectionHeaderView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CollectionHeaderView.m; sourceTree = "<group>"; };
-		FBF993F629CC9C680014CD91 /* FormatInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FormatInfo.h; sourceTree = "<group>"; };
-		FBF993F729CC9C680014CD91 /* FormatInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FormatInfo.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,11 +243,18 @@
 				FBB16D63232EB49B0026F789 /* Defines.h */,
 				FBF5B3AC232E973F00DDFC4E /* MainVC.h */,
 				FBF5B3AD232E973F00DDFC4E /* MainVC.m */,
-				FBF993F629CC9C680014CD91 /* FormatInfo.h */,
-				FBF993F729CC9C680014CD91 /* FormatInfo.m */,
+				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
+				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
+				FBB2C8A12582595300AB0B09 /* TaskCtrl.h */,
+				FBB2C8A22582595300AB0B09 /* TaskCtrl.m */,
+				FB9E2A742592267C00BD7E1E /* TaskGroup.h */,
+				FB9E2A752592267C00BD7E1E /* TaskGroup.m */,
+				FB79D710258A67FC00DEAD6A /* Task.h */,
+				FB79D711258A67FC00DEAD6A /* Task.m */,
+				FB3012BD250BA85C0062A1FA /* InputSource.h */,
+				FB3012BE250BA85C0062A1FA /* InputSource.m */,
 				FB4F251E2740629A00F2F8AB /* ExternalScreenVC.h */,
 				FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */,
-				FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */,
 				FB97DAF126B1915A0025EE56 /* PopoverMenuVC.m */,
 				FB9BBAD9260A32A70026C4E4 /* HelpVC.h */,
 				FB9BBADA260A32A70026C4E4 /* HelpVC.m */,
@@ -258,6 +262,7 @@
 				FB56160E2654620500E5BE54 /* ThumbView.m */,
 				FBA1F16725EEE97800434E2F /* Layout.h */,
 				FBA1F16825EEE97800434E2F /* Layout.m */,
+				FB97DAF026B1915A0025EE56 /* PopoverMenuVC.h */,
 				FBB1D9FC2330FD0900845DF1 /* Transform.h */,
 				FBB1D9FD2330FD0900845DF1 /* Transform.m */,
 				FBB1D9D3232FB24800845DF1 /* Transforms.h */,
@@ -267,18 +272,8 @@
 				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
 				FBD1FADA261F8169005B0EEA /* ReticleView.h */,
 				FBD1FADB261F8169005B0EEA /* ReticleView.m */,
-				FBB2C8A12582595300AB0B09 /* TaskCtrl.h */,
-				FBB2C8A22582595300AB0B09 /* TaskCtrl.m */,
-				FB9E2A742592267C00BD7E1E /* TaskGroup.h */,
-				FB9E2A752592267C00BD7E1E /* TaskGroup.m */,
-				FB79D710258A67FC00DEAD6A /* Task.h */,
-				FB79D711258A67FC00DEAD6A /* Task.m */,
-				FBF5B3C2232E99CE00DDFC4E /* CameraController.h */,
-				FBF5B3C3232E99CE00DDFC4E /* CameraController.m */,
 				FB57A28926F8B133001A6583 /* Stats.h */,
 				FB57A28A26F8B133001A6583 /* Stats.m */,
-				FB3012BD250BA85C0062A1FA /* InputSource.h */,
-				FB3012BE250BA85C0062A1FA /* InputSource.m */,
 				FB1C854C26E64B18005AED48 /* Frame.h */,
 				FB1C854D26E64B18005AED48 /* Frame.m */,
 				FBB2C8AC2586A9E400AB0B09 /* PixBuf.h */,
@@ -339,7 +334,8 @@
 		FBF5B39E232E973E00DDFC4E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1300;
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
 				ORGANIZATIONNAME = Cheswick.com;
 				TargetAttributes = {
 					FBF5B3A5232E973F00DDFC4E = {
@@ -397,7 +393,6 @@
 				FB97DAF226B1915A0025EE56 /* PopoverMenuVC.m in Sources */,
 				FB9BBADB260A32A70026C4E4 /* HelpVC.m in Sources */,
 				FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */,
-				FBF993F829CC9C680014CD91 /* FormatInfo.m in Sources */,
 				FB79D712258A67FC00DEAD6A /* Task.m in Sources */,
 				FBB1D9E5232FE44400845DF1 /* trans.c in Sources */,
 				FB57A28B26F8B133001A6583 /* Stats.m in Sources */,

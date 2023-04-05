@@ -261,15 +261,18 @@ static PixelIndex_t dPI(int x, int y) {
         case Stopped:
         case Running:
             return nil;
+        case LayoutBroken:
+            return nil; // XXXX is this right
         case Idle:
-            ;
+            break;
     }
-
-    if (taskGroup.taskCtrl.state != LayoutOK) {
+#ifdef XXXX
+    if (taskGroup.taskCtrl.taskStatus == LayoutBroken) {
         taskStatus = Stopped;
         return nil;
     }
-
+#endif
+    
     Frame *readOnlyIncomingFrame = taskGroup.scaledIncomingFrame;
     if (transformList.count == 0) { // just display the input
         dispatch_async(dispatch_get_main_queue(), ^(void){

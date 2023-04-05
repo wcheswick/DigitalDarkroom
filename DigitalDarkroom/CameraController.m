@@ -14,16 +14,33 @@
 
 CameraController *cameraController = nil;
 
+struct camera_t {
+    BOOL front, threeD;
+    NSString *name;
+    CameraType type;
+} possibleCameras[] = {
+    {YES, NO, @"Front camera", FrontCamera},
+    {YES, YES, @"Front 3D camera", FrontCamera},
+    {NO, NO, @"Back camera", BackCamera},
+    {NO, YES, @"Back 3D camera", BackCamera},
+};
+#define N_POSS_CAM   (sizeof(possibleCameras)/sizeof(struct camera_t))
+
+#define IS_FRONT_CAMERA(s)  (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].front)
+#define IS_3D_CAMERA(s)     (IS_CAMERA(s) && possibleCameras[(s).cameraIndex].threeD)
+
 @interface CameraController ()
 
-@property (strong, nonatomic)   AVCaptureDevice *captureDevice;
+@property (assign)              BOOL captureNeedsFormat;
+
 @property (nonatomic, strong)   AVCaptureSession *captureSession;
 @property (assign)              AVCaptureVideoOrientation videoOrientation;
-@property (assign)              UIDeviceOrientation deviceOrientation;
 
 @property (nonatomic, strong)   AVCaptureVideoDataOutput *videoDataOutput;
 @property (nonatomic, strong)   AVCaptureDepthDataOutput *depthDataOutput;
 @property (nonatomic, strong)   AVCaptureDataOutputSynchronizer *outputSynchronizer;
+
+@property (nonatomic, strong)   NSMutableArray *usefulCameraFormats;
 
 @property (assign)              BOOL busy;
 
@@ -31,17 +48,22 @@ CameraController *cameraController = nil;
 
 @implementation CameraController
 
+@synthesize cameraList;
+@synthesize currentCamera, currentPosition;
+@synthesize currentFormats;
+
 @synthesize videoDataOutput, depthDataOutput, outputSynchronizer;
 @synthesize captureSession;
 @synthesize videoProcessor;
 
 @synthesize depthDataAvailable;
 
-@synthesize captureDevice;
+@synthesize frontCameras, backCameras;
+@synthesize captureNeedsFormat;
+
 @synthesize deviceOrientation;
 @synthesize captureVideoPreviewLayer;
 @synthesize videoOrientation;
-@synthesize usefulFormatList;
 @synthesize hasSome3D;
 @synthesize stats;
 @synthesize busy;
@@ -52,98 +74,117 @@ CameraController *cameraController = nil;
     self = [super init];
     if (self) {
         captureVideoPreviewLayer = nil;
-        captureDevice = nil;
+        captureNeedsFormat = YES;
         captureSession = nil;
         lastRawFrame = nil;
         videoOrientation = -1;  // not initialized
-        usefulFormatList = [[NSMutableArray alloc] init];
+        
         cameraController = self;
-       busy = NO;
+        currentCamera = nil;
+        currentPosition = AVCaptureDevicePositionUnspecified;
+        
+        busy = NO;
+        
+        AVCaptureDeviceDiscoverySession *discSess = [AVCaptureDeviceDiscoverySession
+                                                     discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInTrueDepthCamera,
+                                                                                       AVCaptureDeviceTypeBuiltInDualWideCamera,
+                                                                                       AVCaptureDeviceTypeBuiltInTripleCamera,
+                                                                                       AVCaptureDeviceTypeBuiltInDualCamera,
+                                                                                       AVCaptureDeviceTypeBuiltInWideAngleCamera,
+                                                                                       AVCaptureDeviceTypeBuiltInUltraWideCamera]
+                                                     mediaType:AVMediaTypeVideo
+                                                     position:AVCaptureDevicePositionUnspecified];
+        cameraList = [NSArray arrayWithArray:discSess.devices];
+        
+#ifdef DEBUG_CAMERA
+        NSLog(@"DC: Camera list:");
+        for (int ci=0; ci < cameraList.count; ci++) {
+            AVCaptureDevice *camera = cameraList[ci];
+            NSLog(@"DC:    %d  %@", ci, camera.localizedName);
+        }
+#endif
     }
     return self;
 }
 
-- (BOOL) cameraDeviceOnFront:(BOOL)onFront needs3D:(BOOL) needs3D {
-    AVCaptureDeviceDiscoverySession *discSess = [AVCaptureDeviceDiscoverySession
-                                                 discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInTrueDepthCamera,
-                                                                                   AVCaptureDeviceTypeBuiltInDualWideCamera,
-                                                                                   AVCaptureDeviceTypeBuiltInTripleCamera,
-                                                                                   AVCaptureDeviceTypeBuiltInDualCamera,
-                                                                                   AVCaptureDeviceTypeBuiltInWideAngleCamera,
-                                                                                   AVCaptureDeviceTypeBuiltInUltraWideCamera]
-                                                 mediaType:AVMediaTypeVideo
-                                                 position:onFront ? AVCaptureDevicePositionFront : AVCaptureDevicePositionBack];
-    //    NSLog(@" discovered devices: %@", discSess.devices);
-    //    NSLog(@"        device sets: %@", discSess.supportedMultiCamDeviceSets);
-    hasSome3D = NO;
-    if (!discSess.devices.count)
-        return NO;
-    
-    captureDevice = discSess.devices[0];
-    //    NSLog(@" top device: %@", activeDevice);
-    //    NSLog(@"    formats: %@", activeDevice.formats);    // need to select supports depth
-    
-    // first, scan for depth formats.  If available at all, then reject all formats
-    // that do not have a useable depth format
-    
-    NSMutableArray *usefulVideoFormats = [[NSMutableArray alloc]
-                                          initWithCapacity:captureDevice.formats.count];
-    NSMutableArray *usefulVideoWithDepthFormats = [[NSMutableArray alloc]
-                                                   initWithCapacity:captureDevice.formats.count];
-
-    AVCaptureDeviceFormat *lastFormat;
-    CMVideoDimensions lastSize;
-    
-#ifdef DEBUG_LAYOUT
-    NSLog(@"Examining %lu formats for device %@",
-          (unsigned long)captureDevice.formats.count,
-          captureDevice.uniqueID);
+- (void) selectCamera:(AVCaptureDevice *)newCamera {
+    if (newCamera == currentCamera) {
+#ifdef DEBUG_CAMERA
+        NSLog(@"DC:  selectCamera, current camera re-selected");
 #endif
-
-    for (int i=0; i<captureDevice.formats.count; i++) {
-        AVCaptureDeviceFormat *thisFormat = captureDevice.formats[i];
-        BOOL has3D = thisFormat.supportedDepthDataFormats && thisFormat.supportedDepthDataFormats.count;
-        if (needs3D && has3D)
-            continue;
-        hasSome3D |= has3D;
-        CMVideoDimensions thisSize = CMVideoFormatDescriptionGetDimensions(thisFormat.formatDescription);
-        if (i > 0 && SAME_SIZE(thisSize, lastSize)) {
-            // same size.  Is this better than the previous?  If so, replace
-            if (lastFormat.videoHDRSupported && !thisFormat.videoHDRSupported)
-                continue;
-            usefulVideoFormats[usefulVideoFormats.count - 1] = thisFormat;
-            lastFormat = thisFormat;
+        return;
+    }
+    currentCamera = newCamera;
+#ifdef DEBUG_CAMERA
+    NSLog(@"DC:  selectCamera %@  %@",
+          currentCamera.position == AVCaptureDevicePositionFront ? @"front" : @"back ",
+          currentCamera.localizedName);
+    NSLog(@"DC:       %lu formats", (unsigned long)currentCamera.formats.count);
+#endif
+    
+    // find useful formats, and store a list sorted by increasing size
+    
+    //   NSMutableArray *usefulVideoFormats = [[NSMutableArray alloc]
+    //                                         initWithCapacity:currentCamera.formats.count];
+    //    NSMutableArray *usefulVideoWithDepthFormats = [[NSMutableArray alloc]
+    //                                                   initWithCapacity:currentCamera.formats.count];
+    
+    currentFormats = [[NSMutableArray alloc] init];
+    
+    for (AVCaptureDeviceFormat *rawFormat in currentCamera.formats) {
+#ifdef DEBUG_FORMATS
+        NSLog(@"DF:  %@", [self dumpFormat:rawFormat]);
+#endif
+        if (![self formatHasUsefulSubtype:rawFormat]) {
+#ifdef DEBUG_FORMATS
+            NSLog(@"DF:      non-useful subtype");
+#endif
             continue;
         }
-        [usefulVideoFormats addObject:thisFormat];
-        lastSize = thisSize;
-        lastFormat = thisFormat;
+        [currentFormats addObject:rawFormat];
     }
-    usefulFormatList = usefulVideoFormats;
-#ifdef DEBUG_LAYOUT
-    NSLog(@"          found: %lu", (unsigned long)usefulFormatList.count);
-//    [self dumpFormats:usefulFormatList];
+#ifdef DEBUG_CAMERA
+    NSLog(@"DC:  .. found %lu selected formats", (unsigned long)currentFormats.count);
+#endif
+}
+
+#ifdef SORTBYSIZE
+//        BOOL has3D = thisFormat.supportedDepthDataFormats && thisFormat.supportedDepthDataFormats.count;
+//        hasSome3D |= has3D;
+        CMVideoDimensions thisSize = CMVideoFormatDescriptionGetDimensions(thisFormat.formatDescription);
+ 
+    // put in increasing order of display area. We are given format indicies.
+    [sortedFormatIndicies sortUsingComparator:^NSComparisonResult(NSNumber *f1, NSNumber *f2) {
+        AVCaptureDeviceFormat *format1 = currentCamera.formats[f1.intValue];
+        AVCaptureDeviceFormat *format2 = currentCamera.formats[f2.intValue];
+        CMVideoDimensions size1 = CMVideoFormatDescriptionGetDimensions(format1.formatDescription);
+        CGFloat area1 = size1.width * size1.height;
+        CMVideoDimensions size2 = CMVideoFormatDescriptionGetDimensions(format2.formatDescription);
+        CGFloat area2 = size2.width * size2.height;
+        if (area1 > area2) {
+            return (NSComparisonResult)NSOrderedDescending;
+        } else if (area1 < area2) {
+            return (NSComparisonResult)NSOrderedAscending;
+        } else
+            return (NSComparisonResult)NSOrderedSame;
+    }];
 #endif
 
-#ifdef NOTYET
-    if (depthDataAvailable) {
-        assert(usefulVideoWithDepthFormats.count);
-        usefulFormatList = usefulVideoWithDepthFormats;
-    } else
-        usefulFormatList = usefulVideoFormats;
-    NSLog(@"%d:  %@", onFront, usefulFormatList);
-#endif
-    
-    assert(usefulFormatList.count);   // we need at least one format!
-    if (!usefulFormatList.count) {
-        return NO;
-    }
-    return YES;
+- (NSString *) dumpCameraInfo:(AVCaptureDevice *)camera {
+    return [NSString stringWithFormat:@"%@ %@", camera.localizedName,
+            (camera.position == AVCaptureDevicePositionFront) ? @"front" : @"back"];
+}
+
+- (void) adjustCameraOrientation:(UIDeviceOrientation) newDeviceOrientation {
+    deviceOrientation = newDeviceOrientation;
+    videoOrientation = [self videoOrientationForDeviceOrientation];
 }
 
 - (BOOL) formatHasUsefulSubtype: (AVCaptureDeviceFormat *)format {
     FourCharCode mediaSubType = CMFormatDescriptionGetMediaSubType(format.formatDescription);
-    u_char *typeCode = (u_char *)&mediaSubType;
+#ifdef DEBUG_CAMERA
+            u_char *typeCode = (u_char *)&mediaSubType;
+#endif
     //NSLog(@"  mediaSubType %u", (unsigned int)mediaSubType);
     switch (mediaSubType) {
         case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
@@ -153,10 +194,10 @@ CameraController *cameraController = nil;
             /* 2 plane YCbCr10 4:2:2, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
         case kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange: // 'x444'
             /* 2 plane YCbCr10 4:4:4, each 10 bits in the MSBs of 16bits, video-range (luma=[64,940] chroma=[64,960]) */
-//#ifdef DEBUG_CAMERA
-//            NSLog(@"Rejecting media subtype %1c%1c%1c%1c",
-//                  typeCode[0], typeCode[1], typeCode[2], typeCode[3]);
-//#endif
+#ifdef DEBUG_CAMERA
+            NSLog(@"Rejecting media subtype %1c%1c%1c%1c",
+                  typeCode[0], typeCode[1], typeCode[2], typeCode[3]);
+#endif
             return NO;
        case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange: // We want only the formats with full range
 //#ifdef DEBUG_CAMERA
@@ -169,6 +210,63 @@ CameraController *cameraController = nil;
             return NO;
     }
 }
+
+
+#ifdef NOTUSED
+- (int) bestCameraForPosition:(AVCaptureDevicePosition) position {
+    switch (position) {
+        case AVCaptureDevicePositionFront:
+            assert(frontCameraIndicies.count);
+            cameraList = frontCameras;
+            break;
+        case AVCaptureDevicePositionBack:
+            assert(backCameraIndicies.count);
+            cameraList = backCameras;
+           break;
+       default:
+            NSLog(@"bestCameraForPosition: non-camera position");
+            assert(FALSE);
+    }
+    currentPosition = position;
+
+    for (int i=0; i<cameraList.count; i++) {
+        AVCaptureDevice *thisDevice = cameraList[i];
+        if (thisDevice.activeDepthDataFormat) {
+            currentCameraIndex = i;
+            return i;
+        } else if (!currentCamera)    // not threeD, but at least it is something
+            currentCameraIndex = i;
+            return i;
+    }
+    assert(NO); // we should have found some camera
+}
+
+- (void) selectCameraForPosition: (AVCaptureDevicePosition) position index:(int) ci {
+    currentCamera = [self captureDeviceForPosition:position index:ci];
+    NSLog(@"selectCameraForPosition selecting %@", currentCamera.localizedName);
+    currentPosition = position;
+    currentCaptureDeviceIndex = ci;
+    
+    [self listFormatsForDevice];
+}
+
+- (AVCaptureDevice *) captureDeviceForPosition: (AVCaptureDevicePosition) position index:(int) ci {
+    switch (position) {
+        case AVCaptureDevicePositionFront:
+            assert(frontCameraDevices);
+            currentCamera = frontCameraDevices[ci];
+            break;
+        case AVCaptureDevicePositionBack:
+            assert(backCameraDevices);
+            currentCamera = backCameraDevices[ci];
+           break;
+       default:
+            NSLog(@"captureDeviceForPosition: non-camera position");
+            assert(FALSE);
+    }
+    return currentCamera;
+}
+#endif
 
 
 + (BOOL) depthFormat:(AVCaptureDeviceFormat *)depthFormat
@@ -222,19 +320,6 @@ CameraController *cameraController = nil;
     return NO;
 }
 
-- (BOOL) selectCameraOnFront:(BOOL)front needs3D:(BOOL) needs3D {
-#ifdef DEBUG_CAMERA
-    NSLog(@"CCC selecting camera on side %@ 3d:%@", front ? @"Front" : @"Rear ",
-          needs3D ?@"YES" : @"NO");
-#endif
-    if (![self cameraDeviceOnFront:front needs3D:needs3D])
-        return NO;
-#ifdef DEBUG_CAMERA
-    NSLog(@"CCC found %ld", cameraController.usefulFormatList.count);
-#endif
-    return YES;
-}
-
 // I really have no idea what is going on here.  Values were determined by
 // experimentation.  The Apple documentation has been ... difficult.
 
@@ -258,19 +343,13 @@ CameraController *cameraController = nil;
     }
 }
 
-- (void) updateOrientationTo:(UIDeviceOrientation) devo {
-    deviceOrientation = devo;
-    videoOrientation = [self videoOrientationForDeviceOrientation];
-}
-
 // need an up-to-date deviceorientation
-// need capturedevice set
-- (void) setupCameraSessionWithFormat:(AVCaptureDeviceFormat *)format
-                          depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat {
+// need currentCamera set
+
+- (void) selectCameraFormat:(AVCaptureDeviceFormat *) format
+                depthFormat:(AVCaptureDeviceFormat *__nullable)depthFormat {
     NSError *error;
     dispatch_queue_t outputQueue = dispatch_queue_create("output queue", DISPATCH_QUEUE_SERIAL);
-
-#pragma mark - Capture session
 
     if (captureSession) {
         [captureSession stopRunning];
@@ -279,11 +358,10 @@ CameraController *cameraController = nil;
     captureSession = [[AVCaptureSession alloc] init];
     [captureSession beginConfiguration];
 
-#pragma mark - Capture device
 #ifdef DEBUG_FORMAT
-    NSLog(@"CC: locking device %@", captureDevice.uniqueID);
+    NSLog(@"CC: locking device %@", currentCamera.uniqueID);
 #endif
-    [captureDevice lockForConfiguration:&error];
+    [currentCamera lockForConfiguration:&error];
     if (error) {
         NSLog(@"startSession: could not lock camera: %@",
               [error localizedDescription]);
@@ -295,27 +373,30 @@ CameraController *cameraController = nil;
     [captureSession setSessionPreset:AVCaptureSessionPresetInputPriority];
 #ifdef DEBUG_FORMAT
     NSLog(@"***** desired format: %@", [self dumpFormat: format]);
-    for (AVCaptureDeviceFormat *fmt in captureDevice.formats) {
-        NSLog(@"format: %@", [self dumpFormat: fmt]);
+    BOOL found = NO;
+    for (AVCaptureDeviceFormat *fmt in currentCamera.formats) {
+        if (fmt == format)
+            found = YES;
+        NSLog(@"format: %@  %@", (fmt == format) ? @"-->" : @"   ",
+              [self dumpFormat: fmt]);
     }
+    assert(found);
 #ifdef DEBUG_LAYOUT
     NSLog(@"Cameracontroller set format %@", [self dumpFormat:format]);
 #endif
 #endif
-    captureDevice.activeFormat = format;
+    
+    currentCamera.activeFormat = format;
+    
 //    assert(depthFormat);    // XXXXXX for the moment
-    NSLog(@"depth format: %@", depthFormat);
-    if (depthFormat) {
+//    NSLog(@"depth format: %@", depthFormat);
+//    if (depthFormat) {
 #ifdef DEBUG_LAYOUT
         NSLog(@"Cameracontroller capture depth format %@", depthFormat);
 #endif
-        captureDevice.activeDepthDataFormat = depthFormat;
-    }
-    
-#pragma mark - video input
-
+ 
     AVCaptureDeviceInput *videoInput = [AVCaptureDeviceInput
-                                        deviceInputWithDevice:captureDevice
+                                        deviceInputWithDevice:currentCamera
                                         error:&error];
     if (error) {
         NSLog(@"*** startSession, AVCaptureDeviceInput: error %@",
@@ -340,9 +421,9 @@ CameraController *cameraController = nil;
         //
     // https://stackoverflow.com/questions/34718833/ios-swift-avcapturesession-capture-frames-respecting-frame-rate
 
-    captureDevice.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FPS );
-    captureDevice.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FPS );
-    [captureDevice unlockForConfiguration];
+    currentCamera.activeVideoMaxFrameDuration = CMTimeMake( 1, MAX_FPS );
+    currentCamera.activeVideoMinFrameDuration = CMTimeMake( 1, MAX_FPS );
+    [currentCamera unlockForConfiguration];
     
 #pragma mark - video output
     
@@ -407,8 +488,8 @@ CameraController *cameraController = nil;
 
     [captureSession commitConfiguration];
 #ifdef DEBUG_CAMERA
-    NSLog(@"CCCC format: %@", captureDevice.activeFormat);
-    NSLog(@"      depth: %@", captureDevice.activeDepthDataFormat);
+    NSLog(@"CCCC format: %@", currentCamera.activeFormat);
+    NSLog(@"      depth: %@", currentCamera.activeDepthDataFormat);
 #endif
     return;
 }
@@ -416,14 +497,14 @@ CameraController *cameraController = nil;
 // if depth date not available, return size zero
 - (void) currentRawSizes:(CGSize *)rawImageSize
             rawDepthSize:(CGSize *) rawDepthSize {
-    assert(captureDevice.activeFormat);
-    CMFormatDescriptionRef ref = captureDevice.activeFormat.formatDescription;
+    assert(currentCamera.activeFormat);
+    CMFormatDescriptionRef ref = currentCamera.activeFormat.formatDescription;
     CMVideoDimensions size = CMVideoFormatDescriptionGetDimensions(ref);
     *rawImageSize = CGSizeMake(size.width, size.height);
     if (!depthDataAvailable)
         *rawDepthSize = CGSizeZero;
     else {
-        AVCaptureDeviceFormat *depthFormat = captureDevice.activeDepthDataFormat;
+        AVCaptureDeviceFormat *depthFormat = currentCamera.activeDepthDataFormat;
         NSLog(@"DDDDDD Depth format: %@", depthFormat);
         CMFormatDescriptionRef ref = depthFormat.formatDescription;
         CMVideoDimensions size = CMVideoFormatDescriptionGetDimensions(ref);
@@ -753,8 +834,9 @@ static NSString * const imageOrientation[] = {
     first = [first stringByReplacingOccurrencesOfString:@"  " withString:@" "];
     NSArray <NSString *>*hdrField = [first componentsSeparatedByString:@" "];
     NSString *vdim = hdrField[3];
-    NSString *response = [NSString stringWithFormat:@"%@ %@ %@",
-            hdrField[1], hdrField[2], vdim];
+    NSString *response = [NSString stringWithFormat:@"%@ %@ HDR:%@",
+                          hdrField[2], vdim,
+                          fmt.videoHDRSupported ? @"Y" : @"n"];
     return response;
 }
 

@@ -20,7 +20,9 @@
 //#define DDEBUG_LAYOUT   1
 //#define DDEBUG_LAYOUT   1
 #define DEBUG_FORMAT    1
-
+#define DEBUG_FORMATS    1
+#define DEBUG_RECONFIGURATION   1
+#define DEBUG_SCORE     1
 //#define DEBUG_ORIENTATION
 //#define MEMLEAK_AIDS 1
 

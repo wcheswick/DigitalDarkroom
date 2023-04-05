@@ -32,18 +32,14 @@ NSString * __nullable displayOptionNames[] = {
 };
 
 
-#define EXECUTE_ROW_H       (mainVC.execFontSize + SEP)
-#define EXECUTE_H_FOR(n)    ((n)*EXECUTE_ROW_H + 2*EXECUTE_BORDER_W + 2*SEP)
-#define EXECUTE_MIN_H       MIN(PLUS_H, EXECUTE_H_FOR(1))
-#define EXECUTE_FULL_H      [self executeHForRowCount:6]
-
 #define SCALE_UNINITIALIZED (-1.0)
 
 #define SCREEN  mainVC.containerView.frame
 
 @interface Layout ()
 
-
+@property (assign)  CGSize imageSourceSize;
+@property (assign)  CGRect executeRect;
 @property (assign)  ThumbsPosition thumbsPosition;
 @property (assign)  float thumbScore, displayScore, scaleScore;
 @property (assign)  float thumbFrac;
@@ -52,19 +48,24 @@ NSString * __nullable displayOptionNames[] = {
 
 @implementation Layout
 
+@synthesize device, format, depthFormat;
+@synthesize index;
+
 @synthesize transformSize;   // what we give the transform chain
 @synthesize displayRect;     // where we put the transformed (and scaled) result
 @synthesize fullThumbViewRect;
 @synthesize thumbScrollRect;
 @synthesize executeRect;     // where the active transform list is shown
+@synthesize executeScrollMinH;
+@synthesize executeScrollRect;
+@synthesize sourceImageSize;
 @synthesize plusRect;        // in executeRect
 @synthesize paramRect;       // where the parameter slider goes
 
 @synthesize firstThumbRect;  // thumb size and position in fullThumbViewRect
 @synthesize thumbImageRect;  // image sample size in each thumb button
 
-@synthesize format, depthFormat;
-@synthesize displayOption, thumbsPosition;
+@synthesize layoutOption, thumbsPosition;
 
 @synthesize imageSourceSize;
 @synthesize executeIsTight;
@@ -74,19 +75,24 @@ NSString * __nullable displayOptionNames[] = {
 @synthesize status, type;
 @synthesize score, thumbScore, displayScore, scaleScore;
 
-- (id)initForSize:(CGSize) ss
+- (id)initForSize:(CGSize) iss
       rightThumbs:(size_t) rightThumbs
      bottomThumbs:(size_t) bottomThumbs
-    displayOption:(DisplayOptions) dopt
-              format:(AVCaptureDeviceFormat * __nullable) fmt {
+     layoutOption:(LayoutOptions) lopt
+           device:(AVCaptureDevice *__nullable)dev
+           format:(AVCaptureDeviceFormat *__nullable) form
+      depthFormat:(AVCaptureDeviceFormat *__nullable) df {
     self = [super init];
     if (self) {
         assert(rightThumbs == 0 || bottomThumbs == 0); // no fancy stuff
         
-        imageSourceSize = ss;
-        format = fmt;
-        displayOption = dopt;
-        depthFormat = nil;
+        device = dev;
+        format = form;
+        depthFormat = df;
+        index = INDEX_UNKNOWN;
+        
+        imageSourceSize = iss;
+        layoutOption = lopt;
         score = BAD_LAYOUT;
         status = nil;   // XXX may be a dreg
         
@@ -173,17 +179,24 @@ NSString * __nullable displayOptionNames[] = {
     
     if (displayRect.size.width < mainVC.minDisplayWidth) {
         score = 0;
-//        NSLog(@"display too narrow");
+#ifdef DEBUG_SCORE
+        NSLog(@"DS:  display too narrow");
+#endif
         return;
     }
     if (displayRect.size.height < mainVC.minDisplayHeight) {
         score = 0;
-//        NSLog(@"display too short");
+#ifdef DEBUG_SCORE
+        NSLog(@"DS:  display too short");
+#endif
         return;
     }
 #ifdef OLD
     if (displayFrac < mainVC.minDisplayFrac) {
         score = 0;
+#ifdef DEBUG_SCORE
+        NSLog(@"DS:  display too small a fraction");
+#endif
         return;
     }
 #endif
@@ -225,7 +238,7 @@ NSString * __nullable displayOptionNames[] = {
     int onScreenThumbsPerCol = thumbScrollRect.size.height / (firstThumbRect.size.height + SEP);
     int thumbsOnScreen = onScreenThumbsPerRow * onScreenThumbsPerCol;
     float pctThumbsShown = (float)thumbsOnScreen / (float)mainVC.thumbViewsArray.count;
-    if (displayOption != OnlyTransformDisplayed && pctThumbsShown < mainVC.minPctThumbsShown)
+    if (layoutOption != OnlyTransformDisplayed && pctThumbsShown < mainVC.minPctThumbsShown)
         thumbScore = 0;
     else {
         thumbScore = pctThumbsShown + displayFrac;
@@ -243,8 +256,10 @@ NSString * __nullable displayOptionNames[] = {
     assert(displayScore >= 0);
     score = thumbScore * scaleScore * displayScore;
     score = pctUsed * displayFrac;
-    NSLog(@"SSSS   %3.1f * %3.1f * %3.1f  = %3.1f",
+#ifdef DEBUG_SCORE
+    NSLog(@"DS   %3.1f * %3.1f * %3.1f  = %3.1f",
           thumbScore, scaleScore, displayScore, score);
+#endif
 }
 
 // I realize that the following may give the wrong result if one dimension
@@ -291,9 +306,11 @@ NSString * __nullable displayOptionNames[] = {
 
 - (void) dump {
     NSLog(@"layout dump:  type %@  score %.1f  scale %.2f", type, score, scale);
+#ifdef OLD
     NSLog(@"screen format %@", format ? format : @"fixed image");
     if (format && depthFormat)
         NSLog(@"depth format %@", depthFormat);
+#endif
     
     NSLog(@"source  %4.0fx%4.0f (%5.3f)",
           imageSourceSize.width, imageSourceSize.height,
@@ -318,5 +335,4 @@ NSString * __nullable displayOptionNames[] = {
           firstThumbRect.size.width, firstThumbRect.size.height,
           firstThumbRect.origin.x, firstThumbRect.origin.y);
 }
-
 @end

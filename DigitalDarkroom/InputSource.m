@@ -17,10 +17,12 @@
 @implementation InputSource
 
 @synthesize label;
-@synthesize cameraIndex;
+@synthesize camera;
+@synthesize sourceIndex;
 @synthesize imagePath;
 //@synthesize image;
 @synthesize thumbImageCache;
+@synthesize sourceMenuSections;
 
 - (id)init {
     self = [super init];
@@ -28,15 +30,19 @@
         label = @"";
         imagePath = nil;
         thumbImageCache = nil;
-        cameraIndex = NOT_A_CAMERA;
+        camera = nil;
+        sourceIndex = NO_SOURCE_INDEX;
+//        sourceMenuSections = [NSArray arrayWithObjects:@"Front cameras", @"Back cameras",
+//                              @"Sample files", @"Saved files", nil]
     }
     return self;
 }
 
-- (void) makeCameraSource:(NSString *)name cameraIndex:(int) ci {
-    label = name;
-    cameraIndex = ci;
-    thumbImageCache = nil;
+- (AVCaptureDevicePosition) position {
+    if (camera) {
+        return camera.position;
+    } else
+        return AVCaptureDevicePositionUnspecified;
 }
 
 - (void) loadImage:(NSString *)path {

@@ -22,7 +22,6 @@
 
 @synthesize transforms;
 @synthesize taskGroups;
-@synthesize state;
 @synthesize layingOut;
 @synthesize activeGroups;
 @synthesize lastFrame;
@@ -32,7 +31,6 @@
     if (self) {
         taskGroups = [[NSMutableArray alloc] init];
         activeGroups = [[NSMutableDictionary alloc] init];
-        state = NeedsNewLayout;
         layingOut = NO;
         lastFrame = nil;
     }
@@ -68,6 +66,7 @@
             continue;
 
         dispatch_async(dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            assert(srcFrame);
             @synchronized (srcFrame) {
                 srcFrame.useCount++;
             }
@@ -89,24 +88,25 @@
     return taskGroup;
 }
 
-- (void) idleFor:(LayoutStatus_t) newStatus {
-#ifdef DEBUG_TASK_BUSY
-    NSLog(@"TTT idling for %d", newStatus);
+- (void) suspendTasksForDisplayUpdate {
+#ifdef DEBUG_RECONFIGURATION
+    NSLog(@"DR suspendTasksForDisplayUpdate: tasks are idle");
 #endif
-    state = newStatus;
     [self checkForIdle];
 }
 
 - (void) checkForIdle {
-    if (state == LayoutOK)
-        return;
     for (TaskGroup *taskGroup in taskGroups) {
         if (!taskGroup.groupEnabled)
             continue;
         if (taskGroup.groupBusy)
             return;
     }
-    [mainVC tasksReadyFor:state];
+#ifdef DEBUG_RECONFIGURATION
+    NSLog(@"DR checkForIdle: tasks are idle");
+#endif
+
+    [mainVC reconfigureDisplay];
 }
 
 - (void) enableTasks {

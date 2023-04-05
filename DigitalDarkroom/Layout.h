@@ -17,6 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 #define IS_CAMERA_LAYOUT(l) ((l) != nil)
 
 #define BAD_LAYOUT          (0.0)    // no quality. 1.0 is perfect
+#define NO_FORMAT   (-1)
+#define INDEX_UNKNOWN   (-1)
 
 typedef enum {
     Bottom,
@@ -25,9 +27,13 @@ typedef enum {
 } ThumbsPosition;
 
 @interface Layout : NSObject {
-    DisplayOptions displayOption;
+    LayoutOptions layoutOption;
     CGSize sourceImageSize;  // file or camera output size
-    
+    AVCaptureDevice *device;    // nil if file or undecided
+    AVCaptureDeviceFormat *format;
+    AVCaptureDeviceFormat *depthFormat;
+    NSUInteger index;  // index of this layout in layouts in Main, or -1
+
     // computed layout rectangles:
     CGSize transformSize;   // what we give the transform chain
     CGRect displayRect;     // where we put the transformed (and scaled) result
@@ -35,6 +41,7 @@ typedef enum {
     CGRect thumbScrollRect;
     CGRect executeScrollRect;     // where the active transform list is shown
     CGFloat executeScrollMinH;
+    CGRect executeRect;
     CGRect plusRect;        // in executeRect
     CGRect paramRect;       // where the parameter slider goes
     
@@ -45,8 +52,6 @@ typedef enum {
     float scale;            // how we scale the capture image.  1.0 (no scaling) is most efficient
     float aspectRatio;      // of the input source
 
-    AVCaptureDeviceFormat * __nullable format;
-    AVCaptureDeviceFormat * __nullable depthFormat;
     
     float score;            // quality of layout from 0.0 (reject) to 1.0 (perfect)
     NSString *type;         // layout type (coded text)
@@ -60,9 +65,13 @@ typedef enum {
     NSString *status;
 }
 
-@property (assign)              DisplayOptions displayOption;
-@property (assign)              CGSize sourceImageSize;
+@property (nonatomic, strong)   AVCaptureDevice *device;
+@property (nonatomic, strong)   AVCaptureDeviceFormat *format;
+@property (nonatomic, strong)   AVCaptureDeviceFormat *depthFormat;
+@property (assign)              NSUInteger index;
 
+@property (assign)              LayoutOptions layoutOption;
+@property (assign)              CGSize sourceImageSize;
 @property (assign)              CGSize transformSize;
 @property (assign)              CGRect displayRect;
 @property (assign)              CGRect fullThumbViewRect;
@@ -75,10 +84,6 @@ typedef enum {
 @property (assign)              CGRect firstThumbRect, thumbImageRect;
 
 @property (assign)              float scale, aspectRatio;
-
-@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable format;
-@property (nonatomic, strong)   AVCaptureDeviceFormat * __nullable depthFormat;
-
 @property (assign)              float score;
 @property (nonatomic, strong)   NSString *type;
 @property (assign)              BOOL executeIsTight;
@@ -87,11 +92,13 @@ typedef enum {
 @property (assign)              BOOL executeOverlayOK;  // text placement guidance
 @property (nonatomic, strong)   NSString *status;
 
-- (id)initForSize:(CGSize) ss
+- (id)initForSize:(CGSize) iss
       rightThumbs:(size_t) rightThumbs
      bottomThumbs:(size_t) bottomThumbs
-    displayOption:(DisplayOptions) dopt
-           format:(AVCaptureDeviceFormat * __nullable) fmt;
+     layoutOption:(LayoutOptions) lopt
+           device:(AVCaptureDevice *__nullable)dev
+           format:(AVCaptureDeviceFormat *__nullable) form
+      depthFormat:(AVCaptureDeviceFormat *__nullable) df;
 
 - (NSComparisonResult) compare:(Layout *)layout;
 + (CGSize) fitSize:(CGSize)srcSize toSize:(CGSize)size;

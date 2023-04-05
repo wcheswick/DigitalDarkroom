@@ -45,10 +45,8 @@ didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     NSLog(@"incoming URL: %@", url);
     NSLog(@"     options: %@", options);
     NSString* urlPath = url.path;
-    if(![[NSFileManager defaultManager] isReadableFileAtPath:urlPath])
-    {
-        if([url startAccessingSecurityScopedResource])
-        {
+    if(![[NSFileManager defaultManager] isReadableFileAtPath:urlPath]) {
+        if([url startAccessingSecurityScopedResource]) {
             NSString* docsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
             NSString* destPath = [NSString stringWithFormat:@"%@/%@", docsPath, [url.path lastPathComponent]];
             NSLog(@"copy file %@ to %@", docsPath, destPath);

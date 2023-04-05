@@ -25,6 +25,7 @@ typedef enum {
     Idle,
     Running,
     Stopped,
+    LayoutBroken,
 } TaskStatus_t;
 
 @interface Task : NSObject {
