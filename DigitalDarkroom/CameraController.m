@@ -123,43 +123,40 @@ struct camera_t {
 #endif
     
     // find useful formats, and store a list sorted by increasing size
+    NSMutableDictionary *formatList = [[NSMutableDictionary alloc]
+                                       initWithCapacity:currentCamera.formats.count];
     
-    //   NSMutableArray *usefulVideoFormats = [[NSMutableArray alloc]
-    //                                         initWithCapacity:currentCamera.formats.count];
-    //    NSMutableArray *usefulVideoWithDepthFormats = [[NSMutableArray alloc]
-    //                                                   initWithCapacity:currentCamera.formats.count];
-    
-    currentFormats = [[NSMutableArray alloc] init];
-    
+    // run through the list of available formats, recording the most suitable
+    // one for each size.
     for (AVCaptureDeviceFormat *rawFormat in currentCamera.formats) {
-#ifdef DEBUG_FORMATS
-        NSLog(@"DF:  %@", [self dumpFormat:rawFormat]);
-#endif
-        if (![self formatHasUsefulSubtype:rawFormat]) {
-#ifdef DEBUG_FORMATS
-            NSLog(@"DF:      non-useful subtype");
-#endif
+//#ifdef DEBUG_FORMATS
+//        NSLog(@"DF:  %@", [self dumpFormat:rawFormat]);
+//#endif
+        NSString *sizeKey = [self sizeKeyForFormat:rawFormat];
+        AVCaptureDeviceFormat *prevfmt = [formatList objectForKey:sizeKey];
+        
+        if (!prevfmt) { // new format for this size
+            [formatList setValue:rawFormat forKey:sizeKey];
             continue;
         }
-        [currentFormats addObject:rawFormat];
+        if ([self format:rawFormat isBetterThan:prevfmt]) {
+            [formatList removeObjectForKey:sizeKey];
+            [formatList setValue:rawFormat forKey:sizeKey];
+            continue;
+        }
     }
-#ifdef DEBUG_CAMERA
-    NSLog(@"DC:  .. found %lu selected formats", (unsigned long)currentFormats.count);
-#endif
-}
+    
+    currentFormats = [[NSMutableArray alloc] init];
+    for (NSString *key in formatList ) {
+        AVCaptureDeviceFormat *fmt = [formatList objectForKey:key];
+        [currentFormats addObject:fmt];
+    }
 
-#ifdef SORTBYSIZE
-//        BOOL has3D = thisFormat.supportedDepthDataFormats && thisFormat.supportedDepthDataFormats.count;
-//        hasSome3D |= has3D;
-        CMVideoDimensions thisSize = CMVideoFormatDescriptionGetDimensions(thisFormat.formatDescription);
- 
-    // put in increasing order of display area. We are given format indicies.
-    [sortedFormatIndicies sortUsingComparator:^NSComparisonResult(NSNumber *f1, NSNumber *f2) {
-        AVCaptureDeviceFormat *format1 = currentCamera.formats[f1.intValue];
-        AVCaptureDeviceFormat *format2 = currentCamera.formats[f2.intValue];
-        CMVideoDimensions size1 = CMVideoFormatDescriptionGetDimensions(format1.formatDescription);
+    [currentFormats sortUsingComparator:^NSComparisonResult(AVCaptureDeviceFormat *f1,
+                                                            AVCaptureDeviceFormat *f2) {
+        CMVideoDimensions size1 = CMVideoFormatDescriptionGetDimensions(f1.formatDescription);
         CGFloat area1 = size1.width * size1.height;
-        CMVideoDimensions size2 = CMVideoFormatDescriptionGetDimensions(format2.formatDescription);
+        CMVideoDimensions size2 = CMVideoFormatDescriptionGetDimensions(f2.formatDescription);
         CGFloat area2 = size2.width * size2.height;
         if (area1 > area2) {
             return (NSComparisonResult)NSOrderedDescending;
@@ -168,6 +165,35 @@ struct camera_t {
         } else
             return (NSComparisonResult)NSOrderedSame;
     }];
+
+#ifdef DEBUG_FORMATS
+    NSLog(@"DC:  .. selected %lu formats out of %lu",
+          currentFormats.count,
+          currentCamera.formats.count);
+#endif
+}
+
+- (BOOL) format:(AVCaptureDeviceFormat *) f2 isBetterThan: (AVCaptureDeviceFormat *) f1 {
+    NSLog(@" is %@", f1);
+    NSLog(@" is %@", f2);
+    return NO;  // XXXXXX STUB
+}
+
+// from: <AVCaptureDeviceFormat: 0x281f57cf0 'vide'/'420v' 3088x2316, { 2- 30 fps}, photo dims:{3088x2316}, \
+//      fov:55.680, max zoom:144.75 (upscales @1.00), ISO:18.0-1728.0, SS:0.000020-0.500000, supports HDR, \
+//      supports depth, supports highest photo quality>
+// extract string (e.g. "3088x2316") as a key to the dictionary of sizes
+
+- (NSString *)sizeKeyForFormat:(AVCaptureDeviceFormat *) fmt {
+    NSString *fullFmt = [NSString stringWithFormat:@"%@", fmt];
+    NSArray <NSString *>*fields = [fullFmt componentsSeparatedByString:@","];
+    NSString *first = [fields[0] stringByReplacingOccurrencesOfString:@"x " withString:@"x"];
+    return first;
+}
+
+#ifdef SORTBYSIZE
+//        BOOL has3D = thisFormat.supportedDepthDataFormats && thisFormat.supportedDepthDataFormats.count;
+//        hasSome3D |= has3D;
 #endif
 
 - (NSString *) dumpCameraInfo:(AVCaptureDevice *)camera {
@@ -356,6 +382,9 @@ struct camera_t {
         captureSession = nil;
     }
     captureSession = [[AVCaptureSession alloc] init];
+#ifdef DEBUG_RECONFIGURATION
+    NSLog(@"DR   capturesession initialized");
+#endif
     [captureSession beginConfiguration];
 
 #ifdef DEBUG_FORMAT

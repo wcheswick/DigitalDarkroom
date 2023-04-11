@@ -90,17 +90,25 @@
 
 - (void) suspendTasksForDisplayUpdate {
 #ifdef DEBUG_RECONFIGURATION
-    NSLog(@"DR suspendTasksForDisplayUpdate: tasks are idle");
+    NSLog(@"DR suspendTasksForDisplayUpdate");
 #endif
     [self checkForIdle];
 }
 
 - (void) checkForIdle {
     for (TaskGroup *taskGroup in taskGroups) {
-        if (!taskGroup.groupEnabled)
+        if (!taskGroup.groupEnabled) {
+#ifdef DEBUG_RECONFIGURATION
+            NSLog(@"DR:  checkForIdle: taskGroup %@ not enabled", taskGroup.groupName);
+#endif
             continue;
-        if (taskGroup.groupBusy)
+        }
+        if (taskGroup.groupBusy) {
+#ifdef DEBUG_RECONFIGURATION
+            NSLog(@"DR:  checkForIdle: taskGroup %@ busy", taskGroup.groupName);
+#endif
             return;
+        }
     }
 #ifdef DEBUG_RECONFIGURATION
     NSLog(@"DR checkForIdle: tasks are idle");

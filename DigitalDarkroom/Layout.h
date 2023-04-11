@@ -29,7 +29,7 @@ typedef enum {
 @interface Layout : NSObject {
     LayoutOptions layoutOption;
     CGSize sourceImageSize;  // file or camera output size
-    AVCaptureDevice *device;    // nil if file or undecided
+    BOOL isCamera;
     AVCaptureDeviceFormat *format;
     AVCaptureDeviceFormat *depthFormat;
     NSUInteger index;  // index of this layout in layouts in Main, or -1
@@ -65,10 +65,10 @@ typedef enum {
     NSString *status;
 }
 
-@property (nonatomic, strong)   AVCaptureDevice *device;
 @property (nonatomic, strong)   AVCaptureDeviceFormat *format;
 @property (nonatomic, strong)   AVCaptureDeviceFormat *depthFormat;
 @property (assign)              NSUInteger index;
+@property (assign)              BOOL isCamera;
 
 @property (assign)              LayoutOptions layoutOption;
 @property (assign)              CGSize sourceImageSize;
@@ -96,7 +96,7 @@ typedef enum {
       rightThumbs:(size_t) rightThumbs
      bottomThumbs:(size_t) bottomThumbs
      layoutOption:(LayoutOptions) lopt
-           device:(AVCaptureDevice *__nullable)dev
+      cameraInput:(BOOL) isCamera
            format:(AVCaptureDeviceFormat *__nullable) form
       depthFormat:(AVCaptureDeviceFormat *__nullable) df;
 

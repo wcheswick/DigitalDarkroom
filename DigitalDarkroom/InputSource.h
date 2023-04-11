@@ -27,7 +27,9 @@ NS_ASSUME_NONNULL_BEGIN
     NSString *label;
     int sourceIndex;            // in sources array
     AVCaptureDevice *camera;    // nil is uninitialized or file source
+    BOOL live;                  // if camera, and camera is live
     NSString *__nullable imagePath; // where a file image is
+    Frame *lastCameraFrame;     // if not running, last image displayed
     UIImage *__nullable thumbImageCache;
     NSMutableArray *sourceMenuSections;
 }
@@ -35,8 +37,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong)   NSMutableArray *frontCameras, *backCameras;
 @property (nonatomic, strong)   NSString *label;
 @property (assign)              int sourceIndex;
+@property (assign)              BOOL live;
 @property (nonatomic, strong)   AVCaptureDevice *camera;
 @property (nonatomic, strong)   NSString *__nullable imagePath;
+@property (nonatomic, strong)  Frame *lastCameraFrame;
 @property (nonatomic, strong)   UIImage *__nullable thumbImageCache;
 //@property (nonatomic, strong)   UIImage *__nullable image;
 @property (nonatomic, strong)   NSMutableArray *sourceMenuSections;

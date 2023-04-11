@@ -20,7 +20,9 @@
 @synthesize camera;
 @synthesize sourceIndex;
 @synthesize imagePath;
+@synthesize live;
 //@synthesize image;
+@synthesize lastCameraFrame;
 @synthesize thumbImageCache;
 @synthesize sourceMenuSections;
 
@@ -31,6 +33,8 @@
         imagePath = nil;
         thumbImageCache = nil;
         camera = nil;
+        lastCameraFrame = nil;
+        live = NO;
         sourceIndex = NO_SOURCE_INDEX;
 //        sourceMenuSections = [NSArray arrayWithObjects:@"Front cameras", @"Back cameras",
 //                              @"Sample files", @"Saved files", nil]

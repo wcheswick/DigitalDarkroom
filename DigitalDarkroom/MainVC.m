@@ -169,7 +169,7 @@ MainVC *mainVC = nil;
 @property (nonatomic, strong)   UILabel *layoutValuesView;
 @property (nonatomic, strong)   UILabel *mainStatsView;
 
-@property (assign)              BOOL showControls, showStats, live;
+@property (assign)              BOOL showControls, showStats;
 @property (assign)              BOOL transformChainChanged;
 @property (assign)              BOOL busy;      // transforming is busy, don't start a new one
 @property (nonatomic, strong)   UILabel *paramLow, *paramName, *paramHigh, *paramValue;
@@ -266,7 +266,6 @@ MainVC *mainVC = nil;
 @synthesize inputSources;
 @synthesize cameraSourceThumb;
 @synthesize fileSourceFrame;
-@synthesize live;
 @synthesize cameraCount;
 
 @synthesize cameraController;
@@ -1067,42 +1066,40 @@ CGFloat topOfNonDepthArray = 0;
     NSLog(@"DR reconfigureDisplay");
 #endif
     
+    if (currentSource && currentSource.live)
+        [self goLive:NO];
+    
     if (nextSource) {   // new camera or file input
         if (SOURCE_IS_CAMERA(nextSource)) {
             [cameraController selectCamera:nextSource.camera];
             nextOrientation = UIDeviceOrientationUnknown;
-            [self liveOn:NO];
         } else {    // file source
             fileSourceFrame = [[Frame alloc] init];
             [fileSourceFrame readImageFromPath: currentSource.imagePath];
         }
         currentSource = nextSource;
         nextSource = nil;
-        currentLayout = nil;   // force new layout
     }
    
     if (nextOrientation == UIDeviceOrientationUnknown || nextOrientation != DEVICE_ORIENTATION) {
         if (SOURCE_IS_CAMERA(currentSource)) {
             [cameraController adjustCameraOrientation:DEVICE_ORIENTATION];
         }
-        currentLayout = nil;   // force new layout
         nextOrientation = DEVICE_ORIENTATION;
     }
     
     if (nextLayout) {   // next layout already selected, apply it
-    }
-    
-    if (!currentLayout) {
+        currentLayout = nextLayout;
+    } else {
         [self computeLayoutLimits];
         
         NSMutableArray *candidateLayouts = [[NSMutableArray alloc] init];
         
         if (fileSourceFrame) {  // fixed, non-camera input
-            [self proposeLayoutsForSize:fileSourceFrame.size into:candidateLayouts];
+            [self proposeLayoutsForSize:fileSourceFrame.size format:nil into:candidateLayouts];
         } else {        // various camera source size options
             for (AVCaptureDeviceFormat *format in cameraController.currentFormats) {
-                CGSize s = [cameraController sizeForFormat:format];
-                [self proposeLayoutsForSize:s into:candidateLayouts];
+                [self proposeLayoutsForSize:CGSizeZero format:format into:candidateLayouts];
             }
         }
         
@@ -1125,17 +1122,15 @@ CGFloat topOfNonDepthArray = 0;
         }
         
         [layouts removeAllObjects]; // loaded by the next routine
-        Layout *bestLayout = [self editAndSortLayouts:candidateLayouts];
+        nextLayout = [self editAndSortLayouts:candidateLayouts];
         NSLog(@"LLLL best layout index: %ld", currentLayout.index);
-        
-        [self applyScreenLayout:bestLayout];
 
     #ifdef NOTDEF
         int i = 0;
         for (Layout *layout in layouts) {
             NSLog(@"%3d   %.3f  %.3f %.3f    %@", i,
                   layout.displayFrac, layout.score, layout.thumbFrac,
-                  i == currentLayout.index ? @"<---" : @"");
+                  i == nextLayout.index ? @"<---" : @"");
             i++;
         }
         
@@ -1144,10 +1139,13 @@ CGFloat topOfNonDepthArray = 0;
             NSLog(@"%2d %@", i, layout.status);
         }
     #endif
-
     }
+
+    [self applyNextLayout];
     
     [self refreshScreen];
+    if (currentSource.camera)
+        [self goLive:YES];
 
     // finish up
     if (!isiPhone)  // if room for a title
@@ -1223,10 +1221,18 @@ CGFloat topOfNonDepthArray = 0;
 #endif
 }
 
-- (void) proposeLayoutsForSize:(CGSize) sourceSize into:(NSMutableArray <Layout *> *)candidateLayouts {
+- (void) proposeLayoutsForSize:(CGSize) sourceSize
+                        format:(AVCaptureDeviceFormat *__nullable) format
+                          into:(NSMutableArray <Layout *> *)candidateLayouts {
     size_t thumbCols = minThumbCols;
     size_t thumbRows = minThumbRows;
     Layout *layout;
+    
+    if (format) {
+        assert(!sourceSize.width && !sourceSize.height);
+        CMVideoDimensions vs = CMVideoFormatDescriptionGetDimensions(format.formatDescription);
+        sourceSize = CGSizeMake(vs.width, vs.height);
+    }
     
     switch (layoutStyle) {
         case BestIPadLayout:
@@ -1237,8 +1243,8 @@ CGFloat topOfNonDepthArray = 0;
                           rightThumbs:thumbCols++
                           bottomThumbs:0
                           layoutOption:layoutStyle
-                          device:nil
-                          format:nil
+                          cameraInput: YES
+                          format:format
                           depthFormat:nil];
                 if (!layout || layout.score == BAD_LAYOUT)
                     continue;
@@ -1247,7 +1253,6 @@ CGFloat topOfNonDepthArray = 0;
 #endif
                 [candidateLayouts addObject:layout];
             } while (layout);
-            
             // try bottom thumbs
             do {    // try bottom thumbs
                 layout = [[Layout alloc]
@@ -1255,7 +1260,7 @@ CGFloat topOfNonDepthArray = 0;
                           rightThumbs:0
                           bottomThumbs:thumbRows++
                           layoutOption:layoutStyle
-                          device:nil
+                          cameraInput: YES
                           format:nil
                           depthFormat:nil];                if (/* DISABLES CODE */ (NO) && layout) {
                     NSLog(@"BT  %@", [layout layoutSum]);
@@ -1380,10 +1385,10 @@ CGFloat topOfNonDepthArray = 0;
     }
 }
 
-- (void) applyScreenLayout:(Layout *) newLayout {
-    assert(newLayout);
-    
-    currentLayout = newLayout;
+- (void) applyNextLayout {
+    assert(nextLayout);
+    currentLayout = nextLayout;
+    nextLayout = nil;
 #ifdef DEBUG_LAYOUT
     NSLog(@"MainVC: *** applyScreenLayout index %ld, %@",
           layoutIndex, [cameraController dumpFormat:currentLayout.format]);
@@ -1486,7 +1491,7 @@ CGFloat topOfNonDepthArray = 0;
     // then display (possibly scaled) onto transformView.
     
     CGSize imageSize, depthSize;
-    if (currentLayout.device) { // camera input: set format and get raw sizes
+    if (currentSource.camera) { // camera input: set format and get raw sizes
         [cameraController selectCameraFormat:currentLayout.format depthFormat:currentLayout.depthFormat];
         //AVCaptureVideoPreviewLayer *previewLayer = (AVCaptureVideoPreviewLayer *)transformImageView.layer;
         //cameraController.captureVideoPreviewLayer = previewLayer;
@@ -1554,7 +1559,7 @@ CGFloat topOfNonDepthArray = 0;
     [self updateExecuteView];
     
     if (SOURCE_IS_CAMERA(currentSource)) {
-        [self setLive:YES];
+        [self goLive:YES];
     }
 
     [taskCtrl enableTasks];
@@ -1691,8 +1696,8 @@ CGFloat topOfNonDepthArray = 0;
 }
 
 - (void) refreshScreen {
-    if (SOURCE_IS_CAMERA(currentSource) && live)
-        return; // updates when the camera is ready
+    if (currentSource.live)
+        return; // camera will refresh the frame
     Frame *frame = [[Frame alloc] init];
     [frame readImageFromPath:currentSource.imagePath];
     [taskCtrl processFrame:frame];
@@ -1865,16 +1870,17 @@ CGFloat topOfNonDepthArray = 0;
 
 // pause/unpause video
 - (IBAction) togglePauseResume:(UITapGestureRecognizer *)recognizer {
-    assert(SOURCE_IS_CAMERA(currentSource));
-    [self liveOn:!live];
+    assert(currentSource.camera);
+    [self goLive:!currentSource.live];
 }
 
-- (void) liveOn:(BOOL) state {
-    live = state;
+- (void) goLive:(BOOL) turnOn {
+    assert(currentSource.camera);
 #ifdef DEBUG_RECONFIGURATION
-    NSLog(@"DR live: %@", state ? @"ON" : @"OFF");
+    NSLog(@"DR go live: %@", turnOn ? @"YES" : @"NO");
 #endif
-    if (live) {
+    if (turnOn) {
+        currentSource.live = YES;
         fileSourceFrame = nil;
         runningButton.selected = NO;
         [runningButton setNeedsDisplay];
@@ -1888,8 +1894,11 @@ CGFloat topOfNonDepthArray = 0;
         [runningButton setImage:[self fitImage:[UIImage systemImageNamed:@"play.fill"]
                                             toSize:runningButton.frame.size centered:YES]
                            forState:UIControlStateNormal];
-        if (taskCtrl.lastFrame)
+        if (taskCtrl.lastFrame) {
             [taskCtrl processFrame:taskCtrl.lastFrame];
+            currentSource.lastCameraFrame = taskCtrl.lastFrame;
+        }
+        currentSource.live = NO;
     }
     [runningButton setNeedsDisplay];
     [self adjustControls];
@@ -2557,7 +2566,7 @@ static CGSize startingPinchSize;
 - (void) reloadSourceImage {
     if (!currentSource)
         return;
-   if (SOURCE_IS_CAMERA(currentSource) && live)
+   if (currentSource.live)
        return;  // no need: the camera will refresh
     [taskCtrl suspendTasksForDisplayUpdate];    // XXXX is this needed?
     transformChainChanged = YES;

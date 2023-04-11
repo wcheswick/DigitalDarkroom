@@ -16,13 +16,12 @@
 //#define VERIFY_REMAP_BUFFERS    1
 //#define VERIFY_DEPTHS           1
 
-//#define DEBUG_LAYOUT    1
-//#define DDEBUG_LAYOUT   1
+//#define DEBUG_LAYOUT    1 // compilation broken
 //#define DDEBUG_LAYOUT   1
 #define DEBUG_FORMAT    1
 #define DEBUG_FORMATS    1
 #define DEBUG_RECONFIGURATION   1
-#define DEBUG_SCORE     1
+//#define DEBUG_SCORE     1
 //#define DEBUG_ORIENTATION
 //#define MEMLEAK_AIDS 1
 

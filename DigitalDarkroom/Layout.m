@@ -48,7 +48,8 @@ NSString * __nullable displayOptionNames[] = {
 
 @implementation Layout
 
-@synthesize device, format, depthFormat;
+@synthesize format, depthFormat;
+@synthesize isCamera;
 @synthesize index;
 
 @synthesize transformSize;   // what we give the transform chain
@@ -79,14 +80,13 @@ NSString * __nullable displayOptionNames[] = {
       rightThumbs:(size_t) rightThumbs
      bottomThumbs:(size_t) bottomThumbs
      layoutOption:(LayoutOptions) lopt
-           device:(AVCaptureDevice *__nullable)dev
+      cameraInput:(BOOL) isCam
            format:(AVCaptureDeviceFormat *__nullable) form
       depthFormat:(AVCaptureDeviceFormat *__nullable) df {
     self = [super init];
     if (self) {
         assert(rightThumbs == 0 || bottomThumbs == 0); // no fancy stuff
-        
-        device = dev;
+        isCamera = isCam;
         format = form;
         depthFormat = df;
         index = INDEX_UNKNOWN;
@@ -111,7 +111,9 @@ NSString * __nullable displayOptionNames[] = {
             targetSize = CGSizeMake(SCREEN.size.width - thumbScrollRect.size.width - SEP,
                                     SCREEN.size.height - SEP - PARAM_VIEW_H);
             if (targetSize.width < mainVC.minDisplayWidth) {
+#ifdef DEBUG_LAYOUT
                 NSLog(@"no room for %zu thumb columns on right", rightThumbs);
+#endif
                 return nil;
             }
             displayRect.size = [Layout fitSize:imageSourceSize toSize:targetSize];
@@ -135,7 +137,9 @@ NSString * __nullable displayOptionNames[] = {
             targetSize = CGSizeMake(SCREEN.size.width - executeRect.size.width,
                                     SCREEN.size.height - SEP - PARAM_VIEW_H - SEP - thumbScrollRect.size.height);
             if (targetSize.height < mainVC.minDisplayHeight) {
+#ifdef DEBUG_LAYOUT
                 NSLog(@"no room for %zu thumb rows on bottom", bottomThumbs);
+#endif
                 return nil;
             }
             displayRect.size = [Layout fitSize:imageSourceSize toSize:targetSize];
