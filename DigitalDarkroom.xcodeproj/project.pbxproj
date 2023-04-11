@@ -10,6 +10,7 @@
 		FB1C854E26E64B18005AED48 /* Frame.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1C854D26E64B18005AED48 /* Frame.m */; };
 		FB20A72125D1791C0005CA53 /* Options.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A71F25D1791C0005CA53 /* Options.m */; };
 		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
+		FB248F6729E5B3060018408E /* ChBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FB248F6529E5B3060018408E /* ChBuf.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
 		FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */; };
@@ -47,7 +48,6 @@
 		FBB2C8A32582595300AB0B09 /* TaskCtrl.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8A22582595300AB0B09 /* TaskCtrl.m */; };
 		FBB2C8AE2586A9E400AB0B09 /* PixBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8AD2586A9E400AB0B09 /* PixBuf.m */; };
 		FBB2C8B22586A9F800AB0B09 /* DepthBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8B12586A9F800AB0B09 /* DepthBuf.m */; };
-		FBB2C8B62586AA3C00AB0B09 /* ChBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8B52586AA3C00AB0B09 /* ChBuf.m */; };
 		FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BA2586B9AA00AB0B09 /* RemapBuf.m */; };
 		FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */; };
 		FBB4E3D4251E5998000D99B7 /* InglisEtAlSRDS.c in Sources */ = {isa = PBXBuildFile; fileRef = FBB4E3D3251E5998000D99B7 /* InglisEtAlSRDS.c */; };
@@ -67,6 +67,8 @@
 		FB20A72025D1791C0005CA53 /* Options.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Options.h; sourceTree = "<group>"; };
 		FB20A72325D17A760005CA53 /* OptionsVC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OptionsVC.h; sourceTree = "<group>"; };
 		FB20A72425D17A760005CA53 /* OptionsVC.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OptionsVC.m; sourceTree = "<group>"; };
+		FB248F6529E5B3060018408E /* ChBuf.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ChBuf.m; path = "../../../../Library/Mobile Documents/com~apple~CloudDocs/.Trash/ChBuf.m"; sourceTree = "<group>"; };
+		FB248F6629E5B3060018408E /* ChBuf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ChBuf.h; path = "../../../../Library/Mobile Documents/com~apple~CloudDocs/.Trash/ChBuf.h"; sourceTree = "<group>"; };
 		FB3012BD250BA85C0062A1FA /* InputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InputSource.h; sourceTree = "<group>"; };
 		FB3012BE250BA85C0062A1FA /* InputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InputSource.m; sourceTree = "<group>"; };
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
@@ -272,6 +274,8 @@
 				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
 				FBD1FADA261F8169005B0EEA /* ReticleView.h */,
 				FBD1FADB261F8169005B0EEA /* ReticleView.m */,
+				FB248F6629E5B3060018408E /* ChBuf.h */,
+				FB248F6529E5B3060018408E /* ChBuf.m */,
 				FB57A28926F8B133001A6583 /* Stats.h */,
 				FB57A28A26F8B133001A6583 /* Stats.m */,
 				FB1C854C26E64B18005AED48 /* Frame.h */,
@@ -408,7 +412,6 @@
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
-				FBB2C8B62586AA3C00AB0B09 /* ChBuf.m in Sources */,
 				FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */,
 				FBF5B3AB232E973F00DDFC4E /* AppDelegate.m in Sources */,
 				FBA1F16925EEE97800434E2F /* Layout.m in Sources */,
@@ -423,6 +426,7 @@
 				FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */,
 				FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */,
 				FB56160F2654620500E5BE54 /* ThumbView.m in Sources */,
+				FB248F6729E5B3060018408E /* ChBuf.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
