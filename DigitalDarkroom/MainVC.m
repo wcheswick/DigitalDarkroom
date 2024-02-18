@@ -929,13 +929,16 @@ CGFloat topOfNonDepthArray = 0;
     [self adjustBarButtons];
 //    [self updateExecuteView];
     
+#ifdef OLD
+    //Use UISceneDelegate or related notifications to be informed of connecting scenes from other screens
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(externalScreenDidConnect:)
                                                  name:UIScreenDidConnectNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(externalScreenDidDisconnect:)
                                                  name:UIScreenDidDisconnectNotification object:nil];
-
+#endif
+    
 #ifdef DEBUG_RECONFIGURATION
     NSLog(@"DR viewDidLoad: selecting source 0");
 #endif

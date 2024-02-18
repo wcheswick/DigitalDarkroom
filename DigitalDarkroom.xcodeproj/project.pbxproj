@@ -3,14 +3,14 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 53;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB097FF12B8265A300D56795 /* ChBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FB097FF02B8265A300D56795 /* ChBuf.m */; };
 		FB1C854E26E64B18005AED48 /* Frame.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1C854D26E64B18005AED48 /* Frame.m */; };
 		FB20A72125D1791C0005CA53 /* Options.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A71F25D1791C0005CA53 /* Options.m */; };
 		FB20A72525D17A760005CA53 /* OptionsVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB20A72425D17A760005CA53 /* OptionsVC.m */; };
-		FB248F6729E5B3060018408E /* ChBuf.m in Sources */ = {isa = PBXBuildFile; fileRef = FB248F6529E5B3060018408E /* ChBuf.m */; };
 		FB3012BF250BA85C0062A1FA /* InputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = FB3012BE250BA85C0062A1FA /* InputSource.m */; };
 		FB389A4B254055F500E29530 /* ColorTable.m in Sources */ = {isa = PBXBuildFile; fileRef = FB389A4A254055F500E29530 /* ColorTable.m */; };
 		FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */ = {isa = PBXBuildFile; fileRef = FB4F251F2740629A00F2F8AB /* ExternalScreenVC.m */; };
@@ -61,14 +61,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FB097FF02B8265A300D56795 /* ChBuf.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ChBuf.m; sourceTree = "<group>"; };
+		FB097FF22B8265C400D56795 /* ChBuf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ChBuf.h; sourceTree = "<group>"; };
 		FB1C854C26E64B18005AED48 /* Frame.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Frame.h; sourceTree = "<group>"; };
 		FB1C854D26E64B18005AED48 /* Frame.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Frame.m; sourceTree = "<group>"; };
 		FB20A71F25D1791C0005CA53 /* Options.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Options.m; sourceTree = "<group>"; };
 		FB20A72025D1791C0005CA53 /* Options.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Options.h; sourceTree = "<group>"; };
 		FB20A72325D17A760005CA53 /* OptionsVC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = OptionsVC.h; sourceTree = "<group>"; };
 		FB20A72425D17A760005CA53 /* OptionsVC.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = OptionsVC.m; sourceTree = "<group>"; };
-		FB248F6529E5B3060018408E /* ChBuf.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ChBuf.m; path = "../../../../Library/Mobile Documents/com~apple~CloudDocs/.Trash/ChBuf.m"; sourceTree = "<group>"; };
-		FB248F6629E5B3060018408E /* ChBuf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ChBuf.h; path = "../../../../Library/Mobile Documents/com~apple~CloudDocs/.Trash/ChBuf.h"; sourceTree = "<group>"; };
 		FB3012BD250BA85C0062A1FA /* InputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InputSource.h; sourceTree = "<group>"; };
 		FB3012BE250BA85C0062A1FA /* InputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InputSource.m; sourceTree = "<group>"; };
 		FB389A49254055F500E29530 /* ColorTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ColorTable.h; sourceTree = "<group>"; };
@@ -274,8 +274,8 @@
 				FBB2C8BE2587D41F00AB0B09 /* TransformInstance.m */,
 				FBD1FADA261F8169005B0EEA /* ReticleView.h */,
 				FBD1FADB261F8169005B0EEA /* ReticleView.m */,
-				FB248F6629E5B3060018408E /* ChBuf.h */,
-				FB248F6529E5B3060018408E /* ChBuf.m */,
+				FB097FF22B8265C400D56795 /* ChBuf.h */,
+				FB097FF02B8265A300D56795 /* ChBuf.m */,
 				FB57A28926F8B133001A6583 /* Stats.h */,
 				FB57A28A26F8B133001A6583 /* Stats.m */,
 				FB1C854C26E64B18005AED48 /* Frame.h */,
@@ -339,7 +339,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1520;
 				ORGANIZATIONNAME = Cheswick.com;
 				TargetAttributes = {
 					FBF5B3A5232E973F00DDFC4E = {
@@ -410,6 +410,7 @@
 				FB20A72125D1791C0005CA53 /* Options.m in Sources */,
 				FBB2C8BF2587D41F00AB0B09 /* TransformInstance.m in Sources */,
 				FBB1D9F8232FE56700845DF1 /* cdisplay_colorblind.c in Sources */,
+				FB097FF12B8265A300D56795 /* ChBuf.m in Sources */,
 				FB389A4B254055F500E29530 /* ColorTable.m in Sources */,
 				FBB1D9E8232FE44400845DF1 /* point.c in Sources */,
 				FB9E2A762592267C00BD7E1E /* TaskGroup.m in Sources */,
@@ -426,7 +427,6 @@
 				FB4F25202740629A00F2F8AB /* ExternalScreenVC.m in Sources */,
 				FBB2C8BB2586B9AA00AB0B09 /* RemapBuf.m in Sources */,
 				FB56160F2654620500E5BE54 /* ThumbView.m in Sources */,
-				FB248F6729E5B3060018408E /* ChBuf.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,6 +437,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -471,6 +472,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -485,7 +487,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -498,6 +500,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -532,6 +535,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -540,7 +544,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 12.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = NO;
@@ -559,7 +563,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = HK64XTSZFA;
 				INFOPLIST_FILE = DigitalDarkroom/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -580,7 +584,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = HK64XTSZFA;
 				INFOPLIST_FILE = DigitalDarkroom/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
